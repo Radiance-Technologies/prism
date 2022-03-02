@@ -1,0 +1,66 @@
+image: "python:3.9"
+
+variables:
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+workflow:
+  rules:
+    - if: '$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS'
+      when: never
+    - when: always
+
+cache:
+  paths:
+    - .cache/pip
+    - venv/
+
+stages:
+  - test
+
+before_script:
+  - apt-get -y update
+  - apt-get -y install pkg-config make
+  - pip install virtualenv
+  - virtualenv venv
+  - source venv/bin/activate
+  - make install
+
+precommit:
+  stage: test
+  before_script:
+    # Global before_script does not get prepended
+    # Track https://gitlab.com/gitlab-org/gitlab/-/issues/258606
+    - pip install virtualenv
+    - virtualenv venv
+    - source venv/bin/activate
+    - which ssh-agent || apt-get install openssh-client -qqy
+    - eval `ssh-agent -s`
+    - echo "${PRECOMMIT_CI_PRIVATE_KEY}" | base64 -d | ssh-add - > /dev/null # add ssh key
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - echo "$SSH_PUBLIC_KEY" >> ~/.ssh/id_rsa.pub
+    - '[[ -f /.dockerenv ]] && echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config'
+  script:
+    - pip install pre-commit
+    - pre-commit install
+    - precommit_passed=0
+    - pre-commit run --files $(git diff-tree --no-commit-id --name-only -r HEAD origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}) || precommit_passed=$?
+    - if (( $precommit_passed == 0 )) ; then echo "All pre-commit checks passed"; exit 0; fi
+    - files_changes=0
+    - test "$(git status -uno -s)" != "" || files_changed=$?
+    - if (( $files_changed != 0 )) ; then echo "Some pre-commit checks failed"; exit 1; fi
+    - git add -u
+    - git config --global user.email "${PRECOMMIT_CI_EMAIL}"
+    - git config --global user.name "${PRECOMMIT_CI_USERNAME}"
+    - git commit -m "[pre-commit-ci] Apply pre-commit hooks." --no-verify
+    - git remote set-url origin ssh://git@${CI_SERVER_HOST}:${CI_SERVER_SSH_PORT}/${CI_PROJECT_PATH}.git
+    - git push origin HEAD:${CI_COMMIT_REF_NAME}
+    - echo "Some pre-commit checks altered files. Fixes pushed as new commit."
+    - exit 1
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+runTests:
+  stage: test
+  script:
+    - make test
