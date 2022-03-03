@@ -1,0 +1,14 @@
+*.pyc
+*.pyproj
+*.suo
+*.pyproj.user
+/*.sln
+build/
+dist/
+*.egg-info/
+*/__pycache__/*
+venv*
+.vscode*
+.eggs/
+.pytest_cache/
+.cache/

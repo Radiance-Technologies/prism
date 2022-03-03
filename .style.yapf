@@ -1,0 +1,24 @@
+[style]
+based_on_style = yapf
+arithmetic_precedence_indication = false
+column_limit = 80
+force_multiline_dict = true
+indent_dictionary_value = true
+indent_blank_lines = false
+spaces_around_subscript_colon = true
+spaces_before_comment = 2
+split_all_comma_separated_values = true
+indent_width = 4
+split_before_closing_bracket = true
+split_before_first_argument = true
+split_complex_comprehension = true
+split_before_logical_operator = true
+split_before_arithmetic_operator = true
+split_arguments_when_comma_terminated = true
+split_all_top_level_comma_separated_values = false
+split_before_expression_after_opening_paren = true
+split_before_named_assigns = true
+align_closing_bracket_with_visual_indent = true
+split_penalty_for_added_line_split = 30
+split_penalty_after_opening_bracket = 0
+split_penalty_comprehension = 80
