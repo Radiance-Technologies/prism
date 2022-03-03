@@ -7,7 +7,7 @@ fi
 
 if [ "$1" == "" ] ; then
   echo "Defaulting to Python version 3.10.2"
-  export VERSION=3.10.2
+  export VERSION=3.9.10
 else
   export VERSION=$1
 fi
