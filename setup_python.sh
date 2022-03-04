@@ -6,7 +6,7 @@ if [ "$_" == "$0" ] ; then
 fi
 
 if [ "$1" == "" ] ; then
-  echo "Defaulting to Python version 3.10.2"
+  echo "Defaulting to Python version 3.9.10"
   export VERSION=3.9.10
 else
   export VERSION=$1
