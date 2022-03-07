@@ -7,6 +7,7 @@ repos:
     rev: c6077954245bc3add82dafd853a1c7305a6ebd20
     hooks:
       - id: yapf
+        additional_dependencies: [toml]
   - repo: https://github.com/myint/docformatter
     rev: v1.4
     hooks:
