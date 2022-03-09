@@ -26,10 +26,13 @@ class Project(Repo):
         Commit
             A random `Commit` object from the project repo
         """
-        # The `Commit` objects may be large, so don't persist them
-        # in the object itself.
-        commits = list(self.iter_commits('--all'))
-        result = random.choice(commits)
+
+        def _get_hash(commit: Commit) -> str:
+            return commit.hexsha
+
+        commit_hashes = list(map(_get_hash, self.iter_commits('--all')))
+        chosen_hash = random.choice(commit_hashes)
+        result = self.commit(chosen_hash)
         return result
 
     def get_random_file(self, commit_name: Optional[str] = None) -> Blob:
