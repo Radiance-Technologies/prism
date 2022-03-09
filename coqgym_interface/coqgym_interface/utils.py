@@ -144,36 +144,36 @@ class Project(Repo):
             encoding)
         # Split sentences by instances of periods followed by
         # whitespace.
-        split_ver = re.split(r"\.\s", file_contents_no_comments)
-        for i in range(len(split_ver)):
+        sentences = re.split(r"\.\s", file_contents_no_comments)
+        for i in range(len(sentences)):
             # Replace any whitespace or groups of whitespace with a
             # single space.
-            split_ver[i] = re.sub(r"(\s)+", " ", split_ver[i])
-            split_ver[i] = split_ver[i].strip()
-            split_ver[i] += "."
+            sentences[i] = re.sub(r"(\s)+", " ", sentences[i])
+            sentences[i] = sentences[i].strip()
+            sentences[i] += "."
         if glom_proofs:
             # Reconstruct proofs onto one line.
             result = []
             idx = 0
-            while idx < len(split_ver):
+            while idx < len(sentences):
                 # Proofs can start with "Proof. " or "Proof <other
                 # words>."
-                if split_ver[idx] == "Proof." or split_ver[idx].startswith(
+                if sentences[idx] == "Proof." or sentences[idx].startswith(
                         "Proof "):
                     intermediate_list = []
-                    while split_ver[idx] not in Project.proof_enders:
-                        intermediate_list.append(split_ver[idx])
+                    while sentences[idx] not in Project.proof_enders:
+                        intermediate_list.append(sentences[idx])
                         idx += 1
-                    intermediate_list.append(split_ver[idx])
+                    intermediate_list.append(sentences[idx])
                     result.append(" ".join(intermediate_list))
                 else:
-                    result.append(split_ver[idx])
+                    result.append(sentences[idx])
                 idx += 1
-            # Lop of the final line if it's just a period, i.e., blank.
+            # Lop off the final line if it's just a period, i.e., blank.
             if result[-1] == ".":
                 result.pop()
         else:
-            result = split_ver
+            result = sentences
         return result
 
 
@@ -183,7 +183,7 @@ def main():
     """
     repo_folder = "../data/CompCert"
     compcert_repo = Project(repo_folder)
-    random_file = compcert_repo.get_random_file("master")
+    random_file = compcert_repo.get_random_file()
     ds = random_file.data_stream
     output = ds.read()
     for line in Project._decode_byte_stream(output).split('\n'):
