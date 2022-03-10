@@ -1,11 +1,12 @@
 """
 Utilities module for CoqGym interface.
 """
+import os
 import random
 import re
 from typing import List, Optional, Union
 
-from git import Blob, Commit, Repo
+from git import Blob, Commit, InvalidGitRepositoryError, Repo
 
 
 class Project(Repo):
@@ -16,6 +17,19 @@ class Project(Repo):
     """
 
     proof_enders = ["Qed.", "Save.", "Defined.", "Admitted.", "Abort."]
+
+    # def __init__(self, *args, glom_proofs: bool = True, **kwargs):
+    #     """
+    #     Initialize Project object.
+
+    #     Parameters
+    #     ----------
+    #     glom_proofs : bool, optional
+    #         A flag indicating whether or not proofs should be kept
+    #         together as pseudo-sentences, by default True
+    #     """
+    #     super().__init__(*args, **kwargs)
+    #     self.glom_proofs = glom_proofs
 
     def get_random_commit(self) -> Commit:
         """
@@ -91,6 +105,95 @@ class Project(Repo):
             if blob.abspath == filename:
                 return blob
 
+    def get_random_sentence(
+            self,
+            filename: Optional[str] = None,
+            commit_name: Optional[str] = None,
+            glom_proofs: bool = True) -> str:
+        """
+        Return a random sentence from the project.
+
+        Filename and commit are random unless they are provided.
+
+        Parameters
+        ----------
+        filename : Optional[str], optional
+            Absolute path to file to load sentence from, by default None
+        commit_name : Optional[str], optional
+            Commit name (hash, branch name, tag name) to load sentence
+            from, by default None
+        glom_proofs : bool, optional
+            Boolean flag indicating whether proofs should form their own
+            pseudo-sentences, by default True
+
+        Returns
+        -------
+        str
+            A random sentence from the project
+        """
+        if commit_name is None:
+            commit_name = self.get_random_commit()
+        if filename is None:
+            blob = self.get_random_file(commit_name)
+        else:
+            blob = self.get_file(filename, commit_name)
+        contents = blob.data_stream.read()
+        sentences = Project.split_by_sentence(contents, 'utf-8', glom_proofs)
+        sentence = random.choice(sentences)
+        return sentence
+
+    def get_random_sentence_pair_adjacent(
+            self,
+            filename: Optional[str] = None,
+            commit_name: Optional[str] = None,
+            glom_proofs: bool = True) -> List[str]:
+        """
+        Return a random adjacent sentence pair from the project.
+
+        Filename and commit are random unless they are provided.
+
+        Parameters
+        ----------
+        filename : Optional[str], optional
+            Absolute path to file to load sentences from, by default
+            None
+        commit_name : Optional[str], optional
+            Commit name (hash, branch name, tag name) to load sentences
+            from, by default None
+        glom_proofs : bool, optional
+            Boolean flag indicating whether proofs should form their own
+            pseudo-sentences, by default True
+
+        Returns
+        -------
+        List of str
+            A list of two adjacent sentences from the project, with the
+            first sentence chosen at random
+        """
+        sentences: List[str] = []
+        counter = 0
+        THRESHOLD = 100
+        while len(sentences) < 2:
+            if counter > THRESHOLD:
+                raise RuntimeError(
+                    "Can't find file with more than 1 sentence after",
+                    THRESHOLD,
+                    "attempts. Try different inputs.")
+            if commit_name is None:
+                commit_name = self.get_random_commit()
+            if filename is None:
+                blob = self.get_random_file(commit_name)
+            else:
+                blob = self.get_file(filename, commit_name)
+            contents = blob.data_stream.read()
+            sentences = Project.split_by_sentence(
+                contents,
+                'utf-8',
+                glom_proofs)
+            counter += 1
+        first_sentence_idx = random.randint(0, len(sentences) - 2)
+        return sentences[first_sentence_idx : first_sentence_idx + 2]
+
     @staticmethod
     def _decode_byte_stream(byte_stream: bytes, encoding: str = 'utf-8') -> str:
         return byte_stream.decode(encoding)
@@ -146,7 +249,7 @@ class Project(Repo):
         # whitespace.
         sentences = re.split(r"\.\s", file_contents_no_comments)
         for i in range(len(sentences)):
-            # Replace any whitespace or groups of whitespace with a
+            # Replace any whitespace or group of whitespace with a
             # single space.
             sentences[i] = re.sub(r"(\s)+", " ", sentences[i])
             sentences[i] = sentences[i].strip()
@@ -175,6 +278,85 @@ class Project(Repo):
         else:
             result = sentences
         return result
+
+
+class CoqGymBaseDataset:
+    """
+    Base dataset for CoqGym data.
+
+    Attributes
+    ----------
+    projects : List[Project]
+        The list of Coq projects to draw data from
+    """
+
+    def __init__(
+            self,
+            projects: Optional[List[Project]] = None,
+            base_dir: Optional[str] = None,
+            dir_list: Optional[List[str]] = None):
+        """
+        Initialize the CoqGymDataset object.
+
+        Provide exactly one of `projects`, `base_dir`, or `dir_list`.
+
+        Parameters
+        ----------
+        projects : Optional[List[Project]], optional
+            If provided, use these already-created `Project` objects to
+            build the dataset, by default None
+        base_dir : Optional[str], optional
+            If provided, build `Project` objects from the subdirectories
+            in this directory. Any subdirectories that are not
+            repositories are ignored, by default None
+        dir_list : Optional[List[str]], optional
+            If provided, build a `Project` from each of these
+            directories. If any of these directories are not
+            repositories, an exception is raised, by default None
+
+        Raises
+        ------
+        ValueError
+            If != 1 of the input arguments are provided
+        ValueError
+            If one or more of the directories in `dir_list` is not a
+            repository
+        """
+
+        def _three_way_xor(a: bool, b: bool, c: bool) -> bool:
+            return (a ^ b ^ c) & ~(a & b & c)
+
+        projects_not_none = projects is not None
+        base_dir_not_none = base_dir is not None
+        dir_list_not_none = dir_list is not None
+        if not _three_way_xor(projects_not_none,
+                              base_dir_not_none,
+                              dir_list_not_none):
+            raise ValueError(
+                "Provide exactly one of the input arguments"
+                " `projects`, `base_dir`, or `dir_list`.")
+        if projects_not_none:
+            self.projects = projects
+        elif base_dir_not_none:
+            self.projects = []
+            for item in os.listdir(base_dir):
+                if os.path.isdir(item):
+                    try:
+                        self.projects.append(
+                            Project(os.path.join(base_dir,
+                                                 item)))
+                    except InvalidGitRepositoryError:
+                        # If a directory is not a repo, just ignore it
+                        pass
+        else:
+            self.projects = []
+            for directory in dir_list:
+                try:
+                    self.projects.append(Project(directory))
+                except InvalidGitRepositoryError as e:
+                    raise ValueError(
+                        f"{directory} in `dir_list` is not a valid repository."
+                    ) from e
 
 
 def main():

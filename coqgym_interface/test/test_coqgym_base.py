@@ -1,9 +1,9 @@
 """
-Test module for coqgym_interface.utils.
+Test module for coqgym_interface.coqgym_base.
 """
 import unittest
 
-from coqgym_interface.utils import Project
+from coqgym_interface.coqgym_base import Project
 
 test_contents = """
 (* *********************************************************************)
@@ -184,7 +184,7 @@ test_list = [
 
 class TestUtils(unittest.TestCase):
     """
-    Class for testing utils module.
+    Class for testing coqgym_base module.
     """
 
     def test_split_by_sentence(self):
