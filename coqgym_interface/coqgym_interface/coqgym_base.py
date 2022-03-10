@@ -357,6 +357,41 @@ class CoqGymBaseDataset:
                     raise ValueError(
                         f"{directory} in `dir_list` is not a valid repository."
                     ) from e
+        # <TODO>: Figure out a heuristic to weight the projects so
+        # random files, sentences, and pairs can be provided somewhat
+        # fairly. Maybe use total file size for the master branch.
+
+    # <TODO>: Implement the following methods, using project weights
+    # <TODO>: Change object project list to a dictionary with project
+    # names, which the following methods will use.
+    def _get_random_file(
+            self,
+            project_name: Optional[str] = None,
+            commit_name: Optional[str] = None) -> Blob:
+        pass
+
+    def _get_file(
+            self,
+            filename: str,
+            project_name: str,
+            commit_name: str = 'master') -> Blob:
+        pass
+
+    def _get_random_sentence(
+            self,
+            filename: Optional[str] = None,
+            project_name: Optional[str] = None,
+            commit_name: Optional[str] = None,
+            glom_proofs: bool = True) -> str:
+        pass
+
+    def _get_random_sentence_pair_adjacent(
+            self,
+            filename: Optional[str] = None,
+            project_name: Optional[str] = None,
+            commit_name: Optional[str] = None,
+            glom_proofs: bool = True) -> List[str]:
+        pass
 
 
 def main():
