@@ -5,5 +5,3 @@ max-doc-length = 72
 max-complexity = 15
 select = B,C,D,E,F,W,T4,B902,B950
 docstring-convention = numpy
-per-file-ignores =
-    coqgym_interface/test/test_coqgym_base.py:E501,B950
