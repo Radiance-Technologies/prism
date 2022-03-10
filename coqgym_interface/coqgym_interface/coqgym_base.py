@@ -5,6 +5,7 @@ import os
 import random
 import re
 from typing import List, Optional, Union
+from warnings import warn
 
 from git import Blob, Commit, InvalidGitRepositoryError, Repo
 
@@ -74,10 +75,7 @@ class Project(Repo):
         files = commit.tree.traverse()
 
         def _select_coq_files(x: Blob) -> bool:
-            if x.abspath.endswith(".v"):
-                return True
-            else:
-                return False
+            return x.abspath.endswith(".v")
 
         files = list(filter(_select_coq_files, files))
         result = random.choice(files)
@@ -259,19 +257,28 @@ class Project(Repo):
             result = []
             idx = 0
             while idx < len(sentences):
-                # Proofs can start with "Proof. " or "Proof <other
-                # words>."
-                if sentences[idx] == "Proof." or sentences[idx].startswith(
-                        "Proof "):
-                    intermediate_list = []
-                    while sentences[idx] not in Project.proof_enders:
+                try:
+                    # Proofs can start with "Proof." or "Proof <other
+                    # words>."
+                    if sentences[idx] == "Proof." or sentences[idx].startswith(
+                            "Proof "):
+                        intermediate_list = []
+                        while sentences[idx] not in Project.proof_enders:
+                            intermediate_list.append(sentences[idx])
+                            idx += 1
                         intermediate_list.append(sentences[idx])
-                        idx += 1
-                    intermediate_list.append(sentences[idx])
-                    result.append(" ".join(intermediate_list))
-                else:
-                    result.append(sentences[idx])
-                idx += 1
+                        result.append(" ".join(intermediate_list))
+                    else:
+                        result.append(sentences[idx])
+                    idx += 1
+                except IndexError:
+                    # If we've gotten here, there's a proof-related
+                    # syntax error, and we should stop trying to glom
+                    # proofs that are possibly incorrectly formed.
+                    warn(
+                        "Found an unterminated proof environment. "
+                        "Abandoning proof glomming.")
+                    return sentences
             # Lop off the final line if it's just a period, i.e., blank.
             if result[-1] == ".":
                 result.pop()
