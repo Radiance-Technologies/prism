@@ -2,9 +2,10 @@
 Utilities module for CoqGym interface.
 """
 import os
+import pathlib
 import random
 import re
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 from warnings import warn
 
 from git import Blob, Commit, InvalidGitRepositoryError, Repo
@@ -15,22 +16,28 @@ class Project(Repo):
     Class for representing a Coq project.
 
     Based on GitPython's `Repo` class.
+
+    Attributes
+    ----------
+    name : str
+        The stem of the repo working directory, used as the project name
+    master_size_bytes : int
+        The total space on disk occupied by the files in the master
+        branch in bytes.
     """
 
     proof_enders = ["Qed.", "Save.", "Defined.", "Admitted.", "Abort."]
 
-    # def __init__(self, *args, glom_proofs: bool = True, **kwargs):
-    #     """
-    #     Initialize Project object.
-
-    #     Parameters
-    #     ----------
-    #     glom_proofs : bool, optional
-    #         A flag indicating whether or not proofs should be kept
-    #         together as pseudo-sentences, by default True
-    #     """
-    #     super().__init__(*args, **kwargs)
-    #     self.glom_proofs = glom_proofs
+    def __init__(self, *args, **kwargs):
+        """
+        Initialize Project object.
+        """
+        super().__init__(*args, **kwargs)
+        self.name = pathlib.Path(self.working_dir).stem
+        self.master_size_bytes = sum(
+            f.stat().st_size
+            for f in pathlib.Path(self.working_dir).glob('**/*')
+            if f.is_file())
 
     def get_random_commit(self) -> Commit:
         """
@@ -287,19 +294,27 @@ class Project(Repo):
         return result
 
 
+# Custom types
+ProjectDict = Dict[str, Project]
+
+
 class CoqGymBaseDataset:
     """
     Base dataset for CoqGym data.
 
     Attributes
     ----------
-    projects : List[Project]
-        The list of Coq projects to draw data from
+    projects : ProjectDict
+        The dictionary of Coq projects to draw data from
+    weights : Dict[str, float]
+        Weights for each project for sampling
     """
+
+    projects: ProjectDict = {}
 
     def __init__(
             self,
-            projects: Optional[List[Project]] = None,
+            projects: Optional[ProjectDict] = None,
             base_dir: Optional[str] = None,
             dir_list: Optional[List[str]] = None):
         """
@@ -309,7 +324,7 @@ class CoqGymBaseDataset:
 
         Parameters
         ----------
-        projects : Optional[List[Project]], optional
+        projects : Optional[ProjectDict], optional
             If provided, use these already-created `Project` objects to
             build the dataset, by default None
         base_dir : Optional[str], optional
@@ -345,60 +360,162 @@ class CoqGymBaseDataset:
         if projects_not_none:
             self.projects = projects
         elif base_dir_not_none:
-            self.projects = []
-            for item in os.listdir(base_dir):
-                if os.path.isdir(item):
+            for proj_dir in os.listdir(base_dir):
+                if os.path.isdir(os.path.join(base_dir, proj_dir)):
                     try:
-                        self.projects.append(
-                            Project(os.path.join(base_dir,
-                                                 item)))
+                        project = Project(os.path.join(base_dir, proj_dir))
+                        self.projects[project.name] = project
                     except InvalidGitRepositoryError:
                         # If a directory is not a repo, just ignore it
                         pass
         else:
-            self.projects = []
             for directory in dir_list:
                 try:
-                    self.projects.append(Project(directory))
+                    project = Project(directory)
+                    self.projects[project.name] = project
                 except InvalidGitRepositoryError as e:
                     raise ValueError(
                         f"{directory} in `dir_list` is not a valid repository."
                     ) from e
-        # <TODO>: Figure out a heuristic to weight the projects so
-        # random files, sentences, and pairs can be provided somewhat
-        # fairly. Maybe use total file size for the master branch.
+        # Store project weights for sampling later.
+        self.weights: Dict[str,
+                           float] = {}
+        for proj_name, proj in self.projects.items():
+            self.weights[proj_name] = proj.master_size_bytes
 
-    # <TODO>: Implement the following methods, using project weights
-    # <TODO>: Change object project list to a dictionary with project
-    # names, which the following methods will use.
-    def _get_random_file(
+    def get_random_file(
             self,
             project_name: Optional[str] = None,
             commit_name: Optional[str] = None) -> Blob:
-        pass
+        """
+        Return a random Coq source file from one of the projects.
 
-    def _get_file(
+        The commit and project may be specified or left to be chosen at
+        random.
+
+        Parameters
+        ----------
+        project_name : Optional[str], optional
+            Project name to draw random file from, by default None
+        commit_name : Optional[str], optional
+            Commit hash, branch name, or tag name to draw random file
+            from, by default None
+
+        Returns
+        -------
+        Blob
+            A random Coq source file in the form of a Blob
+        """
+        if project_name is None:
+            project_name = self._get_random_project()
+        return self.projects[project_name].get_random_file(commit_name)
+
+    def get_file(
             self,
             filename: str,
             project_name: str,
             commit_name: str = 'master') -> Blob:
-        pass
+        """
+        Return specific Coq source file from specific project & commit.
 
-    def _get_random_sentence(
+        Parameters
+        ----------
+        filename : str
+            The absolute path to the file to return
+        project_name : str
+            Project name from which to load the file
+        commit_name : str, optional
+            A commit hash, branch name, or tag name from which to fetch
+            the file, by default 'master'
+
+        Returns
+        -------
+        Blob
+            A Blob corresponding to the selected Coq source file
+        """
+        return self.projects[project_name].get_file(filename, commit_name)
+
+    def get_random_sentence(
             self,
             filename: Optional[str] = None,
             project_name: Optional[str] = None,
             commit_name: Optional[str] = None,
             glom_proofs: bool = True) -> str:
-        pass
+        """
+        Return a random sentence from the group of projects.
 
-    def _get_random_sentence_pair_adjacent(
+        Filename, project name, and commit are random unless they are
+        provided.
+
+        Parameters
+        ----------
+        filename : Optional[str], optional
+            Absolute path to file to load sentence from, by default None
+        project_name : Optional[str], optional
+            Project name from which to load the file, by default None
+        commit_name : Optional[str], optional
+            A commit hash, branch name, or tag name from which to fetch
+            the file, by default None
+        glom_proofs : bool, optional
+            Boolean flag indicating whether proofs should form their own
+            pseudo-sentences, by default True
+
+        Returns
+        -------
+        str
+            A random sentence from the group of projects
+        """
+        if project_name is None:
+            project_name = self._get_random_project()
+        return self.projects[project_name].get_random_sentence(
+            filename,
+            commit_name,
+            glom_proofs)
+
+    def get_random_sentence_pair_adjacent(
             self,
             filename: Optional[str] = None,
             project_name: Optional[str] = None,
             commit_name: Optional[str] = None,
             glom_proofs: bool = True) -> List[str]:
-        pass
+        """
+        Return a random adjacent sentence pair from the projects.
+
+        Parameters
+        ----------
+        filename : Optional[str], optional
+            Absolute path to file to load sentences from, by default
+            None
+        project_name : Optional[str], optional
+            Project naem from which to load the sentence pair, by
+            default None
+        commit_name : Optional[str], optional
+            Commit hash, branch name, or tag name from which to fetch
+            the sentence pair, by default None
+        glom_proofs : bool, optional
+            Boolean flag indicating whether proofs should form their own
+            pseduo-sentences, by default True
+
+        Returns
+        -------
+        List[str]
+            A list of two adjacent sentences from the projects, with the
+            first sentence chosen at random
+        """
+        if project_name is None:
+            project_name = self._get_random_project()
+        return self.projects[project_name].get_random_sentence_pair_adjacent(
+            filename,
+            commit_name,
+            glom_proofs)
+
+    def _get_random_project(self) -> str:
+        weights = []
+        project_names = list(self.projects.keys())
+        for proj in project_names:
+            weights.append(self.weights[proj])
+        chosen_proj = random.choices(project_names, weights, k=1)[0]
+        return chosen_proj
 
 
 def main():
