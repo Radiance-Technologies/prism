@@ -67,13 +67,6 @@ class ProjectBase(ABC):
         pass
 
     @abstractmethod
-    def _pre_get_file(self, **kwargs):
-        """
-        Handle tasks needed before getting a non-random file.
-        """
-        pass
-
-    @abstractmethod
     def _pre_get_random(self, **kwargs):
         """
         Handle tasks needed before getting a random file (or pair, etc).
@@ -87,6 +80,7 @@ class ProjectBase(ABC):
         """
         pass
 
+    @abstractmethod
     def get_file(self, filename: str, **kwargs) -> FileObject:
         """
         Return a specific Coq source file.
@@ -100,11 +94,14 @@ class ProjectBase(ABC):
         -------
         FileObject
             A FileObject corresponding to the selected Coq source file
+
+        Raises
+        ------
+        ValueError
+            If given `filename` does not end in ".v"
         """
-        self._pre_get_file(**kwargs)
-        for obj in self._traverse_file_tree():
-            if obj.abspath == filename:
-                return obj
+        if not filename.endswith(".v"):
+            raise ValueError("filename must end in .v")
 
     def get_random_file(self, **kwargs) -> FileObject:
         """
@@ -392,9 +389,20 @@ class ProjectRepo(Repo, ProjectBase):
         Returns
         -------
         FileObject
-            A Blob corresponding to the selected Coq source file
+            A FileObject corresponding to the selected Coq source file
+
+        Raises
+        ------
+        ValueError
+            If given `filename` does not end in ".v"
         """
-        return super().get_file(filename, commit_name=commit_name)
+        super().get_file(filename)
+        commit = self.commit(commit_name)
+        # Compute relative path
+        rel_filename = filename.replace(commit.tree.abspath, "")[1 :]
+        return FileObject(
+            filename,
+            (commit.tree / rel_filename).data_stream.read())
 
     def get_random_commit(self) -> Commit:
         """
@@ -565,6 +573,30 @@ class ProjectDir(ProjectBase):
                                             file),
                                contents))
         return out_files
+
+    def get_file(self, filename: str, *args, **kwargs) -> FileObject:
+        """
+        Get a specific Coq file and return the corresponding FileObject.
+
+        Parameters
+        ----------
+        filename : str
+            The absolute path to the file
+
+        Returns
+        -------
+        FileObject
+            The corresponding FileObject
+
+        Raises
+        ------
+        ValueError
+            If given `filename` does not end in ".v"
+        """
+        super().get_file(filename)
+        with open(filename, "rt") as f:
+            contents = f.read()
+        return FileObject(filename, contents)
 
 
 # Custom types
@@ -798,6 +830,18 @@ class CoqGymBaseDataset:
             weights.append(self.weights[proj])
         chosen_proj = random.choices(project_names, weights, k=1)[0]
         return chosen_proj
+
+
+def CoqFileGenerator(dataset: CoqGymBaseDataset):
+    """
+    Yield Coq files from CoqGymBaseDataset.
+
+    Parameters
+    ----------
+    dataset : CoqGymBaseDataset
+        The base dataset to yield the Coq files from
+    """
+    pass
 
 
 def main():
