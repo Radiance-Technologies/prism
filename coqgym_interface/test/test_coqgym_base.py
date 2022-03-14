@@ -3,7 +3,7 @@ Test module for coqgym_interface.coqgym_base.
 """
 import unittest
 
-from coqgym_interface.coqgym_base import Project
+from coqgym_interface.coqgym_base import ProjectBase
 
 test_contents = """
 (* *********************************************************************)
@@ -191,7 +191,7 @@ class TestUtils(unittest.TestCase):
         """
         Test method for splitting Coq code by sentence.
         """
-        actual_outcome = Project.split_by_sentence(test_contents)
+        actual_outcome = ProjectBase.split_by_sentence(test_contents)
         self.assertEqual(actual_outcome, test_list)
 
 

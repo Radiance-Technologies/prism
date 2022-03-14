@@ -5,128 +5,135 @@ import os
 import pathlib
 import random
 import re
-from typing import Dict, List, Optional, Union
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Type, Union
 from warnings import warn
 
 from git import Blob, Commit, InvalidGitRepositoryError, Repo
 
 
-class Project(Repo):
+@dataclass
+class FileObject:
     """
-    Class for representing a Coq project.
+    Class for file objects.
 
-    Based on GitPython's `Repo` class.
+    Attributes
+    ----------
+    abspath : str
+        Absolute path to the file
+    file_contents : str or bytes
+        Contents of the file, either in string or byte-string form
+    """
+
+    abspath: str
+    file_contents: Union[str, bytes]
+
+
+class ProjectBase(ABC):
+    """
+    Abstract base class for representing a Coq project.
 
     Attributes
     ----------
     name : str
-        The stem of the repo working directory, used as the project name
-    master_size_bytes : int
-        The total space on disk occupied by the files in the master
-        branch in bytes.
+        The stem of the working directory, used as the project name
+    size_bytes : int
+        The total space on disk occupied by the files in the dir in
+        bytes
     """
 
     proof_enders = ["Qed.", "Save.", "Defined.", "Admitted.", "Abort."]
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, dir_abspath: str):
         """
         Initialize Project object.
         """
-        super().__init__(*args, **kwargs)
-        self.name = pathlib.Path(self.working_dir).stem
-        self.master_size_bytes = sum(
-            f.stat().st_size
-            for f in pathlib.Path(self.working_dir).glob('**/*')
-            if f.is_file())
+        self.name = self._get_dir_stem(dir_abspath)
+        self.size_bytes = self._get_size_bytes(dir_abspath)
 
-    def get_random_commit(self) -> Commit:
+    @abstractmethod
+    def _get_dir_stem(self, dir_abspath: str) -> str:
         """
-        Return a random `Commit` object from the project repo.
-
-        Returns
-        -------
-        Commit
-            A random `Commit` object from the project repo
+        Extract directory stem from working directory.
         """
+        pass
 
-        def _get_hash(commit: Commit) -> str:
-            return commit.hexsha
-
-        commit_hashes = list(map(_get_hash, self.iter_commits('--all')))
-        chosen_hash = random.choice(commit_hashes)
-        result = self.commit(chosen_hash)
-        return result
-
-    def get_random_file(self, commit_name: Optional[str] = None) -> Blob:
+    @abstractmethod
+    def _get_size_bytes(self, dir_abspath: str) -> int:
         """
-        Return a random Coq source file from the repo.
-
-        The commit may be specified or left to be chosen at radnom.
-
-        Parameters
-        ----------
-        commit_name : str or None
-            A commit hash, branch name, or tag name indicating where
-            the file should be selected from. If None, commit is chosen
-            at random.
-
-        Returns
-        -------
-        Blob
-            A random Coq source file in the form of a Blob
+        Get size in bytes of working directory.
         """
-        if commit_name is None:
-            commit_name = self.get_random_commit()
-        commit = self.commit(commit_name)
-        # This should traverse the tree to get all files at all levels
-        files = commit.tree.traverse()
+        pass
 
-        def _select_coq_files(x: Blob) -> bool:
-            return x.abspath.endswith(".v")
-
-        files = list(filter(_select_coq_files, files))
-        result = random.choice(files)
-        return result
-
-    def get_file(self, filename: str, commit_name: str = 'master') -> Blob:
+    @abstractmethod
+    def _pre_get_file(self, **kwargs):
         """
-        Return a specific Coq source file from a specific commit.
+        Handle tasks needed before getting a non-random file.
+        """
+        pass
+
+    @abstractmethod
+    def _pre_get_random(self, **kwargs):
+        """
+        Handle tasks needed before getting a random file (or pair, etc).
+        """
+        pass
+
+    @abstractmethod
+    def _traverse_file_tree(self) -> List[FileObject]:
+        """
+        Traverse the file tree and return a list of Coq file objects.
+        """
+        pass
+
+    def get_file(self, filename: str, **kwargs) -> FileObject:
+        """
+        Return a specific Coq source file.
 
         Parameters
         ----------
         filename : str
             The absolute path to the file to return.
-        commit_name : str
-            A commit hash, branch name, or tag name from which to fetch
-            the file. This is 'master' by default.
 
         Returns
         -------
-        Blob
-            A Blob corresponding to the selected Coq source file
+        FileObject
+            A FileObject corresponding to the selected Coq source file
         """
-        commit = self.commit(commit_name)
-        for blob in commit.tree.traverse():
-            if blob.abspath == filename:
-                return blob
+        self._pre_get_file(**kwargs)
+        for obj in self._traverse_file_tree():
+            if obj.abspath == filename:
+                return obj
+
+    def get_random_file(self, **kwargs) -> FileObject:
+        """
+        Return a random Coq source file.
+
+        Returns
+        -------
+        FileObject
+            A random Coq source file in the form of a FileObject
+        """
+        self._pre_get_random(**kwargs)
+        files = self._traverse_file_tree()
+        result = random.choice(files)
+        return result
 
     def get_random_sentence(
             self,
             filename: Optional[str] = None,
-            commit_name: Optional[str] = None,
-            glom_proofs: bool = True) -> str:
+            glom_proofs: bool = True,
+            **kwargs) -> str:
         """
         Return a random sentence from the project.
 
-        Filename and commit are random unless they are provided.
+        Filename is random unless it is provided.
 
         Parameters
         ----------
         filename : Optional[str], optional
             Absolute path to file to load sentence from, by default None
-        commit_name : Optional[str], optional
-            Commit name (hash, branch name, tag name) to load sentence
-            from, by default None
         glom_proofs : bool, optional
             Boolean flag indicating whether proofs should form their own
             pseudo-sentences, by default True
@@ -136,35 +143,33 @@ class Project(Repo):
         str
             A random sentence from the project
         """
-        if commit_name is None:
-            commit_name = self.get_random_commit()
         if filename is None:
-            blob = self.get_random_file(commit_name)
+            obj = self.get_random_file(**kwargs)
         else:
-            blob = self.get_file(filename, commit_name)
-        contents = blob.data_stream.read()
-        sentences = Project.split_by_sentence(contents, 'utf-8', glom_proofs)
+            obj = self.get_file(filename, **kwargs)
+        contents = obj.file_contents
+        sentences = ProjectBase.split_by_sentence(
+            contents,
+            'utf-8',
+            glom_proofs)
         sentence = random.choice(sentences)
         return sentence
 
     def get_random_sentence_pair_adjacent(
             self,
             filename: Optional[str] = None,
-            commit_name: Optional[str] = None,
-            glom_proofs: bool = True) -> List[str]:
+            glom_proofs: bool = True,
+            **kwargs) -> List[str]:
         """
         Return a random adjacent sentence pair from the project.
 
-        Filename and commit are random unless they are provided.
+        Filename is random unless it is provided.
 
         Parameters
         ----------
         filename : Optional[str], optional
             Absolute path to file to load sentences from, by default
             None
-        commit_name : Optional[str], optional
-            Commit name (hash, branch name, tag name) to load sentences
-            from, by default None
         glom_proofs : bool, optional
             Boolean flag indicating whether proofs should form their own
             pseudo-sentences, by default True
@@ -184,14 +189,12 @@ class Project(Repo):
                     "Can't find file with more than 1 sentence after",
                     THRESHOLD,
                     "attempts. Try different inputs.")
-            if commit_name is None:
-                commit_name = self.get_random_commit()
             if filename is None:
-                blob = self.get_random_file(commit_name)
+                obj = self.get_random_file(**kwargs)
             else:
-                blob = self.get_file(filename, commit_name)
-            contents = blob.data_stream.read()
-            sentences = Project.split_by_sentence(
+                obj = self.get_file(filename, **kwargs)
+            contents = obj.file_contents
+            sentences = ProjectBase.split_by_sentence(
                 contents,
                 'utf-8',
                 glom_proofs)
@@ -210,7 +213,9 @@ class Project(Repo):
             encoding: str = 'utf-8') -> str:
         comment_pattern = r"[(]+\*(.|\n|\r)*?\*[)]+"
         if isinstance(file_contents, bytes):
-            file_contents = Project._decode_byte_stream(file_contents, encoding)
+            file_contents = ProjectBase._decode_byte_stream(
+                file_contents,
+                encoding)
         str_no_comments = re.sub(comment_pattern, '', file_contents)
         return str_no_comments
 
@@ -246,8 +251,10 @@ class Project(Repo):
             flag.
         """
         if isinstance(file_contents, bytes):
-            file_contents = Project._decode_byte_stream(file_contents, encoding)
-        file_contents_no_comments = Project._strip_comments(
+            file_contents = ProjectBase._decode_byte_stream(
+                file_contents,
+                encoding)
+        file_contents_no_comments = ProjectBase._strip_comments(
             file_contents,
             encoding)
         # Split sentences by instances of periods followed by
@@ -270,7 +277,7 @@ class Project(Repo):
                     if sentences[idx] == "Proof." or sentences[idx].startswith(
                             "Proof "):
                         intermediate_list = []
-                        while sentences[idx] not in Project.proof_enders:
+                        while sentences[idx] not in ProjectBase.proof_enders:
                             intermediate_list.append(sentences[idx])
                             idx += 1
                         intermediate_list.append(sentences[idx])
@@ -294,8 +301,274 @@ class Project(Repo):
         return result
 
 
+class ProjectRepo(Repo, ProjectBase):
+    """
+    Class for representing a Coq project.
+
+    Based on GitPython's `Repo` class.
+
+    Attributes
+    ----------
+    name : str
+        The stem of the repo working directory, used as the project name
+    size_bytes : int
+        The total space on disk occupied by the files in the master
+        branch in bytes.
+    """
+
+    def __init__(self, dir_abspath: str):
+        """
+        Initialize Project object.
+        """
+        Repo.__init__(self, dir_abspath)
+        ProjectBase.__init__(self, dir_abspath)
+
+    def _get_dir_stem(self, *args, **kwargs) -> str:
+        """
+        Extract directory stem from working directory.
+        """
+        return pathlib.Path(self.working_dir).stem
+
+    def _get_size_bytes(self, *args, **kwargs) -> int:
+        """
+        Get size in bytes of working directory.
+        """
+        return sum(
+            f.stat().st_size
+            for f in pathlib.Path(self.working_dir).glob('**/*')
+            if f.is_file())
+
+    def _pre_get_file(self, **kwargs):
+        """
+        Set the current commit; use master if none given.
+        """
+        if "commit_name" in kwargs.keys():
+            if kwargs["commit_name"] is None:
+                self.current_commit_name = "master"
+            else:
+                self.current_commit_name = kwargs["commit_name"]
+        else:
+            self.current_commit_name = "master"
+
+    def _pre_get_random(self, **kwargs):
+        """
+        Set the current commit; use random if none given.
+        """
+        if "commit_name" in kwargs.keys():
+            if kwargs["commit_name"] is None:
+                self.current_commit_name = self.get_random_commit()
+            else:
+                self.current_commit_name = kwargs["commit_name"]
+        else:
+            self.current_commit_name = self.get_random_commit()
+
+    def _traverse_file_tree(self) -> List[FileObject]:
+        """
+        Traverse the file tree and return a full list of file objects.
+        """
+        commit = self.commit(self.current_commit_name)
+
+        def _select_coq_files(x, _i: int) -> bool:
+            return x.abspath.endswith(".v") if isinstance(x, Blob) else True
+
+        files = commit.tree.traverse(predicate=_select_coq_files)
+        return [FileObject(f.abspath, f.data_stream.read()) for f in files]
+
+    def get_file(
+            self,
+            filename: str,
+            commit_name: str = 'master') -> FileObject:
+        """
+        Return a specific Coq source file from a specific commit.
+
+        Parameters
+        ----------
+        filename : str
+            The absolute path to the file to return.
+        commit_name : str
+            A commit hash, branch name, or tag name from which to fetch
+            the file. This is 'master' by default.
+
+        Returns
+        -------
+        FileObject
+            A Blob corresponding to the selected Coq source file
+        """
+        return super().get_file(filename, commit_name=commit_name)
+
+    def get_random_commit(self) -> Commit:
+        """
+        Return a random `Commit` object from the project repo.
+
+        Returns
+        -------
+        Commit
+            A random `Commit` object from the project repo
+        """
+
+        def _get_hash(commit: Commit) -> str:
+            return commit.hexsha
+
+        commit_hashes = list(map(_get_hash, self.iter_commits('--all')))
+        chosen_hash = random.choice(commit_hashes)
+        result = self.commit(chosen_hash)
+        return result
+
+    def get_random_file(self, commit_name: Optional[str] = None) -> FileObject:
+        """
+        Return a random Coq source file from the repo.
+
+        The commit may be specified or left to be chosen at radnom.
+
+        Parameters
+        ----------
+        commit_name : str or None
+            A commit hash, branch name, or tag name indicating where
+            the file should be selected from. If None, commit is chosen
+            at random.
+
+        Returns
+        -------
+        FileObject
+            A random Coq source file in the form of a FileObject
+        """
+        return super().get_random_file(commit_name=commit_name)
+
+    def get_random_sentence(
+            self,
+            filename: Optional[str] = None,
+            glom_proofs: bool = True,
+            commit_name: Optional[str] = None) -> str:
+        """
+        Return a random sentence from the project.
+
+        Filename and commit are random unless they are provided.
+
+        Parameters
+        ----------
+        filename : Optional[str], optional
+            Absolute path to file to load sentence from, by default None
+        glom_proofs : bool, optional
+            Boolean flag indicating whether proofs should form their own
+            pseudo-sentences, by default True
+        commit_name : Optional[str], optional
+            Commit name (hash, branch name, tag name) to load sentence
+            from, by default None
+
+        Returns
+        -------
+        str
+            A random sentence from the project
+        """
+        return super().get_random_sentence(
+            filename,
+            glom_proofs,
+            commit_name=commit_name)
+
+    def get_random_sentence_pair_adjacent(
+            self,
+            filename: Optional[str] = None,
+            glom_proofs: bool = True,
+            commit_name: Optional[str] = None) -> List[str]:
+        """
+        Return a random adjacent sentence pair from the project.
+
+        Filename and commit are random unless they are provided.
+
+        Parameters
+        ----------
+        filename : Optional[str], optional
+            Absolute path to file to load sentences from, by default
+            None
+        glom_proofs : bool, optional
+            Boolean flag indicating whether proofs should form their own
+            pseudo-sentences, by default True
+        commit_name : Optional[str], optional
+            Commit name (hash, branch name, tag name) to load sentences
+            from, by default None
+
+        Returns
+        -------
+        List of str
+            A list of two adjacent sentences from the project, with the
+            first sentence chosen at random
+        """
+        return super().get_random_sentence_pair_adjacent(
+            filename,
+            glom_proofs,
+            commit_name=commit_name)
+
+
+class ProjectDir(ProjectBase):
+    """
+    Class for representing a Coq project.
+
+    This class makes no assumptions about whether the project directory
+    is a git repository or not.
+
+    Attributes
+    ----------
+    name : str
+        The stem of the repo working directory, used as the project name
+    size_bytes : int
+        The total space on disk occupied by the files in the master
+        branch in bytes.
+    working_dir : str
+        Absolute path to the working directory
+    """
+
+    def __init__(self, dir_abspath: str, *args, **kwargs):
+        """
+        Initialize Project object.
+        """
+        self.working_dir = dir_abspath
+        super().__init__(dir_abspath, *args, **kwargs)
+
+    def _get_dir_stem(self, *args, **kwargs) -> str:
+        """
+        Extract directory stem from working directory.
+        """
+        return pathlib.Path(self.working_dir).stem
+
+    def _get_size_bytes(self, *args, **kwargs) -> int:
+        """
+        Get size in bytes of working directory.
+        """
+        return sum(
+            f.stat().st_size
+            for f in pathlib.Path(self.working_dir).glob('**/*')
+            if f.is_file())
+
+    def _pre_get_file(self, **kwargs):
+        """
+        Do nothing.
+        """
+        pass
+
+    def _pre_get_random(self, **kwargs):
+        """
+        Do nothing.
+        """
+        pass
+
+    def _traverse_file_tree(self) -> List[FileObject]:
+        """
+        Traverse the file tree and return a list of Coq file objects.
+        """
+        files = pathlib.Path(self.working_dir).rglob("*.v")
+        out_files = []
+        for file in files:
+            with open(file, "rt") as f:
+                contents = f.read()
+                out_files.append(
+                    FileObject(os.path.join(self.working_dir,
+                                            file),
+                               contents))
+        return out_files
+
+
 # Custom types
-ProjectDict = Dict[str, Project]
+ProjectDict = Dict[str, Union[ProjectRepo, ProjectDir]]
 
 
 class CoqGymBaseDataset:
@@ -314,6 +587,7 @@ class CoqGymBaseDataset:
 
     def __init__(
             self,
+            project_class: Type[ProjectBase],
             projects: Optional[ProjectDict] = None,
             base_dir: Optional[str] = None,
             dir_list: Optional[List[str]] = None):
@@ -324,6 +598,9 @@ class CoqGymBaseDataset:
 
         Parameters
         ----------
+        project_class : Type[ProjectBase]
+            Class name for Project objects. Either ProjectRepo or
+            ProjectDir.
         projects : Optional[ProjectDict], optional
             If provided, use these already-created `Project` objects to
             build the dataset, by default None
@@ -363,7 +640,9 @@ class CoqGymBaseDataset:
             for proj_dir in os.listdir(base_dir):
                 if os.path.isdir(os.path.join(base_dir, proj_dir)):
                     try:
-                        project = Project(os.path.join(base_dir, proj_dir))
+                        project = project_class(
+                            os.path.join(base_dir,
+                                         proj_dir))
                         self.projects[project.name] = project
                     except InvalidGitRepositoryError:
                         # If a directory is not a repo, just ignore it
@@ -371,7 +650,7 @@ class CoqGymBaseDataset:
         else:
             for directory in dir_list:
                 try:
-                    project = Project(directory)
+                    project = project_class(directory)
                     self.projects[project.name] = project
                 except InvalidGitRepositoryError as e:
                     raise ValueError(
@@ -386,7 +665,7 @@ class CoqGymBaseDataset:
     def get_random_file(
             self,
             project_name: Optional[str] = None,
-            commit_name: Optional[str] = None) -> Blob:
+            commit_name: Optional[str] = None) -> FileObject:
         """
         Return a random Coq source file from one of the projects.
 
@@ -399,22 +678,23 @@ class CoqGymBaseDataset:
             Project name to draw random file from, by default None
         commit_name : Optional[str], optional
             Commit hash, branch name, or tag name to draw random file
-            from, by default None
+            from, if used by `project_class`, by default None
 
         Returns
         -------
-        Blob
-            A random Coq source file in the form of a Blob
+        FileObject
+            A random Coq source file in the form of a FileObject
         """
         if project_name is None:
             project_name = self._get_random_project()
-        return self.projects[project_name].get_random_file(commit_name)
+        return self.projects[project_name].get_random_file(
+            commit_name=commit_name)
 
     def get_file(
             self,
             filename: str,
             project_name: str,
-            commit_name: str = 'master') -> Blob:
+            commit_name: str = 'master') -> FileObject:
         """
         Return specific Coq source file from specific project & commit.
 
@@ -426,21 +706,23 @@ class CoqGymBaseDataset:
             Project name from which to load the file
         commit_name : str, optional
             A commit hash, branch name, or tag name from which to fetch
-            the file, by default 'master'
+            the file, if used by `project_class`, by default 'master'
 
         Returns
         -------
-        Blob
-            A Blob corresponding to the selected Coq source file
+        FileObject
+            A FileObject corresponding to the selected Coq source file
         """
-        return self.projects[project_name].get_file(filename, commit_name)
+        return self.projects[project_name].get_file(
+            filename,
+            commit_name=commit_name)
 
     def get_random_sentence(
             self,
             filename: Optional[str] = None,
             project_name: Optional[str] = None,
-            commit_name: Optional[str] = None,
-            glom_proofs: bool = True) -> str:
+            glom_proofs: bool = True,
+            commit_name: Optional[str] = None) -> str:
         """
         Return a random sentence from the group of projects.
 
@@ -453,12 +735,12 @@ class CoqGymBaseDataset:
             Absolute path to file to load sentence from, by default None
         project_name : Optional[str], optional
             Project name from which to load the file, by default None
-        commit_name : Optional[str], optional
-            A commit hash, branch name, or tag name from which to fetch
-            the file, by default None
         glom_proofs : bool, optional
             Boolean flag indicating whether proofs should form their own
             pseudo-sentences, by default True
+        commit_name : Optional[str], optional
+            A commit hash, branch name, or tag name from which to fetch
+            the file, if used by `project_class`, by default None
 
         Returns
         -------
@@ -469,15 +751,15 @@ class CoqGymBaseDataset:
             project_name = self._get_random_project()
         return self.projects[project_name].get_random_sentence(
             filename,
-            commit_name,
-            glom_proofs)
+            glom_proofs,
+            commit_name=commit_name)
 
     def get_random_sentence_pair_adjacent(
             self,
             filename: Optional[str] = None,
             project_name: Optional[str] = None,
-            commit_name: Optional[str] = None,
-            glom_proofs: bool = True) -> List[str]:
+            glom_proofs: bool = True,
+            commit_name: Optional[str] = None) -> List[str]:
         """
         Return a random adjacent sentence pair from the projects.
 
@@ -489,12 +771,12 @@ class CoqGymBaseDataset:
         project_name : Optional[str], optional
             Project naem from which to load the sentence pair, by
             default None
-        commit_name : Optional[str], optional
-            Commit hash, branch name, or tag name from which to fetch
-            the sentence pair, by default None
         glom_proofs : bool, optional
             Boolean flag indicating whether proofs should form their own
             pseduo-sentences, by default True
+        commit_name : Optional[str], optional
+            Commit hash, branch name, or tag name from which to fetch
+            the sentence pair, by default None
 
         Returns
         -------
@@ -506,8 +788,8 @@ class CoqGymBaseDataset:
             project_name = self._get_random_project()
         return self.projects[project_name].get_random_sentence_pair_adjacent(
             filename,
-            commit_name,
-            glom_proofs)
+            glom_proofs,
+            commit_name=commit_name)
 
     def _get_random_project(self) -> str:
         weights = []
@@ -523,14 +805,15 @@ def main():
     Test module functionality.
     """
     repo_folder = "../data/CompCert"
-    compcert_repo = Project(repo_folder)
+    compcert_repo = ProjectDir(repo_folder)
     random_file = compcert_repo.get_random_file()
-    ds = random_file.data_stream
-    output = ds.read()
-    for line in Project._decode_byte_stream(output).split('\n'):
+    fc = random_file.file_contents
+    # for line in ProjectDir._decode_byte_stream(fc).split('\n'):
+    #     print(line)
+    for line in fc.split('\n'):
         print(line)
     print('*************************************')
-    split_contents = Project.split_by_sentence(output)
+    split_contents = ProjectDir.split_by_sentence(fc)
     for line in split_contents:
         print(line)
     print("File:", random_file.abspath)
