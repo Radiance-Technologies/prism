@@ -619,7 +619,8 @@ class CoqGymBaseDataset:
 
     def __init__(
             self,
-            project_class: Type[ProjectBase],
+            *,
+            project_class: Optional[Type[ProjectBase]] = None,
             projects: Optional[ProjectDict] = None,
             base_dir: Optional[str] = None,
             dir_list: Optional[List[str]] = None):
@@ -630,9 +631,10 @@ class CoqGymBaseDataset:
 
         Parameters
         ----------
-        project_class : Type[ProjectBase]
+        project_class : Optional[Type[ProjectBase]], optional
             Class name for Project objects. Either ProjectRepo or
-            ProjectDir.
+            ProjectDir. Must be given if `base_dir` or `dir_list` is
+            given. Ignored if `projects` is given.
         projects : Optional[ProjectDict], optional
             If provided, use these already-created `Project` objects to
             build the dataset, by default None
@@ -652,6 +654,9 @@ class CoqGymBaseDataset:
         ValueError
             If one or more of the directories in `dir_list` is not a
             repository
+        ValueError
+            If `project_class` is not provided and either `base_dir` or
+            `dir_list` is provided.
         """
 
         def _three_way_xor(a: bool, b: bool, c: bool) -> bool:
@@ -669,6 +674,10 @@ class CoqGymBaseDataset:
         if projects_not_none:
             self.projects = projects
         elif base_dir_not_none:
+            if project_class is None:
+                raise ValueError(
+                    "If `base_dir` is given, `project_class` must be "
+                    "given as well.")
             for proj_dir in os.listdir(base_dir):
                 if os.path.isdir(os.path.join(base_dir, proj_dir)):
                     try:
@@ -680,6 +689,10 @@ class CoqGymBaseDataset:
                         # If a directory is not a repo, just ignore it
                         pass
         else:
+            if project_class is None:
+                raise ValueError(
+                    "If `dir_list` is given, `project_class` must be "
+                    "given as well.")
             for directory in dir_list:
                 try:
                     project = project_class(directory)
