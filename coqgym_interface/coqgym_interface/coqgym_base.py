@@ -219,10 +219,7 @@ class ProjectBase(ABC):
         str
             String representation of input data
         """
-        try:
-            return data.decode(encoding) if isinstance(data, bytes) else data
-        except UnicodeDecodeError:
-            print(data)
+        return data.decode(encoding) if isinstance(data, bytes) else data
 
     @staticmethod
     def _strip_comments(
