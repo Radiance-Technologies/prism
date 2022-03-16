@@ -30,6 +30,17 @@ class FileObject:
     file_contents: Union[str, bytes]
 
 
+class DirHasNoCoqFiles(Exception):
+    """
+    Exception indicating that the current directory has no Coq files.
+
+    Sub-directories should be checked as well before raising this
+    exception.
+    """
+
+    pass
+
+
 class ProjectBase(ABC):
     """
     Abstract base class for representing a Coq project.
@@ -544,6 +555,8 @@ class ProjectDir(ProjectBase):
         Initialize Project object.
         """
         self.working_dir = dir_abspath
+        if not self._traverse_file_tree():
+            raise DirHasNoCoqFiles(f"{dir_abspath} has no Coq files.")
         super().__init__(dir_abspath, *args, **kwargs)
 
     def _get_dir_stem(self, *args, **kwargs) -> str:
@@ -699,8 +712,10 @@ class CoqGymBaseDataset:
                             os.path.join(base_dir,
                                          proj_dir))
                         self.projects[project.name] = project
-                    except InvalidGitRepositoryError:
-                        # If a directory is not a repo, just ignore it
+                    except (InvalidGitRepositoryError, DirHasNoCoqFiles):
+                        # If we're using ProjectRepo and a directory is
+                        # not a repo, or if we're using ProjectDir and
+                        # the directory has no Coq files, just ignore it
                         pass
         else:
             if project_class is None:
@@ -715,11 +730,12 @@ class CoqGymBaseDataset:
                     raise ValueError(
                         f"{directory} in `dir_list` is not a valid repository."
                     ) from e
+                except DirHasNoCoqFiles as e:
+                    raise ValueError(
+                        f"{directory} in `dir_list` has no Coq files.") from e
         # Store project weights for sampling later.
-        self.weights: Dict[str,
-                           float] = {}
-        for proj_name, proj in self.projects.items():
-            self.weights[proj_name] = proj.master_size_bytes
+        self.weights = {pn: p.size_bytes for pn,
+                        p in self.projects.items()}
 
     def get_random_file(
             self,
