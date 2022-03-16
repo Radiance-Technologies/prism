@@ -7,7 +7,7 @@ import unittest
 
 import git
 
-from coqgym_interface.coqgym_base import ProjectBase, ProjectRepo
+from coqgym_interface.coqgym_base import ProjectBase, ProjectDir, ProjectRepo
 
 
 class TestProjectBase(unittest.TestCase):
@@ -77,13 +77,13 @@ class TestProjectRepo(unittest.TestCase):
         # Checkout HEAD of master as of March 14, 2022
         cls.master_hash = "9d3521b4db46773239a2c5f9f6970de826075508"
         cls.test_repo.git.checkout(cls.master_hash)
+        cls.project = ProjectRepo(cls.repo_path)
 
     def test_get_file(self):
         """
         Ensure get_file method returns a file as expected.
         """
-        repo = ProjectRepo(self.repo_path)
-        file_object = repo.get_file(
+        file_object = self.project.get_file(
             os.path.join(self.repo_path,
                          "cfrontend",
                          "Ctypes.v"),
@@ -93,7 +93,42 @@ class TestProjectRepo(unittest.TestCase):
             os.path.join(self.repo_path,
                          "cfrontend",
                          "Ctypes.v"))
-        self.assertIsInstance(file_object.file_contents, bytes)
+        self.assertGreater(len(file_object.file_contents), 0)
+
+    def test_get_random_commit(self):
+        """
+        Ensure a sensible commit object is returned.
+        """
+        commit_hash = self.project.get_random_commit()
+        self.assertEqual(len(commit_hash.hexsha), 40)
+
+    def test_get_random_file(self):
+        """
+        Ensure a correctly-formed random file is returned.
+        """
+        random_file = self.project.get_random_file(commit_name=self.master_hash)
+        self.assertTrue(random_file.abspath.endswith(".v"))
+        self.assertGreater(len(random_file.file_contents), 0)
+
+    def test_get_random_sentence(self):
+        """
+        Ensure a properly-formed random sentence is returned.
+        """
+        random_sentence = self.project.get_random_sentence(
+            commit_name=self.master_hash)
+        self.assertIsInstance(random_sentence, str)
+        self.assertTrue(random_sentence.endswith('.'))
+
+    def test_get_random_sentence_pair(self):
+        """
+        Ensure correctly-formed sentence pairs are returned.
+        """
+        random_pair = self.project.get_random_sentence_pair_adjacent(
+            commit_name=self.master_hash)
+        for sentence in random_pair:
+            self.assertIsInstance(sentence, str)
+            self.assertTrue(sentence.endswith('.'))
+            self.assertGreater(len(sentence), 0)
 
     @classmethod
     def tearDownClass(cls):
@@ -102,6 +137,26 @@ class TestProjectRepo(unittest.TestCase):
         """
         del cls.test_repo
         shutil.rmtree(os.path.join(cls.repo_path))
+
+
+class TestProjectDir(TestProjectRepo):
+    """
+    Tests for `ProjectDir`, based on `TestProjectRepo`.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        """
+        Set the project to use `ProjectDir` instead of `ProjectRepo`.
+        """
+        super().setUpClass()
+        cls.project = ProjectDir(cls.repo_path)
+
+    def test_get_random_commit(self):
+        """
+        Ignore; this method is not implemented in `ProjectDir`.
+        """
+        pass
 
 
 if __name__ == "__main__":

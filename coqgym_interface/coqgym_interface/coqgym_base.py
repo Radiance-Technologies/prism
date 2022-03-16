@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Type, Union
 from warnings import warn
 
-from git import Blob, Commit, InvalidGitRepositoryError, Repo
+from git import Commit, InvalidGitRepositoryError, Repo
 
 
 @dataclass
@@ -200,8 +200,29 @@ class ProjectBase(ABC):
         return sentences[first_sentence_idx : first_sentence_idx + 2]
 
     @staticmethod
-    def _decode_byte_stream(byte_stream: bytes, encoding: str = 'utf-8') -> str:
-        return byte_stream.decode(encoding)
+    def _decode_byte_stream(
+            data: Union[bytes,
+                        str],
+            encoding: str = 'utf-8') -> str:
+        """
+        Decode the incoming data if it's a byte string.
+
+        Parameters
+        ----------
+        data : Union[bytes, str]
+            Byte-string or string data to be decoded if byte-string
+        encoding : str, optional
+            Encoding to use in decoding, by default 'utf-8'
+
+        Returns
+        -------
+        str
+            String representation of input data
+        """
+        try:
+            return data.decode(encoding) if isinstance(data, bytes) else data
+        except UnicodeDecodeError:
+            print(data)
 
     @staticmethod
     def _strip_comments(
@@ -364,11 +385,7 @@ class ProjectRepo(Repo, ProjectBase):
         Traverse the file tree and return a full list of file objects.
         """
         commit = self.commit(self.current_commit_name)
-
-        def _select_coq_files(x, _i: int) -> bool:
-            return x.abspath.endswith(".v") if isinstance(x, Blob) else True
-
-        files = commit.tree.traverse(predicate=_select_coq_files)
+        files = [f for f in commit.tree.traverse() if f.abspath.endswith(".v")]
         return [FileObject(f.abspath, f.data_stream.read()) for f in files]
 
     def get_file(
