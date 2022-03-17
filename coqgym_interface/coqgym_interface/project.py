@@ -295,9 +295,10 @@ class ProjectBase(ABC):
         file_contents_no_comments = ProjectBase._strip_comments(
             file_contents,
             encoding)
-        # Split sentences by instances of periods followed by
-        # whitespace.
-        sentences = re.split(r"\.\s", file_contents_no_comments)
+        # Split sentences by instances of single periods followed by
+        # whitespace. Double (or more) periods are specifically
+        # excluded.
+        sentences = re.split(r"(?<!\.)\.\s", file_contents_no_comments)
         for i in range(len(sentences)):
             # Replace any whitespace or group of whitespace with a
             # single space.
