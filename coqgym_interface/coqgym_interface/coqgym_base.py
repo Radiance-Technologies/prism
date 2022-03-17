@@ -804,12 +804,6 @@ class CoqGymBaseDataset:
             The commit (named by branch, hash, or tag) to load from, if
             relevant, for each project, by default None
 
-        Returns
-        -------
-        Generator[str, None, None]
-            A generator which yields the contents of a Coq file in the
-            group of projects
-
         Yields
         ------
         str
@@ -971,12 +965,6 @@ class CoqGymBaseDataset:
         commit_names : Optional[Dict[str, str]], optional
             The commit (named by branch, hash, or tag) to load from, if
             relevant, for each project, by default None
-
-        Returns
-        -------
-        Generator[str, None, None]
-            A generator that yields single Coq sentences from Coq files
-            within the group of projects
 
         Yields
         ------
