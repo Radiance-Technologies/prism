@@ -788,6 +788,62 @@ class CoqGymBaseDataset:
         self.weights = {pn: p.size_bytes for pn,
                         p in self.projects.items()}
 
+    def CoqFileGenerator(self, commit_names: Optional[Dict[str, str]] = None):
+        """
+        Yield Coq files from CoqGymBaseDataset.
+
+        Parameters
+        ----------
+        commit_names : Optional[Dict[str, str]], optional
+            The commit (named by branch, hash, or tag) to load from, if
+            relevant, for each project, by default None
+
+        Yields
+        ------
+        str
+            Contents of a Coq file in the group of projects
+        """
+        project_names = sorted(list(self.projects.keys()))
+        if commit_names is None:
+            commit_names = {pn: 'master' for pn in project_names}
+        for project in project_names:
+            file_list = self.projects[project].get_file_list(
+                commit_name=commit_names[project])
+            for file in file_list:
+                with open(file, "r") as f:
+                    f: TextIOWrapper
+                    contents = f.read()
+                    yield FileObject(file, contents)
+
+    def CoqSentenceGenerator(
+            self,
+            commit_names: Optional[Dict[str,
+                                        str]] = None,
+            glom_proofs: bool = True):
+        """
+        Yield Coq sentences from CoqGymBaseDataset.
+
+        Parameters
+        ----------
+        commit_names : Optional[Dict[str, str]], optional
+            The commit (named by branch, hash, or tag) to load from, if
+            relevant, for each project, by default None
+
+        Yields
+        ------
+        str
+            A single sentence, which might be a glommed proof if
+            `glom_proofs` is True, from a Coq file within the group of
+            projects in the dataset
+        """
+        coq_file_generator = self.CoqFileGenerator(commit_names)
+        for file_obj in coq_file_generator:
+            sentence_list = ProjectBase.split_by_sentence(
+                file_obj.file_contents,
+                glom_proofs=glom_proofs)
+            for sentence in sentence_list:
+                yield sentence
+
     def get_random_file(
             self,
             project_name: Optional[str] = None,
@@ -926,88 +982,18 @@ class CoqGymBaseDataset:
         return chosen_proj
 
 
-def CoqFileGenerator(
-        dataset: CoqGymBaseDataset,
-        commit_names: Optional[Dict[str,
-                                    str]] = None):
-    """
-    Yield Coq files from CoqGymBaseDataset.
-
-    Parameters
-    ----------
-    dataset : CoqGymBaseDataset
-        The base dataset to yield the Coq files from
-    commit_names : Optional[Dict[str, str]], optional
-        The commit (named by branch, hash, or tag) to load from, if
-        relevant, for each project, by default None
-
-    Yields
-    ------
-    str
-        Contents of a Coq file in the group of projects
-    """
-    project_names = sorted(list(dataset.projects.keys()))
-    if commit_names is None:
-        commit_names = {pn: 'master' for pn in project_names}
-    for project in project_names:
-        file_list = dataset.projects[project].get_file_list(
-            commit_name=commit_names[project])
-        for file in file_list:
-            with open(file, "r") as f:
-                f: TextIOWrapper
-                contents = f.read()
-                yield contents
-
-
-def CoqSentenceGenerator(
-        dataset: CoqGymBaseDataset,
-        commit_names: Optional[Dict[str,
-                                    str]] = None,
-        glom_proofs: bool = True):
-    """
-    Yield Coq sentences from CoqGymBaseDataset.
-
-    Parameters
-    ----------
-    dataset : CoqGymBaseDataset
-        The base dataset to yield the Coq files from
-    commit_names : Optional[Dict[str, str]], optional
-        The commit (named by branch, hash, or tag) to load from, if
-        relevant, for each project, by default None
-
-    Yields
-    ------
-    str
-        A single sentence, which might be a glommed proof if
-        `glom_proofs` is True, from a Coq file within the group of
-        projects in the dataset
-    """
-    coq_file_generator = CoqFileGenerator(dataset, commit_names)
-    for file in coq_file_generator:
-        sentence_list = ProjectBase.split_by_sentence(
-            file,
-            glom_proofs=glom_proofs)
-        for sentence in sentence_list:
-            yield sentence
-
-
 def main():
     """
     Test module functionality.
     """
     repo_folder = "../data/CompCert"
-    compcert_repo = ProjectDir(repo_folder)
-    random_file = compcert_repo.get_random_file()
-    fc = random_file.file_contents
-    # for line in ProjectDir._decode_byte_stream(fc).split('\n'):
-    #     print(line)
-    for line in fc.split('\n'):
-        print(line)
-    print('*************************************')
-    split_contents = ProjectDir.split_by_sentence(fc)
-    for line in split_contents:
-        print(line)
-    print("File:", random_file.abspath)
+    dataset = CoqGymBaseDataset(
+        project_class=ProjectRepo,
+        dir_list=[repo_folder])
+    csg = dataset.CoqSentenceGenerator()
+    for _i, _ in enumerate(csg):
+        pass
+    print(_i)
 
 
 if __name__ == "__main__":

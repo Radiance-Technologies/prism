@@ -333,6 +333,24 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         self.assertIsInstance(random_sentence, str)
         self.assertTrue(random_sentence.endswith('.'))
 
+    def test_coq_file_generator(self):
+        """
+        Ensure `CoqFileGenerator` produces sane output.
+        """
+        cfg = self.dataset.CoqFileGenerator()
+        for file_obj in cfg:
+            self.assertTrue(os.path.isfile(file_obj.abspath))
+            self.assertIsInstance(file_obj.file_contents, str)
+
+    def test_coq_sentence_generator(self):
+        """
+        Ensure `CoqSentenceGenerator` produces sane output.
+        """
+        csg = self.dataset.CoqSentenceGenerator()
+        for sentence in csg:
+            self.assertGreater(len(sentence), 0)
+            self.assertTrue(sentence.endswith('.'))
+
     @classmethod
     def tearDownClass(cls):
         """
