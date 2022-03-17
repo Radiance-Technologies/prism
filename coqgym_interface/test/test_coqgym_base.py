@@ -337,7 +337,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         """
         Ensure `CoqFileGenerator` produces sane output.
         """
-        cfg = self.dataset.CoqFileGenerator()
+        cfg = self.dataset.files()
         for file_obj in cfg:
             self.assertTrue(os.path.isfile(file_obj.abspath))
             self.assertIsInstance(file_obj.file_contents, str)
@@ -346,7 +346,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         """
         Ensure `CoqSentenceGenerator` produces sane output.
         """
-        csg = self.dataset.CoqSentenceGenerator()
+        csg = self.dataset.sentences()
         for sentence in csg:
             self.assertGreater(len(sentence), 0)
             self.assertTrue(sentence.endswith('.'))

@@ -8,7 +8,7 @@ import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from io import TextIOWrapper
-from typing import Dict, List, Optional, Type, Union
+from typing import Dict, Generator, List, Optional, Type, Union
 from warnings import warn
 
 from git import Commit, InvalidGitRepositoryError, Repo
@@ -788,7 +788,13 @@ class CoqGymBaseDataset:
         self.weights = {pn: p.size_bytes for pn,
                         p in self.projects.items()}
 
-    def CoqFileGenerator(self, commit_names: Optional[Dict[str, str]] = None):
+    def files(
+        self,
+        commit_names: Optional[Dict[str,
+                                    str]] = None
+    ) -> Generator[str,
+                   None,
+                   None]:
         """
         Yield Coq files from CoqGymBaseDataset.
 
@@ -797,6 +803,12 @@ class CoqGymBaseDataset:
         commit_names : Optional[Dict[str, str]], optional
             The commit (named by branch, hash, or tag) to load from, if
             relevant, for each project, by default None
+
+        Returns
+        -------
+        Generator[str, None, None]
+            A generator which yields the contents of a Coq file in the
+            group of projects
 
         Yields
         ------
@@ -815,11 +827,13 @@ class CoqGymBaseDataset:
                     contents = f.read()
                     yield FileObject(file, contents)
 
-    def CoqSentenceGenerator(
+    def sentences(
             self,
             commit_names: Optional[Dict[str,
                                         str]] = None,
-            glom_proofs: bool = True):
+            glom_proofs: bool = True) -> Generator[str,
+                                                   None,
+                                                   None]:
         """
         Yield Coq sentences from CoqGymBaseDataset.
 
@@ -829,6 +843,12 @@ class CoqGymBaseDataset:
             The commit (named by branch, hash, or tag) to load from, if
             relevant, for each project, by default None
 
+        Returns
+        -------
+        Generator[str, None, None]
+            A generator that yields single Coq sentences from Coq files
+            within the group of projects
+
         Yields
         ------
         str
@@ -836,7 +856,7 @@ class CoqGymBaseDataset:
             `glom_proofs` is True, from a Coq file within the group of
             projects in the dataset
         """
-        coq_file_generator = self.CoqFileGenerator(commit_names)
+        coq_file_generator = self.files(commit_names)
         for file_obj in coq_file_generator:
             sentence_list = ProjectBase.split_by_sentence(
                 file_obj.file_contents,
@@ -990,7 +1010,7 @@ def main():
     dataset = CoqGymBaseDataset(
         project_class=ProjectRepo,
         dir_list=[repo_folder])
-    csg = dataset.CoqSentenceGenerator()
+    csg = dataset.sentences()
     for _i, _ in enumerate(csg):
         pass
     print(_i)
