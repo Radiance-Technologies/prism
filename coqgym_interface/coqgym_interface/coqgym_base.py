@@ -7,7 +7,7 @@ import random
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from io import FileIO
+from io import TextIOWrapper
 from typing import Dict, List, Optional, Type, Union
 from warnings import warn
 
@@ -954,7 +954,7 @@ def CoqFileGenerator(
             commit_name=commit_names[project])
         for file in file_list:
             with open(file, "r") as f:
-                f: FileIO
+                f: TextIOWrapper
                 contents = f.read()
                 yield contents
 
