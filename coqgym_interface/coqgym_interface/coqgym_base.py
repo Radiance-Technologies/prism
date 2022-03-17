@@ -7,6 +7,7 @@ import random
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from io import FileIO
 from typing import Dict, List, Optional, Type, Union
 from warnings import warn
 
@@ -113,6 +114,18 @@ class ProjectBase(ABC):
         """
         if not filename.endswith(".v"):
             raise ValueError("filename must end in .v")
+
+    @abstractmethod
+    def get_file_list(self, **kwargs) -> List[FileObject]:
+        """
+        Return a list of all Coq files associated with this project.
+
+        Returns
+        -------
+        List[str]
+            The list of absolute paths to all Coq files in the project
+        """
+        pass
 
     def get_random_file(self, **kwargs) -> FileObject:
         """
@@ -429,6 +442,29 @@ class ProjectRepo(Repo, ProjectBase):
             filename,
             (commit.tree / rel_filename).data_stream.read())
 
+    def get_file_list(self, commit_name: str = 'master') -> List[FileObject]:
+        """
+        Return a list of all Coq files associated with this project.
+
+        Parameters
+        ----------
+        commit_name : str
+            A commit hash, branch name, or tag name from which to get
+            the file list. This is 'master' by default.
+
+        Returns
+        -------
+        List[str]
+            The list of absolute paths to all Coq files in the project
+        """
+        commit = self.commit(commit_name)
+        files = [
+            str(f.abspath)
+            for f in commit.tree.traverse()
+            if f.abspath.endswith(".v")
+        ]
+        return sorted(files)
+
     def get_random_commit(self) -> Commit:
         """
         Return a random `Commit` object from the project repo.
@@ -624,6 +660,21 @@ class ProjectDir(ProjectBase):
         with open(filename, "rt") as f:
             contents = f.read()
         return FileObject(filename, contents)
+
+    def get_file_list(self, **kwargs) -> List[FileObject]:
+        """
+        Return a list of all Coq files associated with this project.
+
+        Returns
+        -------
+        List[str]
+            The list of absolute paths to all Coq files in the project
+        """
+        files = [
+            str(i.resolve())
+            for i in pathlib.Path(self.working_dir).rglob("*.v")
+        ]
+        return sorted(files)
 
 
 # Custom types
@@ -875,7 +926,10 @@ class CoqGymBaseDataset:
         return chosen_proj
 
 
-def CoqFileGenerator(dataset: CoqGymBaseDataset):
+def CoqFileGenerator(
+        dataset: CoqGymBaseDataset,
+        commit_names: Optional[Dict[str,
+                                    str]] = None):
     """
     Yield Coq files from CoqGymBaseDataset.
 
@@ -883,8 +937,58 @@ def CoqFileGenerator(dataset: CoqGymBaseDataset):
     ----------
     dataset : CoqGymBaseDataset
         The base dataset to yield the Coq files from
+    commit_names : Optional[Dict[str, str]], optional
+        The commit (named by branch, hash, or tag) to load from, if
+        relevant, for each project, by default None
+
+    Yields
+    ------
+    str
+        Contents of a Coq file in the group of projects
     """
-    pass
+    project_names = sorted(list(dataset.projects.keys()))
+    if commit_names is None:
+        commit_names = {pn: 'master' for pn in project_names}
+    for project in project_names:
+        file_list = dataset.projects[project].get_file_list(
+            commit_name=commit_names[project])
+        for file in file_list:
+            with open(file, "r") as f:
+                f: FileIO
+                contents = f.read()
+                yield contents
+
+
+def CoqSentenceGenerator(
+        dataset: CoqGymBaseDataset,
+        commit_names: Optional[Dict[str,
+                                    str]] = None,
+        glom_proofs: bool = True):
+    """
+    Yield Coq sentences from CoqGymBaseDataset.
+
+    Parameters
+    ----------
+    dataset : CoqGymBaseDataset
+        The base dataset to yield the Coq files from
+    commit_names : Optional[Dict[str, str]], optional
+        The commit (named by branch, hash, or tag) to load from, if
+        relevant, for each project, by default None
+
+    Yields
+    ------
+    str
+        A single sentence, which might be a glommed proof if
+        `glom_proofs` is True, from a Coq file within the group of
+        projects in the dataset
+    """
+    coq_file_generator = CoqFileGenerator(dataset, commit_names)
+    for file in coq_file_generator:
+        sentence_list = ProjectBase.split_by_sentence(
+            file,
+            glom_proofs=glom_proofs)
+        for sentence in sentence_list:
+            yield sentence
 
 
 def main():
