@@ -29,6 +29,29 @@ class CoqGymBaseDataset:
         The dictionary of Coq projects to draw data from
     weights : Dict[str, float]
         Weights for each project for sampling
+
+    Methods
+    -------
+    files(commit_names)
+        Returns a generator that yields Coq files from the object.
+    get_random_file(project_name, commit_name)
+        Returns a random Coq source file from one of the internal
+        projects.
+    get_file(filename, project_name, commit_name)
+        Returns a specific Coq source file from a specific project and
+        commit (if applicable).
+    get_random_sentence(filename, project_name, glom_proofs,
+            commit_name)
+        Returns a random sentence from one of the internal projects.
+    get_random_sentence_pair_adjacent(filename, project_name,
+            glom_proofs, commit_name)
+        Returns a random adjacent sentence pair from one of the internal
+        projects.
+    sentences(commit_names, glom_proofs)
+        Returns a generator that yields Coq sentences from the object.
+    _get_random_project()
+        Returns a random project from the list of internal projects,
+        with sampling weighted by `weights`.
     """
 
     projects: ProjectDict = {}
