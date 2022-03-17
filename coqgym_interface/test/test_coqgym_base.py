@@ -7,12 +7,8 @@ import unittest
 
 import git
 
-from coqgym_interface.coqgym_base import (
-    CoqGymBaseDataset,
-    ProjectBase,
-    ProjectDir,
-    ProjectRepo,
-)
+from coqgym_interface.dataset import CoqGymBaseDataset
+from coqgym_interface.project import ProjectBase, ProjectDir, ProjectRepo
 
 
 class TestProjectBase(unittest.TestCase):
