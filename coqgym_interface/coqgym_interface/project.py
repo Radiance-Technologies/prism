@@ -584,13 +584,24 @@ class ProjectDir(ProjectBase):
         branch in bytes.
     working_dir : str
         Absolute path to the working directory
+    ignore_decode_errors : bool, optional
+        Skip files with UnicodeDecodeError and ignore the exception
+        if True, otherwise raise the exception.
+
     """
 
-    def __init__(self, dir_abspath: str, *args, **kwargs):
+    def __init__(
+            self,
+            dir_abspath: str,
+            *args,
+            ignore_decode_errors: Optional[bool] = False,
+            **kwargs
+        ):
         """
         Initialize Project object.
         """
         self.working_dir = dir_abspath
+        self.ignore_decode_errors = ignore_decode_errors
         if not self._traverse_file_tree():
             raise DirHasNoCoqFiles(f"{dir_abspath} has no Coq files.")
         super().__init__(dir_abspath, *args, **kwargs)
@@ -629,12 +640,16 @@ class ProjectDir(ProjectBase):
         files = pathlib.Path(self.working_dir).rglob("*.v")
         out_files = []
         for file in files:
-            with open(file, "rt") as f:
-                contents = f.read()
-                out_files.append(
-                    FileObject(os.path.join(self.working_dir,
-                                            file),
-                               contents))
+            try:
+                with open(file, "rt") as f:
+                    contents = f.read()
+                    out_files.append(
+                        FileObject(os.path.join(self.working_dir,
+                                                file),
+                                   contents))
+            except UnicodeDecodeError as e:
+                if not self.ignore_decode_errors:
+                    raise e
         return out_files
 
     def get_file(self, filename: str, *args, **kwargs) -> FileObject:
