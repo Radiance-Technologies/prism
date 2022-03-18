@@ -587,7 +587,6 @@ class ProjectDir(ProjectBase):
     ignore_decode_errors : bool, optional
         Skip files with UnicodeDecodeError and ignore the exception
         if True, otherwise raise the exception.
-
     """
 
     def __init__(

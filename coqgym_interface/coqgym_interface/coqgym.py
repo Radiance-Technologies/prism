@@ -1,21 +1,23 @@
-import os
 import json
-import datasets
-from typing import List, Optional, Union, Tuple, NewType, Dict, Sequence
+import os
 from enum import Enum
+from typing import Dict, List, NewType, Optional, Sequence, Tuple, Union
+
+import datasets
+from git.exc import InvalidGitRepositoryError
 
 from coqgym_interface.dataset import CoqGymBaseDataset, Metadata
-from coqgym_interface.project import ProjectDir, ProjectRepo
-from git.exc import InvalidGitRepositoryError
+from coqgym_interface.extractors import (
+    CoqGymInterfaceSentenceExtractor,
+    Extractor,
+)
 from coqgym_interface.HFDatasets.definitions import (
     COQGYM_ENV_VAR,
+    DEFAULT_METADATA_FILENAME,
     DatasetTask,
-    DEFAULT_METADATA_FILENAME
-    SentenceFormat
+    SentenceFormat,
 )
-from coqgym_interface.extractors import Extractor, CoqGymInterfaceSentenceExtractor
-
-
+from coqgym_interface.project import ProjectDir, ProjectRepo
 
 logger = datasets.logging.get_logger(__name__)
 
@@ -23,7 +25,9 @@ logger = datasets.logging.get_logger(__name__)
 
 
 class CoqGymConfig(datasets.BuilderConfig):
-    """BuilderConfig for Coq dataset."""
+    """
+    BuilderConfig for Coq dataset.
+    """
 
     def __init__(
         self,
@@ -130,7 +134,7 @@ class CoqGym(datasets.GeneratorBasedBuilder):
 
     def _info(self) -> datasets.DatasetInfo:
         """
-        Generate Dataset Info for Coq Dataset
+        Generate Dataset Info for Coq Dataset.
         """
         features = {feature: datasets.Value("string") for feature in self.config.features}
         return datasets.DatasetInfo(
@@ -143,7 +147,7 @@ class CoqGym(datasets.GeneratorBasedBuilder):
         Create SplitGenerator for each split inside metadata file.
         """
         metadata = Metadata(self.config.metadata_path)
-        split_dict = metadata.get_project_split()            
+        split_dict = metadata.get_project_split()
         return [
             datasets.SplitGenerator(
                 name=datasets.Split(split.lower()),
@@ -162,10 +166,10 @@ class CoqGym(datasets.GeneratorBasedBuilder):
             data_path = self.config.data_path
             target_paths = [os.path.join(data_path, t) for t in targets]
             sentence_extractor = self.config.extractor_cls(
-                target_paths, 
+                target_paths,
                 sentence_format=self.sentence_format,
                 ignore_decode_errors=self.ignore_decode_errors
-            )        
+            )
             base_dataset = _get_coqgym_dataset(self.config.data_path, targets)
             for id_, sentence in enumerate(base_dataset.sentences()):
                 if sentence.strip():

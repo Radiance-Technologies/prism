@@ -1,17 +1,19 @@
 """
 Module for extracting dataset from targets (projects, files, etc.).
 """
+from typing import Dict, Generator, List, Tuple
+
 import datasets
-from typing import List, Tuple, Dict, Generator
-from coqgym_interface.dataset import CoqGymBaseDataset
-from coqgym_interface.project import ProjectDir, ProjectRepo
 from git.exc import InvalidGitRepositoryError
+
+from coqgym_interface.dataset import CoqGymBaseDataset
 from coqgym_interface.definitions import SentenceFormat
+from coqgym_interface.project import ProjectDir, ProjectRepo
 
 
 class ExtractorBase(ABC):
     """
-    Base Extractor class
+    Base Extractor class.
     """
     def __init__(self, targets: List[str]):
         self.targets = targets

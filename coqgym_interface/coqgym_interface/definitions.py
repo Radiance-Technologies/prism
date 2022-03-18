@@ -1,16 +1,16 @@
 """
 Module for constants used across different datasets.
 """
-import os
 import json
-import datasets
-from typing import List, Optional, Union, Tuple, TypeVar , Dict, Sequence
+import os
 from enum import Enum
+from typing import Dict, List, Optional, Sequence, Tuple, TypeVar, Union
+
+import datasets
+from git.exc import InvalidGitRepositoryError
 
 from coqgym_interface.dataset import CoqGymBaseDataset
 from coqgym_interface.project import ProjectDir, ProjectRepo
-from git.exc import InvalidGitRepositoryError
-
 
 COQGYM_ENV_VAR: str = "COQGYM_SHARED"
 DEFAULT_METADATA_FILENAME: str = "metadata.json"
@@ -41,7 +41,6 @@ class SentenceFormat(Enum):
     coq_gloom: str
         All sentences for a proof are on the same line, while sentences
         outside of proofs are own their own line.
-
     """
     raw: str = "raw"
     coq: str = "coq"

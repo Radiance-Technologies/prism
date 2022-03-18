@@ -4,7 +4,7 @@ Module providing the base dataset object for the CoqGym interface.
 import os
 import random
 from io import TextIOWrapper
-from typing import Dict, Generator, List, Optional, Type, Union, TypeVar
+from typing import Dict, Generator, List, Optional, Type, TypeVar, Union
 
 from git import InvalidGitRepositoryError
 
@@ -15,7 +15,6 @@ from coqgym_interface.project import (
     ProjectDir,
     ProjectRepo,
 )
-
 
 ProjectDict = Dict[str, Union[ProjectRepo, ProjectDir]]
 MetadataDict = TypeVar("MetadataDict")
@@ -32,7 +31,6 @@ class Metadata:
         Path to metadata file
     data : MetadataDict
         Dictionary format of metadata file.
-
     """
     def __init__(self, path: Optional[str] = None):
         """
@@ -62,9 +60,9 @@ class Metadata:
         """
         Return dictionary map of split names to project names.
 
-        Each split present ('train', 'test', 'validation') maps to
-        a list of project names. All files in a project will be used
-        to generate examples for the corresponding split.
+        Each split present ('train', 'test', 'validation') maps to a
+        list of project names. All files in a project will be used to
+        generate examples for the corresponding split.
         """
         return self.data['split'] if self.data else None
 
