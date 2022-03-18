@@ -153,7 +153,7 @@ class CoqGymBaseDataset:
         self,
         commit_names: Optional[Dict[str,
                                     str]] = None
-    ) -> Generator[str,
+    ) -> Generator[FileObject,
                    None,
                    None]:
         """
