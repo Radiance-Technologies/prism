@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools", "wheel", "setuptools_scm"]
+build-backend = 'setuptools.build_meta'
+
+# [tool.poetry]
+# version = "0.0.1"
+# name = "coqgym_interface"
+# description = "Utilities for interacting with CoqGym"
+# authors = ["Radiance Technologies, Inc."]
+# readme = "../README.md"
+# license = "Proprietary"
+
+# [[tool.poetry.source]]
+# name = 'radtorch_repo'
+# url = 'https://radpy_deploy_token:DjPSv9x8AG1Acr7MyM_D@rsngit.radiancetech.com/api/v4/projects/79/packages/pypi/simple'
+
+# [[tool.poetry.source]]
+# name = 'radpytools_repo'
+# url = 'https://radpy_deploy_token:DjPSv9x8AG1Acr7MyM_D@rsngit.radiancetech.com/api/v4/projects/78/packages/pypi/simple'
+
+# [tool.poetry.dependencies]
+# GitPython = "*"
+# python = "~3.9"
+# radtorch = ">=0.14.13"
+
+# [tool.poetry-dynamic-versioning]
+# enable = true
+# vcs = "git"
+# style = "semver"
+
+# [build-system]
+# requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning"]
+# build-backend = "poetry.core.masonry.api"
+
+# [build-system]
+# requires = ["flit_core >=3.2,<4"]
+# build-backend = "flit_core.buildapi"
+
+# [project]
+# name = "coqgym_interface"
+# authors = [
+#     {name = "Radiance Technologies, Inc."},
+# ]
+# readme = "../README.md"
+# requires-python = ">=3.9,<3.10"
+# dynamic = ["version", "description"]
+# dependencies = [
+#     "GitPython",
+#     "pkg_resources"
+# ]
