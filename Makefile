@@ -6,10 +6,12 @@ export
 .PHONY: install
 install: venv_check venv
 	echo "Installing project into virtual environment $(VENV)"
+	SOFT=True make -C coqgym_interface install
 
 # test internal packages
 test: venv_check venv
 	echo "Running tests"
+	SOFT=True make -C coqgym_interface test
 
 venv: $(VENV)/bin/activate
 
