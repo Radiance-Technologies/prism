@@ -210,10 +210,9 @@ class CoqGymBaseDataset:
         self,
         commit_names: Optional[Dict[str,
                                     str]] = None,
-        ignore_decode_errors: bool = False
-    ) -> Generator[FileObject,
-                   None,
-                   None]:
+        ignore_decode_errors: bool = False) -> Generator[FileObject,
+                                                         None,
+                                                         None]:
         """
         Yield Coq files from CoqGymBaseDataset.
 
@@ -376,13 +375,13 @@ class CoqGymBaseDataset:
             commit_name=commit_name)
 
     def sentences(
-        self,
-        commit_names: Optional[Dict[str,
-                                    str]] = None,
-        glom_proofs: bool = True,
-        ignore_decode_errors: bool = False) -> Generator[str,
-                                                                   None,
-                                                                   None]:
+            self,
+            commit_names: Optional[Dict[str,
+                                        str]] = None,
+            glom_proofs: bool = True,
+            ignore_decode_errors: bool = False) -> Generator[str,
+                                                             None,
+                                                             None]:
         """
         Yield Coq sentences from CoqGymBaseDataset.
 
