@@ -210,7 +210,7 @@ class CoqGymBaseDataset:
         self,
         commit_names: Optional[Dict[str,
                                     str]] = None,
-        ignore_decode_errors: Optional[bool] = False
+        ignore_decode_errors: bool = False
     ) -> Generator[FileObject,
                    None,
                    None]:
@@ -222,7 +222,7 @@ class CoqGymBaseDataset:
         commit_names : Optional[Dict[str, str]], optional
             The commit (named by branch, hash, or tag) to load from, if
             relevant, for each project, by default None
-        ignore_decode_errors : Optional[bool], optional
+        ignore_decode_errors : bool
             Skip files with UnicodeDecodeError and ignore the exception
             if True, otherwise raise the exception.
         Yields
@@ -380,7 +380,7 @@ class CoqGymBaseDataset:
         commit_names: Optional[Dict[str,
                                     str]] = None,
         glom_proofs: bool = True,
-        ignore_decode_errors: Optional[bool] = False) -> Generator[str,
+        ignore_decode_errors: bool = False) -> Generator[str,
                                                                    None,
                                                                    None]:
         """
@@ -391,7 +391,7 @@ class CoqGymBaseDataset:
         commit_names : Optional[Dict[str, str]], optional
             The commit (named by branch, hash, or tag) to load from, if
             relevant, for each project, by default None
-        ignore_decode_errors : Optional[bool], optional
+        ignore_decode_errors : bool
             Skip files with UnicodeDecodeError and ignore the exception
             if True, otherwise raise the exception.
 

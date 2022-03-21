@@ -584,7 +584,7 @@ class ProjectDir(ProjectBase):
         branch in bytes.
     working_dir : str
         Absolute path to the working directory
-    ignore_decode_errors : bool, optional
+    ignore_decode_errors : bool
         Skip files with UnicodeDecodeError and ignore the exception
         if True, otherwise raise the exception.
     """
@@ -593,7 +593,7 @@ class ProjectDir(ProjectBase):
             self,
             dir_abspath: str,
             *args,
-            ignore_decode_errors: Optional[bool] = False,
+            ignore_decode_errors: bool = False,
             **kwargs):
         """
         Initialize Project object.
