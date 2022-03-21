@@ -594,8 +594,7 @@ class ProjectDir(ProjectBase):
             dir_abspath: str,
             *args,
             ignore_decode_errors: Optional[bool] = False,
-            **kwargs
-        ):
+            **kwargs):
         """
         Initialize Project object.
         """
@@ -643,9 +642,10 @@ class ProjectDir(ProjectBase):
                 with open(file, "rt") as f:
                     contents = f.read()
                     out_files.append(
-                        FileObject(os.path.join(self.working_dir,
-                                                file),
-                                   contents))
+                        FileObject(
+                            os.path.join(self.working_dir,
+                                         file),
+                            contents))
             except UnicodeDecodeError as e:
                 if not self.ignore_decode_errors:
                     raise e

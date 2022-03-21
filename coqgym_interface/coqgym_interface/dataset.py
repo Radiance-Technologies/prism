@@ -19,6 +19,7 @@ from coqgym_interface.project import (
 ProjectDict = Dict[str, Union[ProjectRepo, ProjectDir]]
 MetadataDict = TypeVar("MetadataDict")
 
+
 class Metadata:
     """
     Helper class to load a dataset metadata.
@@ -32,6 +33,7 @@ class Metadata:
     data : MetadataDict
         Dictionary format of metadata file.
     """
+
     def __init__(self, path: Optional[str] = None):
         """
         Initialize Metadata instance.
@@ -41,7 +43,7 @@ class Metadata:
         path: Optional[str]
             File location of metadata file.
         """
-        filetype = os.path.splitext(path)[-1][1:]
+        filetype = os.path.splitext(path)[-1][1 :]
         self.filetype = filetype
         self.path = path
         self.data = self._load() if path is not None else None
@@ -72,7 +74,6 @@ class Metadata:
         Load a json from given the filename.
         """
         return json.load(open(path))
-
 
 
 class CoqGymBaseDataset:
@@ -375,13 +376,13 @@ class CoqGymBaseDataset:
             commit_name=commit_name)
 
     def sentences(
-            self,
-            commit_names: Optional[Dict[str,
-                                        str]] = None,
-            glom_proofs: bool = True,
-            ignore_decode_errors: Optional[bool] = False) -> Generator[str,
-                                                                       None,
-                                                                       None]:
+        self,
+        commit_names: Optional[Dict[str,
+                                    str]] = None,
+        glom_proofs: bool = True,
+        ignore_decode_errors: Optional[bool] = False) -> Generator[str,
+                                                                   None,
+                                                                   None]:
         """
         Yield Coq sentences from CoqGymBaseDataset.
 
@@ -402,8 +403,8 @@ class CoqGymBaseDataset:
             projects in the dataset
         """
         coq_file_generator = self.files(
-            commit_names, ignore_decode_errors=ignore_decode_errors
-            )
+            commit_names,
+            ignore_decode_errors=ignore_decode_errors)
         for file_obj in coq_file_generator:
             sentence_list = ProjectBase.split_by_sentence(
                 file_obj.file_contents,
