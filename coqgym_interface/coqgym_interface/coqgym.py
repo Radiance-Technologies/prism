@@ -1,15 +1,16 @@
-import json
+"""
+Dataset creation script for coqgym.
+"""
 import os
-from enum import Enum
-from typing import Dict, List, NewType, Optional, Sequence, Tuple, Union
+from typing import List, Optional, Sequence, Union
 
 import datasets
-from git.exc import InvalidGitRepositoryError
 
-from coqgym_interface.dataset import CoqGymBaseDataset, Metadata
+from coqgym_interface.dataset import Metadata
 from coqgym_interface.extractors import (
     CoqGymInterfaceSentenceExtractor,
     Extractor,
+    ExtractorBase,
 )
 from coqgym_interface.HFDatasets.definitions import (
     COQGYM_ENV_VAR,
@@ -17,11 +18,8 @@ from coqgym_interface.HFDatasets.definitions import (
     DatasetTask,
     SentenceFormat,
 )
-from coqgym_interface.project import ProjectDir, ProjectRepo
 
 logger = datasets.logging.get_logger(__name__)
-
-
 
 
 class CoqGymConfig(datasets.BuilderConfig):
@@ -30,19 +28,21 @@ class CoqGymConfig(datasets.BuilderConfig):
     """
 
     def __init__(
-        self,
-        data_path: Optional[str] = None,
-        extractor_cls: Optional[Extractor] = None,
-        features: List[str] = ["text"],
-        label_classes: Optional[Sequence[str]] = None,
-        metadata_path: Optional[str] = None,
-        sentence_format: Union[str, SentenceFormat] = SentenceFormat.coq_gloom,
-        task: Union[str, DatasetTask] = DatasetTask.LM,
-        task_version: Optional[str] = None,
-        **kwargs
-    ):
+            self,
+            data_path: Optional[str] = None,
+            extractor_cls: Optional[Extractor] = None,
+            features: Optional[List[str]] = None,
+            label_classes: Optional[Sequence[str]] = None,
+            metadata_path: Optional[str] = None,
+            sentence_format: Union[str,
+                                   SentenceFormat] = SentenceFormat.coq_glom,
+            task: Union[str,
+                        DatasetTask] = DatasetTask.LM,
+            task_version: Optional[str] = None,
+            **kwargs):
         """
-        BuilderConfig for Coq dataset.
+        Initialize ConfigBuilder for Coq dataset.
+
         Parameters
         ----------
         data_path : Optional[str]
@@ -85,12 +85,7 @@ class CoqGymConfig(datasets.BuilderConfig):
             # Construct name based on options.
             kwargs['name'] = '_'.join(('coqgym', task_str, sentence_str))
 
-        super().__init__(
-            version=datasets.Version(
-                "1.0.0",
-            ),
-            **kwargs
-        )
+        super().__init__(version=datasets.Version("1.0.0",), **kwargs)
         self.data_path = data_path
         self.extractor_cls = extractor_cls
         self.features = features
@@ -102,21 +97,25 @@ class CoqGymConfig(datasets.BuilderConfig):
 
 
 class CoqGym(datasets.GeneratorBasedBuilder):
+    """
+    CoqGym dataset generator.
+    """
 
     VERSION = datasets.Version("0.1.0")
 
     BUILDER_CONFIGS = [
-        CoqGymConfig(  # Sentence per line, with proof gloom
-            extractor_cls = CoqGymInterfaceSentenceExtractor,
+        CoqGymConfig(  # Sentence per line, with proof glom
+            extractor_cls=CoqGymInterfaceSentenceExtractor,
             features=["text"],
-            name="coqgym-coqlang-gloomed",
-            sentence_format='coq-gloom',
+            name="coqgym-coqlang-glomed",
+            sentence_format='coq-glom',
             task='language-modeling',
             task_version="pretraining-phase1",
-            description="MLM with coq code. 1 sentence per line, proofs are 1 sentence"
+            description="MLM with coq code. 1 sentence per line,\
+                         proofs are 1 sentence"
         ),
-        CoqGymConfig(  # Sentence per line, no gloom
-            extractor_cls = CoqGymInterfaceSentenceExtractor,
+        CoqGymConfig(  # Sentence per line, no glom
+            extractor_cls=CoqGymInterfaceSentenceExtractor,
             features=["text"],
             sentence_format='coq',
             task='language-modeling',
@@ -125,24 +124,44 @@ class CoqGym(datasets.GeneratorBasedBuilder):
         ),
     ]
 
-    DEFAULT_CONFIG_NAME: str = "coqgym-coqlang-gloomed"
+    DEFAULT_CONFIG_NAME: str = "coqgym-coqlang-glomed"
 
-    def _coqgym_interface_extractor(self, targets: List[str], split: datasets.Split) -> :
-        if self.config.task is DatasetTask.LM:
-            CoqGymInterfaceSentenceExtractor(target_paths)
+    def _extractor(
+            self,
+            targets: List[str],
+            split: datasets.Split) -> ExtractorBase:
+        """
+        Create example extractor.
 
+        Parameters
+        ----------
+        targets : List[str]
+            List of targets to extract examples from
+        split : datasets.Split
+            Dataset split examples are being created for.
+
+        Returns
+        -------
+        ExtractorBase
+            Generator that returns dataset examples.
+        """
 
     def _info(self) -> datasets.DatasetInfo:
         """
         Generate Dataset Info for Coq Dataset.
         """
-        features = {feature: datasets.Value("string") for feature in self.config.features}
+        features = {
+            feature: datasets.Value("string")
+            for feature in self.config.features
+        }
         return datasets.DatasetInfo(
             description=self.config.description,
-            features=datasets.Features(features)
-        )
+            features=datasets.Features(features))
 
-    def _split_generators(self, dl_manager: datasets.DownloadManager) -> List[datasets.SplitGenerator]:
+    def _split_generators(
+            self,
+            dl_manager: datasets.DownloadManager
+    ) -> List[datasets.SplitGenerator]:
         """
         Create SplitGenerator for each split inside metadata file.
         """
@@ -154,42 +173,26 @@ class CoqGym(datasets.GeneratorBasedBuilder):
                 gen_kwargs={
                     "targets": targets,
                     "split": datasets.Split(split.lower())
-                }
-            ) for split, targets in split_dict.items()
+                }) for split,
+            targets in split_dict.items()
         ]
 
     def _generate_examples(self, targets: List[str], split: datasets.Split):
         """
         Yield examples in language modeling format from targets.
         """
+        dp = self.config.data_path
         if self.config.task is DatasetTask.LM:
-            data_path = self.config.data_path
-            target_paths = [os.path.join(data_path, t) for t in targets]
-            sentence_extractor = self.config.extractor_cls(
+            target_paths = [os.path.join(dp, t) for t in targets]
+            extractor = self.config.extractor_cls(
                 target_paths,
                 sentence_format=self.sentence_format,
-                ignore_decode_errors=self.ignore_decode_errors
-            )
-            base_dataset = _get_coqgym_dataset(self.config.data_path, targets)
-            for id_, sentence in enumerate(base_dataset.sentences()):
+                ignore_decode_errors=self.ignore_decode_errors)
+            for id_, sentence in extractor:
                 if sentence.strip():
                     yield id_, {"text": sentence}
                 else:
                     yield id_, {"text": ""}
         else:
-            raise ValueError(f"Unknown or unimplemented task: {self.config.task}")
-
-def _get_coqgym_dataset(root: str, projects: List[str]) -> CoqGymBaseDataset:
-
-    def make(cls):
-        d = {}
-        for dir in projects:
-            project = cls(os.path.join(root, dir), ignore_decode_errors=True)
-            d[project.name] = project
-        return d
-    #try:
-    #    base_dataset = CoqGymBaseDataset(projects=make(ProjectRepo))
-    #except InvalidGitRepositoryError:
-    #    base_dataset = CoqGymBaseDataset(projects=make(ProjectDir))
-    base_dataset = CoqGymBaseDataset(projects=make(ProjectDir))
-    return base_dataset
+            raise ValueError(
+                f"Unknown or unimplemented task: {self.config.task}")
