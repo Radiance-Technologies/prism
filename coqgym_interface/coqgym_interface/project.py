@@ -56,12 +56,13 @@ class ProjectBase(ABC):
 
     proof_enders = ["Qed.", "Save.", "Defined.", "Admitted.", "Abort."]
 
-    def __init__(self, dir_abspath: str):
+    def __init__(self, dir_abspath: str, ignore_decode_errors: bool = False):
         """
         Initialize Project object.
         """
         self.name = self._get_dir_stem(dir_abspath)
         self.size_bytes = self._get_size_bytes(dir_abspath)
+        self.ignore_decode_errors = ignore_decode_errors
 
     @abstractmethod
     def _get_dir_stem(self, dir_abspath: str) -> str:
@@ -355,12 +356,12 @@ class ProjectRepo(Repo, ProjectBase):
         branch in bytes.
     """
 
-    def __init__(self, dir_abspath: str):
+    def __init__(self, dir_abspath: str, ignore_decode_errors: bool = True):
         """
         Initialize Project object.
         """
         Repo.__init__(self, dir_abspath)
-        ProjectBase.__init__(self, dir_abspath)
+        ProjectBase.__init__(self, dir_abspath, ignore_decode_errors)
 
     def _get_dir_stem(self, *args, **kwargs) -> str:
         """
@@ -589,17 +590,14 @@ class ProjectDir(ProjectBase):
         if True, otherwise raise the exception.
     """
 
-    def __init__(
-            self,
-            dir_abspath: str,
-            *args,
-            ignore_decode_errors: bool = False,
-            **kwargs):
+    def __init__(self, dir_abspath: str, *args, **kwargs):
         """
         Initialize Project object.
         """
         self.working_dir = dir_abspath
-        self.ignore_decode_errors = ignore_decode_errors
+        self.ignore_decode_errors: bool = kwargs.get(
+            'ignore_decode_errors',
+            False)
         if not self._traverse_file_tree():
             raise DirHasNoCoqFiles(f"{dir_abspath} has no Coq files.")
         super().__init__(dir_abspath, *args, **kwargs)

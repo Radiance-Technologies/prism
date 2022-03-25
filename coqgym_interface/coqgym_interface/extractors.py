@@ -33,7 +33,7 @@ class SentenceExtractorBase(ExtractorBase):
     """
 
     def __init__(self, targets: List[str], sentence_format: SentenceFormat):
-        super().__init__(self, targets)
+        ExtractorBase.__init__(self, targets)
         self.sentence_format = sentence_format
 
 
@@ -42,8 +42,12 @@ class CoqGymInterfaceSentenceExtractor(SentenceExtractorBase):
     Class to extract sentences using coqgym_interface.
     """
 
-    def __init__(self, *args, ignore_decode_errors: bool = True, **kwargs):
-        super().__init__(self, *args, **kwargs)
+    def __init__(
+            self,
+            targets: List[str],
+            sentence_format: SentenceFormat = SentenceFormat.coq_glom,
+            ignore_decode_errors: bool = True):
+        SentenceExtractorBase.__init__(self, targets, sentence_format)
         if self.sentence_format is SentenceFormat.coq_glom:
             glom_proofs = True
         else:
@@ -91,7 +95,7 @@ class CoqGymInterfaceSentenceExtractor(SentenceExtractorBase):
             project_dict[project.name] = project
         return project_dict
 
-    def __iter__(self) -> Generator[Tuple[int, str]]:
+    def __iter__(self) -> Generator[None, Tuple[int, str], None]:
         """
         Return a generator of sentence and sentence index.
 

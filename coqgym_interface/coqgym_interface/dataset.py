@@ -1,6 +1,7 @@
 """
 Module providing the base dataset object for the CoqGym interface.
 """
+import json
 import os
 import random
 from io import TextIOWrapper
@@ -224,6 +225,7 @@ class CoqGymBaseDataset:
         ignore_decode_errors : bool
             Skip files with UnicodeDecodeError and ignore the exception
             if True, otherwise raise the exception.
+
         Yields
         ------
         str

@@ -7,16 +7,15 @@ from typing import List, Optional, Sequence, Union
 import datasets
 
 from coqgym_interface.dataset import Metadata
-from coqgym_interface.extractors import (
-    CoqGymInterfaceSentenceExtractor,
-    Extractor,
-    ExtractorBase,
-)
-from coqgym_interface.HFDatasets.definitions import (
+from coqgym_interface.definitions import (
     COQGYM_ENV_VAR,
     DEFAULT_METADATA_FILENAME,
     DatasetTask,
     SentenceFormat,
+)
+from coqgym_interface.extractors import (
+    CoqGymInterfaceSentenceExtractor,
+    ExtractorBase,
 )
 
 logger = datasets.logging.get_logger(__name__)
@@ -30,7 +29,7 @@ class CoqGymConfig(datasets.BuilderConfig):
     def __init__(
             self,
             data_path: Optional[str] = None,
-            extractor_cls: Optional[Extractor] = None,
+            extractor_cls: Optional[ExtractorBase] = None,
             features: Optional[List[str]] = None,
             label_classes: Optional[Sequence[str]] = None,
             metadata_path: Optional[str] = None,
@@ -186,8 +185,7 @@ class CoqGym(datasets.GeneratorBasedBuilder):
             target_paths = [os.path.join(dp, t) for t in targets]
             extractor = self.config.extractor_cls(
                 target_paths,
-                sentence_format=self.sentence_format,
-                ignore_decode_errors=self.ignore_decode_errors)
+                sentence_format=self.config.sentence_format)
             for id_, sentence in extractor:
                 if sentence.strip():
                     yield id_, {"text": sentence}
