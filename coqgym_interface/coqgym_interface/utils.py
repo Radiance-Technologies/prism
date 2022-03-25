@@ -32,7 +32,7 @@ def replace_unknowns(input_sequence: str, unknown_set: Set[str]) -> str:
     return output_sequence
 
 
-def replace_unrecognized_sequences(
+def find_and_replace_unrecognized_sequences(
         input_sequence: str,
         tokenizer: Optional[Callable[[str],
                                      BatchEncoding]] = None,
@@ -41,7 +41,7 @@ def replace_unrecognized_sequences(
         unknown_token: str = "<unk>",
         special_tokens: Optional[Set[str]] = None) -> str:
     """
-    Replace sequences unknown to tokenizer with something meaningful.
+    Find/replace sequences unknown to the tokenizer.
 
     Parameters
     ----------
