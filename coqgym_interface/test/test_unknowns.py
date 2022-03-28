@@ -16,7 +16,7 @@ class TestUtils(unittest.TestCase):
 
     def test_replace_unrecognized_sequences_bart(self):
         """
-        Ensure this method properly converts unknowns.
+        Ensure this function properly converts unknowns.
         """
         test_in = "foo <unk> bar <unk>"
         test_out = find_and_replace_unrecognized_sequences(test_in)
@@ -24,7 +24,7 @@ class TestUtils(unittest.TestCase):
 
     def test_replace_unrecognized_sequences_bert(self):
         """
-        Ensure the method works with the Bert tokenizer.
+        Ensure the function works with the Bert tokenizer.
         """
         test_in = "foo bar ∀A baz"
         tokenizer_config = TokenizerConfiguration.from_name("bert_base_uncased")
@@ -37,6 +37,19 @@ class TestUtils(unittest.TestCase):
             test_in_2,
             tokenizer_config)
         self.assertEqual(test_out_2, "foo bar \\ensuremath{\\forall} A baz")
+
+    def test_rus_bert_with_unlatexable_character(self):
+        """
+        Make sure the function works to convert unlatexable unknowns.
+        """
+        test_in = "foo bar 𐡀baz"
+        tokenizer_config = TokenizerConfiguration.from_name("bert_base_uncased")
+        test_out = find_and_replace_unrecognized_sequences(
+            test_in,
+            tokenizer_config)
+        self.assertEqual(
+            test_out,
+            r"foo bar b'\xff\xfe\x02\xd8@\xdcb\x00a\x00z\x00'")
 
 
 if __name__ == "__main__":
