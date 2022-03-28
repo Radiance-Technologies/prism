@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Callable, Optional, Sequence, Set
 
+from pylatexenc.latexencode import unicode_to_latex
 from transformers import BartTokenizer, BatchEncoding, BertTokenizer
 
 
@@ -103,7 +104,7 @@ class TokenizerConfiguration:
 
 def replace_unknowns(input_sequence: str, unknown_set: Set[str]) -> str:
     """
-    Replace unknowns with ascii renderings of their utf-16 encodings.
+    Replace unknowns with LaTeX or ascii repr of their utf-16 encodings.
 
     Parameters
     ----------
@@ -119,10 +120,16 @@ def replace_unknowns(input_sequence: str, unknown_set: Set[str]) -> str:
     """
     output_sequence = input_sequence
     for unknown in list(unknown_set):
-        output_sequence = output_sequence.replace(
-            unknown,
-            str(bytes(unknown,
-                      encoding="utf-16")))
+        try:
+            output_sequence = unicode_to_latex(
+                output_sequence,
+                non_ascii_only=True,
+                unknown_char_policy='fail')
+        except ValueError:
+            output_sequence = output_sequence.replace(
+                unknown,
+                str(bytes(unknown,
+                          encoding="utf-16")))
     return output_sequence
 
 
