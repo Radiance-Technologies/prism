@@ -1,10 +1,11 @@
 """
 Module providing coqgym_interface utilities.
 """
+import re
 from copy import copy
 from typing import Callable, Optional, Sequence, Set
 
-from transformers import BartTokenizer, BatchEncoding
+from transformers import BartTokenizer, BatchEncoding, BertTokenizer
 
 
 def replace_unknowns(input_sequence: str, unknown_set: Set[str]) -> str:
@@ -95,6 +96,15 @@ def find_and_replace_unrecognized_sequences(
         for token in list(special_tokens):
             temp_input_sequence = temp_input_sequence.replace(token, "")
             reversed_trial_output = reversed_trial_output.replace(token, "")
+        # Strip any leading or trailing whitespace, possibly left over
+        # from special tokens at the beginning or end of the sequence
+        temp_input_sequence = temp_input_sequence.strip()
+        reversed_trial_output = reversed_trial_output.strip()
+        # Replace any remaining whitespace with single spaces to further
+        # clean up after special token removal
+        temp_input_sequence = re.sub(r"\s+", " ", temp_input_sequence)
+        reversed_trial_output = re.sub(r"\s+", " ", reversed_trial_output)
+        # Continue
         unk_token_brackets = reversed_trial_output.split(unknown_token)
         for start_bracket, end_bracket in zip(
                 unk_token_brackets[:-1],
@@ -126,3 +136,22 @@ def find_and_replace_unrecognized_sequences(
         return cleaned_sequence
     else:
         return input_sequence
+
+
+if __name__ == "__main__":
+    test_input = "foo bar ∀A bleep blorp"
+    tokenizer: BertTokenizer = BertTokenizer.from_pretrained(
+        "bert-base-uncased")
+    unknown_token = "[UNK]"
+    special_tokens = {'[SEP]',
+                      '[PAD]',
+                      '[CLS]',
+                      '[MASK]'}
+    cleaned_output = find_and_replace_unrecognized_sequences(
+        test_input,
+        tokenizer,
+        tokenizer.decode,
+        unknown_token,
+        special_tokens)
+    print(cleaned_output)
+    print(tokenizer.decode(tokenizer(test_input)['input_ids']))
