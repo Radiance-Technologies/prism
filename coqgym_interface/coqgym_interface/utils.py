@@ -43,6 +43,17 @@ def find_and_replace_unrecognized_sequences(
     """
     Find/replace sequences unknown to the tokenizer.
 
+    To find any unknown tokens in the input, the input is passed through
+    the tokenizer and then decoded again using the tokenizer. If any
+    `unknown_token`s are present in the reversed output, the output is
+    compared to the input to find out what sequences were turned into
+    `unknown_token`s.
+
+    The reversed output is split using the `unknown_token` as a
+    delimiter, and the resulting sequences are treated as "brackets"
+    for the unknown sequences. These brackets are used to localize and
+    identify the unknown sequences in the original input.
+
     Parameters
     ----------
     input_sequence : str
