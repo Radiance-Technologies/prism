@@ -218,15 +218,3 @@ def find_and_replace_unrecognized_sequences(
         return cleaned_sequence
     else:
         return input_sequence
-
-
-if __name__ == "__main__":
-    test_input = "foo bar ∀A bleep blorp"
-    tokenizer_config = TokenizerConfiguration.from_name("bert_base_uncased")
-    cleaned_output = find_and_replace_unrecognized_sequences(
-        test_input,
-        tokenizer_config)
-    print(cleaned_output)
-    print(
-        tokenizer_config.decode(
-            tokenizer_config.tokenizer(test_input)['input_ids']))
