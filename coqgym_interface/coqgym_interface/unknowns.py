@@ -119,7 +119,7 @@ def replace_unknowns(input_sequence: str, unknown_set: Set[str]) -> str:
         The input sequence with unknown subsequences replaced
     """
     output_sequence = input_sequence
-    for unknown in list(unknown_set):
+    for unknown in unknown_set:
         try:
             output_sequence = unicode_to_latex(
                 output_sequence,
@@ -179,7 +179,7 @@ def find_and_replace_unrecognized_sequences(
                 return x
 
         # Clean any non-unknown special tokens from sequences
-        for token in list(tokenizer_config.special_tokens):
+        for token in tokenizer_config.special_tokens:
             temp_input_sequence = temp_input_sequence.replace(token, "")
             reversed_trial_output = reversed_trial_output.replace(token, "")
         # Strip any leading or trailing whitespace, possibly left over
