@@ -3,7 +3,7 @@ Tests for the utils module.
 """
 import unittest
 
-from coqgym_interface.utils import find_and_replace_unrecognized_sequences
+from coqgym_interface.unknowns import find_and_replace_unrecognized_sequences
 
 
 class TestUtils(unittest.TestCase):
