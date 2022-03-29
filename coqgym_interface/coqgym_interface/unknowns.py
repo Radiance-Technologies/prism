@@ -18,6 +18,7 @@ class TokenizerEnum(Enum):
 
     BART_FACEBOOK_BART_BASE = auto()
     BERT_BASE_UNCASED = auto()
+    BERT_BASE_CASED = auto()
     OTHER = auto()
 
 
@@ -98,6 +99,19 @@ class TokenizerConfiguration:
                                 '[CLS]',
                                 '[MASK]'},
                 uncased=True)
+        elif name.lower() == TokenizerEnum.BERT_BASE_CASED.name.lower():
+            tokenizer: BertTokenizer = BertTokenizer.from_pretrained(
+                "bert-base-cased")
+            return cls(
+                name=TokenizerEnum.BERT_BASE_CASED,
+                tokenizer=tokenizer,
+                decode=tokenizer.decode,
+                unknown_token="[UNK]",
+                special_tokens={'[SEP]',
+                                '[PAD]',
+                                '[CLS]',
+                                '[MASK]'},
+                uncased=False)
         else:
             raise ValueError(f"Tokenizer with name {name} is unknown.")
 
