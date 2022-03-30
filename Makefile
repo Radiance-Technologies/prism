@@ -2,12 +2,12 @@ include Makefile.include
 
 export
 
-ifndef SWITCH_NAME
-SWITCH_NAME=prism-8.10.2
+ifndef OPAMSWITCH
+OPAMSWITCH=prism-8.10.2
 endif
 
 INSWITCH=$(shell opam switch show)
-ifeq ($(INSWITCH),$(SWITCH_NAME))
+ifeq ($(INSWITCH),$(OPAMSWITCH))
 INSWITCH=True
 else
 INSWITCH=False
@@ -22,7 +22,7 @@ install: venv_check venv
 # test internal packages
 test: venv_check venv switch_check
 	echo "Running tests"
-	pushd test && pytest --cov=$(PACKAGE) && popd
+	pytest --pyargs --cov=prism prism
 
 
 venv: $(VENV)/bin/activate
@@ -48,8 +48,7 @@ ifeq ($(INSWITCH),True)
 switch_check:
 else
 switch_check:
-	echo "You must activate the OPAM switch before making this target. \nCall 'source $(GITROOT)/setup_coq.sh' to activate the project switch."
-	exit 1
+	$(error You must activate the OPAM switch before making this target. $(n)    Call 'source $(GITROOT)/setup_coq.sh' to activate the project switch)
 endif
 
 clean:

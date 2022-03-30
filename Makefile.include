@@ -1,5 +1,11 @@
 SHELL=/bin/bash
 
+# newline
+define n
+
+
+endef
+
 ifndef GITROOT
 GITROOT= $(shell while :; do  [ -d .git  ] && [ -f .prism ] && { echo `pwd`; break; }; [ `pwd` = "/" ] && { echo ""; break; }; cd ..; done)
 endif
@@ -26,8 +32,7 @@ ifeq ($(INVENV),True)
 venv_check:
 else
 venv_check:
-	echo "You must activate a virtual environment before calling 'make'. \nCall 'source $(GITROOT)/setup_python.sh' to set environment variables first or set VENV to an existing virtual environment directory."
-	exit 1
+	$(error You must activate a virtual environment before calling 'make'. $(n)    Call 'source $(GITROOT)/setup_python.sh' to set environment variables first or set VENV to an existing virtual environment directory)
 endif
 
 PACKAGE=$(shell pwd | xargs basename)
