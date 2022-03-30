@@ -8,7 +8,7 @@ from typing import Dict, Generator, List, Optional, Type, Union
 
 from git import InvalidGitRepositoryError
 
-from coqgym_interface.project import (
+from prism.data.project import (
     DirHasNoCoqFiles,
     FileObject,
     ProjectBase,

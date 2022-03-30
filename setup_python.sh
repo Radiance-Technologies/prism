@@ -15,7 +15,7 @@ fi
 if [ "$1" == "-h" ] ; then
   echo "Help: setup_python.sh [python 3 version number]"
   echo ""
-  echo "Install a local version of Python 3 for use with the reg-dft build system. No administrator privileges required."
+  echo "Install a local version of Python 3. No administrator privileges required."
 fi
 
 if [ -z ${GITROOT+x} ];

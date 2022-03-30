@@ -2,16 +2,28 @@ include Makefile.include
 
 export
 
+ifndef SWITCH_NAME
+SWITCH_NAME=prism-8.10.2
+endif
+
+INSWITCH=$(shell opam switch show)
+ifeq ($(INSWITCH),$(SWITCH_NAME))
+INSWITCH=True
+else
+INSWITCH=False
+endif
+
 # build internal packages
 .PHONY: install
 install: venv_check venv
 	echo "Installing project into virtual environment $(VENV)"
-	SOFT=True make -C coqgym_interface install
+	pip install -e .
 
 # test internal packages
-test: venv_check venv
+test: venv_check venv switch_check
 	echo "Running tests"
-	SOFT=True make -C coqgym_interface test
+	pushd test && pytest --cov=$(PACKAGE) && popd
+
 
 venv: $(VENV)/bin/activate
 
@@ -32,6 +44,13 @@ $(VENV)/bin/activate: requirements.txt
 	echo "Conda environment $(CONDA_DEFAULT_ENV) already activated."
 endif
 
+ifeq ($(INSWITCH),True)
+switch_check:
+else
+switch_check:
+	echo "You must activate the OPAM switch before making this target. \nCall 'source $(GITROOT)/setup_coq.sh' to activate the project switch."
+	exit 1
+endif
 
 clean:
 	if [ $(INVENV) = "True" ] ; then \
@@ -42,3 +61,4 @@ clean:
 	fi
 	rm -rf $(VENV)
 	find -iname "*.pyc" -delete
+	opam switch remove $(SWITCH_NAME)
