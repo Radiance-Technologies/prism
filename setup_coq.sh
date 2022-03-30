@@ -28,13 +28,13 @@ if [ -z ${GITROOT+x} ];
             done);
 fi
 
-export SWITCH_NAME="prism-$COQ_VERSION"
-SWITCH_DETECTED=$(opam switch list 2>&1 | grep )
+export OPAMSWITCH="prism-$COQ_VERSION"
+SWITCH_DETECTED=$(opam switch list 2>&1 | grep $OPAMSWITCH)
 
 # remove artifacts from previous setup
-if [ ! -z ${SWITCH_DETECTED} ] ; then
+if [ ! -z ${SWITCH_DETECTED+x} ] ; then
   while true; do
-    read -p "Previous switch of $COQ_VERSION detected. Do you want to remove and reinstall?[y/n]" yn
+    read -p "Previous switch $OPAMSWITCH with Coq==$COQ_VERSION detected. Do you want to remove and reinstall?[y/n]" yn
     case $yn in
       [Yy]* ) REINSTALL=true; break;;
       [Nn]* ) REINSTALL=false; break;;
@@ -44,13 +44,18 @@ if [ ! -z ${SWITCH_DETECTED} ] ; then
 fi
 
 if [ "$REINSTALL" == "true" ] || [ "$REINSTALL" = "" ] ; then
-  test ! -z ${SWITCH_DETECTED} && echo "Removing previous $COQ_VERSION switch" &&  opam switch remove $SWITCH_NAME -y
+  test "$REINSTALL" == "true" && echo "Removing $OPAMSWITCH" && opam switch remove $OPAMSWITCH -y
 
-  echo "Installing requested version of Coq in switch $SWITCH_NAME"
-  opam switch create $SWITCH_NAME 4.07.1 -y
-	opam switch $SWITCH_NAME
+  echo "Installing requested version of Coq in switch $OPAMSWITCH"
+  opam switch create $OPAMSWITCH 4.07.1 -y
+  opam switch $OPAMSWITCH
+  echo "Updating shell environment"
   eval $(opam env)
   opam update
-	opam pin add coq $COQ_VERSION
-	opam pin add coq-serapi $SERAPI_VERSION
+  opam pin add coq $COQ_VERSION -y
+  opam pin add coq-serapi $SERAPI_VERSION -y
+else
+  opam switch $OPAMSWITCH
+  echo "Updating shell environment"
+  eval $(opam env)
 fi
