@@ -1,3 +1,9 @@
+"""
+Abstractions for Coq lexical tokens.
+
+Adapted from `roosterize.data.Token` at
+https://github.com/EngineeringSoftware/roosterize/.
+"""
 from dataclasses import dataclass
 from typing import Dict
 

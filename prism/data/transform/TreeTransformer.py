@@ -1,9 +1,8 @@
 import abc
 import random
-from typing import *
 
-from roosterize.data.TreeTransformation import TreeTransformationConsts
-from roosterize.sexp import *
+from prism.data.transform import TreeTransformationConsts
+from prism.parser.sexp import SexpList, SexpNode, SexpString
 
 
 class TreeTransformer:
@@ -67,7 +66,8 @@ class RandomTransformer(TreeTransformer):
 
     def transform(self, sexp: SexpNode, is_root: bool = True) -> SexpNode:
         # Each node, except root, gets a chance to be removed
-        # If a list is removed, its children are connected to the parent list
+        # If a list is removed, its children are connected to the parent
+        # list
         keep = is_root or random.random() < self.target_size_fraction
 
         if sexp.is_list():

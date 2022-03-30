@@ -1,8 +1,8 @@
-from prism.data.TreeTransformation import (
+from prism.data.transform.TreeTransformation import (
     TreeTransformation,
     TreeTransformationConsts,
 )
-from prism.data.TreeTransformer import (
+from prism.data.transform.TreeTransformer import (
     Depth10Transformer,
     RandomTransformer,
     TreeTransformer,

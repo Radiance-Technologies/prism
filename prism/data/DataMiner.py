@@ -21,9 +21,13 @@ from tqdm import tqdm
 
 from prism.data.CoqDocument import CoqDocument
 from prism.data.Definition import Definition
-from prism.data.Lemma import Lemma
-from prism.data.LemmaBackendSexpTransformers import LemmaBackendSexpTransformers
-from prism.data.LemmaForeendSexpTransformers import LemmaForeendSexpTransformers
+from prism.data.lemma import Lemma
+from prism.data.lemma.LemmaBackendSexpTransformers import (
+    LemmaBackendSexpTransformers,
+)
+from prism.data.lemma.LemmaForeendSexpTransformers import (
+    LemmaForeendSexpTransformers,
+)
 from prism.parser.gallina.CoqParser import CoqParser
 from prism.parser.gallina.ParserUtils import ParserUtils
 from prism.parser.gallina.SexpAnalyzer import SexpAnalyzer, SexpInfo
