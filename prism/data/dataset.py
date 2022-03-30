@@ -1,10 +1,11 @@
 """
 Module providing the base dataset object for the CoqGym interface.
 """
+import json
 import os
 import random
 from io import TextIOWrapper
-from typing import Dict, Generator, List, Optional, Type, Union
+from typing import Dict, Generator, List, Optional, Type, TypeVar, Union
 
 from git import InvalidGitRepositoryError
 
@@ -17,6 +18,63 @@ from prism.data.project import (
 )
 
 ProjectDict = Dict[str, Union[ProjectRepo, ProjectDir]]
+MetadataDict = TypeVar("MetadataDict")
+
+
+class Metadata:
+    """
+    Helper class to load a dataset metadata.
+
+    Attributes
+    ----------
+    filetype : str
+        File format the metadata file is saved in (e.g. json).
+    path : str
+        Path to metadata file
+    data : MetadataDict
+        Dictionary format of metadata file.
+    """
+
+    def __init__(self, path: Optional[str] = None):
+        """
+        Initialize Metadata instance.
+
+        Parameters
+        ----------
+        path: Optional[str]
+            File location of metadata file.
+        """
+        filetype = os.path.splitext(path)[-1][1 :]
+        self.filetype = filetype
+        self.path = path
+        self.data = self._load() if path is not None else None
+
+    def _load(self) -> MetadataDict:
+        """
+        Load metadata from file and return contents in dict format.
+        """
+        if self.filetype == 'json':
+            data = Metadata.from_json(self.path)
+        else:
+            raise ValueError(f"Unknown filetype: {self.filetype}")
+        return data
+
+    def get_project_split(self) -> Dict[str, str]:
+        """
+        Return dictionary map of split names to project names.
+
+        Each split present ('train', 'test', 'validation') maps to a
+        list of project names. All files in a project will be used to
+        generate examples for the corresponding split.
+        """
+        return self.data['split'] if self.data else None
+
+    @staticmethod
+    def from_json(path: str) -> MetadataDict:
+        """
+        Load a json from given the filename.
+        """
+        return json.load(open(path))
 
 
 class CoqGymBaseDataset:
@@ -152,10 +210,10 @@ class CoqGymBaseDataset:
     def files(
         self,
         commit_names: Optional[Dict[str,
-                                    str]] = None
-    ) -> Generator[FileObject,
-                   None,
-                   None]:
+                                    str]] = None,
+        ignore_decode_errors: bool = False) -> Generator[FileObject,
+                                                         None,
+                                                         None]:
         """
         Yield Coq files from CoqGymBaseDataset.
 
@@ -164,6 +222,9 @@ class CoqGymBaseDataset:
         commit_names : Optional[Dict[str, str]], optional
             The commit (named by branch, hash, or tag) to load from, if
             relevant, for each project, by default None
+        ignore_decode_errors : bool
+            Skip files with UnicodeDecodeError and ignore the exception
+            if True, otherwise raise the exception.
 
         Yields
         ------
@@ -177,10 +238,14 @@ class CoqGymBaseDataset:
             file_list = self.projects[project].get_file_list(
                 commit_name=commit_names[project])
             for file in file_list:
-                with open(file, "r") as f:
-                    f: TextIOWrapper
-                    contents = f.read()
-                    yield FileObject(file, contents)
+                try:
+                    with open(file, "r") as f:
+                        f: TextIOWrapper
+                        contents = f.read()
+                        yield FileObject(file, contents)
+                except UnicodeDecodeError as e:
+                    if not ignore_decode_errors:
+                        raise e
 
     def get_random_file(
             self,
@@ -315,9 +380,10 @@ class CoqGymBaseDataset:
             self,
             commit_names: Optional[Dict[str,
                                         str]] = None,
-            glom_proofs: bool = True) -> Generator[str,
-                                                   None,
-                                                   None]:
+            glom_proofs: bool = True,
+            ignore_decode_errors: bool = False) -> Generator[str,
+                                                             None,
+                                                             None]:
         """
         Yield Coq sentences from CoqGymBaseDataset.
 
@@ -326,6 +392,9 @@ class CoqGymBaseDataset:
         commit_names : Optional[Dict[str, str]], optional
             The commit (named by branch, hash, or tag) to load from, if
             relevant, for each project, by default None
+        ignore_decode_errors : bool
+            Skip files with UnicodeDecodeError and ignore the exception
+            if True, otherwise raise the exception.
 
         Yields
         ------
@@ -334,7 +403,9 @@ class CoqGymBaseDataset:
             `glom_proofs` is True, from a Coq file within the group of
             projects in the dataset
         """
-        coq_file_generator = self.files(commit_names)
+        coq_file_generator = self.files(
+            commit_names,
+            ignore_decode_errors=ignore_decode_errors)
         for file_obj in coq_file_generator:
             sentence_list = ProjectBase.split_by_sentence(
                 file_obj.file_contents,
