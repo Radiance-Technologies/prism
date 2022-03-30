@@ -12,3 +12,4 @@ venv*
 .eggs/
 .pytest_cache/
 .cache/
+*.coverage
