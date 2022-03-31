@@ -59,14 +59,9 @@ class DataMiner:
     TASK_DEFINITIONS = FilesManager.DEFINITIONS  # "definitions"
     TASK_INSTALL_COQ_PROJECTS = "install-coq-projects"
     TASK_LEMMA = FilesManager.LEMMAS  # "lemmas"
-    # "lemmas-bsexp-transformations"
-    TASK_LEMMA_BACKEND_SEXP_TRANSFORMATIONS = \
-        FilesManager.LEMMAS_BACKEND_SEXP_TRANSFORMATIONS
-    # "lemmas-filtered"
-    TASK_LEMMA_FILTERED = FilesManager.LEMMAS_FILTERED
-    # "lemmas-fsexp-transformations"
-    TASK_LEMMA_FOREEND_SEXP_TRANSFORMATIONS = \
-        FilesManager.LEMMAS_FOREEND_SEXP_TRANSFORMATIONS
+    TASK_LEMMA_BACKEND_SEXP_TRANSFORMATIONS = FilesManager.LEMMAS_BACKEND_SEXP_TRANSFORMATIONS  # noqa: B950 "lemmas-bsexp-transformations"
+    TASK_LEMMA_FILTERED = FilesManager.LEMMAS_FILTERED  # "lemmas-filtered"
+    TASK_LEMMA_FOREEND_SEXP_TRANSFORMATIONS = FilesManager.LEMMAS_FOREEND_SEXP_TRANSFORMATIONS  # noqa: B950 "lemmas-fsexp-transformations"
 
     dataset_dir = Macros.project_dir.parent / "math-comp-corpus"
 
