@@ -85,7 +85,7 @@ class CoqDocument:
     project_name : str
         The name of the project whence comes the file
     revision : str
-        ?
+        String identifying a commit
     abspath : str
         Absolute path to the file
     file_contents : str or bytes
@@ -97,7 +97,7 @@ class CoqDocument:
     project_name: str = ""
     revision: str = ""
     abspath: str = ""
-    file_contents: str = ""
+    source_code: str = ""
 
     def get_all_tokens(self) -> List[Token]:
         """
@@ -136,7 +136,7 @@ class CoqDocument:
             project_name=self.project_name,
             revision=self.revision,
             abspath=self.abspath,
-            file_contents=self.file_contents)
+            source_code=self.source_code)
 
     def debug_repr(self) -> str:
         """

@@ -244,7 +244,7 @@ class CoqGymBaseDataset:
                         contents = f.read()
                         yield CoqDocument(
                             abspath=file,
-                            file_contents=contents,
+                            source_code=contents,
                             project_name=project)
                 except UnicodeDecodeError as e:
                     if not ignore_decode_errors:
@@ -411,7 +411,7 @@ class CoqGymBaseDataset:
             ignore_decode_errors=ignore_decode_errors)
         for file_obj in coq_file_generator:
             sentence_list = ProjectBase.split_by_sentence(
-                file_obj.file_contents,
+                file_obj.source_code,
                 glom_proofs=glom_proofs)
             for sentence in sentence_list:
                 yield sentence

@@ -1,3 +1,6 @@
+"""
+Module providing Coq file parsing capabilities.
+"""
 import logging
 from typing import List, Optional, Set, Union
 
@@ -11,6 +14,9 @@ from prism.util.debug import Debug
 
 
 class CoqParserConsts:
+    """
+    Class collecting constants used in parsing Coq files.
+    """
 
     VERNAC_TYPES_GALLINA_OR_VERNAC_CONTROL = [
         # pure-VernacControl like
@@ -623,15 +629,31 @@ class CoqParser:
     """
     Parses (different parts of) Coq code.
     """
+
     logger: logging.Logger = logging.getLogger(__name__, logging.INFO)
     if Debug.is_debug:
         logger.setLevel(logging.DEBUG)
 
     @classmethod
-    def parse_sertok_sentences(
+    def parse_sertok_sentences(  # noqa: C901
             cls,
             sertok_sentences: List[SexpInfo.SertokSentence],
             source_code: str) -> List[VernacularSentence]:
+        """
+        Parse tokenized sentences into VernacularSentences.
+
+        Parameters
+        ----------
+        sertok_sentences : List[SexpInfo.SertokSentence]
+            List of sentences tokenized by sertok
+        source_code : str
+            Source code in string form
+
+        Returns
+        -------
+        List[VernacularSentence]
+            Parsed tokenized sentences
+        """
         cur_lineno = 1
         cur_charno = 0
         vernac_sentences: List[VernacularSentence] = list()
@@ -689,7 +711,8 @@ class CoqParser:
 
                 # Adjustment token kind: sertok put KEYWORD and SYMBOL
                 # in the same category
-                if sertok_token.kind == TokenConsts.KIND_KEYWORD and sertok_token.content in CoqParserConsts.SYMBOLS:
+                if (sertok_token.kind == TokenConsts.KIND_KEYWORD
+                        and sertok_token.content in CoqParserConsts.SYMBOLS):
                     sertok_token.kind = TokenConsts.KIND_SYMBOL
                 # end if
 
@@ -755,15 +778,15 @@ class CoqParser:
         # end for
 
         # Remove all comments
-        for vernac_i, vernac_sentence in enumerate(vernac_sentences):
+        for _vernac_i, vernac_sentence in enumerate(vernac_sentences):
             for token_i in reversed(range(len(vernac_sentence.tokens))):
                 if vernac_sentence.tokens[
                         token_i].kind == TokenConsts.KIND_COMMENT:
                     # cls.logger.debug(
-                    #     f"Removing comment at vernac#{vernac_i}, token#{token_i}; "  # noqa: W505
-                    #     f"loffset {vernac_sentence.tokens[0].loffset}, "  # noqa: W505
-                    #     f"indentation {vernac_sentence.tokens[0].indentation}, "  # noqa: W505
-                    #     f"coffset {vernac_sentence.tokens[0].coffset}; "  # noqa: W505
+                    #     f"Removing comment at vernac#{vernac_i}, token#{token_i}; "  # noqa: W505, B950
+                    #     f"loffset {vernac_sentence.tokens[0].loffset}, "  # noqa: W505, B950
+                    #     f"indentation {vernac_sentence.tokens[0].indentation}, "  # noqa: W505, B950
+                    #     f"coffset {vernac_sentence.tokens[0].coffset}; "  # noqa: W505, B950
                     #     f"content {vernac_sentence.tokens[0].content}"
                     # )
                     if token_i == 0 and vernac_sentence.tokens[
@@ -787,7 +810,7 @@ class CoqParser:
         return vernac_sentences
 
     @classmethod
-    def should_ignore_gallina_part(
+    def should_ignore_gallina_part(  # noqa: D102
         cls,
         gallina_part: Union[SexpInfo.ConstrExprR,
                             SexpInfo.CLocalAssum]) -> bool:
@@ -798,13 +821,16 @@ class CoqParser:
         # end if
 
     @classmethod
-    def parse_document(
+    def parse_document(  # noqa: C901
         cls,
         source_code: str,
         ast_sexp_list: List[SexpNode],
         tok_sexp_list: List[SexpNode],
         unicode_offsets: List[int],
     ) -> CoqDocument:
+        """
+        Parse a Coq document and produce a list of sentences.
+        """
         # Parse tok sexp to vernacular setences
         sertok_sentences: List[
             SexpInfo.SertokSentence] = SexpAnalyzer.analyze_sertok_sentences(
@@ -854,7 +880,8 @@ class CoqParser:
             # end if
 
             # Check sentence_lid against is_in_ltac_part
-            if not is_in_ltac_part and sentence_lid == CoqParserConsts.VERNAC_TYPES_LTAC:
+            if (not is_in_ltac_part
+                    and sentence_lid == CoqParserConsts.VERNAC_TYPES_LTAC):
                 cls.logger.warning(
                     f"Ltac sentence in non-Ltac part, likely to be a bug, at {loc}"
                 )
@@ -901,7 +928,7 @@ class CoqParser:
                 # and vernac_ast.vernac_type not in
                 # SexpInfo.VernacConsts.type_abort:
                 # cls.logger.warning(
-                #     "EndProof appeared in non-Ltac part, likely to be a bug, "  # noqa: W505
+                #     "EndProof appeared in non-Ltac part, likely to be a bug, "  # noqa: W505, B950
                 #     f"at {vernac_ast.loc}."
                 # )
                 is_in_ltac_part = False
@@ -952,5 +979,6 @@ class CoqParser:
         # Create coq document
         coq_document = CoqDocument()
         coq_document.sentences = vernac_sentences
+        coq_document.source_code = source_code
 
         return coq_document

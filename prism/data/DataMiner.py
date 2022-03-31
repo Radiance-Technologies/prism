@@ -1,3 +1,6 @@
+"""
+Module providing Coq file data mining capabilities.
+"""
 import collections
 import copy
 import hashlib
@@ -40,6 +43,9 @@ from prism.util.logging import log_and_raise
 
 
 class DataMiner:
+    """
+    Class providing data mining functionality.
+    """
 
     logger: logging.Logger = logging.getLogger(__name__, logging.DEBUG)
     from prism.util.debug import Debug
@@ -53,14 +59,22 @@ class DataMiner:
     TASK_DEFINITIONS = FilesManager.DEFINITIONS  # "definitions"
     TASK_INSTALL_COQ_PROJECTS = "install-coq-projects"
     TASK_LEMMA = FilesManager.LEMMAS  # "lemmas"
-    TASK_LEMMA_BACKEND_SEXP_TRANSFORMATIONS = FilesManager.LEMMAS_BACKEND_SEXP_TRANSFORMATIONS  # "lemmas-bsexp-transformations"
-    TASK_LEMMA_FILTERED = FilesManager.LEMMAS_FILTERED  # "lemmas-filtered"
-    TASK_LEMMA_FOREEND_SEXP_TRANSFORMATIONS = FilesManager.LEMMAS_FOREEND_SEXP_TRANSFORMATIONS  # "lemmas-fsexp-transformations"
+    # "lemmas-bsexp-transformations"
+    TASK_LEMMA_BACKEND_SEXP_TRANSFORMATIONS = \
+        FilesManager.LEMMAS_BACKEND_SEXP_TRANSFORMATIONS
+    # "lemmas-filtered"
+    TASK_LEMMA_FILTERED = FilesManager.LEMMAS_FILTERED
+    # "lemmas-fsexp-transformations"
+    TASK_LEMMA_FOREEND_SEXP_TRANSFORMATIONS = \
+        FilesManager.LEMMAS_FOREEND_SEXP_TRANSFORMATIONS
 
     dataset_dir = Macros.project_dir.parent / "math-comp-corpus"
 
     @classmethod
     def collect_data(cls, **options) -> None:
+        """
+        Collect data from Coq the corpus of Coq projects.
+        """
         data_mgr = FilesManager(cls.dataset_dir)
 
         task = options["task"]
@@ -112,7 +126,11 @@ class DataMiner:
         files: List[str] = None,
         is_verifying_tokenizer: bool = False,
     ) -> None:
-        # Prepare the used directories (coq-documents, raw-files, original-files)
+        """
+        Gather Coq files from the projects in CoqDocument form.
+        """
+        # Prepare the used directories (coq-documents, raw-files,
+        # original-files)
         for rel_path in [
             [FilesManager.COQ_DOCUMENTS],
             [FilesManager.RAW_FILES],
@@ -140,8 +158,8 @@ class DataMiner:
                 raise
             except Exception:
                 cls.logger.warning(
-                    f"Error while processing project {project.full_name}: {traceback.format_exc()}"
-                )
+                    f"Error while processing project {project.full_name}:"
+                    f" {traceback.format_exc()}")
                 continue
             else:
                 coq_documents.extend(coq_documents_project)
@@ -159,6 +177,9 @@ class DataMiner:
 
     @classmethod
     def load_coq_documents(cls, data_mgr: FilesManager) -> List[CoqDocument]:
+        """
+        Load Coq documents.
+        """
         return data_mgr.load_data(
             [FilesManager.COQ_DOCUMENTS,
              FilesManager.COQ_DOCUMENTS],
@@ -176,6 +197,9 @@ class DataMiner:
         files: List[str] = None,
         is_verifying_tokenizer: bool = False,
     ) -> List[CoqDocument]:
+        """
+        Collect the Coq files from a single project.
+        """
         coq_documents: List[CoqDocument] = list()
 
         # Clone and checkout repo
@@ -283,7 +307,8 @@ class DataMiner:
                         tok_sexp_list,
                         unicode_offsets=unicode_offsets)
 
-                    # Save the parsed document (printed format) to raw_files
+                    # Save the parsed document (printed format) to
+                    # raw_files
                     data_mgr.dump_data(
                         [FilesManager.RAW_FILES,
                          project.full_name,
@@ -295,6 +320,8 @@ class DataMiner:
                     coq_document.file_name = coq_file
                     coq_document.project_name = project.full_name
                     coq_document.revision = project.revision
+                    coq_document.abspath = Path(project.full_name,
+                                                coq_file).resolve()
 
                     coq_documents.append(coq_document)
                 except KeyboardInterrupt:
@@ -302,8 +329,8 @@ class DataMiner:
                     raise
                 except Exception:
                     cls.logger.warning(
-                        f"File {coq_file} failed! Exception was: {traceback.format_exc()}"
-                    )
+                        f"File {coq_file} failed! Exception was: "
+                        f"{traceback.format_exc()}")
                     continue
                 # end try
             # end for
@@ -317,6 +344,9 @@ class DataMiner:
             tok_sexp_list: List[SexpNode],
             source_code: str,
             unicode_offsets: List[int]) -> bool:
+        """
+        Make sure the parser didn't miss anything.
+        """
         sertok_sentences = SexpAnalyzer.analyze_sertok_sentences(
             tok_sexp_list,
             unicode_offsets)
@@ -334,10 +364,15 @@ class DataMiner:
                     if not ParserUtils.is_ws_or_comment(
                             source_code[code_i : token.beg_charno]):
                         cls.logger.error(
-                            f"Unresolved characters at charno {code_i} to {token.beg_charno}; next expect token {token.content} beginning at charno {token.beg_charno} (lineno {token.lineno}); file content {source_code[code_i:token.beg_charno]};"
-                        )
+                            f"Unresolved characters at charno {code_i} to"
+                            f" {token.beg_charno}; next expect token"
+                            f" {token.content} beginning at charno "
+                            f"{token.beg_charno} (lineno {token.lineno}); "
+                            "file content "
+                            f"{source_code[code_i:token.beg_charno]};")
                         cls.logger.error(
-                            f"assotiated sexp: \n{tok_sexp_list[sent_i][1][token_i].pretty_format()}"
+                            "assotiated sexp: \n"
+                            f"{tok_sexp_list[sent_i][1][token_i].pretty_format()}"
                         )
                         has_error = True
                     # end if
@@ -348,11 +383,14 @@ class DataMiner:
 
                 if token.content != source_code[code_i : token.end_charno]:
                     cls.logger.error(
-                        f"Mismatch token at charno {code_i} to {token.end_charno}; expect token {token.content} beginning at charno {token.beg_charno} (lineno {token.lineno}); file content {source_code[code_i:token.end_charno]};"
-                    )
+                        f"Mismatch token at charno {code_i} to "
+                        f"{token.end_charno}; expect token {token.content} "
+                        f"beginning at charno {token.beg_charno} (lineno "
+                        f"{token.lineno}); file content "
+                        f"{source_code[code_i:token.end_charno]};")
                     cls.logger.error(
-                        f"assotiated sexp: \n{tok_sexp_list[sent_i][1][token_i].pretty_format()}"
-                    )
+                        "assotiated sexp: \n"
+                        f"{tok_sexp_list[sent_i][1][token_i].pretty_format()}")
                     has_error = True
                 # end if
 
@@ -364,8 +402,9 @@ class DataMiner:
             if not ParserUtils.is_ws_or_comment(
                     source_code[code_i : len(source_code)]):
                 cls.logger.error(
-                    f"Unresolved characters at charno {code_i} to {len(source_code)} (end of file); file content {source_code[code_i:len(source_code)]}"
-                )
+                    f"Unresolved characters at charno {code_i} to "
+                    f"{len(source_code)} (end of file); file content "
+                    f"{source_code[code_i:len(source_code)]}")
                 has_error = True
             # end if
         # end if
@@ -374,6 +413,9 @@ class DataMiner:
 
     @classmethod
     def install_coq_projects(cls, projects: List[Project]) -> None:
+        """
+        Install several Coq projects.
+        """
         names_projects = {p.full_name: p for p in projects}
         for i, p in enumerate(projects):
             cls.logger.info(f"Installing {p.full_name} ({i}/{len(projects)})")
@@ -388,7 +430,10 @@ class DataMiner:
             names_projects: Dict[str,
                                  Project]) -> None:
         """
-        :requires: the project is cloned and checked-out to the desired version.
+        Install the Coq project.
+
+        :requires: the project is cloned and checked-out to the desired\
+        version.
         """
         if not project.is_cloned:
             project.clone()
@@ -431,32 +476,32 @@ class DataMiner:
         with IOUtils.cd(project.checkout_dir):
             # Build
             cls.logger.info(
-                f"Project {project.full_name}: Building with {project.data['build_cmd']}"
-            )
+                f"Project {project.full_name}: Building with "
+                f"{project.data['build_cmd']}")
             r = BashUtils.run(project.data["build_cmd"])
             if r.return_code != 0:
                 raise Exception(
-                    f"Compilation failed! Return code is {r.return_code}! stdout:\n{r.stdout}\n; stderr:\n{r.stderr}"
-                )
+                    f"Compilation failed! Return code is {r.return_code}! "
+                    f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
             else:
                 cls.logger.debug(
-                    f"Compilation finished. Return code is {r.return_code}. stdout:\n{r.stdout}\n; stderr:\n{r.stderr}"
-                )
+                    f"Compilation finished. Return code is {r.return_code}. "
+                    f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
             # end if
 
             # Install
             cls.logger.info(
-                f"Project {project.full_name}: Installing with {project.data['install_cmd']}"
-            )
+                f"Project {project.full_name}: Installing with "
+                f"{project.data['install_cmd']}")
             r = BashUtils.run(project.data["install_cmd"])
             if r.return_code != 0:
                 raise Exception(
-                    f"Installation failed! Return code is {r.return_code}! stdout:\n{r.stdout}\n; stderr:\n{r.stderr}"
-                )
+                    f"Installation failed! Return code is {r.return_code}! "
+                    f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
             else:
                 cls.logger.debug(
-                    f"Installation finished. Return code is {r.return_code}. stdout:\n{r.stdout}\n; stderr:\n{r.stderr}"
-                )
+                    f"Installation finished. Return code is {r.return_code}. "
+                    f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
             # end if
 
             IOUtils.dump(
@@ -472,18 +517,23 @@ class DataMiner:
             data_mgr: FilesManager,
             projects: List[Project]) -> None:
         """
-        Split the dataset and record the data indexes for {t1, t2, t3, lo, ta, allgroup} * {train, val, test, all} dataset parts.
+        Split the dataset and record the data indexes.
+
+        ...for {t1, t2, t3, lo, ta, allgroup} * {train, val, test, all}
+        dataset parts.
         """
         data_mgr.clean_path([FilesManager.DATA_INDEXES])
         data_mgr.resolve([FilesManager.DATA_INDEXES]).mkdir(parents=True)
 
         # (Random) Split by train/val/test
         cls.logger.info(
-            f"Splitting regular dataset info train/val/test sets with ratio of {Macros.DS_TRAIN_RATIO}/{Macros.DS_VAL_RATIO}/{Macros.DS_TEST_RATIO}"
-        )
+            "Splitting regular dataset info train/val/test sets with ratio of"
+            f" {Macros.DS_TRAIN_RATIO}/{Macros.DS_VAL_RATIO}/"
+            f"{Macros.DS_TEST_RATIO}")
         cls.logger.info(
-            f"Splitting leave-out dataset info train/val/test sets with ratio of {Macros.DS_LO_TRAIN_RATIO}/{Macros.DS_LO_VAL_RATIO}/{Macros.DS_LO_TEST_RATIO}"
-        )
+            "Splitting leave-out dataset info train/val/test sets with ratio"
+            f" of {Macros.DS_LO_TRAIN_RATIO}/{Macros.DS_LO_VAL_RATIO}/"
+            f"{Macros.DS_LO_TEST_RATIO}")
 
         # Load and sort coq-documents data
         coq_documents: List[CoqDocument] = cls.load_coq_documents(data_mgr)
@@ -533,7 +583,8 @@ class DataMiner:
             else:
                 log_and_raise(
                     cls.logger,
-                    f"Invalid group name {project.data['group']} for {project.full_name}",
+                    f"Invalid group name {project.data['group']} for "
+                    f"{project.full_name}",
                     Exception)
             # end if
 
@@ -635,6 +686,9 @@ class DataMiner:
             data_mgr: FilesManager,
             projects: List[Project],
             files: List[str] = None):
+        """
+        Collect lemmas from the collected Coq files.
+        """
         data_mgr.clean_path([FilesManager.LEMMAS])
         data_mgr.resolve([FilesManager.LEMMAS]).mkdir(parents=True)
 
@@ -660,8 +714,8 @@ class DataMiner:
         for doc_i, doc in enumerate(tqdm(coq_documents)):
             try:
                 cls.logger.info(
-                    f"Collecting from file {doc.get_data_index()} ({doc_i}/{len(coq_documents)}). Collected: {len(lemmas)}"
-                )
+                    f"Collecting from file {doc.get_data_index()} "
+                    f"({doc_i}/{len(coq_documents)}). Collected: {len(lemmas)}")
 
                 # Load AST sexp
                 ast_sexp_list: List[SexpNode] = SexpParser.parse_list(
@@ -683,11 +737,11 @@ class DataMiner:
                 raise
             except Exception:
                 cls.logger.warning(
-                    f"Error while parsing {doc.get_data_index()}: {traceback.format_exc()}"
-                )
+                    f"Error while parsing {doc.get_data_index()}: "
+                    f"{traceback.format_exc()}")
                 cls.logger.warning(
-                    "The script will continue on other files before it returns with failure. Use Ctrl+C to cut it early."
-                )
+                    "The script will continue on other files before it returns"
+                    " with failure. Use Ctrl+C to cut it early.")
                 errors.append((doc.get_data_index(), traceback.format_exc()))
                 continue
             # end try
@@ -719,7 +773,11 @@ class DataMiner:
 
     @classmethod
     def filter_lemmas(cls, data_mgr: FilesManager):
-        # Increase recursion limit because the backend sexps are CRAZZZZY deep
+        """
+        Remove lemmas below a certain depth.
+        """
+        # Increase recursion limit because the backend sexps are
+        # CRAZZZZY deep
         sys.setrecursionlimit(10000)
 
         data_mgr.clean_path([FilesManager.LEMMAS_FILTERED])
@@ -743,8 +801,8 @@ class DataMiner:
             if lemma.backend_sexp.height() <= depth_cutoff_point
         ]
         cls.logger.info(
-            f"Cutoff depth is {depth_cutoff_point}, and {len(data_indexes_names)} data are included"
-        )
+            f"Cutoff depth is {depth_cutoff_point}, and "
+            f"{len(data_indexes_names)} data are included")
 
         lemmas_filtered: List[Lemma] = [
             lemma for lemma in lemmas if (lemma.data_index,
@@ -765,6 +823,9 @@ class DataMiner:
 
     @classmethod
     def collect_definitions(cls, data_mgr: FilesManager):
+        """
+        Collect definitions from collected Coq files.
+        """
         data_mgr.clean_path([FilesManager.DEFINITIONS])
         data_mgr.resolve([FilesManager.DEFINITIONS]).mkdir(parents=True)
 
@@ -775,7 +836,7 @@ class DataMiner:
 
         errors: List[Tuple[str, str]] = list()
 
-        for doc_i, doc in enumerate(tqdm(coq_documents)):
+        for doc in tqdm(coq_documents):
             try:
                 # Load AST sexp
                 ast_sexp_list: List[SexpNode] = SexpParser.parse_list(
@@ -795,11 +856,11 @@ class DataMiner:
                 raise
             except Exception:
                 cls.logger.warning(
-                    f"Error while parsing {doc.get_data_index()}: {traceback.format_exc()}"
-                )
+                    f"Error while parsing {doc.get_data_index()}: "
+                    f"{traceback.format_exc()}")
                 cls.logger.warning(
-                    "The script will continue on other files before it returns with failure. Use Ctrl+C to cut it early."
-                )
+                    "The script will continue on other files before it returns"
+                    " with failure. Use Ctrl+C to cut it early.")
                 errors.append((doc.get_data_index(), traceback.format_exc()))
                 continue
             # end try
@@ -825,14 +886,15 @@ class DataMiner:
         return
 
     @classmethod
-    def collect_lemmas_backend_sexp_transformations(
+    def collect_lemmas_backend_sexp_transformations(  # noqa: D102
             cls,
             data_mgr: FilesManager):
         data_mgr.clean_path([cls.TASK_LEMMA_BACKEND_SEXP_TRANSFORMATIONS])
         data_mgr.resolve(
             [cls.TASK_LEMMA_BACKEND_SEXP_TRANSFORMATIONS]).mkdir(parents=True)
 
-        # Increase recursion limit because the backend sexps are CRAZZZZY deep
+        # Increase recursion limit because the backend sexps are
+        # CRAZZZZY deep
         sys.setrecursionlimit(10000)
 
         lemmas_filtered: List[Lemma] = data_mgr.load_data(
@@ -847,13 +909,16 @@ class DataMiner:
         last_level: Optional[str] = None  # None means original
         for level in LemmaBackendSexpTransformers.LEVELS:
             cls.logger.info(
-                f"Doing {last_level if last_level is not None else 'orig'} -> {level} transformation"
-            )
+                f"Doing {last_level if last_level is not None else 'orig'} -> "
+                f"{level} transformation")
             levels_lemmas_bsexp_transformed[level] = list()
 
             for lemma_i, lemma in enumerate(tqdm(lemmas_filtered)):
-                orig_sexp = lemma.backend_sexp if last_level is None else levels_lemmas_bsexp_transformed[
-                    last_level][lemma_i]
+                if last_level is None:
+                    orig_sexp = lemma.backend_sexp
+                else:
+                    orig_sexp = levels_lemmas_bsexp_transformed[last_level][
+                        lemma_i]
                 bsexp_transformed = LemmaBackendSexpTransformers.transform(
                     level,
                     copy.deepcopy(orig_sexp))
@@ -874,11 +939,12 @@ class DataMiner:
                 per_batch=5000)
         # end for
 
-        # Other special transformation, directly applied on original trees
+        # Other special transformation, directly applied on original
+        # trees
         for tr_name in LemmaBackendSexpTransformers.SPECIALS:
             cls.logger.info(f"Doing orig -> {tr_name} transformation")
             bsexp_transformed_list = list()
-            for lemma_i, lemma in enumerate(tqdm(lemmas_filtered)):
+            for lemma in tqdm(lemmas_filtered):
                 orig_sexp = lemma.backend_sexp
                 bsexp_transformed = LemmaBackendSexpTransformers.transform(
                     tr_name,
@@ -901,14 +967,15 @@ class DataMiner:
         return
 
     @classmethod
-    def collect_lemmas_foreend_sexp_transformations(
+    def collect_lemmas_foreend_sexp_transformations(  # noqa: D102
             cls,
             data_mgr: FilesManager):
         data_mgr.clean_path([cls.TASK_LEMMA_FOREEND_SEXP_TRANSFORMATIONS])
         data_mgr.resolve(
             [cls.TASK_LEMMA_FOREEND_SEXP_TRANSFORMATIONS]).mkdir(parents=True)
 
-        # Increase recursion limit because the backend sexps are CRAZZZZY deep
+        # Increase recursion limit because the backend sexps are
+        # CRAZZZZY deep
         sys.setrecursionlimit(10000)
 
         lemmas_filtered: List[Lemma] = data_mgr.load_data(
@@ -923,13 +990,16 @@ class DataMiner:
         last_level: Optional[str] = None  # None means original
         for level in LemmaForeendSexpTransformers.LEVELS:
             cls.logger.info(
-                f"Doing {last_level if last_level is not None else 'orig'} -> {level} transformation"
-            )
+                f"Doing {last_level if last_level is not None else 'orig'} ->"
+                f" {level} transformation")
             levels_lemmas_fsexp_transformed[level] = list()
 
             for lemma_i, lemma in enumerate(tqdm(lemmas_filtered)):
-                orig_sexp = lemma.ast_sexp if last_level is None else levels_lemmas_fsexp_transformed[
-                    last_level][lemma_i]
+                if last_level is None:
+                    orig_sexp = lemma.ast_sexp
+                else:
+                    orig_sexp = levels_lemmas_fsexp_transformed[last_level][
+                        lemma_i]
                 fsexp_transformed = LemmaForeendSexpTransformers.transform(
                     level,
                     copy.deepcopy(orig_sexp))
@@ -951,13 +1021,17 @@ class DataMiner:
                 per_batch=5000)
         # end for
 
-        # Other special transformation, directly applied on level 0 trees
+        # Other special transformation, directly applied on level 0
+        # trees
         for tr_name in LemmaForeendSexpTransformers.SPECIALS:
             cls.logger.info(
-                f"Doing {LemmaForeendSexpTransformers.LEVEL_0} -> {tr_name} transformation"
-            )
+                f"Doing {LemmaForeendSexpTransformers.LEVEL_0} -> {tr_name}"
+                " transformation")
             fsexp_transformed_list = list()
-            for lemma_i, lemma in enumerate(tqdm(lemmas_filtered)):
+            for _lemma in tqdm(lemmas_filtered):
+                # <Radiance note>: This ref to lemma_i feels like a bug,
+                # but if we're not using this code anyway, it's not
+                # important to fix.
                 orig_sexp = levels_lemmas_fsexp_transformed[
                     LemmaForeendSexpTransformers.LEVEL_0][lemma_i]
                 fsexp_transformed = LemmaForeendSexpTransformers.transform(
@@ -986,7 +1060,7 @@ class DataMiner:
     VTYPES_DEFINITIONS = [SexpInfo.VernacConsts.type_definition]
 
     @classmethod
-    def collect_lemmas_doc(
+    def collect_lemmas_doc(  # noqa: C901, D102
         cls,
         doc: CoqDocument,
         ast_sexp_list: List[SexpNode],
@@ -1020,13 +1094,13 @@ class DataMiner:
             vernac = SexpAnalyzer.analyze_vernac(ast_sexp)
 
             if vernac.vernac_type in cls.VTYPES_MODULE_BEG:
-                # (VernacExpr()(VernacDefineModule()  (  (   v   ( Id <module name>)) ...
-                #  0         1 2 20               21  22 220  2201    22011
+                # noqa: W505, B950 (VernacExpr()(VernacDefineModule()  (  (   v   ( Id <module name>)) ...
+                # noqa: W505, B950  0         1 2 20               21  22 220  2201    22011
                 module_name = vernac.vernac_sexp[2][2][0][1][1].content_no_quote
                 modules.append(module_name)
             elif vernac.vernac_type in cls.VTYPES_MODULE_END:
-                # (VernacExpr()(VernacEndSegment  (  (   v   ( Id <module name>)) ...
-                #  0         1 2 20               21 210  2101    21011
+                # noqa: W505, B950 (VernacExpr()(VernacEndSegment  (  (   v   ( Id <module name>)) ...
+                # noqa: W505, B950  0         1 2 20               21 210  2101    21011
                 try:
                     module_name = vernac.vernac_sexp[2][1][0][1][
                         1].content_no_quote
@@ -1038,8 +1112,8 @@ class DataMiner:
                     modules.pop(
                     )  # EndModule and EndSection share the same vernac type
             elif vernac.vernac_type in cls.VTYPES_LEMMA:
-                # (VernacExpr()(VernacStartTheoremProof Lemma ( ( ( ( ( v (       Id <lemma name>))
-                #  0         1 2 20                     21   22   2200000 2200001    22000011
+                # noqa: W505, B950 (VernacExpr()(VernacStartTheoremProof Lemma ( ( ( ( ( v (       Id <lemma name>))
+                # noqa: W505, B950 0         1 2 20                     21   22   2200000 2200001    22000011
                 lemma = Lemma()
                 lemma.data_index = data_index
 
@@ -1048,7 +1122,8 @@ class DataMiner:
                 lemma.qname = qprefix_this_doc + "." + ".".join(
                     modules + [lemma.name])
 
-                # Find lemma content, after the first token matching the lemma name
+                # Find lemma content, after the first token matching the
+                # lemma name
                 tok_i = 0
                 for tok in sent.tokens:
                     if tok.content == lemma.name:
@@ -1058,7 +1133,8 @@ class DataMiner:
                 if tok_i == len(sent.tokens):
                     log_and_raise(
                         cls.logger,
-                        f"Lemma name {lemma.name} didn't appear in the source code {sent.str_with_space()}",
+                        f"Lemma name {lemma.name} didn't appear in the source"
+                        f" code {sent.str_with_space()}",
                         Exception)
 
                 lemma.vernac_command = sent.tokens[: tok_i]
@@ -1076,7 +1152,8 @@ class DataMiner:
         IOUtils.dump(lemma_qnames_file, lemma_qnames, IOUtils.Format.txt)
 
         lemma_qnames_backend_sexps_str: str = BashUtils.run(
-            f"sername {serapi_options} --require-lib={qprefix_this_doc} {lemma_qnames_file}",
+            f"sername {serapi_options} --require-lib={qprefix_this_doc}"
+            f" {lemma_qnames_file}",
             expected_return_code=0).stdout
         IOUtils.rm(lemma_qnames_file)
         for qname_backend_sexp_str in lemma_qnames_backend_sexps_str.splitlines(
@@ -1098,20 +1175,20 @@ class DataMiner:
         return lemmas_doc
 
     @classmethod
-    def collect_definitions_doc(
+    def collect_definitions_doc(  # noqa: D102
         cls,
         doc: CoqDocument,
         ast_sexp_list: List[SexpNode],
     ) -> List[Definition]:
         definitions_doc: List[Definition] = list()
         data_index = doc.get_data_index()
-        for sent_i, sent in enumerate(doc.sentences):
+        for sent_i, _sent in enumerate(doc.sentences):
             ast_sexp = ast_sexp_list[sent_i]
             vernac = SexpAnalyzer.analyze_vernac(ast_sexp)
 
             if vernac.vernac_type in cls.VTYPES_DEFINITIONS:
-                # (VernacExpr()( VernacDefinition (  NoDischarge Definition) (  (   (    v     (     Name   (      Id      codom   ))) ...
-                #  0         1 2 20               21 210         211         22 220 2200 22000 22001 220010 220011 2200110 2200111
+                # noqa: W505, B950 (VernacExpr()( VernacDefinition (  NoDischarge Definition) (  (   (    v     (     Name   (      Id      codom   ))) ...
+                # noqa: W505, B950  0         1 2 20               21 210         211         22 220 2200 22000 22001 220010 220011 2200110 2200111
                 try:
                     if vernac.vernac_sexp[2][1][
                             0].content == "NoDischarge" and vernac.vernac_sexp[
@@ -1132,7 +1209,7 @@ class DataMiner:
         return definitions_doc
 
     @classmethod
-    def extract_data_project(
+    def extract_data_project(  # noqa: D102
         cls,
         project_path: Path,
         files: Optional[List[str]],
@@ -1179,7 +1256,7 @@ class DataMiner:
                 ]
             # end if
 
-            for i, coq_file in enumerate(tqdm(coq_files)):
+            for coq_file in tqdm(coq_files):
                 try:
                     # Read file
                     with open(coq_file, "r", newline="") as f:
@@ -1223,8 +1300,8 @@ class DataMiner:
                     raise
                 except Exception:
                     cls.logger.warning(
-                        f"File {coq_file} failed! Exception was: {traceback.format_exc()}"
-                    )
+                        f"File {coq_file} failed! Exception was: "
+                        f"{traceback.format_exc()}")
                     continue
                 # end try
             # end for
@@ -1233,7 +1310,8 @@ class DataMiner:
             lemmas: List[Lemma] = list()
             definitions: List[Definition] = list()
 
-            # Increase recursion limit because the backend sexps are CRAZZZZY deep
+            # Increase recursion limit because the backend sexps are
+            # CRAZZZZY deep
             sys.setrecursionlimit(10000)
 
             for file_path, doc in tqdm(coq_documents.items()):
@@ -1268,6 +1346,9 @@ class DataMiner:
         groups: List[str],
         output_path: Path,
     ):
+        """
+        Extract data from the corpus of Coq files.
+        """
         # 1. Prepare output path
         if output_path.is_dir():
             cls.logger.warning(
@@ -1303,7 +1384,8 @@ class DataMiner:
             IOUtils.Format.json,
             clz=Definition)
 
-        # 3. Output to output_path for each combination of traineval and group
+        # 3. Output to output_path for each combination of traineval
+        # and group
         for traineval in trainevals:
             for group in groups:
                 IOUtils.mk_dir(output_path / f"{group}-{traineval}")

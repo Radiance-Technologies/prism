@@ -152,7 +152,7 @@ class ProjectBase(ABC):
             obj = self.get_random_file(**kwargs)
         else:
             obj = self.get_file(filename, **kwargs)
-        contents = obj.file_contents
+        contents = obj.source_code
         sentences = ProjectBase.split_by_sentence(
             contents,
             'utf-8',
@@ -198,7 +198,7 @@ class ProjectBase(ABC):
                 obj = self.get_random_file(**kwargs)
             else:
                 obj = self.get_file(filename, **kwargs)
-            contents = obj.file_contents
+            contents = obj.source_code
             sentences = ProjectBase.split_by_sentence(
                 contents,
                 'utf-8',
@@ -396,7 +396,7 @@ class ProjectRepo(Repo, ProjectBase):
             CoqDocument(
                 project_name=self.name,
                 abspath=f.abspath,
-                file_contents=f.data_stream.read()) for f in files
+                source_code=f.data_stream.read()) for f in files
         ]
 
     def get_file(
@@ -431,7 +431,7 @@ class ProjectRepo(Repo, ProjectBase):
         return CoqDocument(
             project_name=self.name,
             abspath=filename,
-            file_contents=(commit.tree / rel_filename).data_stream.read())
+            source_code=(commit.tree / rel_filename).data_stream.read())
 
     def get_file_list(self, commit_name: str = 'master') -> List[str]:
         """
@@ -634,7 +634,7 @@ class ProjectDir(ProjectBase):
                             project_name=self.name,
                             abspath=os.path.join(self.working_dir,
                                                  file),
-                            file_contents=contents))
+                            source_code=contents))
             except UnicodeDecodeError as e:
                 if not self.ignore_decode_errors:
                     raise e
@@ -665,7 +665,7 @@ class ProjectDir(ProjectBase):
         return CoqDocument(
             project_name=self.name,
             abspath=filename,
-            file_contents=contents)
+            source_code=contents)
 
     def get_file_list(self, **kwargs) -> List[str]:
         """
