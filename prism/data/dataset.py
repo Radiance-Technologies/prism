@@ -9,9 +9,9 @@ from typing import Dict, Generator, List, Optional, Type, TypeVar, Union
 
 from git import InvalidGitRepositoryError
 
+from prism.data.CoqDocument import CoqDocument
 from prism.data.project import (
     DirHasNoCoqFiles,
-    FileObject,
     ProjectBase,
     ProjectDir,
     ProjectRepo,
@@ -211,7 +211,7 @@ class CoqGymBaseDataset:
         self,
         commit_names: Optional[Dict[str,
                                     str]] = None,
-        ignore_decode_errors: bool = False) -> Generator[FileObject,
+        ignore_decode_errors: bool = False) -> Generator[CoqDocument,
                                                          None,
                                                          None]:
         """
@@ -228,7 +228,7 @@ class CoqGymBaseDataset:
 
         Yields
         ------
-        str
+        CoqDocument
             Contents of a Coq file in the group of projects
         """
         project_names = sorted(list(self.projects.keys()))
@@ -242,7 +242,10 @@ class CoqGymBaseDataset:
                     with open(file, "r") as f:
                         f: TextIOWrapper
                         contents = f.read()
-                        yield FileObject(file, contents)
+                        yield CoqDocument(
+                            abspath=file,
+                            file_contents=contents,
+                            project_name=project)
                 except UnicodeDecodeError as e:
                     if not ignore_decode_errors:
                         raise e
@@ -250,7 +253,7 @@ class CoqGymBaseDataset:
     def get_random_file(
             self,
             project_name: Optional[str] = None,
-            commit_name: Optional[str] = None) -> FileObject:
+            commit_name: Optional[str] = None) -> CoqDocument:
         """
         Return a random Coq source file from one of the projects.
 
@@ -267,8 +270,8 @@ class CoqGymBaseDataset:
 
         Returns
         -------
-        FileObject
-            A random Coq source file in the form of a FileObject
+        CoqDocument
+            A random Coq source file in the form of a CoqDocument
         """
         if project_name is None:
             project_name = self._get_random_project()
@@ -279,7 +282,7 @@ class CoqGymBaseDataset:
             self,
             filename: str,
             project_name: str,
-            commit_name: str = 'master') -> FileObject:
+            commit_name: str = 'master') -> CoqDocument:
         """
         Return specific Coq source file from specific project & commit.
 
@@ -295,8 +298,8 @@ class CoqGymBaseDataset:
 
         Returns
         -------
-        FileObject
-            A FileObject corresponding to the selected Coq source file
+        CoqDocument
+            A CoqDocument corresponding to the selected Coq source file
         """
         return self.projects[project_name].get_file(
             filename,

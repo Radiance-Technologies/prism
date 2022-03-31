@@ -6,28 +6,12 @@ import pathlib
 import random
 import re
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import List, Optional, Union
 from warnings import warn
 
 from git import Commit, Repo
 
-
-@dataclass
-class FileObject:
-    """
-    Class for file objects.
-
-    Attributes
-    ----------
-    abspath : str
-        Absolute path to the file
-    file_contents : str or bytes
-        Contents of the file, either in string or byte-string form
-    """
-
-    abspath: str
-    file_contents: Union[str, bytes]
+from prism.data.CoqDocument import CoqDocument
 
 
 class DirHasNoCoqFiles(Exception):
@@ -86,14 +70,14 @@ class ProjectBase(ABC):
         pass
 
     @abstractmethod
-    def _traverse_file_tree(self) -> List[FileObject]:
+    def _traverse_file_tree(self) -> List[CoqDocument]:
         """
         Traverse the file tree and return a list of Coq file objects.
         """
         pass
 
     @abstractmethod
-    def get_file(self, filename: str, **kwargs) -> FileObject:
+    def get_file(self, filename: str, **kwargs) -> CoqDocument:
         """
         Return a specific Coq source file.
 
@@ -104,8 +88,8 @@ class ProjectBase(ABC):
 
         Returns
         -------
-        FileObject
-            A FileObject corresponding to the selected Coq source file
+        CoqDocument
+            A CoqDocument corresponding to the selected Coq source file
 
         Raises
         ------
@@ -116,7 +100,7 @@ class ProjectBase(ABC):
             raise ValueError("filename must end in .v")
 
     @abstractmethod
-    def get_file_list(self, **kwargs) -> List[FileObject]:
+    def get_file_list(self, **kwargs) -> List[str]:
         """
         Return a list of all Coq files associated with this project.
 
@@ -127,14 +111,14 @@ class ProjectBase(ABC):
         """
         pass
 
-    def get_random_file(self, **kwargs) -> FileObject:
+    def get_random_file(self, **kwargs) -> CoqDocument:
         """
         Return a random Coq source file.
 
         Returns
         -------
-        FileObject
-            A random Coq source file in the form of a FileObject
+        CoqDocument
+            A random Coq source file in the form of a CoqDocument
         """
         self._pre_get_random(**kwargs)
         files = self._traverse_file_tree()
@@ -402,18 +386,23 @@ class ProjectRepo(Repo, ProjectBase):
         else:
             self.current_commit_name = self.get_random_commit()
 
-    def _traverse_file_tree(self) -> List[FileObject]:
+    def _traverse_file_tree(self) -> List[CoqDocument]:
         """
         Traverse the file tree and return a full list of file objects.
         """
         commit = self.commit(self.current_commit_name)
         files = [f for f in commit.tree.traverse() if f.abspath.endswith(".v")]
-        return [FileObject(f.abspath, f.data_stream.read()) for f in files]
+        return [
+            CoqDocument(
+                project_name=self.name,
+                abspath=f.abspath,
+                file_contents=f.data_stream.read()) for f in files
+        ]
 
     def get_file(
             self,
             filename: str,
-            commit_name: str = 'master') -> FileObject:
+            commit_name: str = 'master') -> CoqDocument:
         """
         Return a specific Coq source file from a specific commit.
 
@@ -427,8 +416,8 @@ class ProjectRepo(Repo, ProjectBase):
 
         Returns
         -------
-        FileObject
-            A FileObject corresponding to the selected Coq source file
+        CoqDocument
+            A CoqDocument corresponding to the selected Coq source file
 
         Raises
         ------
@@ -439,11 +428,12 @@ class ProjectRepo(Repo, ProjectBase):
         commit = self.commit(commit_name)
         # Compute relative path
         rel_filename = filename.replace(commit.tree.abspath, "")[1 :]
-        return FileObject(
-            filename,
-            (commit.tree / rel_filename).data_stream.read())
+        return CoqDocument(
+            project_name=self.name,
+            abspath=filename,
+            file_contents=(commit.tree / rel_filename).data_stream.read())
 
-    def get_file_list(self, commit_name: str = 'master') -> List[FileObject]:
+    def get_file_list(self, commit_name: str = 'master') -> List[str]:
         """
         Return a list of all Coq files associated with this project.
 
@@ -484,7 +474,7 @@ class ProjectRepo(Repo, ProjectBase):
         result = self.commit(chosen_hash)
         return result
 
-    def get_random_file(self, commit_name: Optional[str] = None) -> FileObject:
+    def get_random_file(self, commit_name: Optional[str] = None) -> CoqDocument:
         """
         Return a random Coq source file from the repo.
 
@@ -499,8 +489,8 @@ class ProjectRepo(Repo, ProjectBase):
 
         Returns
         -------
-        FileObject
-            A random Coq source file in the form of a FileObject
+        CoqDocument
+            A random Coq source file in the form of a CoqDocument
         """
         return super().get_random_file(commit_name=commit_name)
 
@@ -595,12 +585,12 @@ class ProjectDir(ProjectBase):
         Initialize Project object.
         """
         self.working_dir = dir_abspath
+        super().__init__(dir_abspath, *args, **kwargs)
         self.ignore_decode_errors: bool = kwargs.get(
             'ignore_decode_errors',
             False)
         if not self._traverse_file_tree():
             raise DirHasNoCoqFiles(f"{dir_abspath} has no Coq files.")
-        super().__init__(dir_abspath, *args, **kwargs)
 
     def _get_dir_stem(self, *args, **kwargs) -> str:
         """
@@ -629,7 +619,7 @@ class ProjectDir(ProjectBase):
         """
         pass
 
-    def _traverse_file_tree(self) -> List[FileObject]:
+    def _traverse_file_tree(self) -> List[CoqDocument]:
         """
         Traverse the file tree and return a list of Coq file objects.
         """
@@ -640,18 +630,19 @@ class ProjectDir(ProjectBase):
                 with open(file, "rt") as f:
                     contents = f.read()
                     out_files.append(
-                        FileObject(
-                            os.path.join(self.working_dir,
-                                         file),
-                            contents))
+                        CoqDocument(
+                            project_name=self.name,
+                            abspath=os.path.join(self.working_dir,
+                                                 file),
+                            file_contents=contents))
             except UnicodeDecodeError as e:
                 if not self.ignore_decode_errors:
                     raise e
         return out_files
 
-    def get_file(self, filename: str, *args, **kwargs) -> FileObject:
+    def get_file(self, filename: str, *args, **kwargs) -> CoqDocument:
         """
-        Get a specific Coq file and return the corresponding FileObject.
+        Get specific Coq file and return the corresponding CoqDocument.
 
         Parameters
         ----------
@@ -660,8 +651,8 @@ class ProjectDir(ProjectBase):
 
         Returns
         -------
-        FileObject
-            The corresponding FileObject
+        CoqDocument
+            The corresponding CoqDocument
 
         Raises
         ------
@@ -671,9 +662,12 @@ class ProjectDir(ProjectBase):
         super().get_file(filename)
         with open(filename, "rt") as f:
             contents = f.read()
-        return FileObject(filename, contents)
+        return CoqDocument(
+            project_name=self.name,
+            abspath=filename,
+            file_contents=contents)
 
-    def get_file_list(self, **kwargs) -> List[FileObject]:
+    def get_file_list(self, **kwargs) -> List[str]:
         """
         Return a list of all Coq files associated with this project.
 
