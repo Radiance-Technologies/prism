@@ -63,5 +63,6 @@ precommit:
 runTests:
   stage: test
   script:
+    - opam init -n
     - source setup_coq.sh -n
     - make test
