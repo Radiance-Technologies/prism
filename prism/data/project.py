@@ -1,17 +1,22 @@
 """
 Module providing CoqGym project class representations.
 """
+import logging
 import os
 import pathlib
 import random
 import re
 from abc import ABC, abstractmethod
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 from warnings import warn
 
 from git import Commit, Repo
+from seutil import BashUtils
 
 from prism.data.CoqDocument import CoqDocument
+from prism.util.logging import default_log_level
+
+logger: logging.Logger = logging.getLogger(__name__, default_log_level())
 
 
 class DirHasNoCoqFiles(Exception):
@@ -47,11 +52,25 @@ class ProjectBase(ABC):
         self.name = self._get_dir_stem(dir_abspath)
         self.size_bytes = self._get_size_bytes(dir_abspath)
         self.ignore_decode_errors = ignore_decode_errors
+        self.build_cmd: str = None
+        self.clean_cmd: str = None
+        self.install_cmd: str = None
 
     @abstractmethod
     def _get_dir_stem(self, dir_abspath: str) -> str:
         """
         Extract directory stem from working directory.
+        """
+        pass
+
+    @abstractmethod
+    def _get_file(self, filename: str, **kwargs) -> CoqDocument:
+        """
+        Return a specific Coq source file.
+
+        See Also
+        --------
+        ProjectBase.get_file : For public API.
         """
         pass
 
@@ -76,7 +95,40 @@ class ProjectBase(ABC):
         """
         pass
 
-    @abstractmethod
+    def build(self) -> Tuple[int, str, str]:
+        """
+        Build the project.
+        """
+        if self.build_cmd is None:
+            raise RuntimeError(f"Build command not set for {self.name}.")
+        r = BashUtils.run(self.build_cmd)
+        if r.return_code != 0:
+            raise Exception(
+                f"Compilation failed! Return code is {r.return_code}! "
+                f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
+        else:
+            logger.debug(
+                f"Compilation finished. Return code is {r.return_code}. "
+                f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
+        return (r.return_code, r.stdout, r.stderr)
+
+    def clean(self) -> Tuple[int, str, str]:
+        """
+        Clean the build status of the project.
+        """
+        if self.clean_cmd is None:
+            raise RuntimeError(f"Clean command not set for {self.name}.")
+        r = BashUtils.run(self.clean_cmd)
+        if r.return_code != 0:
+            raise Exception(
+                f"Cleaning failed! Return code is {r.return_code}! "
+                f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
+        else:
+            logger.debug(
+                f"Cleaning finished. Return code is {r.return_code}. "
+                f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
+        return (r.return_code, r.stdout, r.stderr)
+
     def get_file(self, filename: str, **kwargs) -> CoqDocument:
         """
         Return a specific Coq source file.
@@ -98,6 +150,7 @@ class ProjectBase(ABC):
         """
         if not filename.endswith(".v"):
             raise ValueError("filename must end in .v")
+        return self._get_file(filename, **kwargs)
 
     @abstractmethod
     def get_file_list(self, **kwargs) -> List[str]:
@@ -206,6 +259,24 @@ class ProjectBase(ABC):
             counter += 1
         first_sentence_idx = random.randint(0, len(sentences) - 2)
         return sentences[first_sentence_idx : first_sentence_idx + 2]
+
+    def install(self) -> Tuple[int, str, str]:
+        """
+        Install the project system-wide in "coq-contrib".
+        """
+        if self.install_cmd is None:
+            raise RuntimeError(f"Install command not set for {self.name}.")
+        self.build()
+        r = BashUtils.run(self.install_cmd)
+        if r.return_code != 0:
+            raise Exception(
+                f"Installation failed! Return code is {r.return_code}! "
+                f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
+        else:
+            logger.debug(
+                f"Installation finished. Return code is {r.return_code}. "
+                f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
+        return (r.return_code, r.stdout, r.stderr)
 
     @staticmethod
     def _decode_byte_stream(
@@ -346,12 +417,46 @@ class ProjectRepo(Repo, ProjectBase):
         """
         Repo.__init__(self, dir_abspath)
         ProjectBase.__init__(self, dir_abspath, ignore_decode_errors)
+        self.current_commit_name = None  # i.e., HEAD
 
     def _get_dir_stem(self, *args, **kwargs) -> str:
         """
         Extract directory stem from working directory.
         """
         return pathlib.Path(self.working_dir).stem
+
+    def _get_file(
+            self,
+            filename: str,
+            commit_name: Optional[str] = None) -> CoqDocument:
+        """
+        Return a specific Coq source file from a specific commit.
+
+        Parameters
+        ----------
+        filename : str
+            The absolute path to the file to return.
+        commit_name : str or None, optional
+            A commit hash, branch name, or tag name from which to fetch
+            the file. Defaults to HEAD.
+
+        Returns
+        -------
+        CoqDocument
+            A CoqDocument corresponding to the selected Coq source file
+
+        Raises
+        ------
+        ValueError
+            If given `filename` does not end in ".v"
+        """
+        commit = self.commit(commit_name)
+        # Compute relative path
+        rel_filename = filename.replace(commit.tree.abspath, "")[1 :]
+        return CoqDocument(
+            project_name=self.name,
+            abspath=filename,
+            source_code=(commit.tree / rel_filename).data_stream.read())
 
     def _get_size_bytes(self, *args, **kwargs) -> int:
         """
@@ -364,27 +469,18 @@ class ProjectRepo(Repo, ProjectBase):
 
     def _pre_get_file(self, **kwargs):
         """
-        Set the current commit; use master if none given.
+        Set the current commit; use HEAD if none given.
         """
-        if "commit_name" in kwargs.keys():
-            if kwargs["commit_name"] is None:
-                self.current_commit_name = "master"
-            else:
-                self.current_commit_name = kwargs["commit_name"]
-        else:
-            self.current_commit_name = "master"
+        self.current_commit_name = kwargs.get("commit_name", None)
 
     def _pre_get_random(self, **kwargs):
         """
         Set the current commit; use random if none given.
         """
-        if "commit_name" in kwargs.keys():
-            if kwargs["commit_name"] is None:
-                self.current_commit_name = self.get_random_commit()
-            else:
-                self.current_commit_name = kwargs["commit_name"]
-        else:
-            self.current_commit_name = self.get_random_commit()
+        commit_name = kwargs.get("commit_name", None)
+        if commit_name is None:
+            kwargs['commit_name'] = self.get_random_commit()
+        self._pre_get_file(**kwargs)
 
     def _traverse_file_tree(self) -> List[CoqDocument]:
         """
@@ -398,40 +494,6 @@ class ProjectRepo(Repo, ProjectBase):
                 abspath=f.abspath,
                 source_code=f.data_stream.read()) for f in files
         ]
-
-    def get_file(
-            self,
-            filename: str,
-            commit_name: str = 'master') -> CoqDocument:
-        """
-        Return a specific Coq source file from a specific commit.
-
-        Parameters
-        ----------
-        filename : str
-            The absolute path to the file to return.
-        commit_name : str
-            A commit hash, branch name, or tag name from which to fetch
-            the file. This is 'master' by default.
-
-        Returns
-        -------
-        CoqDocument
-            A CoqDocument corresponding to the selected Coq source file
-
-        Raises
-        ------
-        ValueError
-            If given `filename` does not end in ".v"
-        """
-        super().get_file(filename)
-        commit = self.commit(commit_name)
-        # Compute relative path
-        rel_filename = filename.replace(commit.tree.abspath, "")[1 :]
-        return CoqDocument(
-            project_name=self.name,
-            abspath=filename,
-            source_code=(commit.tree / rel_filename).data_stream.read())
 
     def get_file_list(self, commit_name: str = 'master') -> List[str]:
         """
@@ -598,6 +660,33 @@ class ProjectDir(ProjectBase):
         """
         return pathlib.Path(self.working_dir).stem
 
+    def _get_file(self, filename: str) -> CoqDocument:
+        """
+        Get specific Coq file and return the corresponding CoqDocument.
+
+        Parameters
+        ----------
+        filename : str
+            The absolute path to the file
+
+        Returns
+        -------
+        CoqDocument
+            The corresponding CoqDocument
+
+        Raises
+        ------
+        ValueError
+            If given `filename` does not end in ".v"
+        """
+        super().get_file(filename)
+        with open(filename, "rt") as f:
+            contents = f.read()
+        return CoqDocument(
+            project_name=self.name,
+            abspath=filename,
+            source_code=contents)
+
     def _get_size_bytes(self, *args, **kwargs) -> int:
         """
         Get size in bytes of working directory.
@@ -639,33 +728,6 @@ class ProjectDir(ProjectBase):
                 if not self.ignore_decode_errors:
                     raise e
         return out_files
-
-    def get_file(self, filename: str, *args, **kwargs) -> CoqDocument:
-        """
-        Get specific Coq file and return the corresponding CoqDocument.
-
-        Parameters
-        ----------
-        filename : str
-            The absolute path to the file
-
-        Returns
-        -------
-        CoqDocument
-            The corresponding CoqDocument
-
-        Raises
-        ------
-        ValueError
-            If given `filename` does not end in ".v"
-        """
-        super().get_file(filename)
-        with open(filename, "rt") as f:
-            contents = f.read()
-        return CoqDocument(
-            project_name=self.name,
-            abspath=filename,
-            source_code=contents)
 
     def get_file_list(self, **kwargs) -> List[str]:
         """

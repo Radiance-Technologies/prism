@@ -14,10 +14,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 import numpy as np
-from roosterize.Environment import Environment
-from roosterize.FilesManager import FilesManager
-from roosterize.Macros import Macros
-from roosterize.Utils import Utils
 from seutil import BashUtils, IOUtils
 from seutil.project import Project
 from tqdm import tqdm
@@ -31,6 +27,10 @@ from prism.data.lemma.LemmaBackendSexpTransformers import (
 from prism.data.lemma.LemmaForeendSexpTransformers import (
     LemmaForeendSexpTransformers,
 )
+from prism.deprecated.Environment import Environment
+from prism.deprecated.FilesManager import FilesManager
+from prism.deprecated.Macros import Macros
+from prism.deprecated.Utils import Utils
 from prism.parser.gallina.CoqParser import CoqParser
 from prism.parser.gallina.ParserUtils import ParserUtils
 from prism.parser.gallina.SexpAnalyzer import SexpAnalyzer, SexpInfo
@@ -39,7 +39,7 @@ from prism.parser.sexp import (
     SexpNode,
     SexpParser,
 )
-from prism.util.logging import log_and_raise
+from prism.util.logging import default_log_level, log_and_raise
 
 
 class DataMiner:
@@ -47,7 +47,7 @@ class DataMiner:
     Class providing data mining functionality.
     """
 
-    logger: logging.Logger = logging.getLogger(__name__, logging.DEBUG)
+    logger: logging.Logger = logging.getLogger(__name__, default_log_level())
     from prism.util.debug import Debug
     if Debug.is_debug:
         logger.setLevel(logging.DEBUG)
