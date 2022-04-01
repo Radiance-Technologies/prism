@@ -68,7 +68,7 @@ runTests:
     - export OPAMROOT=${PWD}/.opam
     - |
       if [ ! -d ${OPAMROOT} ]; then
-        opam init default /var/cache/opam-repository
+        opam init github git+https://github.com/ocaml/opam-repository.git
       fi
     - source setup_coq.sh -n
     - make test
