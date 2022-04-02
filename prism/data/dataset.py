@@ -3,13 +3,14 @@ Module providing the base dataset object for the CoqGym interface.
 """
 import json
 import os
+import pathlib
 import random
 from io import TextIOWrapper
 from typing import Dict, Generator, List, Optional, Type, TypeVar, Union
 
 from git import InvalidGitRepositoryError
 
-from prism.data.CoqDocument import CoqDocument
+from prism.data.document import CoqDocument
 from prism.data.project import (
     DirHasNoCoqFiles,
     ProjectBase,
@@ -231,21 +232,21 @@ class CoqGymBaseDataset:
         CoqDocument
             Contents of a Coq file in the group of projects
         """
-        project_names = sorted(list(self.projects.keys()))
         if commit_names is None:
-            commit_names = {pn: 'master' for pn in project_names}
-        for project in project_names:
-            file_list = self.projects[project].get_file_list(
-                commit_name=commit_names[project])
+            commit_names = {}
+        for project_name, project in self.projects.items():
+            file_list = project.get_file_list(
+                commit_name=commit_names.get(project_name,
+                                             None))
             for file in file_list:
                 try:
                     with open(file, "r") as f:
                         f: TextIOWrapper
                         contents = f.read()
                         yield CoqDocument(
-                            abspath=file,
-                            source_code=contents,
-                            project_name=project)
+                            pathlib.Path(file).relative_to(project.path),
+                            project_path=project.path,
+                            source_code=contents)
                 except UnicodeDecodeError as e:
                     if not ignore_decode_errors:
                         raise e

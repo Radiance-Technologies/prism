@@ -18,8 +18,8 @@ from seutil import BashUtils, IOUtils
 from seutil.project import Project
 from tqdm import tqdm
 
-from prism.data.CoqDocument import CoqDocument
 from prism.data.Definition import Definition
+from prism.data.document import CoqDocument
 from prism.data.lemma import Lemma
 from prism.data.lemma.LemmaBackendSexpTransformers import (
     LemmaBackendSexpTransformers,
@@ -31,9 +31,9 @@ from prism.deprecated.Environment import Environment
 from prism.deprecated.FilesManager import FilesManager
 from prism.deprecated.Macros import Macros
 from prism.deprecated.Utils import Utils
-from prism.parser.gallina.CoqParser import CoqParser
-from prism.parser.gallina.ParserUtils import ParserUtils
-from prism.parser.gallina.SexpAnalyzer import SexpAnalyzer, SexpInfo
+from prism.parser.gallina.analyze import SexpAnalyzer, SexpInfo
+from prism.parser.gallina.parser import CoqParser
+from prism.parser.gallina.util import ParserUtils
 from prism.parser.sexp import (
     IllegalSexpOperationException,
     SexpNode,
@@ -47,10 +47,8 @@ class DataMiner:
     Class providing data mining functionality.
     """
 
-    logger: logging.Logger = logging.getLogger(__name__, default_log_level())
-    from prism.util.debug import Debug
-    if Debug.is_debug:
-        logger.setLevel(logging.DEBUG)
+    logger: logging.Logger = logging.getLogger(__name__)
+    logger.setLevel(default_log_level())
 
     Project.set_downloads_dir(Macros.downloads_dir)
 

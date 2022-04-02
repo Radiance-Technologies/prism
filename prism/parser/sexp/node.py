@@ -113,7 +113,7 @@ class SexpNode:
 
     @abc.abstractmethod
     def __deepcopy__(self,
-                     memodict={}):
+                     memodict=None):
         raise NotImplementedError
 
     class RecurAction(Enum):
@@ -230,5 +230,5 @@ class SexpNode:
 
     @classmethod
     def dejsonfy(cls, data):
-        from prism.parser.sexp.SexpParser import SexpParser
+        from prism.parser.sexp.parser import SexpParser
         return SexpParser.parse(data)

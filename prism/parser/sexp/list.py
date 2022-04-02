@@ -3,7 +3,7 @@ from typing import Callable, Iterable, List, Optional, Tuple
 
 import numpy as np
 
-from prism.parser.sexp.SexpNode import SexpNode
+from prism.parser.sexp.node import SexpNode
 
 
 class SexpList(SexpNode):
@@ -13,7 +13,7 @@ class SexpList(SexpNode):
         return
 
     def __deepcopy__(self,
-                     memodict={}):
+                     memodict=None):
         return SexpList([copy.deepcopy(c) for c in self.children])
 
     def to_python_ds(self) -> list:

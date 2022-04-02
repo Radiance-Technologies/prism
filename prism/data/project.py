@@ -2,7 +2,6 @@
 Module providing CoqGym project class representations.
 """
 import logging
-import os
 import pathlib
 import random
 import re
@@ -13,10 +12,12 @@ from warnings import warn
 from git import Commit, Repo
 from seutil import BashUtils
 
-from prism.data.CoqDocument import CoqDocument
+from prism.data.document import CoqDocument
+from prism.parser.gallina import CoqParser
 from prism.util.logging import default_log_level
 
-logger: logging.Logger = logging.getLogger(__name__, default_log_level())
+logger: logging.Logger = logging.getLogger(__name__)
+logger.setLevel(default_log_level())
 
 
 class DirHasNoCoqFiles(Exception):
@@ -34,6 +35,18 @@ class ProjectBase(ABC):
     """
     Abstract base class for representing a Coq project.
 
+    Parameters
+    ----------
+    dir_abspath : str
+        The absolute path to the project's root directory.
+    build_cmd : str or None
+        The terminal command used to build the project, by default None.
+    clean_cmd : str or None
+        The terminal command used to clean the project, by default None.
+    install_cmd : str or None
+        The terminal command used to install the project, by default
+        None.
+
     Attributes
     ----------
     name : str
@@ -41,30 +54,41 @@ class ProjectBase(ABC):
     size_bytes : int
         The total space on disk occupied by the files in the dir in
         bytes
+    build_cmd : str or None
+        The terminal command used to build the project.
+    clean_cmd : str or None
+        The terminal command used to clean the project.
+    install_cmd : str or None
+        The terminal command used to install the project..
     """
 
     proof_enders = ["Qed.", "Save.", "Defined.", "Admitted.", "Abort."]
 
-    def __init__(self, dir_abspath: str, ignore_decode_errors: bool = False):
+    def __init__(
+            self,
+            dir_abspath: str,
+            build_cmd: Optional[str] = None,
+            clean_cmd: Optional[str] = None,
+            install_cmd: Optional[str] = None):
         """
         Initialize Project object.
         """
-        self.name = self._get_dir_stem(dir_abspath)
-        self.size_bytes = self._get_size_bytes(dir_abspath)
-        self.ignore_decode_errors = ignore_decode_errors
-        self.build_cmd: str = None
-        self.clean_cmd: str = None
-        self.install_cmd: str = None
+        self.name = pathlib.Path(dir_abspath).stem
+        self.size_bytes = self._get_size_bytes()
+        self.build_cmd: Optional[str] = build_cmd
+        self.clean_cmd: Optional[str] = clean_cmd
+        self.install_cmd: Optional[str] = install_cmd
 
+    @property
     @abstractmethod
-    def _get_dir_stem(self, dir_abspath: str) -> str:
+    def path(self) -> str:
         """
-        Extract directory stem from working directory.
+        The path to the project's root directory.
         """
         pass
 
     @abstractmethod
-    def _get_file(self, filename: str, **kwargs) -> CoqDocument:
+    def _get_file(self, filename: str, *args, **kwargs) -> CoqDocument:
         """
         Return a specific Coq source file.
 
@@ -74,12 +98,14 @@ class ProjectBase(ABC):
         """
         pass
 
-    @abstractmethod
-    def _get_size_bytes(self, dir_abspath: str) -> int:
+    def _get_size_bytes(self) -> int:
         """
         Get size in bytes of working directory.
         """
-        pass
+        return sum(
+            f.stat().st_size
+            for f in pathlib.Path(self.path).glob('**/*')
+            if f.is_file())
 
     @abstractmethod
     def _pre_get_random(self, **kwargs):
@@ -129,7 +155,7 @@ class ProjectBase(ABC):
                 f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
         return (r.return_code, r.stdout, r.stderr)
 
-    def get_file(self, filename: str, **kwargs) -> CoqDocument:
+    def get_file(self, filename: str, *args, **kwargs) -> CoqDocument:
         """
         Return a specific Coq source file.
 
@@ -150,7 +176,7 @@ class ProjectBase(ABC):
         """
         if not filename.endswith(".v"):
             raise ValueError("filename must end in .v")
-        return self._get_file(filename, **kwargs)
+        return self._get_file(filename, *args, **kwargs)
 
     @abstractmethod
     def get_file_list(self, **kwargs) -> List[str]:
@@ -401,29 +427,19 @@ class ProjectRepo(Repo, ProjectBase):
     Class for representing a Coq project.
 
     Based on GitPython's `Repo` class.
-
-    Attributes
-    ----------
-    name : str
-        The stem of the repo working directory, used as the project name
-    size_bytes : int
-        The total space on disk occupied by the files in the master
-        branch in bytes.
     """
 
-    def __init__(self, dir_abspath: str, ignore_decode_errors: bool = True):
+    def __init__(self, dir_abspath: str):
         """
         Initialize Project object.
         """
         Repo.__init__(self, dir_abspath)
-        ProjectBase.__init__(self, dir_abspath, ignore_decode_errors)
+        ProjectBase.__init__(self, dir_abspath)
         self.current_commit_name = None  # i.e., HEAD
 
-    def _get_dir_stem(self, *args, **kwargs) -> str:
-        """
-        Extract directory stem from working directory.
-        """
-        return pathlib.Path(self.working_dir).stem
+    @property
+    def path(self) -> str:
+        return self.working_dir
 
     def _get_file(
             self,
@@ -454,18 +470,9 @@ class ProjectRepo(Repo, ProjectBase):
         # Compute relative path
         rel_filename = filename.replace(commit.tree.abspath, "")[1 :]
         return CoqDocument(
-            project_name=self.name,
-            abspath=filename,
+            rel_filename,
+            project_path=self.path,
             source_code=(commit.tree / rel_filename).data_stream.read())
-
-    def _get_size_bytes(self, *args, **kwargs) -> int:
-        """
-        Get size in bytes of working directory.
-        """
-        return sum(
-            f.stat().st_size
-            for f in pathlib.Path(self.working_dir).glob('**/*')
-            if f.is_file())
 
     def _pre_get_file(self, **kwargs):
         """
@@ -490,20 +497,20 @@ class ProjectRepo(Repo, ProjectBase):
         files = [f for f in commit.tree.traverse() if f.abspath.endswith(".v")]
         return [
             CoqDocument(
-                project_name=self.name,
-                abspath=f.abspath,
+                f.path,
+                project_path=self.path,
                 source_code=f.data_stream.read()) for f in files
         ]
 
-    def get_file_list(self, commit_name: str = 'master') -> List[str]:
+    def get_file_list(self, commit_name: Optional[str] = None) -> List[str]:
         """
         Return a list of all Coq files associated with this project.
 
         Parameters
         ----------
-        commit_name : str
+        commit_name : str or None, optional
             A commit hash, branch name, or tag name from which to get
-            the file list. This is 'master' by default.
+            the file list. This is HEAD by default.
 
         Returns
         -------
@@ -627,19 +634,6 @@ class ProjectDir(ProjectBase):
 
     This class makes no assumptions about whether the project directory
     is a git repository or not.
-
-    Attributes
-    ----------
-    name : str
-        The stem of the repo working directory, used as the project name
-    size_bytes : int
-        The total space on disk occupied by the files in the master
-        branch in bytes.
-    working_dir : str
-        Absolute path to the working directory
-    ignore_decode_errors : bool
-        Skip files with UnicodeDecodeError and ignore the exception
-        if True, otherwise raise the exception.
     """
 
     def __init__(self, dir_abspath: str, *args, **kwargs):
@@ -648,17 +642,12 @@ class ProjectDir(ProjectBase):
         """
         self.working_dir = dir_abspath
         super().__init__(dir_abspath, *args, **kwargs)
-        self.ignore_decode_errors: bool = kwargs.get(
-            'ignore_decode_errors',
-            False)
         if not self._traverse_file_tree():
             raise DirHasNoCoqFiles(f"{dir_abspath} has no Coq files.")
 
-    def _get_dir_stem(self, *args, **kwargs) -> str:
-        """
-        Extract directory stem from working directory.
-        """
-        return pathlib.Path(self.working_dir).stem
+    @property
+    def path(self) -> str:
+        return self.working_dir
 
     def _get_file(self, filename: str) -> CoqDocument:
         """
@@ -679,22 +668,10 @@ class ProjectDir(ProjectBase):
         ValueError
             If given `filename` does not end in ".v"
         """
-        super().get_file(filename)
-        with open(filename, "rt") as f:
-            contents = f.read()
         return CoqDocument(
-            project_name=self.name,
-            abspath=filename,
-            source_code=contents)
-
-    def _get_size_bytes(self, *args, **kwargs) -> int:
-        """
-        Get size in bytes of working directory.
-        """
-        return sum(
-            f.stat().st_size
-            for f in pathlib.Path(self.working_dir).glob('**/*')
-            if f.is_file())
+            pathlib.Path(filename).relative_to(self.path),
+            project_path=self.path,
+            source_code=CoqParser.parse_source(filename))
 
     def _pre_get_file(self, **kwargs):
         """
@@ -715,18 +692,10 @@ class ProjectDir(ProjectBase):
         files = pathlib.Path(self.working_dir).rglob("*.v")
         out_files = []
         for file in files:
-            try:
-                with open(file, "rt") as f:
-                    contents = f.read()
-                    out_files.append(
-                        CoqDocument(
-                            project_name=self.name,
-                            abspath=os.path.join(self.working_dir,
-                                                 file),
-                            source_code=contents))
-            except UnicodeDecodeError as e:
-                if not self.ignore_decode_errors:
-                    raise e
+            CoqDocument(
+                file.relative_to(self.path),
+                project_path=self.path,
+                source_code=CoqParser.parse_source(file))
         return out_files
 
     def get_file_list(self, **kwargs) -> List[str]:
