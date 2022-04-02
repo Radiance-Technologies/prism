@@ -12,7 +12,7 @@ Install a sandboxed version of Coq. No administrator privileges required.
 -h         Display this message."
 
 if [ "$1" == "-h" ] ; then
-  echo -e "$HELP" && exit 0
+  echo -e "$HELP" && return 0
 fi
 
 if [ "$1" == "" ] || [ "$1" == "-n" ] || [ "$1" == "-y" ] ; then
@@ -25,7 +25,7 @@ if [ "$1" == "" ] || [ "$1" == "-n" ] || [ "$1" == "-y" ] ; then
     REINSTALL=true
   fi
 else
-  echo "Alternative versions of Coq not yet supported." && exit 1
+  echo "Alternative versions of Coq not yet supported." && return 1
   export COQ_VERSION=$1
 fi
 
@@ -37,11 +37,12 @@ if [ ! -z ${2+x} ] ; then
       REINSTALL=true
     fi
   else
-    echo -e "$HELP" && exit 1
+    echo -e "$HELP" && return 1
   fi
 fi
 
 if [ -z ${GITROOT+x} ];
+    echo "Setting GITROOT environment variable."
     then GITROOT=$(while :; do
                 [ -d .git  ] && [ -f .prism ] && { echo `pwd`; break; };
                 [ `pwd` = "/" ] && { echo ""; break; };
@@ -49,15 +50,16 @@ if [ -z ${GITROOT+x} ];
             done);
 fi
 
-export OPAMSWITCH="prism-$COQ_VERSION"
+OPAM_SWITCH="prism-$COQ_VERSION"
+echo "Checking if switch exists..."
+SWITCH_DETECTED=$((opam switch list || true) | (grep $OPAM_SWITCH || true))
 
-if [ "$REINSTALL" == "" ] ; then
-  SWITCH_DETECTED=$(opam switch list 2>&1 | grep $OPAMSWITCH)
-
-  # remove artifacts from previous setup
-  if [ ! -z ${SWITCH_DETECTED+x} ] ; then
+# remove artifacts from previous setup
+if [ ! "$SWITCH_DETECTED" == "" ] ; then
+  echo "Previous switch $OPAM_SWITCH with Coq==$COQ_VERSION detected. "
+  if [ "$REINSTALL" == "" ] ; then
     while true; do
-      read -p "Previous switch $OPAMSWITCH with Coq==$COQ_VERSION detected. Do you want to remove and reinstall?[y/n]" yn
+      read -p . "Do you want to remove and reinstall?[y/n]" yn
       case $yn in
         [Yy]* ) REINSTALL=true; break;;
         [Nn]* ) REINSTALL=false; break;;
@@ -65,21 +67,24 @@ if [ "$REINSTALL" == "" ] ; then
       esac
     done
   fi
+else
+  echo "No existing switch named $OPAM_SWITCH detected."
+  REINSTALL=""
 fi
 
 if [ "$REINSTALL" == "true" ] || [ "$REINSTALL" = "" ] ; then
-  test "$REINSTALL" == "true" && echo "Removing $OPAMSWITCH" && opam switch remove $OPAMSWITCH -y
+  test "$REINSTALL" == "true" && echo "Removing $OPAM_SWITCH" && opam switch remove $OPAM_SWITCH -y
 
-  echo "Installing requested version of Coq in switch $OPAMSWITCH"
-  opam switch create $OPAMSWITCH 4.07.1 -y
-  opam switch $OPAMSWITCH
+  echo "Installing requested version of Coq in switch $OPAM_SWITCH"
+  opam switch create $OPAM_SWITCH 4.07.1 -y
+  opam switch $OPAM_SWITCH
   echo "Updating shell environment"
-  eval $(opam env)
+  eval $(opam env --switch=$OPAM_SWITCH --set-switch)
   opam update
   opam pin add coq $COQ_VERSION -y
   opam pin add coq-serapi $SERAPI_VERSION -y
 else
-  opam switch $OPAMSWITCH
+  opam switch $OPAM_SWITCH
   echo "Updating shell environment"
-  eval $(opam env)
+  eval $(opam env --switch=$OPAM_SWITCH --set-switch)
 fi

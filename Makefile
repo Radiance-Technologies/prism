@@ -2,17 +2,6 @@ include Makefile.include
 
 export
 
-ifndef OPAMSWITCH
-OPAMSWITCH=prism-8.10.2
-endif
-
-INSWITCH=$(shell opam switch show)
-ifeq ($(INSWITCH),$(OPAMSWITCH))
-INSWITCH=True
-else
-INSWITCH=False
-endif
-
 # build internal packages
 .PHONY: install
 install: venv_check venv
@@ -44,11 +33,11 @@ $(VENV)/bin/activate: requirements.txt
 	echo "Conda environment $(CONDA_DEFAULT_ENV) already activated."
 endif
 
-ifeq ($(INSWITCH),True)
+ifdef OPAMSWITCH
 switch_check:
 else
 switch_check:
-	$(error You must activate the OPAM switch before making this target. $(n)    Call 'source $(GITROOT)/setup_coq.sh' to activate the project switch)
+	$(error You must activate an OPAM switch before making this target. $(n)    Call 'source $(GITROOT)/setup_coq.sh' to install the project switch)
 endif
 
 clean:
