@@ -19,6 +19,7 @@ if [ "$1" == "-h" ] ; then
 fi
 
 if [ -z ${GITROOT+x} ];
+    echo "Setting GITROOT environment variable."
     then GITROOT=$(while :; do
                 [ -d .git  ] && [ -f .prism ] && { echo `pwd`; break; };
                 [ `pwd` = "/" ] && { echo ""; break; };

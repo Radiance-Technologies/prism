@@ -64,11 +64,11 @@ precommit:
 runTests:
   stage: test
   script:
-    - eval $(opam config env)
     - export OPAMROOT=${PWD}/.opam
     - |
       if [ ! -d ${OPAMROOT} ]; then
-        opam init github git+https://github.com/ocaml/opam-repository.git
+        opam init --disable-sandboxing github git+https://github.com/ocaml/opam-repository.git
       fi
+    - eval $(opam env)
     - source setup_coq.sh -n
     - make test
