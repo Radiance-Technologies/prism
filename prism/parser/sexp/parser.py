@@ -1,17 +1,21 @@
+"""
+Defines a parser of s-expressions.
+"""
 import logging
 import string
 from typing import Iterable, List, Tuple, Union
 
-from prism.parser.sexp.SexpList import SexpList
-from prism.parser.sexp.SexpNode import SexpNode
-from prism.parser.sexp.SexpString import SexpString
+from prism.parser.sexp.list import SexpList
+from prism.parser.sexp.node import SexpNode
+from prism.parser.sexp.string import SexpString
 
 
 class SexpParser:
 
     logger = logging.getLogger(__name__)
 
-    # non_par_printables = "".join(c for c in pyparsing.printables if c not in "()")
+    # non_par_printables = "".join(
+    #     c for c in pyparsing.printables if c not in "()")
 
     c_quote = '"'
     c_escape = '\\'
@@ -110,7 +114,9 @@ class SexpParser:
                 cur_pos += 1
                 while True:
                     cur_char = sexp_str[cur_pos]
-                    if cur_char == cls.c_lpar or cur_char == cls.c_rpar or cur_char == cls.c_quote or cur_char in string.whitespace:
+                    if (cur_char == cls.c_lpar or cur_char == cls.c_rpar
+                            or cur_char == cls.c_quote
+                            or cur_char in string.whitespace):
                         break
                     # end if
                     cur_token += cur_char

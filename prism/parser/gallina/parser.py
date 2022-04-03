@@ -1,16 +1,25 @@
+"""
+Module providing Coq file parsing capabilities.
+"""
 import logging
-from typing import List, Optional, Set, Union
+from typing import List, Optional, Set, Tuple, Union
 
-from prism.data.CoqDocument import CoqDocument, VernacularSentence
+from seutil import BashUtils
+
+from prism.data.document import CoqDocument, VernacularSentence
 from prism.data.LanguageId import LanguageId
 from prism.data.Token import Token, TokenConsts
-from prism.parser.gallina.ParserUtils import ParserUtils
-from prism.parser.gallina.SexpAnalyzer import SexpAnalyzer, SexpInfo
-from prism.parser.sexp import SexpNode
+from prism.parser.gallina.analyze import SexpAnalyzer, SexpInfo
+from prism.parser.gallina.util import ParserUtils
+from prism.parser.sexp import SexpNode, SexpParser
+from prism.parser.types import SourceCode
 from prism.util.debug import Debug
 
 
 class CoqParserConsts:
+    """
+    Class collecting constants used in parsing Coq files.
+    """
 
     VERNAC_TYPES_GALLINA_OR_VERNAC_CONTROL = [
         # pure-VernacControl like
@@ -623,15 +632,32 @@ class CoqParser:
     """
     Parses (different parts of) Coq code.
     """
-    logger: logging.Logger = logging.getLogger(__name__, logging.INFO)
+
+    logger: logging.Logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
     if Debug.is_debug:
         logger.setLevel(logging.DEBUG)
 
     @classmethod
-    def parse_sertok_sentences(
+    def parse_sertok_sentences(  # noqa: C901
             cls,
             sertok_sentences: List[SexpInfo.SertokSentence],
             source_code: str) -> List[VernacularSentence]:
+        """
+        Parse tokenized sentences into VernacularSentences.
+
+        Parameters
+        ----------
+        sertok_sentences : List[SexpInfo.SertokSentence]
+            List of sentences tokenized by sertok
+        source_code : str
+            Source code in string form
+
+        Returns
+        -------
+        List[VernacularSentence]
+            Parsed tokenized sentences
+        """
         cur_lineno = 1
         cur_charno = 0
         vernac_sentences: List[VernacularSentence] = list()
@@ -689,7 +715,8 @@ class CoqParser:
 
                 # Adjustment token kind: sertok put KEYWORD and SYMBOL
                 # in the same category
-                if sertok_token.kind == TokenConsts.KIND_KEYWORD and sertok_token.content in CoqParserConsts.SYMBOLS:
+                if (sertok_token.kind == TokenConsts.KIND_KEYWORD
+                        and sertok_token.content in CoqParserConsts.SYMBOLS):
                     sertok_token.kind = TokenConsts.KIND_SYMBOL
                 # end if
 
@@ -755,15 +782,15 @@ class CoqParser:
         # end for
 
         # Remove all comments
-        for vernac_i, vernac_sentence in enumerate(vernac_sentences):
+        for _vernac_i, vernac_sentence in enumerate(vernac_sentences):
             for token_i in reversed(range(len(vernac_sentence.tokens))):
                 if vernac_sentence.tokens[
                         token_i].kind == TokenConsts.KIND_COMMENT:
                     # cls.logger.debug(
-                    #     f"Removing comment at vernac#{vernac_i}, token#{token_i}; "  # noqa: W505
-                    #     f"loffset {vernac_sentence.tokens[0].loffset}, "  # noqa: W505
-                    #     f"indentation {vernac_sentence.tokens[0].indentation}, "  # noqa: W505
-                    #     f"coffset {vernac_sentence.tokens[0].coffset}; "  # noqa: W505
+                    #     f"Removing comment at vernac#{vernac_i}, token#{token_i}; "  # noqa: W505, B950
+                    #     f"loffset {vernac_sentence.tokens[0].loffset}, "  # noqa: W505, B950
+                    #     f"indentation {vernac_sentence.tokens[0].indentation}, "  # noqa: W505, B950
+                    #     f"coffset {vernac_sentence.tokens[0].coffset}; "  # noqa: W505, B950
                     #     f"content {vernac_sentence.tokens[0].content}"
                     # )
                     if token_i == 0 and vernac_sentence.tokens[
@@ -791,6 +818,20 @@ class CoqParser:
         cls,
         gallina_part: Union[SexpInfo.ConstrExprR,
                             SexpInfo.CLocalAssum]) -> bool:
+        """
+        Return whether a Gallina s-expression should be ignored.
+
+        Parameters
+        ----------
+        gallina_part : Union[SexpInfo.ConstrExprR, SexpInfo.CLocalAssum]
+            An s-expression representing a Gallina term/expression.
+
+        Returns
+        -------
+        bool
+            Whether to ignore (True) or not ignore (False) the given
+            s-expression.
+        """
         if isinstance(gallina_part, SexpInfo.ConstrExprR):
             return gallina_part.expr_type in CoqParserConsts.CONSTR_EXPR_TYPES_ONE_TOKEN
         else:
@@ -798,13 +839,159 @@ class CoqParser:
         # end if
 
     @classmethod
-    def parse_document(
+    def parse_all(
         cls,
-        source_code: str,
+        file_path: str,
+        source_code: SourceCode,
+        serapi_options: str = ""
+    ) -> Tuple[List[VernacularSentence],
+               List[SexpNode],
+               List[SexpNode]]:
+        """
+        Parse representations of the indicated Coq document.
+
+        See Also
+        --------
+        CoqParser.parse_sentences : For the public API
+        """
+
+        unicode_offsets = ParserUtils.get_unicode_offsets(source_code)
+
+        ast_sexp_list = cls.parse_asts(file_path, serapi_options)
+        tok_sexp_list = cls.parse_tokens(file_path, serapi_options)
+
+        sentences = cls.parse_sentences_from_sexps(
+            source_code,
+            ast_sexp_list,
+            tok_sexp_list,
+            unicode_offsets)
+
+        return sentences, ast_sexp_list, tok_sexp_list
+
+    @classmethod
+    def parse_asts(cls,
+                   file_path: str,
+                   sercomp_options: str = "") -> List[SexpNode]:
+        """
+        Parse the abstract syntax trees of sentences in the given file.
+
+        Parameters
+        ----------
+        file_path : str
+            The absolute or relative path of a Coq file.
+        sercomp_options : str
+            Options to control the output of ``sercomp``, which is used
+            to parse the document. By default the empty string.
+
+        Returns
+        -------
+        List[SexpNode]
+            A list of s-expression nodes representing the ASTs of
+            sentences in the order of their definition in the document.
+        """
+        ast_sexp_str: str = BashUtils.run(
+            f"sercomp {sercomp_options} --mode=sexp -- {file_path}",
+            expected_return_code=0).stdout
+        ast_sexp_list: List[SexpNode] = SexpParser.parse_list(ast_sexp_str)
+        return ast_sexp_list
+
+    @classmethod
+    def parse_document(
+            cls,
+            file_path: str,
+            serapi_options: str = "") -> CoqDocument:
+        """
+        Parse the indicated Coq document.
+
+        Parameters
+        ----------
+        file_name : str
+            The absolute or relative path of a Coq file.
+        serapi_options : str
+            Options to control the output of SerAPI, which is used to
+            parse the document. By default the empty string.
+
+        Returns
+        -------
+        CoqDocument
+            The parsed Coq document, unattached to any project.
+        """
+        source_code = cls.parse_source(file_path)
+
+        (sentences,
+         ast_sexp_lists,
+         tok_sexp_lists) = cls.parse_all(
+             file_path,
+             source_code,
+             serapi_options)
+
+        return CoqDocument(
+            file_path,
+            source_code,
+            sentences=sentences,
+            ast_sexp_lists=ast_sexp_lists,
+            tok_sexp_lists=tok_sexp_lists,
+        )
+
+    @classmethod
+    def parse_sentences(cls,
+                        file_path: str,
+                        serapi_options: str = "") -> List[VernacularSentence]:
+        """
+        Parse the sentences of the indicated Coq document.
+
+        Parameters
+        ----------
+        file_name : str
+            The absolute or relative path of a Coq file.
+        serapi_options : str
+            Options to control the output of SerAPI, which is used to
+            parse the document. By default the empty string.
+
+        Returns
+        -------
+        list of VernacularSentence
+            The parsed Coq sentences.
+        """
+        source_code = cls.parse_source(file_path)
+        return cls.parse_all(file_path, source_code, serapi_options)[0]
+
+    @classmethod
+    def parse_sentences_from_sexps(  # noqa: C901
+        cls,
+        source_code: SourceCode,
         ast_sexp_list: List[SexpNode],
         tok_sexp_list: List[SexpNode],
         unicode_offsets: List[int],
-    ) -> CoqDocument:
+    ) -> List[VernacularSentence]:
+        """
+        Parse s-expressions into sentences.
+
+        Parameters
+        ----------
+        source_code : SourceCode
+            The raw source of a Coq document.
+        ast_sexp_list : list of SexpNode
+            A list of abstract-syntax-tree s-expressions presumably
+            yielded from ``sercomp`` and corresponding to `source_code`.
+        tok_sexp_list : list of SexpNode
+            A list of lexical-token s-expressions presumably yielded
+            from ``sertok`` and corresponding to `source_code`.
+        unicode_offsets : List[int]
+            The offsets of unicode characters in `source_code` from the
+            beginning of the document.
+
+        Returns
+        -------
+        list of VernacularSentence
+            A list of sentences.
+
+        See Also
+        --------
+        prism.ParserUtils.get_unicode_offsets
+        CoqParser.parse_asts : For the usual source of `ast_sexp_list`
+        CoqParser.parse_tokens : For the usual source of `tok_sexp_list`
+        """
         # Parse tok sexp to vernacular setences
         sertok_sentences: List[
             SexpInfo.SertokSentence] = SexpAnalyzer.analyze_sertok_sentences(
@@ -854,7 +1041,8 @@ class CoqParser:
             # end if
 
             # Check sentence_lid against is_in_ltac_part
-            if not is_in_ltac_part and sentence_lid == CoqParserConsts.VERNAC_TYPES_LTAC:
+            if (not is_in_ltac_part
+                    and sentence_lid == CoqParserConsts.VERNAC_TYPES_LTAC):
                 cls.logger.warning(
                     f"Ltac sentence in non-Ltac part, likely to be a bug, at {loc}"
                 )
@@ -901,7 +1089,7 @@ class CoqParser:
                 # and vernac_ast.vernac_type not in
                 # SexpInfo.VernacConsts.type_abort:
                 # cls.logger.warning(
-                #     "EndProof appeared in non-Ltac part, likely to be a bug, "  # noqa: W505
+                #     "EndProof appeared in non-Ltac part, likely to be a bug, "  # noqa: W505, B950
                 #     f"at {vernac_ast.loc}."
                 # )
                 is_in_ltac_part = False
@@ -949,8 +1137,51 @@ class CoqParser:
 
         # end for
 
-        # Create coq document
-        coq_document = CoqDocument()
-        coq_document.sentences = vernac_sentences
+        return vernac_sentences
 
-        return coq_document
+    @classmethod
+    def parse_source(cls, file_path: str) -> SourceCode:
+        """
+        Parse the raw source code from the indicated document.
+
+        Parameters
+        ----------
+        file_path : str
+            The absolute or relative path of a Coq file.
+
+        Returns
+        -------
+        SourceCode
+            The uninterpreted source code of the Coq file.
+        """
+        with open(file_path, "r", newline="") as f:
+            source_code = f.read()
+        return source_code
+
+    @classmethod
+    def parse_tokens(cls,
+                     file_path: str,
+                     sertok_options: str = "") -> List[SexpNode]:
+        """
+        Parse the lexical tokens of sentences in the given file.
+
+        Parameters
+        ----------
+        file_path : str
+            The absolute or relative path of a Coq file.
+        sercomp_options : str
+            Options to control the output of ``sertok``, which is used
+            to parse the document. By default the empty string.
+
+        Returns
+        -------
+        List[SexpNode]
+            A list of s-expression nodes representing the sequences of
+            lexical tokens in each sentence in the order of their
+            definition in the document.
+        """
+        tok_sexp_str: str = BashUtils.run(
+            f"sertok {sertok_options} --mode=sexp -- {file_path}",
+            expected_return_code=0).stdout
+        tok_sexp_list: List[SexpNode] = SexpParser.parse_list(tok_sexp_str)
+        return tok_sexp_list

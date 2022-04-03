@@ -2,7 +2,7 @@ from typing import Callable, List, Optional, Tuple
 
 import numpy as np
 
-from prism.parser.sexp.SexpNode import SexpNode
+from prism.parser.sexp.node import SexpNode
 
 
 class SexpString(SexpNode):
@@ -12,7 +12,7 @@ class SexpString(SexpNode):
         return
 
     def __deepcopy__(self,
-                     memodict={}):
+                     memodict=None):
         return SexpString(self.content)
 
     def to_python_ds(self) -> str:
