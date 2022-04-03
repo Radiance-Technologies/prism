@@ -12,8 +12,7 @@ class SexpList(SexpNode):
         self.children = children if children is not None else list()
         return
 
-    def __deepcopy__(self,
-                     memodict=None):
+    def __deepcopy__(self, memodict=None):
         return SexpList([copy.deepcopy(c) for c in self.children])
 
     def to_python_ds(self) -> list:

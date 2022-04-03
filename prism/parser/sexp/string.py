@@ -11,8 +11,7 @@ class SexpString(SexpNode):
         self._content = content if content is not None else ""
         return
 
-    def __deepcopy__(self,
-                     memodict=None):
+    def __deepcopy__(self, memodict=None):
         return SexpString(self.content)
 
     def to_python_ds(self) -> str:

@@ -112,8 +112,7 @@ class SexpNode:
         return children[index]
 
     @abc.abstractmethod
-    def __deepcopy__(self,
-                     memodict=None):
+    def __deepcopy__(self, memodict=None):
         raise NotImplementedError
 
     class RecurAction(Enum):
