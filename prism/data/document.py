@@ -20,7 +20,7 @@ class CoqDocument:
 
     Attributes
     ----------
-    file_name : str
+    name : str
         Path to file containing document relative to the project folder.
     project_path : str or None
         The path to the project whence comes the file or None if this
@@ -43,7 +43,7 @@ class CoqDocument:
         definition in the document.
     """
 
-    file_name: str = ""
+    name: str = ""
     source_code: str = ""
     project_path: Optional[str] = None
     revision: Optional[str] = None
@@ -56,7 +56,21 @@ class CoqDocument:
         """
         Get the absolute path of the document.
         """
-        return os.path.abspath(os.path.join(self.project_path_, self.file_name))
+        return os.path.abspath(os.path.join(self.project_path_, self.name))
+
+    @property
+    def index(self) -> str:
+        """
+        Get an index that uniquely identifies the document.
+
+        The index combines the project name, revision, and file name.
+
+        Returns
+        -------
+        str
+            The index of the file.
+        """
+        return f"{self.project_name}@{self.revision}/{self.name}"
 
     @property
     def project_path_(self) -> str:
@@ -83,17 +97,6 @@ class CoqDocument:
         """
         return [t for s in self.sentences for t in s.tokens]
 
-    def get_data_index(self) -> str:
-        """
-        Combine the project name and file name.
-
-        Returns
-        -------
-        str
-            Relative path to Coq file prepended by project name
-        """
-        return f"{self.project_name}@{self.revision}/{self.file_name}"
-
     def __copy__(self):
         """
         Produce a copy of this CoqDocument object.
@@ -105,7 +108,7 @@ class CoqDocument:
         """
         return CoqDocument(
             sentences=copy.deepcopy(self.sentences),
-            file_name=self.file_name,
+            name=self.name,
             project_path=self.project_path,
             revision=self.revision,
             source_code=self.source_code)
@@ -119,7 +122,7 @@ class CoqDocument:
         str
             The debug representation of the Coq document
         """
-        s = f"File: {self.file_name}\n"
+        s = f"File: {self.name}\n"
         s += f"Project: {self.project_name}\n"
         s += f"Revision: {self.revision}\n"
         s += f"#sentences: {len(self.sentences)}\n"

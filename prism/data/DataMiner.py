@@ -56,10 +56,14 @@ class DataMiner:
     TASK_DATA_INDEXES = FilesManager.DATA_INDEXES  # "data-indexes"
     TASK_DEFINITIONS = FilesManager.DEFINITIONS  # "definitions"
     TASK_INSTALL_COQ_PROJECTS = "install-coq-projects"
-    TASK_LEMMA = FilesManager.LEMMAS  # "lemmas"
-    TASK_LEMMA_BACKEND_SEXP_TRANSFORMATIONS = FilesManager.LEMMAS_BACKEND_SEXP_TRANSFORMATIONS  # noqa: B950 "lemmas-bsexp-transformations"
-    TASK_LEMMA_FILTERED = FilesManager.LEMMAS_FILTERED  # "lemmas-filtered"
-    TASK_LEMMA_FOREEND_SEXP_TRANSFORMATIONS = FilesManager.LEMMAS_FOREEND_SEXP_TRANSFORMATIONS  # noqa: B950 "lemmas-fsexp-transformations"
+    # "lemmas"
+    TASK_LEMMA = FilesManager.LEMMAS
+    # "lemmas-bsexp-transformations"
+    TASK_LEMMA_BACKEND_SEXP_TRANSFORMATIONS = FilesManager.LEMMAS_BACKEND_SEXP_TRANSFORMATIONS  # noqa: B950
+    # "lemmas-filtered"
+    TASK_LEMMA_FILTERED = FilesManager.LEMMAS_FILTERED
+    # "lemmas-fsexp-transformations"
+    TASK_LEMMA_FOREEND_SEXP_TRANSFORMATIONS = FilesManager.LEMMAS_FOREEND_SEXP_TRANSFORMATIONS  # noqa: B950
 
     dataset_dir = Macros.project_dir.parent / "math-comp-corpus"
 
@@ -530,7 +534,7 @@ class DataMiner:
 
         # Load and sort coq-documents data
         coq_documents: List[CoqDocument] = cls.load_coq_documents(data_mgr)
-        coq_documents.sort(key=lambda d: d.get_data_index())
+        coq_documents.sort(key=lambda d: d.index)
 
         cls.logger.info(f"Total dataset #doc = {len(coq_documents)}")
         if len(coq_documents) < 10:
@@ -590,19 +594,19 @@ class DataMiner:
             trainevals_data_indexes[Macros.DS_TRAIN].update(
                 set(
                     [
-                        d.get_data_index()
+                        d.index
                         for d in documents_this_project[: train_val_split_point]
                     ]))
             trainevals_data_indexes[Macros.DS_VAL].update(
                 set(
                     [
-                        d.get_data_index() for d in documents_this_project[
+                        d.index for d in documents_this_project[
                             train_val_split_point : val_test_split_point]
                     ]))
             trainevals_data_indexes[Macros.DS_TEST].update(
                 set(
                     [
-                        d.get_data_index()
+                        d.index
                         for d in documents_this_project[val_test_split_point :]
                     ]))
         # end for
@@ -630,7 +634,7 @@ class DataMiner:
                 d for d in coq_documents if d.project_name in project_names
             ]
             groups_data_indexes[group] = set(
-                [d.get_data_index() for d in documents_this_group])
+                [d.index for d in documents_this_group])
         # end for
 
         groups_data_indexes[Macros.DS_GROUP_TA] = set.union(
@@ -707,16 +711,14 @@ class DataMiner:
         for doc_i, doc in enumerate(tqdm(coq_documents)):
             try:
                 cls.logger.info(
-                    f"Collecting from file {doc.get_data_index()} "
+                    f"Collecting from file {doc.index} "
                     f"({doc_i}/{len(coq_documents)}). Collected: {len(lemmas)}")
 
                 # Load AST sexp
                 ast_sexp_list: List[SexpNode] = SexpParser.parse_list(
                     data_mgr.load_data(
-                        [
-                            FilesManager.RAW_FILES,
-                            doc.get_data_index()[:-2] + ".ast.sexp"
-                        ],
+                        [FilesManager.RAW_FILES,
+                         doc.index[:-2] + ".ast.sexp"],
                         IOUtils.Format.txt))
 
                 # Collect lemmas from this doc
@@ -730,12 +732,12 @@ class DataMiner:
                 raise
             except Exception:
                 cls.logger.warning(
-                    f"Error while parsing {doc.get_data_index()}: "
+                    f"Error while parsing {doc.index}: "
                     f"{traceback.format_exc()}")
                 cls.logger.warning(
                     "The script will continue on other files before it returns"
                     " with failure. Use Ctrl+C to cut it early.")
-                errors.append((doc.get_data_index(), traceback.format_exc()))
+                errors.append((doc.index, traceback.format_exc()))
                 continue
             # end try
         # end for
@@ -834,10 +836,8 @@ class DataMiner:
                 # Load AST sexp
                 ast_sexp_list: List[SexpNode] = SexpParser.parse_list(
                     data_mgr.load_data(
-                        [
-                            FilesManager.RAW_FILES,
-                            doc.get_data_index()[:-2] + ".ast.sexp"
-                        ],
+                        [FilesManager.RAW_FILES,
+                         doc.index[:-2] + ".ast.sexp"],
                         IOUtils.Format.txt))
                 definitions_doc: List[Definition] = cls.collect_definitions_doc(
                     doc,
@@ -849,12 +849,12 @@ class DataMiner:
                 raise
             except Exception:
                 cls.logger.warning(
-                    f"Error while parsing {doc.get_data_index()}: "
+                    f"Error while parsing {doc.index}: "
                     f"{traceback.format_exc()}")
                 cls.logger.warning(
                     "The script will continue on other files before it returns"
                     " with failure. Use Ctrl+C to cut it early.")
-                errors.append((doc.get_data_index(), traceback.format_exc()))
+                errors.append((doc.index, traceback.format_exc()))
                 continue
             # end try
         # end for
@@ -1060,7 +1060,7 @@ class DataMiner:
         serapi_options: str,
     ) -> List[Lemma]:
         lemmas_doc: List[Lemma] = list()
-        data_index = doc.get_data_index()
+        data_index = doc.index
 
         # Maintain a stack of module
         modules: List[str] = list()
@@ -1174,7 +1174,7 @@ class DataMiner:
         ast_sexp_list: List[SexpNode],
     ) -> List[Definition]:
         definitions_doc: List[Definition] = list()
-        data_index = doc.get_data_index()
+        data_index = doc.index
         for sent_i, _sent in enumerate(doc.sentences):
             ast_sexp = ast_sexp_list[sent_i]
             vernac = SexpAnalyzer.analyze_vernac(ast_sexp)

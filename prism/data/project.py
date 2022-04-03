@@ -5,6 +5,7 @@ import logging
 import pathlib
 import random
 import re
+import warnings
 from abc import ABC, abstractmethod
 from typing import List, Optional, Tuple, Union
 from warnings import warn
@@ -83,7 +84,7 @@ class ProjectBase(ABC):
     @abstractmethod
     def path(self) -> str:
         """
-        The path to the project's root directory.
+        Get the path to the project's root directory.
         """
         pass
 
@@ -231,11 +232,7 @@ class ProjectBase(ABC):
             obj = self.get_random_file(**kwargs)
         else:
             obj = self.get_file(filename, **kwargs)
-        contents = obj.source_code
-        sentences = ProjectBase.split_by_sentence(
-            contents,
-            'utf-8',
-            glom_proofs)
+        sentences = self.split_by_sentence(obj, 'utf-8', glom_proofs)
         sentence = random.choice(sentences)
         return sentence
 
@@ -277,11 +274,7 @@ class ProjectBase(ABC):
                 obj = self.get_random_file(**kwargs)
             else:
                 obj = self.get_file(filename, **kwargs)
-            contents = obj.source_code
-            sentences = ProjectBase.split_by_sentence(
-                contents,
-                'utf-8',
-                glom_proofs)
+            sentences = self.split_by_sentence(obj, 'utf-8', glom_proofs)
             counter += 1
         first_sentence_idx = random.randint(0, len(sentences) - 2)
         return sentences[first_sentence_idx : first_sentence_idx + 2]
@@ -341,8 +334,7 @@ class ProjectBase(ABC):
 
     @staticmethod
     def split_by_sentence(
-            file_contents: Union[str,
-                                 bytes],
+            document: CoqDocument,
             encoding: str = 'utf-8',
             glom_proofs: bool = True) -> List[str]:
         """
@@ -370,6 +362,7 @@ class ProjectBase(ABC):
             sentences, with proofs glommed (or not) depending on input
             flag.
         """
+        file_contents = document.source_code
         if isinstance(file_contents, bytes):
             file_contents = ProjectBase._decode_byte_stream(
                 file_contents,
@@ -411,7 +404,8 @@ class ProjectBase(ABC):
                     # syntax error, and we should stop trying to glom
                     # proofs that are possibly incorrectly formed.
                     warn(
-                        "Found an unterminated proof environment. "
+                        "Found an unterminated proof environment in "
+                        f"{document.index}. "
                         "Abandoning proof glomming.")
                     return sentences
             # Lop off the final line if it's just a period, i.e., blank.
@@ -438,7 +432,7 @@ class ProjectRepo(Repo, ProjectBase):
         self.current_commit_name = None  # i.e., HEAD
 
     @property
-    def path(self) -> str:
+    def path(self) -> str:  # noqa: D102
         return self.working_dir
 
     def _get_file(
@@ -646,10 +640,10 @@ class ProjectDir(ProjectBase):
             raise DirHasNoCoqFiles(f"{dir_abspath} has no Coq files.")
 
     @property
-    def path(self) -> str:
+    def path(self) -> str:  # noqa: D102
         return self.working_dir
 
-    def _get_file(self, filename: str) -> CoqDocument:
+    def _get_file(self, filename: str, *args, **kwargs) -> CoqDocument:
         """
         Get specific Coq file and return the corresponding CoqDocument.
 
@@ -667,7 +661,17 @@ class ProjectDir(ProjectBase):
         ------
         ValueError
             If given `filename` does not end in ".v"
+
+        Warns
+        -----
+        UserWarning
+            If either of `args` or `kwargs` is nonempty.
         """
+        if args or kwargs:
+            warnings.warn(
+                f"Unexpected additional arguments to Project[{self.name}]._get_file.\n"
+                f"    args: {args}\n"
+                f"    kwargs: {kwargs}")
         return CoqDocument(
             pathlib.Path(filename).relative_to(self.path),
             project_path=self.path,
@@ -692,10 +696,11 @@ class ProjectDir(ProjectBase):
         files = pathlib.Path(self.working_dir).rglob("*.v")
         out_files = []
         for file in files:
-            CoqDocument(
-                file.relative_to(self.path),
-                project_path=self.path,
-                source_code=CoqParser.parse_source(file))
+            out_files.append(
+                CoqDocument(
+                    file.relative_to(self.path),
+                    project_path=self.path,
+                    source_code=CoqParser.parse_source(file)))
         return out_files
 
     def get_file_list(self, **kwargs) -> List[str]:

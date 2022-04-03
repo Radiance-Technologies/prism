@@ -108,9 +108,6 @@ class CoqGymBaseDataset:
         projects.
     sentences(commit_names, glom_proofs)
         Returns a generator that yields Coq sentences from the object.
-    _get_random_project()
-        Returns a random project from the list of internal projects,
-        with sampling weighted by `weights`.
     """
 
     projects: ProjectDict = {}
@@ -207,6 +204,24 @@ class CoqGymBaseDataset:
         # Store project weights for sampling later.
         self.weights = {pn: p.size_bytes for pn,
                         p in self.projects.items()}
+
+    def _get_random_project(self) -> str:
+        """
+        Get a random project from the dataset's internal selection.
+
+        The selection is weighted by ``self.weights``.
+
+        Returns
+        -------
+        str
+            The name of a randomly chosen project.
+        """
+        weights = []
+        project_names = list(self.projects.keys())
+        for proj in project_names:
+            weights.append(self.weights[proj])
+        chosen_proj = random.choices(project_names, weights, k=1)[0]
+        return chosen_proj
 
     def files(
         self,
@@ -412,15 +427,7 @@ class CoqGymBaseDataset:
             ignore_decode_errors=ignore_decode_errors)
         for file_obj in coq_file_generator:
             sentence_list = ProjectBase.split_by_sentence(
-                file_obj.source_code,
+                file_obj,
                 glom_proofs=glom_proofs)
             for sentence in sentence_list:
                 yield sentence
-
-    def _get_random_project(self) -> str:
-        weights = []
-        project_names = list(self.projects.keys())
-        for proj in project_names:
-            weights.append(self.weights[proj])
-        chosen_proj = random.choices(project_names, weights, k=1)[0]
-        return chosen_proj
