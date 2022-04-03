@@ -6,7 +6,7 @@ from typing import Callable, Deque, Iterable, List, Optional, Tuple, Union
 
 import numpy as np
 
-from prism.parser.sexp.IllegalSexpOperationException import (
+from prism.language.sexp.IllegalSexpOperationException import (
     IllegalSexpOperationException,
 )
 
@@ -230,5 +230,6 @@ class SexpNode:
 
     @classmethod
     def dejsonfy(cls, data):
-        from prism.parser.sexp.parser import SexpParser
+        # TODO: Refactor to remove circular reference.
+        from prism.language.sexp.parser import SexpParser
         return SexpParser.parse(data)

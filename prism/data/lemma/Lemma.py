@@ -3,7 +3,7 @@ from typing import List
 from recordclass import RecordClass
 
 from prism.data.Token import Token
-from prism.parser.sexp import SexpNode
+from prism.language.sexp import SexpNode
 
 
 class Lemma(RecordClass):

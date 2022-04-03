@@ -2,7 +2,7 @@ from typing import Callable, List, Optional, Tuple
 
 import numpy as np
 
-from prism.parser.sexp.node import SexpNode
+from prism.language.sexp.node import SexpNode
 
 
 class SexpString(SexpNode):

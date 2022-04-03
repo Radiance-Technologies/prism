@@ -7,7 +7,7 @@ from prism.data.transform.TreeTransformer import (
     RandomTransformer,
     TreeTransformer,
 )
-from prism.parser.sexp import SexpList, SexpNode, SexpString
+from prism.language.sexp import SexpList, SexpNode, SexpString
 
 
 class Level0Transformer(TreeTransformer):

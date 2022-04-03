@@ -5,9 +5,9 @@ import logging
 import string
 from typing import Iterable, List, Tuple, Union
 
-from prism.parser.sexp.list import SexpList
-from prism.parser.sexp.node import SexpNode
-from prism.parser.sexp.string import SexpString
+from prism.language.sexp.list import SexpList
+from prism.language.sexp.node import SexpNode
+from prism.language.sexp.string import SexpString
 
 
 class SexpParser:

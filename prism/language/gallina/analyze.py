@@ -6,8 +6,8 @@ from recordclass import RecordClass
 from seutil import LoggingUtils
 
 from prism.data.Token import TokenConsts
-from prism.parser.gallina.util import ParserUtils
-from prism.parser.sexp import IllegalSexpOperationException, SexpNode
+from prism.language.gallina.util import ParserUtils
+from prism.language.sexp import IllegalSexpOperationException, SexpNode
 
 
 class SexpInfo:

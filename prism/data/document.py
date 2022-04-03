@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from prism.data.Token import Token
-from prism.parser.sexp import SexpNode
+from prism.language.sexp import SexpNode
 
 from .sentence import VernacularSentence
 

@@ -2,7 +2,7 @@ import abc
 import random
 
 from prism.data.transform import TreeTransformationConsts
-from prism.parser.sexp import SexpList, SexpNode, SexpString
+from prism.language.sexp import SexpList, SexpNode, SexpString
 
 
 class TreeTransformer:

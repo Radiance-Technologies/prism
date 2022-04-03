@@ -2,7 +2,7 @@ from typing import List
 
 from recordclass import RecordClass
 
-from prism.parser.sexp import Optional, SexpList, SexpNode, SexpString
+from prism.language.sexp import Optional, SexpList, SexpNode, SexpString
 
 
 class TreeTransformationConsts:

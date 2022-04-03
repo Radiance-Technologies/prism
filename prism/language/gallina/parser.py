@@ -9,10 +9,10 @@ from seutil import BashUtils
 from prism.data.document import CoqDocument, VernacularSentence
 from prism.data.LanguageId import LanguageId
 from prism.data.Token import Token, TokenConsts
-from prism.parser.gallina.analyze import SexpAnalyzer, SexpInfo
-from prism.parser.gallina.util import ParserUtils
-from prism.parser.sexp import SexpNode, SexpParser
-from prism.parser.types import SourceCode
+from prism.language.gallina.analyze import SexpAnalyzer, SexpInfo
+from prism.language.gallina.util import ParserUtils
+from prism.language.sexp import SexpNode, SexpParser
+from prism.language.types import SourceCode
 from prism.util.debug import Debug
 
 

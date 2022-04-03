@@ -32,10 +32,10 @@ from prism.deprecated.Environment import Environment
 from prism.deprecated.FilesManager import FilesManager
 from prism.deprecated.Macros import Macros
 from prism.deprecated.Utils import Utils
-from prism.parser.gallina.analyze import SexpAnalyzer, SexpInfo
-from prism.parser.gallina.parser import CoqParser
-from prism.parser.gallina.util import ParserUtils
-from prism.parser.sexp import (
+from prism.language.gallina.analyze import SexpAnalyzer, SexpInfo
+from prism.language.gallina.parser import CoqParser
+from prism.language.gallina.util import ParserUtils
+from prism.language.sexp import (
     IllegalSexpOperationException,
     SexpNode,
     SexpParser,
