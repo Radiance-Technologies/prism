@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 import numpy as np
+from deprecated.sphinx import deprecated
 from seutil import BashUtils, IOUtils
 from seutil.project import Project
 from tqdm import tqdm
@@ -42,6 +43,7 @@ from prism.parser.sexp import (
 from prism.util.logging import default_log_level, log_and_raise
 
 
+@deprecated(reason="DataMiner is too specialized to Roosterize.")
 class DataMiner:
     """
     Class providing data mining functionality.
