@@ -1,8 +1,21 @@
+"""
+Defines an abstract representation of s-expressions as nodes in trees.
+"""
+
 import abc
 import sys
 from collections import deque
 from enum import Enum
-from typing import Callable, Deque, Iterable, List, Optional, Tuple, Union
+from typing import (
+    Callable,
+    Deque,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 import numpy as np
 
@@ -11,62 +24,103 @@ from prism.language.sexp.IllegalSexpOperationException import (
 )
 
 
-class SexpNode:
+class SexpNode(abc.ABC):
     """
-    Abstract class of a node in sexp.
+    Abstract class of a node in an s-exp represented as a tree.
     """
+
+    class RecurAction(Enum):
+        """
+        Records the result of a recursively applied function.
+        """
+
+        ContinueRecursion = 0
+        StopRecursion = 1
 
     @abc.abstractmethod
-    def to_python_ds(self) -> Union[str, list]:
-        """
-        Converts this s-expression to python lists and strings.
-        """
+    def __deepcopy__(self, memodict=None) -> 'SexpNode':  # noqa: D105
+        raise NotImplementedError
 
-    def is_list(self) -> bool:
+    def __getitem__(self, index: int) -> 'SexpNode':
         """
-        Checks if this node is a list.
+        Get the `index`-th child of this node.
 
-        :return: True if this node is a list.
-        """
-        return False
+        Parameters
+        ----------
+        index : int
+            The index of the requested child.
 
-    def is_string(self) -> bool:
-        """
-        Checks if this node is a string.
+        Returns
+        -------
+        SexpNode
+            The requested child node.
 
-        :return: True if this node is a string.
+        Raises
+        ------
+        IllegalSexpOperationException
+            If the index is out of bounds or the node has no children.
         """
-        return False
+        children = self.get_children()
+        if children is None:
+            raise IllegalSexpOperationException(
+                "Cannot get the children of an s-exp string.")
+        elif isinstance(index, int):
+            if index < -len(children) or index >= len(children):
+                raise IllegalSexpOperationException(
+                    f"Cannot get child ({index}), "
+                    f"this list only have {len(children)} children.")
+            # end if
+        # end if
 
-    def get_content(self) -> Optional[str]:
-        """
-        Gets the content of this (string) node.
+        return children[index]
 
-        :return: self's content if this is a string node, otherwise None.
+    def __len__(self) -> int:
         """
-        return None
+        Get the number of immediate children.
+
+        Returns
+        -------
+        int
+            The number of immediate children of this node.
+        """
+        if self.is_list():
+            return len(self.get_children())
+        else:
+            return 0
+
+    @abc.abstractmethod
+    def __str__(self) -> str:
+        """
+        Get a representation of this subtree as an s-expression.
+        """
+        pass
+
+    @abc.abstractmethod
+    def contains_str(self, s: str) -> bool:
+        """
+        Return whether the given string is in in this node's subtree.
+
+        Returns
+        -------
+        bool
+            The number of nodes in the tree rooted at this `SexpNode`.
+        """
+        pass
 
     @property
-    def content_no_quote(self):
-        content = self.content
-        if content.startswith('"'):
-            content = content[1 :-1]
-        return content
-
-    def get_children(self) -> Optional[List["SexpNode"]]:
+    def content(self) -> str:
         """
-        Gets the children of this (list) node.
+        Get the content of the SexpString, or throw exception.
 
-        :return: self's children if this is a list node, otherwise None.
-        """
-        return None
+        Returns
+        -------
+        str
+            The content of the node if it is a string.
 
-    @property
-    def content(self):
-        """
-        Gets the content of the SexpString, or throw exception.
-        :return: the content, if it is an SexpString.
-        :raises IllegalSexpOperationException: if it is an SexpList.
+        Raises
+        ------
+        IllegalSexpOperationException
+            If the content is None, i.e. the node is not a string.
         """
         content = self.get_content()
         if content is None:
@@ -76,115 +130,125 @@ class SexpNode:
             return content
         # end if
 
-    def __len__(self):
+    @property
+    def content_no_quote(self) -> str:
         """
-        Gets the length of this SexpNode, which is always 0 when it is
-        an SexpString.
+        Get the content stripped of leading/trailing quotes.
 
-        :return: the length of the list when it is an SexpList, or 0 if it is an SexpString.
+        This only strips the outermost layer of quotes, preserving any
+        quotes that would otherwise be interpreted as part of the
+        content.
+
+        Returns
+        -------
+        str
+            The content stripped of at most one layer of leading or
+            trailing quotes.
         """
-        if self.is_list():
-            return len(self.get_children())
-        else:
-            return 0
+        content = self.content
+        if content.startswith('"'):
+            content = content[1 :-1]
+        return content
 
-    def __getitem__(self, index):
-        """
-        Gets the index-th child node if it is an SexpList, or throw
-        exception.
-
-        :param index: the index of the child node to get.
-        :return: the index-th child, if it is an SexpList and index is valid.
-        :raises IllegalSexpOperationException: if it is an SexpString or does not have enough children, or index < 0.
-        """
-        children = self.get_children()
-        if children is None:
-            raise IllegalSexpOperationException(
-                "Cannot get the children of an s-exp string.")
-        elif isinstance(index, int):
-            if index < -len(children) or index >= len(children):
-                raise IllegalSexpOperationException(
-                    f"Cannot get child ({index}), this list only have {len(children)} children."
-                )
-            # end if
-        # end if
-
-        return children[index]
-
+    @property
     @abc.abstractmethod
-    def __deepcopy__(self,
-                     memodict=None):
-        raise NotImplementedError
+    def height(self) -> int:
+        """
+        Get the height of the s-expression rooted at this node.
 
-    class RecurAction(Enum):
-        ContinueRecursion = 0
-        StopRecursion = 1
+        Returns
+        -------
+        int
+            The height of the tree rooted at this `SexpNode`.
+        """
+        pass
+
+    @property
+    @abc.abstractmethod
+    def num_nodes(self) -> int:
+        """
+        Get the number of nodes in this node's subtree.
+
+        Returns
+        -------
+        int
+            The number of nodes in the tree rooted at this `SexpNode`.
+        """
+        pass
+
+    @property
+    @abc.abstractmethod
+    def num_leaves(self) -> int:
+        """
+        Get the number of leaves in this node's subtree.
+
+        Returns
+        -------
+        int
+            The number of leaves in the tree rooted at this `SexpNode`.
+        """
+        pass
 
     @abc.abstractmethod
     def apply_recur(self, func: Callable[["SexpNode"], RecurAction]) -> None:
         """
-        Recursively visits (in depth first search order) each node in
-        the sexp and applying func.
+        Apply a function in depth-first-search order to this subtree.
 
-        :param func: the function to apply, takes in an SexpNode and returns RecurAction to specify if continue explore on this branch or not.
+        Parameters
+        ----------
+        func : func: Callable[["SexpNode"], RecurAction]
+            A function that must necessarily modify its given `SexpNode`
+            in-place or modifies variables in its closure.
         """
-        return NotImplemented
+        pass
 
-    @abc.abstractmethod
-    def modify_recur(
+    def backward_depth_first_sequence(
         self,
-        pre_children_modify: Callable[["SexpNode"],
-                                      Tuple[Optional["SexpNode"],
-                                            "SexpNode.RecurAction"]] = lambda x:
-        (x,
-         SexpNode.RecurAction.ContinueRecursion),
-        post_children_modify: Callable[["SexpNode"],
-                                       Optional["SexpNode"]] = lambda x: x,
-    ) -> Optional["SexpNode"]:
+        children_filtering_func: Callable[[Sequence["SexpNode"]],
+                                          Iterable["SexpNode"]] = lambda x: x,
+        use_parenthesis: bool = False,
+    ) -> List[str]:
         """
-        Recursively visits (in depth first search order) each node in
-        the sexp, and modify the sexp.
+        Filter the content of this s-expression in reverse order.
 
-        :param pre_children_modify: the function that should be applied prior to applying the modification on children.
-        :param post_children_modify: the function that should be applied after applying the modification on children.
-        :return: the modified sexp to replace this sexp node, or None if deleting this node from parent list.
+        See Also
+        --------
+        SexpNode.forward_depth_first_sequence
         """
-        return NotImplemented
+        return self.forward_depth_first_sequence(
+            lambda x: children_filtering_func(reversed(x)),
+            use_parenthesis)
 
-    @abc.abstractmethod
-    def height(self) -> int:
-        return NotImplemented
-
-    @abc.abstractmethod
-    def num_nodes(self) -> int:
-        return NotImplemented
-
-    @abc.abstractmethod
-    def num_leaves(self) -> int:
-        return NotImplemented
-
-    @abc.abstractmethod
-    def contains_str(self, s: str) -> bool:
-        return NotImplemented
-
-    @abc.abstractmethod
-    def __str__(self) -> str:
-        return NotImplemented
-
-    @abc.abstractmethod
-    def pretty_format(self, max_depth: int = np.PINF) -> str:
+    @classmethod
+    def deserialize(cls, data: str) -> 'SexpNode':
         """
-        Formats this s-expression into an human-readable string.
+        Parse the given s-expression into an `SexpNode`.
 
-        :return: a pretty human-readable string for this s-expression.
+        Parameters
+        ----------
+        data : str
+            A serialized s-expression.
+
+        Returns
+        -------
+        SexpNode
+            The parsed, deserialized s-expression.
         """
-        return NotImplemented
+        # TODO: Refactor to remove circular reference.
+        from prism.language.sexp.parser import SexpParser
+        return SexpParser.parse(data)
 
     def dot(self) -> str:
         """
-        Returns the visualization in dot format.
+        Get the source for a visualization of this node's subtree.
 
-        Generate pdf with: `dot -Tpdf $file -o $pdfFile`.
+        A PDF can be generated with: `dot -Tpdf $file -o $pdfFile`.
+
+        Returns
+        -------
+        str
+            A text representation of this node's subtree in a format
+            suitable for visualization with `dot`.
         """
         out = ""
         out += "digraph x {"
@@ -194,12 +258,18 @@ class SexpNode:
             currentSexp: SexpNode = toVisit.popleft()
             if currentSexp.is_string():
                 label = currentSexp.content.replace('"', '\'')
-                out += f"n{hash(currentSexp)% ((sys.maxsize + 1) * 2)} [label=\"{label}\" shape=none];\n"
+                out += (
+                    f"n{hash(currentSexp)% ((sys.maxsize + 1) * 2)} "
+                    f"[label=\"{label}\" shape=none];\n")
             else:
-                out += f"n{hash(currentSexp)% ((sys.maxsize + 1) * 2)} [shape=point];\n"
+                out += (
+                    f"n{hash(currentSexp)% ((sys.maxsize + 1) * 2)} "
+                    "[shape=point];\n")
                 for child in currentSexp.get_children():
                     toVisit.append(child)
-                    out += f"n{hash(currentSexp)% ((sys.maxsize + 1) * 2)} -> n{hash(child)% ((sys.maxsize + 1) * 2)};\n"
+                    out += (
+                        f"n{hash(currentSexp)% ((sys.maxsize + 1) * 2)} "
+                        f"-> n{hash(child)% ((sys.maxsize + 1) * 2)};\n")
                 # end for
             # end if
         # end while
@@ -214,22 +284,138 @@ class SexpNode:
                                           Iterable["SexpNode"]] = lambda x: x,
         use_parathesis: bool = False,
     ) -> List[str]:
-        return NotImplemented
+        """
+        Filter the content of this s-expression in order.
+
+        Parameters
+        ----------
+        children_filtering_func : Callable[[Sequence["SexpNode"]], \
+                                           Iterable["SexpNode"]], \
+                                  optional
+            A function that takes a sequence of nodes and returns an
+            iterator over a derived subset of nodes, nominally a
+            filtered subset.
+            By default identity.
+        use_parenthesis : bool, optional
+            Whether to intersperse the result with parantheses at each
+            level of the tree, by default False.
+
+        Returns
+        -------
+        List[str]
+            The (possibly `children_filtering_func`-modified) content
+            of this node's filtered subtree.
+        """
+        pass
+
+    def get_children(self) -> Optional[List["SexpNode"]]:
+        """
+        Get the children of this (list) node.
+
+        Returns
+        -------
+        list of SexpNode or None
+            This node's children if this is a list node, otherwise None.
+        """
+        return None
+
+    def get_content(self) -> Optional[str]:
+        """
+        Get the content of this (string) node.
+
+        Returns
+        -------
+        str or None
+            The node's content if this is a string node, otherwise None.
+        """
+        return None
+
+    def is_list(self) -> bool:
+        """
+        Check if this node is a list.
+
+        Returns
+        -------
+        bool
+            True if this node is a list, False otherwise.
+        """
+        return False
+
+    def is_string(self) -> bool:
+        """
+        Check if this node is a string.
+
+        Returns
+        -------
+        bool
+            True if this node is a string, False otherwise.
+        """
+        return False
 
     @abc.abstractmethod
-    def backward_depth_first_sequence(
+    def modify_recur(
         self,
-        children_filtering_func: Callable[[Iterable["SexpNode"]],
-                                          Iterable["SexpNode"]] = lambda x: x,
-        use_parathesis: bool = False,
-    ) -> List[str]:
-        return NotImplemented
+        pre_children_modify: Callable[["SexpNode"],
+                                      Tuple[Optional["SexpNode"],
+                                            RecurAction]] = lambda x:
+        (x,
+         SexpNode.RecurAction.ContinueRecursion),
+        post_children_modify: Callable[["SexpNode"],
+                                       Optional["SexpNode"]] = lambda x: x,
+    ) -> Optional["SexpNode"]:
+        r"""
+        Perform an out-of-place modification of this node's subtree.
 
-    def jsonfy(self):
+        Recursively visits (in depth-first-search order) each node in
+        the s-expression and modifies the s-expression.
+        Two functions are composed and applied to this node and each of
+        its children.
+
+        Parameters
+        ----------
+        pre_children_modify : Callable[[SexpNode], \
+                                       Tuple[Optional[SexpNode], \
+                                             RecurAction]]
+            The function that should be applied prior to applying the
+            modification on children.
+        post_children_modify : Callable[[SexpNode], Optional[SexpNode]]
+            The function that should be applied after applying the
+            modification on children.
+
+        Returns
+        -------
+        Optional[SexpNode]
+            The modified s-expression to replace this s-expression node,
+            or None if deleting this node from parent list.
+        """
+        pass
+
+    @abc.abstractmethod
+    def pretty_format(self, max_depth: int = np.PINF) -> str:
+        """
+        Format this s-expression into an human-readable string.
+
+        Returns
+        -------
+        str
+            A pretty human-readable string for this s-expression.
+        """
+        pass
+
+    def serialize(self) -> str:
+        """
+        Convert this node's subtree to an s-expression.
+
+        Returns
+        -------
+        str
+            An s-expression corresponding to this node's subtree.
+        """
         return self.__str__()
 
-    @classmethod
-    def dejsonfy(cls, data):
-        # TODO: Refactor to remove circular reference.
-        from prism.language.sexp.parser import SexpParser
-        return SexpParser.parse(data)
+    @abc.abstractmethod
+    def to_python_ds(self) -> Union[str, list]:
+        """
+        Convert this s-expression to Python lists and strings.
+        """
+        pass
