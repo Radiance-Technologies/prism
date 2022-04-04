@@ -1,10 +1,14 @@
+"""
+Provides methods for extracting Gallina terms from parsed s-expressions.
+"""
 import collections
 import logging
 import re
 from dataclasses import dataclass
 from typing import Counter, List, Optional, Set, Tuple, Union
 
-from recordclass import RecordClass
+from deprecated.sphinx import deprecated
+from radpytools.dataclasses import default_field, immutable_dataclass
 
 from prism.language.gallina.util import ParserUtils
 from prism.language.sexp import IllegalSexpOperationException, SexpNode
@@ -20,12 +24,20 @@ class SexpInfo:
 
     @dataclass
     class Vernac:
+        """
+        A vernacular command.
+        """
+
         vernac_type: str = ""
         extend_type: str = ""
         vernac_sexp: Optional[SexpNode] = None
         loc: Optional["SexpInfo.Loc"] = None
 
     class VernacConsts:
+        """
+        Namsepace for vernacular grammar term constructors.
+        """
+
         type_abort = "VernacAbort"
         type_add_option = "VernacAddOption"
         type_arguments = "VernacArguments"
@@ -75,74 +87,113 @@ class SexpInfo:
 
         extend_type_obligations = "Obligations"
 
-    class Loc(RecordClass):
+    @immutable_dataclass
+    class Loc:
+        """
+        A location within a file.
+        """
+
         filename: str
         lineno: int
         beg_charno: int
         end_charno: int
 
-        def __lt__(self, other):
+        def __lt__(self, other: Union['SexpInfo.Loc', int, float]) -> bool:
+            """
+            Return whether this location is less than another.
+
+            The last possible character within the location is used for
+            the comparison.
+            """
             if isinstance(other, type(self)):
                 return self.end_charno <= other.beg_charno
             elif isinstance(other, (int, float)):
                 return self.end_charno <= other
             else:
-                raise ValueError
+                return NotImplemented
 
-        def __gt__(self, other):
+        def __gt__(self, other: Union['SexpInfo.Loc', int, float]) -> bool:
+            """
+            Return whether this location is greater than another.
+
+            The last possible character within the location is used for
+            the comparison.
+            """
             if isinstance(other, type(self)):
                 return self.beg_charno >= other.end_charno
             elif isinstance(other, (int, float)):
                 return self.beg_charno >= other
             else:
-                raise ValueError
+                return NotImplemented
 
-        def __eq__(self, other):
-            if isinstance(other, type(self)):
-                return (
-                    self.beg_charno,
-                    self.end_charno,
-                    self.filename,
-                    self.lineno) == (
-                        other.beg_charno,
-                        other.end_charno,
-                        other.filename,
-                        other.lineno)
-            else:
-                raise ValueError
+        def contains_charno_range(
+                self,
+                beg_charno: int,
+                end_charno: int) -> bool:
+            """
+            Return whether the given locations form a subinterval.
 
-        def __hash__(self):
-            return hash(
-                (self.filename,
-                 self.lineno,
-                 self.beg_charno,
-                 self.end_charno))
+            Parameters
+            ----------
+            beg_charno : int
+                The location from the start of the document of the first
+                character in the hypothetical subinterval.
+            end_charno : int
+                The location from the start of the document of the last
+                character in the hypothetical subinterval.
 
-        def contains_charno_range(self, beg_charno: int, end_charno: int):
+            Returns
+            -------
+            bool
+                Whether the indicated range of characters are contained
+                within the span of this location.
+            """
             if self.beg_charno <= beg_charno and self.end_charno >= end_charno:
                 return True
             else:
                 return False
             # end if
 
+    @dataclass
     class SertokSentence:
-        tokens: List["SexpInfo.SertokToken"] = None
+        """
+        A sequence of lexical tokens obtained via `sertok`.
+        """
 
+        tokens: List["SexpInfo.SertokToken"] = default_field([])
+
+    @dataclass
     class SertokToken:
-        kind: str = ""
-        content: str = ""
-        loc: "SexpInfo.Loc" = None
+        """
+        A lexical token obtained via `sertok`.
+        """
 
-    class ConstrExprR(RecordClass):
+        kind: str
+        content: str
+        loc: "SexpInfo.Loc"
+
+    @dataclass
+    class ConstrExprR:
+        """
+        A Gallina constructor expression term.
+        """
+
         expr_type: str = ""
-        expr_sexp: SexpNode = None
-        claimed_loc: "SexpInfo.Loc" = None
-        loc: "SexpInfo.Loc" = None
+        expr_sexp: Optional[SexpNode] = None
+        claimed_loc: Optional["SexpInfo.Loc"] = None
+        loc: Optional["SexpInfo.Loc"] = None
 
-        def __hash__(self):
+        def __hash__(self) -> int:
+            """
+            Get the hash of the internal node and location.
+            """
             return hash((self.expr_sexp, self.loc))
 
     class ConstrExprRConsts:
+        """
+        Namespace for Gallina term constructors.
+        """
+
         type_c_ref = "CRef"
         type_c_fix = "CFix"
         type_c_co_fix = "CCoFix"
@@ -189,19 +240,29 @@ class SexpInfo:
             type_c_delimiters,
         ]
 
-    class CNotation(RecordClass):
-        notation_shape: str = ""
-        expr_sexp: SexpNode = None
-        loc: "SexpInfo.Loc" = None
-        args: List["SexpInfo.ConstrExprR"] = None
-        notation_symbols: List[str] = None
+    @dataclass
+    class CNotation:
+        """
+        A custom notation term.
+        """
 
-    class CLocalAssum(RecordClass):
-        sexp: SexpNode = None
-        loc: "SexpInfo.Loc" = None
-        loc_part_1: "SexpInfo.Loc" = None
-        constr_expr_r: "SexpInfo.ConstrExprR" = None
-        is_one_token: bool = False
+        notation_shape: str = ""
+        expr_sexp: Optional[SexpNode] = None
+        loc: Optional["SexpInfo.Loc"] = None
+        args: Optional[List["SexpInfo.ConstrExprR"]] = None
+        notation_symbols: Optional[List[str]] = None
+
+    @dataclass
+    class CLocalAssum:
+        """
+        A local assumption term.
+        """
+
+        sexp: Optional[SexpNode] = None
+        loc: Optional["SexpInfo.Loc"] = None
+        loc_part_1: Optional["SexpInfo.Loc"] = None
+        constr_expr_r: Optional["SexpInfo.ConstrExprR"] = None
+        is_one_token: Optional[bool] = False
 
 
 class SexpAnalyzer:
@@ -209,26 +270,40 @@ class SexpAnalyzer:
     Namespace providing methods for analyzing parsed s-expressions.
 
     The methods can be used to retrieve a variety of types of
-    information from
+    information from s-expressions
     """
+
     logger: logging.Logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
 
     @classmethod
     def analyze_vernac(cls, sexp: SexpNode) -> SexpInfo.Vernac:
         """
-        Analyzes an s-expression and parses it as a Vernac expression,
-        gets type of the expression and source code location of the
-        expression.
+        Analyze an s-expression representing a Vernacular command.
 
-        Accepts s-expression:
-        <sexp_vernac> = ( ( v (VernacExpr (...) ( <TYPE>  ... )) ) <sexp_loc> )
-                              ^----------vernac_sexp-----------^
+        Analyzes an s-expression and parses it as a Vernac expression,
+        getting the type of the expression and its source code location.
+
+        Parameters
+        ----------
+        sexp : SexpNode
+            A parsed s-expression node representing a Vernacular command
+            term.
+            The structure should conform to the following format:
+            <sexp_vernac> = ( ( v (VernacExpr (...) ( <TYPE>  ... )) )
+                                ^----------vernac_sexp-----------^
+                            <sexp_loc> )
+
+        Returns
+        -------
+        SexpInfo.Vernac
+            The extracted Vernacular command.
 
         Raises
         ------
         SexpAnalyzingException
-            If the sexp cannot be parsed that way.
+            If the sexp cannot be parsed that way, i.e., if it is
+            malformed or not representative of a Vernacular command.
         """
         try:
             if len(sexp) != 2:
@@ -250,7 +325,10 @@ class SexpAnalyzer:
                 if v_child[1][2].is_list():
                     vernac_type = v_child[1][2][0].content
                     if vernac_type == SexpInfo.VernacConsts.type_extend:
-                        # ( v (VernacExpr() ( VernacExtend  ( <EXTEND_TYPE> ... ) ...
+                        # ( v (
+                        #    VernacExpr() (
+                        #      VernacExtend  (
+                        #        <EXTEND_TYPE> ... ) ...
                         extend_type = v_child[1][2][1][0].content
                     # end if
                 else:
@@ -281,11 +359,34 @@ class SexpAnalyzer:
             unicode_offsets: Optional[List[int]] = None
     ) -> SexpInfo.ConstrExprR:
         """
-        Analyzes a ConstrExprR sexp.
+        Analyze a ConstrExprR s-expression.
 
-        <ConstrExprR> = ( ( v  (  CXxx ... ) ) (  loc ... )
-                               ^-expr_sexp-^   ^-expr_loc-^
-                          0 00 01 010          1  10
+        Analyzes an s-expression and parses it as a ConstrExprR
+        expression, getting the type of the expression and its source
+        code location.
+
+        Parameters
+        ----------
+        sexp : SexpNode
+            An s-expression representing a Gallina ConstrExprR term.
+            The structure should conform to the following format:
+            <ConstrExprR> = ( ( v  (  CXxx ... ) ) (  loc ... )
+                                ^-expr_sexp-^   ^-expr_loc-^
+                            0 00 01 010          1  10
+        unicode_offsets : list of int | None, optional
+            Offsets of unicode (non-ASCII) characters from the start of
+            the file, by default None.
+
+        Returns
+        -------
+        SexpInfo.ConstrExprR
+            The extracted ConstrExprR expression.
+
+        Raises
+        ------
+        SexpAnalyzingException
+            If the s-expression does not conform to the expected
+            structure of a ConstrExprR.
         """
         if sexp[0][0].content == "v" and sexp[0][1][
                 0].content in SexpInfo.ConstrExprRConsts.types:
@@ -306,9 +407,6 @@ class SexpAnalyzer:
                     except (IllegalSexpOperationException,
                             SexpAnalyzingException):
                         return SexpNode.RecurAction.ContinueRecursion
-                    # end try
-
-                # end def
 
                 sexp.apply_recur(find_all_loc)
 
@@ -320,7 +418,6 @@ class SexpAnalyzer:
                 )
             else:
                 loc = claimed_loc
-            # end if
 
             return SexpInfo.ConstrExprR(
                 expr_type=expr_type,
@@ -337,11 +434,37 @@ class SexpAnalyzer:
             unicode_offsets: Optional[List[int]] = None
     ) -> SexpInfo.CLocalAssum:
         """
-        Analyzes a CLocalAssume sexp.
+        Analyzes a CLocalAssum sexp.
 
-        <CLocalAssume> = ( CLocalAssum ((   (v ...) (loc ...) )) ... ( (v (CXxx ...) ... ) (loc ...) ) )
-                                                    ^-<loc_part_1>   ^---<ConstrExprR>---------------^
-                           0            10 100     101           1   2
+        Analyzes an s-expression and parses it as a CLocalAssum
+        expression, getting the type of the expression and its source
+        code location.
+
+        Parameters
+        ----------
+        sexp : SexpNode
+            An s-expression representing a Gallina CLocalAssum term.
+            The structure should conform to the following format:
+            <CLocalAssume> = ( CLocalAssum ((   (v ...) (loc ...) )) ...
+                                                        ^-<loc_part_1>
+                               0            10 100     101           1
+                               ( (v (CXxx ...) ... ) (loc ...) ) )
+                               ^---<ConstrExprR>---------------^
+                               2
+        unicode_offsets : list of int | None, optional
+            Offsets of unicode (non-ASCII) characters from the start of
+            the file, by default None.
+
+        Returns
+        -------
+        SexpInfo.CLocalAssum
+            The extracted CLocalAssum expression.
+
+        Raises
+        ------
+        SexpAnalyzingException
+            If the s-expression does not conform to the expected
+            structure of a CLocalAssum.
         """
         if sexp[0].content == "CLocalAssum" and sexp[1][0][0][0].content == "v":
             loc_part_1 = cls.analyze_loc(sexp[1][0][1], unicode_offsets)
@@ -378,8 +501,27 @@ class SexpAnalyzer:
     ) -> List[Union[SexpInfo.ConstrExprR,
                     SexpInfo.CLocalAssum]]:
         """
-        Analyzes a sexp (e.g., a vernacular sentence or L_tac sentence),
-        finds all Gallina parts (ConstExprR or CLocalAssum).
+        Extract all Gallina sub-terms from a given parsed s-expression.
+
+        Namely, find all occurrences of ConstExprR or CLocalAssum.
+
+        Parameters
+        ----------
+        sexp : SexpNode
+            An s-expression representing a Vernacular or Ltac command.
+        unicode_offsets : list of int | None, optional
+            Offsets of unicode (non-ASCII) characters from the start of
+            the file, by default None.
+
+        Returns
+        -------
+        list of Union[SexpInfo.CLocalAssum, SexpInfo.CLocalAssum]
+            The extracted Gallina expressions.
+
+        Raises
+        ------
+        SexpAnalyzingException
+            If the s-expression is malformed and cannot be analyzed.
         """
         try:
             cs_parts: List[Union[SexpInfo.ConstrExprR,
@@ -406,12 +548,8 @@ class SexpAnalyzer:
                         return SexpNode.RecurAction.StopRecursion
                     else:
                         return SexpNode.RecurAction.ContinueRecursion
-                    # end if
                 except (IllegalSexpOperationException, SexpAnalyzingException):
                     return SexpNode.RecurAction.ContinueRecursion
-                # end try
-
-            # end def
 
             sexp.apply_recur(find_cs_parts)
             cs_parts.sort(key=lambda e: e.loc)
@@ -427,7 +565,24 @@ class SexpAnalyzer:
     @classmethod
     def find_c_notations(cls, sexp: SexpNode) -> List[SexpInfo.CNotation]:
         """
-        Analyzes an Gallina-only sexp, finds all CNotations.
+        Extract CNotations from a Gallina-only parsed s-expression.
+
+        Parameters
+        ----------
+        sexp : SexpNode
+            A parsed s-expression expected to contain only Gallina
+            terms.
+
+        Returns
+        -------
+        list of List[SexpInfo.CNotation]
+            A list of all discovered CNotations.
+
+        Raises
+        ------
+        SexpAnalyzingException
+            If the s-expression is malformed or not a Gallina-only
+            s-expression.
         """
         try:
             c_notations: List[SexpInfo.CNotation] = list()
@@ -453,8 +608,10 @@ class SexpAnalyzer:
 
                         expr_sexp = sexp_part
 
-                        # ... (  CNotation (   XLevel Shape ) (   ( A1 A2 .. ) ( .. ) ( .. ) ( .. ) )
-                        #     01 010       011 0110   0111      012 0120         0121   0122   0123
+                        # ... (  CNotation (   XLevel Shape ) (
+                        #     01 010       011 0110   0111
+                        #   ( A1 A2 .. ) ( .. ) ( .. ) ( .. ) )
+                        # 012 0120         0121   0122   0123
                         notation_shape = expr_sexp[0][1][1][1].content
                         notation_symbols = list()
                         notation_recur_idx = -1
@@ -469,30 +626,33 @@ class SexpAnalyzer:
                                 notation_shape)
                             if rec_match is None:
                                 # Notation without recursive pattern
+                                # [::2] is to remove the split points
+                                # and only keep symbols
                                 notation_symbols.extend(
-                                    cls.RE_NOTATION_SHAPE.split(
-                                        notation_shape)[:: 2]
-                                )  # [::2] is to remove the split points and only keep symbols
+                                    cls.RE_NOTATION_SHAPE.split(notation_shape)
+                                    [:: 2])
                             else:
-                                # Notation with recursive pattern: ".." and the separators are removed
+                                # Notation with recursive pattern: ".."
+                                # and the separators are removed
                                 notation_recur_symbol = rec_match.group("rec")
+                                # [::2] is to remove the split points
+                                # and only keep symbols
                                 notation_symbols.extend(
                                     cls.RE_NOTATION_SHAPE.split(
                                         notation_shape[: rec_match.start()])
-                                    [:: 2]
-                                )  # [::2] is to remove the split points and only keep symbols
+                                    [:: 2])
                                 notation_recur_idx = len(notation_symbols)
+                                # [::2] is to remove the split points
+                                # and only keep symbols
                                 notation_symbols.extend(
                                     cls.RE_NOTATION_SHAPE.split(
-                                        notation_shape[rec_match.end():])[:: 2]
-                                )  # [::2] is to remove the split points and only keep symbols
+                                        notation_shape[rec_match.end():])[:: 2])
                             # end if
                             num_args = len(notation_symbols) - 1
                         else:
                             # Notation without argument
                             notation_symbols = [notation_shape]
                             num_args = 0
-                        # end if
 
                         args_sexps: List[SexpNode] = list()
                         for i in range(4):
@@ -500,24 +660,26 @@ class SexpAnalyzer:
                                 expr_sexp[0][1][2][i].get_children())
                         # end for
                         if notation_recur_idx == -1:
-                            # No recursive pattern: try to match num_args with len(args_sexps)
+                            # No recursive pattern: try to match num_
+                            # args with len(args_sexps)
                             if num_args != len(args_sexps):
                                 cls.logger.warning(
-                                    f"Notation: num of args doesnot match: {num_args} (in {notation_symbols}) != {len(args_sexps)} (in sexp {sexp_part.pretty_format()})"
-                                )
+                                    f"Notation: num of args doesnot match: {num_args} "
+                                    f"(in {notation_symbols}) != {len(args_sexps)} "
+                                    f"(in sexp {sexp_part.pretty_format()})")
                                 raise SexpAnalyzingException(
                                     sexp,
-                                    f"num of args doesnot match: {num_args} (in {notation_symbols}) != {len(args_sexps)} (in sexp)"
-                                )
-                            # end if
+                                    f"num of args doesnot match: {num_args} "
+                                    f"(in {notation_symbols}) != {len(args_sexps)} "
+                                    "(in sexp)")
                         else:
-                            # Recursive pattern: use len(arg_sexps) to imply num_args
-                            for i in range(len(args_sexps) - num_args):
+                            # Recursive pattern: use len(arg_sexps) to
+                            # imply num_args
+                            for _ in range(len(args_sexps) - num_args):
                                 notation_symbols.insert(
                                     notation_recur_idx,
                                     notation_recur_symbol)
                             num_args = len(args_sexps)
-                        # end if
 
                         args: List[SexpInfo.ConstrExprR] = [
                             cls.analyze_constr_expr_r(arg_sexp)
@@ -535,12 +697,8 @@ class SexpAnalyzer:
                         return SexpNode.RecurAction.StopRecursion
                     else:
                         return SexpNode.RecurAction.ContinueRecursion
-                    # end if
                 except (IllegalSexpOperationException, SexpAnalyzingException):
                     return SexpNode.RecurAction.ContinueRecursion
-                # end try
-
-            # end def
 
             sexp.apply_recur(find_c_notation_parts)
 
@@ -554,13 +712,37 @@ class SexpAnalyzer:
             sexp: SexpNode,
             unicode_offsets: Optional[List[int]] = None) -> SexpInfo.Loc:
         """
-        Analyzes an loc s-expression and gets source code location
-        information.
+        Get source code location metadata from a ``loc`` s-expression.
 
-        Accepts s-expression:
-        <sexp_loc> = ( loc (( (fname(InFile <FILENAME>)) (line_nb X) (bol_pos X) (line_nb_last <LINENO>) (bol_pos_last X) (bp <BEG_CHARNO>) (ep <END_CHARNO>) )) )
+        Analyzes an s-expression and parses it as a ``loc`` expression
+        into an object abstracting a source code location.
 
-        :raises: SexpAnalyzingException if the sexp cannot be parsed that way.
+        Parameters
+        ----------
+        sexp : SexpNode
+            An s-expression representing a ``loc`` term.
+            The structure should conform to the following format:
+            <sexp_loc> = ( loc (( (fname(InFile <FILENAME>))
+                                  (line_nb X)
+                                  (bol_pos X)
+                                  (line_nb_last <LINENO>)
+                                  (bol_pos_last X)
+                                  (bp <BEG_CHARNO>)
+                                  (ep <END_CHARNO>) )) )
+        unicode_offsets : list of int | None, optional
+            Offsets of unicode (non-ASCII) characters from the start of
+            the file, by default None.
+
+        Returns
+        -------
+        SexpInfo.Loc
+            The source code location metadata.
+
+        Raises
+        ------
+        SexpAnalyzingException
+            If the s-expression does not conform to the expected
+            structure.
         """
         try:
             if len(sexp) != 2:
@@ -623,7 +805,33 @@ class SexpAnalyzer:
         tok_sexp_list: List[SexpNode],
         unicode_offsets: Optional[List[int]] = None
     ) -> List[SexpInfo.SertokSentence]:
-        sentences: List[SexpInfo.SertokSentence] = list()
+        """
+        Convert `sertok` output to object-oriented abstractions.
+
+        Each token gets converts to an object as well as each sentence
+        considered as a sequence of tokens.
+
+        Parameters
+        ----------
+        tok_sexp_list : list of SexpNode
+            A sequence of `SexpNode`s yielded from parsing `sertok`'s
+            output with each item corresponding to a sentence.
+        unicode_offsets : list of int | None, optional
+            Offsets of unicode (non-ASCII) characters from the start of
+            the file, by default None.
+
+        Returns
+        -------
+        list of SexpInfo.SertokSentence
+            The extracted sentences.
+
+        Raises
+        ------
+        SexpAnalyzingException
+            If the parsed s-expression is malformed or does not conform
+            to the structure expected from `sertok` output.
+        """
+        sentences: List[SexpInfo.SertokSentence] = []
 
         for sertok_sentence_sexp in tok_sexp_list:
             # ( Sentence  ( tok ... ) )
@@ -635,7 +843,6 @@ class SexpAnalyzer:
                         "Not a valid SertokSentence sexp")
 
                 sentence = SexpInfo.SertokSentence()
-                sentence.tokens = list()
                 for sertok_token_sexp in sertok_sentence_sexp[1].get_children():
                     sentence.tokens.append(
                         cls.analyze_sertok_token(
@@ -661,101 +868,148 @@ class SexpAnalyzer:
     }
 
     @classmethod
+    def analyze_sertok_numeral(cls, sexp: SexpNode) -> str:
+        """
+        Extract a number from a `sertok`-derived parsed s-expression.
+
+        Parameters
+        ----------
+        sexp : SexpNode
+            An s-expression presumed to correspond to a numeral lexical
+            token.
+
+        Returns
+        -------
+        str
+            The extracted number as it was parsed.
+
+        Raises
+        ------
+        SexpAnalyzingException
+            If the s-expression does not match a known numeral type (one
+            of int, frac, or exp).
+        """
+        # ( ( int ? ) (frac ? ) (exp ? ) )
+        #   0         1         2
+        if len(sexp[0][1].content) > 0:
+            content = sexp[0][1].content
+        elif len(sexp[1][1].content) > 0:
+            content = sexp[1][1].content
+        elif len(sexp[2][1].content) > 0:
+            content = sexp[2][1].content
+        else:
+            raise SexpAnalyzingException(sexp, message="Unknown numeral")
+        return content
+
+    @classmethod
     def analyze_sertok_token(
             cls,
             sexp: SexpNode,
             unicode_offsets: Optional[List[int]] = None
     ) -> SexpInfo.SertokToken:
+        """
+        Convert a parsed `sertok` token s-expression into an object.
+
+        Parameters
+        ----------
+        sexp : SexpNode
+            An s-expression yielded from parsing `sertok`'s output and
+            corresponding to a lexical token.
+        unicode_offsets : list of int | None, optional
+            Offsets of unicode (non-ASCII) characters from the start of
+            the file, by default None.
+
+        Returns
+        -------
+        SexpInfo.SertokToken
+            The extracted token.
+
+        Raises
+        ------
+        SexpAnalyzingException
+            If the parsed s-expression is malformed or does not conform
+            to the structure expected from `sertok` output.
+        """
         # ( ( v  (  <KIND> <CONTENT> )) ( loc ... ) ) )
         #   0 00 01 010    011          1
         try:
             if sexp[0][0].content != "v":
                 raise SexpAnalyzingException(sexp)
 
-            sertok_token = SexpInfo.SertokToken()
-
             # Kind and content
             if sexp[0][1].is_list():
-                sertok_token.kind = sexp[0][1][0].content
-                if sertok_token.kind == "NUMERAL":
-                    # ( ( int ? ) (frac ? ) (exp ? ) )
-                    #   0         1         2
-                    if len(sexp[0][1][1][0][1].content) > 0:
-                        sertok_token.content = sexp[0][1][1][0][1].content
-                    elif len(sexp[0][1][1][1][1].content) > 0:
-                        sertok_token.content = sexp[0][1][1][1][1].content
-                    elif len(sexp[0][1][1][2][1].content) > 0:
-                        sertok_token.content = sexp[0][1][1][2][1].content
-                    else:
-                        raise SexpAnalyzingException(
-                            sexp[0][1][1],
-                            message="Unknown numeral")
-                    # end if
+                kind = sexp[0][1][0].content
+                if kind == "NUMERAL":
+                    content = cls.analyze_sertok_numeral(sexp[0][1][1])
                 else:
-                    sertok_token.content = sexp[0][1][1].content
-                # end if
+                    content = sexp[0][1][1].content
             else:
-                sertok_token.kind = sexp[0][1].content
-                if sertok_token.kind == "LEFTQMARK":
-                    sertok_token.content = "?"
+                kind = sexp[0][1].content
+                if kind == "LEFTQMARK":
+                    content = "?"
                 else:
                     raise SexpAnalyzingException(
                         sexp,
                         message="Unknown special token")
-                # end if
-            # end if
 
             # Normalize token kind
-            if sertok_token.kind in cls.SERTOK_TOKEN_KIND_MAPPING:
-                sertok_token.kind = cls.SERTOK_TOKEN_KIND_MAPPING[
-                    sertok_token.kind]
-            # end if
+            if kind in cls.SERTOK_TOKEN_KIND_MAPPING:
+                kind = cls.SERTOK_TOKEN_KIND_MAPPING[kind]
 
             # Loc
-            sertok_token.loc = cls.analyze_loc(sexp[1], unicode_offsets)
+            loc = cls.analyze_loc(sexp[1], unicode_offsets)
 
             # It can never be empty string; if it is, it is '""'
-            if len(sertok_token.content) == 0:
-                sertok_token.content = '""'
+            if len(content) == 0:
+                content = '""'
 
             # Escape the " in coq style
-            if (sertok_token.content[0] == '"'
-                    and sertok_token.content[-1] == '"'
-                    and '"' in sertok_token.content[1 :-1]):
-                sertok_token.content = '"' + sertok_token.content[
-                    1 :-1].replace('"',
-                                   '""') + '"'
-            # end if
+            if (content[0] == '"' and content[-1] == '"'
+                    and '"' in content[1 :-1]):
+                content = '"' + content[1 :-1].replace('"', '""') + '"'
 
             # Adjust content to remove quotes, if necessary
-            if (sertok_token.content[0] == '"'
-                    and sertok_token.content[-1] == '"'
-                    and len(sertok_token.content) !=
-                    sertok_token.loc.end_charno - sertok_token.loc.beg_charno):
-                sertok_token.content = sertok_token.content[1 :-1]
-            # end if
+            if (content[0] == '"' and content[-1] == '"'
+                    and len(content) != loc.end_charno - loc.beg_charno):
+                content = content[1 :-1]
 
             # Adjust content to add quotes, if necessary
-            if (sertok_token.kind == TokenConsts.KIND_STR
-                    and len(sertok_token.content) == sertok_token.loc.end_charno
-                    - sertok_token.loc.beg_charno - 2):
-                sertok_token.content = '"' + sertok_token.content + '"'
-            # end if
+            if (kind == TokenConsts.KIND_STR
+                    and len(content) == loc.end_charno - loc.beg_charno - 2):
+                content = '"' + content + '"'
 
-            # Fix for charno mismatch  TODO: this should be eventually
-            # fixed in Coq
-            if (sertok_token.loc.end_charno - sertok_token.loc.beg_charno < len(
-                    sertok_token.content)):
-                sertok_token.loc.end_charno = len(
-                    sertok_token.content) + sertok_token.loc.beg_charno
-            # end if
+            # Fix for charno mismatch
+            # TODO: this should be eventually fixed in Coq
+            if (loc.end_charno - loc.beg_charno < len(content)):
+                loc.end_charno = len(content) + loc.beg_charno
 
-            return sertok_token
+            return SexpInfo.SertokToken(kind, content, loc)
         except IllegalSexpOperationException:
             raise SexpAnalyzingException(sexp)
 
+    @deprecated(reason="This is not used anywhere.")
     @classmethod
     def find_i_pat_ids(cls, sexp: SexpNode) -> Counter[str]:
+        """
+        Do something TBD. TODO.
+
+        _extended_summary_
+
+        Parameters
+        ----------
+        sexp : SexpNode
+            _description_
+
+        Returns
+        -------
+        Counter[str]
+            _description_
+
+        Raises
+        ------
+        SexpAnalyzingException
+            _description_
+        """
         try:
             i_pat_ids: Counter[str] = collections.Counter()
 
@@ -784,8 +1038,24 @@ class SexpAnalyzer:
         except IllegalSexpOperationException:
             raise SexpAnalyzingException(sexp)
 
+    @deprecated(reason="This is not used anywhere.")
     @classmethod
     def cut_lemma_backend_sexp(cls, sexp: SexpNode) -> SexpNode:
+        """
+        Do something TBD. TODO.
+
+        _extended_summary_
+
+        Parameters
+        ----------
+        sexp : SexpNode
+            _description_
+
+        Returns
+        -------
+        SexpNode
+            _description_
+        """
 
         def pre_children_modify(
             current: SexpNode) -> Tuple[Optional[SexpNode],
@@ -793,7 +1063,8 @@ class SexpAnalyzer:
             while True:
                 no_change = True
 
-                # TODO: Different Coq.Init names, experiment removing them at later phases.
+                # TODO: Different Coq.Init names, experiment removing
+                # them at later phases.
 
                 # ( ( v <X> ) ( loc () ) ) -> <X>
                 if (current.is_list() and len(current) == 2
@@ -810,7 +1081,8 @@ class SexpAnalyzer:
                     no_change = False
                 # end if
 
-                # ( <A> <X> ) -> <X>, where <A> in [Id, ConstRef, Name, GVar]
+                # ( <A> <X> ) -> <X>,
+                # where <A> in [Id, ConstRef, Name, GVar]
                 if (current.is_list() and len(current) == 2
                         and current[0].is_string()
                         and current[0].content in ["Id",
@@ -822,26 +1094,36 @@ class SexpAnalyzer:
                     no_change = False
                 # end if
 
-                # # ( <A> ( <Xs> ) <Ys> ) -> ( <Ys> ), where <A> in [MPfile]
-                # if current.is_list() and len(current) >= 2 and \
-                #         current[0].is_string() and current[0].content in ["MPfile"] and \
-                #         current[1].is_list():
+                # # ( <A> ( <Xs> ) <Ys> ) -> ( <Ys> ),
+                # # where <A> in [MPfile]
+                # if (current.is_list() and len(current) >= 2
+                #         and current[0].is_string()
+                #         and current[0].content in ["MPfile"]
+                #         and current[1].is_list()):
                 #     # then
-                #     del current.get_children()[0:2]
+                #     del current.get_children()[0 : 2]
                 #     no_change = False
                 # # end if
-                #
-                # # ( <A> ( <Xs> ) <Ys> ) -> ( <Xs> <Ys> ), where <A> in [MPdot, DirPath, Constant, MulInd]
-                # if current.is_list() and len(current) >= 2 and\
-                #     current[0].is_string() and current[0].content in ["MPdot", "DirPath", "Constant", "MutInd"] and\
-                #     current[1].is_list():
+
+                # # ( <A> ( <Xs> ) <Ys> ) -> ( <Xs> <Ys> ),
+                # # where <A> in [MPdot, DirPath, Constant, MulInd]
+                # if (current.is_list() and len(current) >= 2
+                #         and current[0].is_string()
+                #         and current[0].content in ["MPdot",
+                #                                    "DirPath",
+                #                                    "Constant",
+                #                                    "MutInd"]
+                #         and current[1].is_list()):
                 #     # then
-                #     current[1].get_children().extend(current[2:])
+                #     current[1].get_children().extend(current[2 :])
                 #     current = current[1]
                 #     no_change = False
                 # # end if
 
-                # ( <A> ( <Xs> ) <Ys> ) -> <Ys[-1]>, or ( <A> ( <Xs> ) ) -> <Xs[-1]>, where <A> in [MPdot, DirPath, Constant, MulInd, MPfile]
+                # ( <A> ( <Xs> ) <Ys> )
+                #     -> <Ys[-1]>, or ( <A> ( <Xs> ) ) -> <Xs[-1]>,
+                # where <A> in
+                # [MPdot, DirPath, Constant, MulInd, MPfile]
                 if (current.is_list() and len(current) >= 2
                         and current[0].is_string()
                         and current[0].content in ["MPdot",
@@ -869,12 +1151,15 @@ class SexpAnalyzer:
                     no_change = False
                 # end if
 
-                # # ( <A> <X> ( <Ys> ) ) -> ( <X> <Ys> ), where <A> in [GApp]
-                # if current.is_list() and len(current) == 3 and\
-                #     current[0].is_string() and current[0].content in ["GApp"] and\
-                #     current[2].is_list():
+                # # ( <A> <X> ( <Ys> ) ) -> ( <X> <Ys> ),
+                # # where <A> in [GApp]
+                # if (current.is_list() and len(current) == 3
+                #         and current[0].is_string()
+                #         and current[0].content in ["GApp"]
+                #         and current[2].is_list()):
                 #     # then
-                #     current = SexpList([current[1]] + current[2].get_children())
+                #     current = (SexpList([current[1]]
+                #                + current[2].get_children()))
                 #     no_change = False
                 # # end if
 
@@ -922,10 +1207,26 @@ class SexpAnalyzer:
 
         return sexp
 
+    @deprecated(reason="This is not used anywhere.")
     @classmethod
     def split_lemma_backend_sexp(cls,
                                  sexp: SexpNode) -> Tuple[Optional[SexpNode],
                                                           SexpNode]:
+        """
+        Do something TBD. TODO.
+
+        _extended_summary_
+
+        Parameters
+        ----------
+        sexp : SexpNode
+            _description_
+
+        Returns
+        -------
+        Tuple[Optional[SexpNode], SexpNode]
+            _description_
+        """
         last_gprod_node: Optional[SexpNode] = None
         first_non_gprod_node: SexpNode = None
 

@@ -1,5 +1,4 @@
 #!/bin/bash
-
 if [ "$_" == "$0" ] ; then
   echo "Please invoke as 'source $(basename $BASH_SOURCE)' instead."
   exit

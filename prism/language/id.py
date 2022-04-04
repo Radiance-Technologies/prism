@@ -1,7 +1,15 @@
+"""
+Provides an enumeration of recognized languages.
+"""
+
 from enum import Enum
 
 
 class LanguageId(Enum):
+    """
+    Enumerates "languages" that occur in Coq source code.
+    """
+
     Unknown = -1
     Vernac = 1
     Gallina = 2
@@ -12,10 +20,7 @@ class LanguageId(Enum):
     LtacMixedWithGallina = 11
     VernacMixedWithGallina = 12
 
-    def debug_repr(self) -> str:
-        return self.__repr__()
-
-    def __repr__(self):
+    def __repr__(self):  # noqa : D105
         return {
             LanguageId.Unknown: "UNK",
             LanguageId.Vernac: "V",
@@ -26,7 +31,7 @@ class LanguageId(Enum):
             LanguageId.VernacMixedWithGallina: "VG",
         }[self]
 
-    def __str__(self):
+    def __str__(self):  # noqa : D105
         return self.__repr__()
 
     @property
@@ -46,4 +51,9 @@ class LanguageId(Enum):
             return LanguageId.Vernac
         else:
             return self
-        # end if
+
+    def debug_repr(self) -> str:
+        """
+        Get a representation of the language ID for debug messages.
+        """
+        return self.__repr__()
