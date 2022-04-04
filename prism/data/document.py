@@ -5,8 +5,10 @@ import copy
 import os
 import pathlib
 from dataclasses import dataclass
+from functools import cached_property
 from typing import List, Optional
 
+from prism.language.gallina.util import ParserUtils
 from prism.language.sexp import SexpNode
 from prism.language.token import Token
 
@@ -85,6 +87,22 @@ class CoqDocument:
         Get the name of the project or the empty string if None.
         """
         return pathlib.Path(self.project_path_).stem
+
+    @cached_property
+    def unicode_offsets(self) -> List[int]:
+        """
+        Get offsets of unicode characters from the start of the file.
+
+        Returns
+        -------
+        List[int]
+            The unicode offsets.
+
+        See Also
+        --------
+        ParserUtils.get_unicode_offsets
+        """
+        return ParserUtils.get_unicode_offsets(self.source_code)
 
     def get_all_tokens(self) -> List[Token]:
         """
