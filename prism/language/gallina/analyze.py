@@ -1,13 +1,16 @@
 import collections
+import logging
 import re
+from dataclasses import dataclass
 from typing import Counter, List, Optional, Set, Tuple, Union
 
 from recordclass import RecordClass
-from seutil import LoggingUtils
 
 from prism.language.gallina.util import ParserUtils
 from prism.language.sexp import IllegalSexpOperationException, SexpNode
 from prism.language.token import TokenConsts
+
+from .exception import SexpAnalyzingException
 
 
 class SexpInfo:
@@ -15,11 +18,12 @@ class SexpInfo:
     Defines varies structs that may be results of SexpAnalyzer.
     """
 
-    class Vernac(RecordClass):
+    @dataclass
+    class Vernac:
         vernac_type: str = ""
         extend_type: str = ""
-        vernac_sexp: SexpNode = None
-        loc: "SexpInfo.Loc" = None
+        vernac_sexp: Optional[SexpNode] = None
+        loc: Optional["SexpInfo.Loc"] = None
 
     class VernacConsts:
         type_abort = "VernacAbort"
@@ -200,27 +204,15 @@ class SexpInfo:
         is_one_token: bool = False
 
 
-class SexpAnalyzingException(Exception):
-
-    def __init__(
-            self,
-            sexp: SexpNode = None,
-            message: str = "",
-            *args,
-            **kwargs):
-        self.sexp = sexp
-        self.message = message
-
-    def __str__(self):
-        return f"{self.message}\nin sexp: {self.sexp.pretty_format()}"
-
-
 class SexpAnalyzer:
     """
-    Analyzing the parsed sexp of a Coq document, and retrieve varies
-    information.
+    Namespace providing methods for analyzing parsed s-expressions.
+
+    The methods can be used to retrieve a variety of types of
+    information from
     """
-    logger = LoggingUtils.get_logger(__name__, LoggingUtils.DEBUG)
+    logger: logging.Logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
 
     @classmethod
     def analyze_vernac(cls, sexp: SexpNode) -> SexpInfo.Vernac:
@@ -232,7 +224,11 @@ class SexpAnalyzer:
         Accepts s-expression:
         <sexp_vernac> = ( ( v (VernacExpr (...) ( <TYPE>  ... )) ) <sexp_loc> )
                               ^----------vernac_sexp-----------^
-        :raises: SexpAnalyzingException if the sexp cannot be parsed that way.
+
+        Raises
+        ------
+        SexpAnalyzingException
+            If the sexp cannot be parsed that way.
         """
         try:
             if len(sexp) != 2:

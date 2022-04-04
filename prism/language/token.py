@@ -7,12 +7,16 @@ https://github.com/EngineeringSoftware/roosterize/.
 from dataclasses import dataclass
 from typing import Dict
 
-from recordclass import RecordClass
+from radpytools.dataclasses import immutable_dataclass
 
 from prism.language.id import LanguageId
 
 
 class TokenConsts:
+    """
+    Collects constants related to lexical tokenization.
+    """
+
     CONTENT_UNK = "<UNK>"
 
     KIND_PAD = "<PAD>"
@@ -50,27 +54,35 @@ class TokenConsts:
     }
 
 
-class Spacing(RecordClass):
+@immutable_dataclass
+class Spacing:
+    """
+    An abstraction of whitespace associated with a token.
+    """
+
     loffset: int = TokenConsts.OFFSET_UNSET
     coffset: int = TokenConsts.OFFSET_UNSET
     indentation: int = TokenConsts.OFFSET_UNSET
 
     def __str__(self):
+        """
+        Get a condensed representation of the whitespace.
+        """
         if self.coffset >= 0:
             return f"{self.coffset}s"
         else:
             return f"{self.loffset}l{self.indentation}s"
 
-    def __hash__(self):
-        return hash((self.loffset, self.coffset, self.indentation))
+    def describe(self) -> str:
+        """
+        Get a human-readable description of the whitespace.
 
-    def __eq__(self, other):
-        if isinstance(other, Spacing):
-            return self.loffset == other.loffset and self.coffset == other.coffset and self.indentation == other.indentation
-        else:
-            return False
-
-    def describe(self):
+        Returns
+        -------
+        str
+            A human-readable description of this `Spacing` object's
+            associated whitespace.
+        """
         if self.coffset >= 0:
             return f"{self.coffset} space(s)"
         else:
@@ -79,6 +91,10 @@ class Spacing(RecordClass):
 
 @dataclass
 class Token:
+    """
+    A lexical token tagged with location and additional metadata.
+    """
+
     content: str = TokenConsts.CONTENT_UNK
     kind: str = TokenConsts.CONTENT_UNK
     loffset: int = TokenConsts.OFFSET_UNSET
@@ -93,10 +109,42 @@ class Token:
 
     is_one_token_gallina: bool = False
 
-    def str_with_space(self):
-        return self.get_space() + self.content
+    def apply_spacing(self, spacing: Spacing) -> None:
+        """
+        Set the spacing associated with this token to the given value.
 
-    def get_space(self):
+        Parameters
+        ----------
+        spacing : Spacing
+            The new spacing information for this token.
+        """
+        self.loffset = spacing.loffset
+        self.coffset = spacing.coffset
+        self.indentation = spacing.indentation
+
+    def clear_naming(self) -> None:
+        """
+        Clear the contents of the token by setting it to be unknown.
+        """
+        self.content = TokenConsts.CONTENT_UNK
+
+    def clear_spacing(self) -> None:
+        """
+        Unset the spacing information of the token.
+        """
+        self.loffset = TokenConsts.OFFSET_UNSET
+        self.coffset = TokenConsts.OFFSET_UNSET
+        self.indentation = TokenConsts.OFFSET_UNSET
+
+    def get_space(self) -> str:
+        """
+        Get the whitespace associated with this token.
+
+        Returns
+        -------
+        str
+            The whitespace that precedes the token in the original text.
+        """
         if self.coffset >= 0:
             return " " * self.coffset
         elif self.indentation >= 0:
@@ -107,25 +155,26 @@ class Token:
         # end if
 
     def get_spacing(self) -> Spacing:
+        """
+        Get the whitespace information associated with this token.
+
+        Returns
+        -------
+        Spacing
+            The whitespace for this token wrapped in a `Spacing` object.
+        """
         return Spacing(self.loffset, self.coffset, self.indentation)
 
-    def clear_spacing(self):
-        self.loffset = TokenConsts.OFFSET_UNSET
-        self.coffset = TokenConsts.OFFSET_UNSET
-        self.indentation = TokenConsts.OFFSET_UNSET
-        return
+    def is_ignored(self) -> bool:
+        """
+        Return whether this kind of token should be ignored.
 
-    def apply_spacing(self, spacing: Spacing):
-        self.loffset = spacing.loffset
-        self.coffset = spacing.coffset
-        self.indentation = spacing.indentation
-        return
-
-    def clear_naming(self):
-        self.content = TokenConsts.CONTENT_UNK
-        return
-
-    def is_ignored(self):
+        Returns
+        -------
+        bool
+            Whether this kind of token is considered to be an ignorable
+            type (True) or not (False).
+        """
         return self.kind not in [
             TokenConsts.KIND_ID,
             TokenConsts.KIND_NUMBER,
@@ -133,3 +182,14 @@ class Token:
             TokenConsts.KIND_KEYWORD,
             TokenConsts.KIND_SYMBOL
         ]
+
+    def str_with_space(self) -> str:
+        """
+        Get the token with appropriate preceding whitespace.
+
+        Returns
+        -------
+        str
+            This `Token`'s content prepended with ``self.get_space()``.
+        """
+        return self.get_space() + self.content
