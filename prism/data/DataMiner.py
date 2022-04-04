@@ -786,7 +786,7 @@ class DataMiner:
             IOUtils.Format.json,
             is_batched=True,
             clz=Lemma)
-        heights: List[int] = [lemma.backend_sexp.height() for lemma in lemmas]
+        heights: List[int] = [lemma.backend_sexp.height for lemma in lemmas]
 
         depth_cutoff_point = sorted(heights)[int(
             np.ceil(Macros.LEMMAS_DEPTH_CUTOFF * len(lemmas)))]
@@ -795,7 +795,7 @@ class DataMiner:
             (lemma.data_index,
              lemma.name)
             for lemma in lemmas
-            if lemma.backend_sexp.height() <= depth_cutoff_point
+            if lemma.backend_sexp.height <= depth_cutoff_point
         ]
         cls.logger.info(
             f"Cutoff depth is {depth_cutoff_point}, and "

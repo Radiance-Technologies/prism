@@ -19,9 +19,7 @@ from typing import (
 
 import numpy as np
 
-from prism.language.sexp.IllegalSexpOperationException import (
-    IllegalSexpOperationException,
-)
+from prism.language.sexp.exception import IllegalSexpOperationException
 
 
 class SexpNode(abc.ABC):

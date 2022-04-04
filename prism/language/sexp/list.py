@@ -43,15 +43,15 @@ class SexpList(SexpNode):
 
     @property
     def height(self) -> int:  # noqa: D102
-        return max([c.height() for c in self.children] + [0]) + 1
+        return max([c.height for c in self.children] + [0]) + 1
 
     @property
     def num_nodes(self) -> int:  # noqa: D102
-        return sum([c.num_nodes() for c in self.children]) + 1
+        return sum([c.num_nodes for c in self.children]) + 1
 
     @property
     def num_leaves(self) -> int:  # noqa: D102
-        return sum([c.num_leaves() for c in self.children])
+        return sum([c.num_leaves for c in self.children])
 
     def apply_recur(  # noqa: D102
             self,
