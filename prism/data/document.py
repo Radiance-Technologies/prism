@@ -7,8 +7,8 @@ import pathlib
 from dataclasses import dataclass
 from typing import List, Optional
 
-from prism.data.Token import Token
 from prism.language.sexp import SexpNode
+from prism.language.token import Token
 
 from .sentence import VernacularSentence
 

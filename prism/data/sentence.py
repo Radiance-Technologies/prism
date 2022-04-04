@@ -5,8 +5,8 @@ import copy
 from dataclasses import dataclass
 from typing import List, Optional
 
-from .LanguageId import LanguageId
-from .Token import Token
+from ..language.id import LanguageId
+from ..language.token import Token
 
 
 @dataclass

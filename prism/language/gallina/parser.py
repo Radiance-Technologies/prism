@@ -7,11 +7,11 @@ from typing import List, Optional, Set, Tuple, Union
 from seutil import BashUtils
 
 from prism.data.document import CoqDocument, VernacularSentence
-from prism.data.LanguageId import LanguageId
-from prism.data.Token import Token, TokenConsts
 from prism.language.gallina.analyze import SexpAnalyzer, SexpInfo
 from prism.language.gallina.util import ParserUtils
+from prism.language.id import LanguageId
 from prism.language.sexp import SexpNode, SexpParser
+from prism.language.token import Token, TokenConsts
 from prism.language.types import SourceCode
 from prism.util.debug import Debug
 
@@ -854,7 +854,6 @@ class CoqParser:
         --------
         CoqParser.parse_sentences : For the public API
         """
-
         unicode_offsets = ParserUtils.get_unicode_offsets(source_code)
 
         ast_sexp_list = cls.parse_asts(file_path, serapi_options)

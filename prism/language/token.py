@@ -9,7 +9,7 @@ from typing import Dict
 
 from recordclass import RecordClass
 
-from prism.data.LanguageId import LanguageId
+from prism.language.id import LanguageId
 
 
 class TokenConsts:

@@ -2,8 +2,8 @@ from typing import List
 
 from recordclass import RecordClass
 
-from prism.data.Token import Token
 from prism.language.sexp import SexpNode
+from prism.language.token import Token
 
 
 class Lemma(RecordClass):

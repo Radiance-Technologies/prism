@@ -5,9 +5,9 @@ from typing import Counter, List, Optional, Set, Tuple, Union
 from recordclass import RecordClass
 from seutil import LoggingUtils
 
-from prism.data.Token import TokenConsts
 from prism.language.gallina.util import ParserUtils
 from prism.language.sexp import IllegalSexpOperationException, SexpNode
+from prism.language.token import TokenConsts
 
 
 class SexpInfo:
