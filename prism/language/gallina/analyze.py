@@ -987,8 +987,8 @@ class SexpAnalyzer:
         except IllegalSexpOperationException:
             raise SexpAnalyzingException(sexp)
 
-    @deprecated(reason="This is not used anywhere.")
     @classmethod
+    @deprecated(reason="This is not used anywhere.", version="0.1.0")
     def find_i_pat_ids(cls, sexp: SexpNode) -> Counter[str]:
         """
         Do something TBD. TODO.
@@ -1038,8 +1038,8 @@ class SexpAnalyzer:
         except IllegalSexpOperationException:
             raise SexpAnalyzingException(sexp)
 
-    @deprecated(reason="This is not used anywhere.")
     @classmethod
+    @deprecated(reason="This is not used anywhere.", version="0.1.0")
     def cut_lemma_backend_sexp(cls, sexp: SexpNode) -> SexpNode:
         """
         Do something TBD. TODO.
@@ -1207,8 +1207,8 @@ class SexpAnalyzer:
 
         return sexp
 
-    @deprecated(reason="This is not used anywhere.")
     @classmethod
+    @deprecated(reason="This is not used anywhere.", version="0.1.0")
     def split_lemma_backend_sexp(cls,
                                  sexp: SexpNode) -> Tuple[Optional[SexpNode],
                                                           SexpNode]:

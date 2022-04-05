@@ -43,7 +43,9 @@ from prism.language.sexp import (
 from prism.util.logging import default_log_level, log_and_raise
 
 
-@deprecated(reason="DataMiner is too specialized to Roosterize.")
+@deprecated(
+    reason="DataMiner is too specialized to Roosterize.",
+    version="0.1.0")
 class DataMiner:
     """
     Class providing data mining functionality.

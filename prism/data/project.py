@@ -14,7 +14,7 @@ from git import Commit, Repo
 from seutil import BashUtils
 
 from prism.data.document import CoqDocument
-from prism.language.gallina import CoqParser
+from prism.language.gallina.parser import CoqParser
 from prism.util.logging import default_log_level
 
 logger: logging.Logger = logging.getLogger(__name__)
