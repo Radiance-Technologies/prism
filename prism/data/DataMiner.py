@@ -19,7 +19,7 @@ from seutil import BashUtils, IOUtils
 from seutil.project import Project
 from tqdm import tqdm
 
-from prism.data.Definition import Definition
+from prism.data.definition import Definition
 from prism.data.document import CoqDocument
 from prism.data.lemma import Lemma
 from prism.data.lemma.LemmaBackendSexpTransformers import (
@@ -1188,12 +1188,10 @@ class DataMiner:
                     if vernac.vernac_sexp[2][1][
                             0].content == "NoDischarge" and vernac.vernac_sexp[
                                 2][1][1].content == "Definition":
-                        definition = Definition()
-                        definition.data_index = data_index
-
-                        definition.name = vernac.vernac_sexp[2][2][0][0][1][1][
-                            1].content_no_quote
-
+                        definition = Definition(
+                            data_index=data_index,
+                            name=vernac.vernac_sexp[2][2][0][0][1][1]
+                            [1].content_no_quote)
                         definitions_doc.append(definition)
                     # end if
                 except IllegalSexpOperationException:
