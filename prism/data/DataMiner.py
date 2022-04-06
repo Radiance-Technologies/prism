@@ -28,7 +28,6 @@ from prism.data.lemma.LemmaBackendSexpTransformers import (
 from prism.data.lemma.LemmaForeendSexpTransformers import (
     LemmaForeendSexpTransformers,
 )
-from prism.deprecated.Environment import Environment
 from prism.deprecated.FilesManager import FilesManager
 from prism.deprecated.Macros import Macros
 from prism.language.gallina.analyze import SexpAnalyzer, SexpInfo
@@ -41,6 +40,7 @@ from prism.language.sexp import (
 )
 from prism.util import get_as_list
 from prism.util.logging import default_log_level, log_and_raise
+from prism.util.random import RandomState
 
 
 @deprecated(
@@ -561,7 +561,7 @@ class DataMiner:
 
             hasher = hashlib.sha256()
             hasher.update(str.encode(project.full_name))
-            hasher.update(str.encode(str(Environment.random_seed)))
+            hasher.update(str.encode(str(RandomState.default_seed)))
             salted_seed = int.from_bytes(hasher.digest(), "big")
             random.seed(salted_seed)
             random.shuffle(documents_this_project)
