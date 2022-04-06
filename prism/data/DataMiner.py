@@ -31,7 +31,6 @@ from prism.data.lemma.LemmaForeendSexpTransformers import (
 from prism.deprecated.Environment import Environment
 from prism.deprecated.FilesManager import FilesManager
 from prism.deprecated.Macros import Macros
-from prism.deprecated.Utils import Utils
 from prism.language.gallina.analyze import SexpAnalyzer, SexpInfo
 from prism.language.gallina.parser import CoqParser
 from prism.language.gallina.util import ParserUtils
@@ -40,6 +39,7 @@ from prism.language.sexp import (
     SexpNode,
     SexpParser,
 )
+from prism.util import get_as_list
 from prism.util.logging import default_log_level, log_and_raise
 
 
@@ -90,10 +90,11 @@ class DataMiner:
             Project)
 
         if task == cls.TASK_COQ_DOCUMENTS:
-            files = Utils.get_option_as_list(options, "files", None)
-            is_verifying_tokenizer = Utils.get_option_as_boolean(
-                options,
-                "verify-tokenizer")
+            files = options.get("files", None)
+            files = get_as_list(options, "files", None)
+            is_verifying_tokenizer = str(
+                options.get("verify-tokenizer",
+                            "false")).lower() != "false"
             cls.collect_coq_documents_projects(
                 data_mgr,
                 projects,
@@ -106,7 +107,7 @@ class DataMiner:
         elif task == cls.TASK_INSTALL_COQ_PROJECTS:
             cls.install_coq_projects(projects)
         elif task == cls.TASK_LEMMA:
-            files = Utils.get_option_as_list(options, "files", None)
+            files = get_as_list(options, "files", None)
             cls.collect_lemmas(data_mgr, projects, files)
         elif task == cls.TASK_LEMMA_BACKEND_SEXP_TRANSFORMATIONS:
             cls.collect_lemmas_backend_sexp_transformations(data_mgr)
