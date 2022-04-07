@@ -59,7 +59,7 @@ if [ ! "$SWITCH_DETECTED" == "" ] ; then
   echo "Previous switch $OPAM_SWITCH with Coq==$COQ_VERSION detected. "
   if [ "$REINSTALL" == "" ] ; then
     while true; do
-      read -p . "Do you want to remove and reinstall?[y/n]" yn
+      read -p "Do you want to remove and reinstall?[y/n]" yn
       case $yn in
         [Yy]* ) REINSTALL=true; break;;
         [Nn]* ) REINSTALL=false; break;;
