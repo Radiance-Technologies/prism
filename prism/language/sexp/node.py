@@ -220,25 +220,6 @@ class SexpNode(abc.ABC):
             lambda x: children_filtering_func(reversed(x)),
             use_parenthesis)
 
-    @classmethod
-    def dejsonfy(cls, data: str) -> 'SexpNode':
-        """
-        Parse the given s-expression into an `SexpNode`.
-
-        Parameters
-        ----------
-        data : str
-            A serialized s-expression.
-
-        Returns
-        -------
-        SexpNode
-            The parsed, deserialized s-expression.
-        """
-        # TODO: Refactor to remove circular reference.
-        from prism.language.sexp.parser import SexpParser
-        return SexpParser.parse(data)
-
     def dot(self) -> str:
         """
         Get the source for a visualization of this node's subtree.
@@ -420,3 +401,22 @@ class SexpNode(abc.ABC):
         Convert this s-expression to Python lists and strings.
         """
         pass
+
+    @classmethod
+    def dejsonfy(cls, data: str) -> 'SexpNode':
+        """
+        Parse the given s-expression into an `SexpNode`.
+
+        Parameters
+        ----------
+        data : str
+            A serialized s-expression.
+
+        Returns
+        -------
+        SexpNode
+            The parsed, deserialized s-expression.
+        """
+        # TODO: Refactor to remove circular reference.
+        from prism.language.sexp.parser import SexpParser
+        return SexpParser.parse(data)
