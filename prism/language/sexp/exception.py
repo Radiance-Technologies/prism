@@ -1,5 +1,8 @@
 """
 Defines exceptions related to s-expressions and their parsing.
+
+Adapted from `roosterize.sexp.IllegalSexpOperationException`
+at https://github.com/EngineeringSoftware/roosterize/.
 """
 
 

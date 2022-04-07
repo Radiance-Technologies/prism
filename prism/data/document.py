@@ -1,5 +1,8 @@
 """
 Module defining classes to reflect data in Coq documents.
+
+Adapted from `roosterize.data.CoqDocument`
+at https://github.com/EngineeringSoftware/roosterize/.
 """
 import copy
 import os

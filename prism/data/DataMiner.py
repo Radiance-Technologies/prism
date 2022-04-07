@@ -1,5 +1,8 @@
 """
 Module providing Coq file data mining capabilities.
+
+Adapted from `roosterize.data.DataMiner`
+at https://github.com/EngineeringSoftware/roosterize/.
 """
 import collections
 import copy

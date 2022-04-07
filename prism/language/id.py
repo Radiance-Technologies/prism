@@ -1,5 +1,8 @@
 """
 Provides an enumeration of recognized languages.
+
+Adapted from `roosterize.data.LanguageID`
+at https://github.com/EngineeringSoftware/roosterize/.
 """
 
 from enum import Enum

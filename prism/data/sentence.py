@@ -1,5 +1,8 @@
 """
 Defines Coq sentence abstractions and associated utilities.
+
+Adapted from `roosterize.data.CoqDocument`
+at https://github.com/EngineeringSoftware/roosterize/.
 """
 import copy
 from dataclasses import dataclass

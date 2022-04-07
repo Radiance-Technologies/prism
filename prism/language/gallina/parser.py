@@ -1,5 +1,8 @@
 """
 Module providing Coq file parsing capabilities.
+
+Adapted from `roosterize.parser.CoqParser`
+at https://github.com/EngineeringSoftware/roosterize/.
 """
 import logging
 from typing import List, Optional, Set, Tuple, Union

@@ -1,5 +1,8 @@
 """
 Defines internal, non-leaf s-expression nodes with branching subtrees.
+
+Adapted from `roosterize.sexp.SexpList`
+at https://github.com/EngineeringSoftware/roosterize/.
 """
 
 import copy

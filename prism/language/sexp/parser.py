@@ -1,5 +1,8 @@
 """
 Defines a parser of s-expressions.
+
+Adapted from `roosterize.sexp.SexpParser`
+at https://github.com/EngineeringSoftware/roosterize/.
 """
 import logging
 import string

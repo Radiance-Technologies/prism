@@ -1,5 +1,8 @@
 """
 Provides methods for extracting Gallina terms from parsed s-expressions.
+
+Adapted from `roosterize.parser.SexpAnalyzer`
+at https://github.com/EngineeringSoftware/roosterize/.
 """
 import collections
 import logging

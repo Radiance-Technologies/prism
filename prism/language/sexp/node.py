@@ -1,5 +1,8 @@
 """
 Defines an abstract representation of s-expressions as nodes in trees.
+
+Adapted from `roosterize.sexp.SexpNode`
+at https://github.com/EngineeringSoftware/roosterize/.
 """
 
 import abc

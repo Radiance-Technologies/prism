@@ -1,5 +1,8 @@
 """
 Defines leaf s-expression nodes with string content.
+
+Adapted from `roosterize.sexp.SexpString`
+at https://github.com/EngineeringSoftware/roosterize/.
 """
 from typing import Callable, List, Optional, Tuple
 
