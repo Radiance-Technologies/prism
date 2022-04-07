@@ -88,3 +88,8 @@ else
   echo "Updating shell environment"
   eval $(opam env --switch=$OPAM_SWITCH --set-switch)
 fi
+
+# clean up environment
+unset REINSTALL
+unset OPAM_SWITCH
+unset SWITCH_DETECTED
