@@ -334,17 +334,6 @@ class SexpNode(abc.ABC):
         """
         return False
 
-    def jsonfy(self) -> str:
-        """
-        Convert this node's subtree to an s-expression.
-
-        Returns
-        -------
-        str
-            An s-expression corresponding to this node's subtree.
-        """
-        return self.__str__()
-
     @abc.abstractmethod
     def modify_recur(
         self,
@@ -395,6 +384,17 @@ class SexpNode(abc.ABC):
         """
         pass
 
+    def serialize(self) -> str:
+        """
+        Convert this node's subtree to an s-expression.
+
+        Returns
+        -------
+        str
+            An s-expression corresponding to this node's subtree.
+        """
+        return self.__str__()
+
     @abc.abstractmethod
     def to_python_ds(self) -> Union[str, list]:
         """
@@ -403,7 +403,7 @@ class SexpNode(abc.ABC):
         pass
 
     @classmethod
-    def dejsonfy(cls, data: str) -> 'SexpNode':
+    def deserialize(cls, data: str) -> 'SexpNode':
         """
         Parse the given s-expression into an `SexpNode`.
 

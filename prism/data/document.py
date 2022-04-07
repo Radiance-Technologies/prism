@@ -39,10 +39,10 @@ class CoqDocument:
     sentences : Optional[List[VernacularSentence]]
         A list of sentences (which are lists of tokens) from this Coq
         document
-    ast_sexp_lists : List[SexpNode]
+    ast_sexp_list : List[SexpNode]
         A list of s-expression nodes representing the ASTs of
         sentences in the order of their definition in the document.
-    tok_sexp_lists : List[SexpNode]
+    tok_sexp_list : List[SexpNode]
         A list of s-expression nodes representing the sequences of
         lexical tokens in each sentence in the order of their
         definition in the document.
@@ -53,8 +53,8 @@ class CoqDocument:
     project_path: Optional[str] = None
     revision: Optional[str] = None
     sentences: Optional[List[VernacularSentence]] = None
-    ast_sexp_lists: Optional[List[SexpNode]] = None
-    tok_sexp_lists: Optional[List[SexpNode]] = None
+    ast_sexp_list: Optional[List[SexpNode]] = None
+    tok_sexp_list: Optional[List[SexpNode]] = None
 
     @property
     def abspath(self) -> str:

@@ -1,22 +1,33 @@
-from typing import List
+"""
+Defines abstractions for a modified s-expression trees.
+"""
+from dataclasses import dataclass
+from typing import List, Optional
 
-from recordclass import RecordClass
-
-from prism.language.sexp import Optional, SexpList, SexpNode, SexpString
+from prism.language.sexp import SexpList, SexpNode, SexpString
 
 
 class TreeTransformationConsts:
+    """
+    Enumerate transformation types.
+    """
+
     KEEP = "K"
     REMOVE = "R"
     UPDATE = "U"
 
 
-class TreeTransformation(RecordClass):
+@dataclass
+class TreeTransformation:
+    """
+    A tree transformation is a modification of an s-expression.
+    """
+
     transform_tree: SexpNode = None
 
     def transform_sexp(self, sexp: SexpNode) -> Optional[SexpNode]:
         """
-        Transforms the sexp according to this transformation.
+        Transform the sexp according to this transformation.
 
         Parameters
         ----------
@@ -36,6 +47,28 @@ class TreeTransformation(RecordClass):
     def transform_sexp_recur(cls,
                              sexp: SexpNode,
                              transform_tree: SexpNode) -> Optional[SexpNode]:
+        """
+        Recursively transform an s-expression tree.
+
+        Parameters
+        ----------
+        sexp : SexpNode
+            A parsed s-expression tree.
+        transform_tree : SexpNode
+            A parallel tree describing the nature of the transformation
+            for each node in `sexp`.
+
+        Returns
+        -------
+        Optional[SexpNode]
+            The result of the transformation.
+
+        Raises
+        ------
+        Exception
+            If `sexp` and `transform_tree` do not match, i.e., if one
+            possesses a node or child and the other does not.
+        """
         if sexp.is_string() and transform_tree.is_string():
             if transform_tree.content == TreeTransformationConsts.KEEP:
                 return sexp

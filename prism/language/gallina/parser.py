@@ -921,18 +921,17 @@ class CoqParser:
         source_code = cls.parse_source(file_path)
 
         (sentences,
-         ast_sexp_lists,
-         tok_sexp_lists) = cls.parse_all(
-             file_path,
-             source_code,
-             serapi_options)
+         ast_sexp_list,
+         tok_sexp_list) = cls.parse_all(file_path,
+                                        source_code,
+                                        serapi_options)
 
         return CoqDocument(
             file_path,
             source_code,
             sentences=sentences,
-            ast_sexp_lists=ast_sexp_lists,
-            tok_sexp_lists=tok_sexp_lists,
+            ast_sexp_list=ast_sexp_list,
+            tok_sexp_list=tok_sexp_list,
         )
 
     @classmethod
@@ -1171,7 +1170,7 @@ class CoqParser:
         ----------
         file_path : str
             The absolute or relative path of a Coq file.
-        sercomp_options : str
+        sertok_options : str
             Options to control the output of ``sertok``, which is used
             to parse the document. By default the empty string.
 
@@ -1183,7 +1182,7 @@ class CoqParser:
             definition in the document.
         """
         tok_sexp_str: str = BashUtils.run(
-            f"sertok {sertok_options} --mode=sexp -- {file_path}",
+            f"sertok {sertok_options} -- {file_path}",
             expected_return_code=0).stdout
         tok_sexp_list: List[SexpNode] = SexpParser.parse_list(tok_sexp_str)
         return tok_sexp_list

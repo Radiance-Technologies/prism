@@ -1,12 +1,20 @@
-from typing import List
+"""
+Defines abstractions for Coq lemmas and theorems.
+"""
 
-from recordclass import RecordClass
+from dataclasses import dataclass
+from typing import List
 
 from prism.language.sexp import SexpNode
 from prism.language.token import Token
 
 
-class Lemma(RecordClass):
+@dataclass
+class Lemma:
+    """
+    A Coq definition corresponding to a lemma or theorem statement.
+    """
+
     data_index: str = ""
 
     vernac_command: List[Token] = None
@@ -19,13 +27,10 @@ class Lemma(RecordClass):
 
     uid: int = -1  # Used only for indexing in this dataset
 
-    def vernac_command_with_space(self):
-        return ''.join([t.str_with_space() for t in self.vernac_command])
+    def __repr__(self):  # noqa : D105
+        return self.__str__()
 
-    def statement_with_space(self):
-        return ''.join([t.str_with_space() for t in self.statement])
-
-    def __str__(self):
+    def __str__(self):  # noqa: D105
         s = ""
         s += f"data_index: {self.data_index}\n"
         s += f"name: {self.name}\n"
@@ -34,5 +39,14 @@ class Lemma(RecordClass):
         s += f"statement: {self.statement_with_space()}\n"
         return s
 
-    def __repr__(self):
-        return self.__str__()
+    def statement_with_space(self) -> str:
+        """
+        Get the lemma statement as a string.
+        """
+        return ''.join([t.str_with_space() for t in self.statement])
+
+    def vernac_command_with_space(self) -> str:
+        """
+        Get the full command associated with the lemma as a string.
+        """
+        return ''.join([t.str_with_space() for t in self.vernac_command])
