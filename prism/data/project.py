@@ -7,18 +7,35 @@ import random
 import re
 import warnings
 from abc import ABC, abstractmethod
+from enum import Enum, auto
 from typing import List, Optional, Tuple, Union
 from warnings import warn
 
 from git import Commit, Repo
-from seutil import BashUtils
+from seutil import BashUtils, io
 
 from prism.data.document import CoqDocument
-from prism.language.gallina.parser import CoqParser
+from prism.language.gallina.parser import CoqParser, ParserUtils
 from prism.util.logging import default_log_level
 
 logger: logging.Logger = logging.getLogger(__name__)
 logger.setLevel(default_log_level())
+
+
+class SentenceExtractionMethod(Enum):
+    """
+    Enum for available sentence extraction methods.
+
+    Attributes
+    ----------
+    SERAPI
+        Use serapi to extract sentences
+    HEURISTIC
+        Use custom heuristic method to extract sentences
+    """
+
+    SERAPI = auto()
+    HEURISTIC = auto()
 
 
 class DirHasNoCoqFiles(Exception):
@@ -47,6 +64,8 @@ class ProjectBase(ABC):
     install_cmd : str or None
         The terminal command used to install the project, by default
         None.
+    sentence_extraction_method : SentenceExtractionMethod
+        The method by which sentences are extracted.
 
     Attributes
     ----------
@@ -60,7 +79,9 @@ class ProjectBase(ABC):
     clean_cmd : str or None
         The terminal command used to clean the project.
     install_cmd : str or None
-        The terminal command used to install the project..
+        The terminal command used to install the project.
+    sentence_extraction_method : SentenceExtractionMethod
+        The method by which sentences are extracted.
     """
 
     proof_enders = ["Qed.", "Save.", "Defined.", "Admitted.", "Abort."]
@@ -70,7 +91,8 @@ class ProjectBase(ABC):
             dir_abspath: str,
             build_cmd: Optional[str] = None,
             clean_cmd: Optional[str] = None,
-            install_cmd: Optional[str] = None):
+            install_cmd: Optional[str] = None,
+            sentence_extraction_method: SentenceExtractionMethod = SentenceExtractionMethod.SERAPI):  # noqa: B950 yapf: disable
         """
         Initialize Project object.
         """
@@ -79,6 +101,7 @@ class ProjectBase(ABC):
         self.build_cmd: Optional[str] = build_cmd
         self.clean_cmd: Optional[str] = clean_cmd
         self.install_cmd: Optional[str] = install_cmd
+        self.sentence_extraction_method = sentence_extraction_method
 
     @property
     @abstractmethod
@@ -320,34 +343,21 @@ class ProjectBase(ABC):
         return data.decode(encoding) if isinstance(data, bytes) else data
 
     @staticmethod
-    def _strip_comments(
-            file_contents: Union[str,
-                                 bytes],
-            encoding: str = 'utf-8') -> str:
-        comment_pattern = r"[(]+\*(.|\n|\r)*?\*[)]+"
-        if isinstance(file_contents, bytes):
-            file_contents = ProjectBase._decode_byte_stream(
-                file_contents,
-                encoding)
-        str_no_comments = re.sub(comment_pattern, '', file_contents)
-        return str_no_comments
-
-    @staticmethod
-    def split_by_sentence(
+    def _extract_sentences_heuristic(
             document: CoqDocument,
             encoding: str = 'utf-8',
             glom_proofs: bool = True) -> List[str]:
         """
-        Split the Coq file text by sentences.
+        Split the Coq file text by sentences using custom heuristics.
 
         By default, proofs are then re-glommed into their own entries.
         This behavior can be switched off.
 
         Parameters
         ----------
-        file_contents : Union[str, bytes]
-            Complete contents of the Coq source file, either in
-            bytestring or string form.
+        document : CoqDocument
+            The Coq source file, in CoqDocument form, to extract
+            sentences from.
         encoding : str, optional
             The encoding to use for decoding if a bytestring is
             provided, by default 'utf-8'
@@ -414,6 +424,119 @@ class ProjectBase(ABC):
         else:
             result = sentences
         return result
+
+    @staticmethod
+    def _extract_sentences_serapi(document: CoqDocument) -> List[str]:
+        """
+        Extract sentences from a Coq document using SerAPI.
+
+        Parameters
+        ----------
+        document : CoqDocument
+            The document from which to extract sentences.
+
+        Returns
+        -------
+        List[str]
+            The resulting sentences from the document.
+
+        Notes
+        -----
+        This function is stitched together from at least two methods
+        originally found in roosterize:
+        * prism.interface.command_line.CommandLineInterface.
+            infer_serapi_options
+        * prism.data.miner.DataMiner.extract_data_project
+        """
+        # Constants
+        RE_SERAPI_OPTIONS = re.compile(r"-R (?P<src>\S+) (?P<tgt>\S+)")
+        # Get unicode offsets
+        source_code = document.source_code
+        coq_file = document.abspath
+        # Try to infer from _CoqProject
+        coq_project_file = pathlib.Path(document.project_path) / "_CoqProject"
+        possible_serapi_options = []
+        if coq_project_file.exists():
+            coq_project = io.load(coq_project_file, io.Fmt.txt)
+            for line in coq_project.splitlines():
+                match = RE_SERAPI_OPTIONS.fullmatch(line.strip())
+                if match is not None:
+                    possible_serapi_options.append(
+                        f"-R {match.group('src')},{match.group('tgt')}")
+
+        if len(possible_serapi_options) > 0:
+            serapi_options = " ".join(possible_serapi_options)
+        else:
+            serapi_options = ""
+        unicode_offsets = ParserUtils.get_unicode_offsets(source_code)
+        # Parse ast sexp
+        ast_sexp_list = CoqParser.parse_asts(coq_file, serapi_options)
+        tok_sexp_list = CoqParser.parse_tokens(coq_file, serapi_options)
+        # Parse the document
+        vernac_sentences = CoqParser.parse_sentences_from_sexps(
+            source_code,
+            ast_sexp_list,
+            tok_sexp_list,
+            unicode_offsets=unicode_offsets)
+        sentences = [vs.str_with_space() for vs in vernac_sentences]
+        return sentences
+
+    @staticmethod
+    def _strip_comments(
+            file_contents: Union[str,
+                                 bytes],
+            encoding: str = 'utf-8') -> str:
+        comment_pattern = r"[(]+\*(.|\n|\r)*?\*[)]+"
+        if isinstance(file_contents, bytes):
+            file_contents = ProjectBase._decode_byte_stream(
+                file_contents,
+                encoding)
+        str_no_comments = re.sub(comment_pattern, '', file_contents)
+        return str_no_comments
+
+    @classmethod
+    def split_by_sentence(
+        cls,
+        document: CoqDocument,
+        encoding: str = 'utf-8',
+        glom_proofs: bool = True,
+        sentence_extraction_method:
+        SentenceExtractionMethod = SentenceExtractionMethod.SERAPI
+    ) -> List[str]:
+        """
+        Split the Coq file text by sentences.
+
+        By default, proofs are then re-glommed into their own entries.
+        This behavior can be switched off.
+
+        Parameters
+        ----------
+        document : CoqDocument
+            The Coq source file, in CoqDocument form, to extract
+            sentences from.
+        encoding : str, optional
+            The encoding to use for decoding if a bytestring is
+            provided, by default 'utf-8'
+        glom_proofs : bool, optional
+            A flag indicating whether or not proofs should be re-glommed
+            after sentences are split, by default `True`
+        sentence_extraction_method : SentenceExtractionMethod
+            Method by which sentences should be extracted
+
+        Returns
+        -------
+        List[str]
+            A list of strings corresponding to Coq source file
+            sentences, with proofs glommed (or not) depending on input
+            flag.
+        """
+        if sentence_extraction_method == SentenceExtractionMethod.HEURISTIC:
+            return cls._extract_sentences_heuristic(
+                document,
+                encoding,
+                glom_proofs)
+        elif sentence_extraction_method == SentenceExtractionMethod.SERAPI:
+            return cls._extract_sentences_serapi(document)
 
 
 class ProjectRepo(Repo, ProjectBase):
