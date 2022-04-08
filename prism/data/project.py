@@ -38,6 +38,9 @@ class SentenceExtractionMethod(Enum):
     HEURISTIC = auto()
 
 
+SEM = SentenceExtractionMethod
+
+
 class DirHasNoCoqFiles(Exception):
     """
     Exception indicating that the current directory has no Coq files.
@@ -92,7 +95,7 @@ class ProjectBase(ABC):
             build_cmd: Optional[str] = None,
             clean_cmd: Optional[str] = None,
             install_cmd: Optional[str] = None,
-            sentence_extraction_method: SentenceExtractionMethod = SentenceExtractionMethod.SERAPI):  # noqa: B950 yapf: disable
+            sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI):
         """
         Initialize Project object.
         """
