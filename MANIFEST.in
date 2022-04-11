@@ -1,5 +1,5 @@
 include LICENSE
 include README.md
 include pyproject.toml
-include prism/data/tests/split_by_sentence_expected.json
-include prism/data/tests/split_by_sentence_test_file.v
+include prism/tests/coq-examples/split_by_sentence_expected.json
+include prism/tests/coq-examples/simple.v

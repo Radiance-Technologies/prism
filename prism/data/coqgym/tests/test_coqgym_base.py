@@ -11,6 +11,7 @@ import git
 from prism.data.coqgym.dataset import CoqGymBaseDataset
 from prism.data.document import CoqDocument
 from prism.data.project import ProjectBase, ProjectDir, ProjectRepo
+from prism.tests import _COQ_EXAMPLES_PATH
 
 
 class TestProjectBase(unittest.TestCase):
@@ -22,10 +23,9 @@ class TestProjectBase(unittest.TestCase):
         """
         Set up class for testing coqgym_base module.
         """
-        test_path = os.path.dirname(__file__)
-        test_filename = os.path.join(test_path, "split_by_sentence_test_file.v")
+        test_filename = os.path.join(_COQ_EXAMPLES_PATH, "simple.v")
         expected_filename = os.path.join(
-            test_path,
+            _COQ_EXAMPLES_PATH,
             "split_by_sentence_expected.json")
         with open(test_filename, "rt") as f:
             self.test_contents = f.read()
