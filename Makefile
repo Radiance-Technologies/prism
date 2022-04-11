@@ -6,12 +6,19 @@ export
 .PHONY: install
 install: venv_check venv
 	echo "Installing project into virtual environment $(VENV)"
-	SOFT=True make -C coqgym_interface install
+	pip install -e .
 
 # test internal packages
-test: venv_check venv
+test: venv_check venv switch_check
 	echo "Running tests"
-	SOFT=True make -C coqgym_interface test
+	pytest --pyargs --cov=prism prism
+
+.PHONY: dev
+dev: venv_check venv
+	echo "Installing developer requirements"
+	pip install -Ur requirements/dev.txt
+	echo "Installing pre-commit hooks"
+	pre-commit install
 
 venv: $(VENV)/bin/activate
 
@@ -32,6 +39,12 @@ $(VENV)/bin/activate: requirements.txt
 	echo "Conda environment $(CONDA_DEFAULT_ENV) already activated."
 endif
 
+ifdef OPAMSWITCH
+switch_check:
+else
+switch_check:
+	$(error You must activate an OPAM switch before making this target. $(n)    Call 'source $(GITROOT)/setup_coq.sh' to install the project switch)
+endif
 
 clean:
 	if [ $(INVENV) = "True" ] ; then \
@@ -42,3 +55,4 @@ clean:
 	fi
 	rm -rf $(VENV)
 	find -iname "*.pyc" -delete
+	opam switch remove $(SWITCH_NAME)

@@ -8,8 +8,10 @@ import unittest
 
 import git
 
-from coqgym_interface.dataset import CoqGymBaseDataset
-from coqgym_interface.project import ProjectBase, ProjectDir, ProjectRepo
+from prism.data.coqgym.dataset import CoqGymBaseDataset
+from prism.data.document import CoqDocument
+from prism.data.project import ProjectBase, ProjectDir, ProjectRepo
+from prism.tests import _COQ_EXAMPLES_PATH
 
 
 class TestProjectBase(unittest.TestCase):
@@ -21,13 +23,13 @@ class TestProjectBase(unittest.TestCase):
         """
         Set up class for testing coqgym_base module.
         """
-        test_path = os.path.dirname(__file__)
-        test_filename = os.path.join(test_path, "split_by_sentence_test_file.v")
+        test_filename = os.path.join(_COQ_EXAMPLES_PATH, "simple.v")
         expected_filename = os.path.join(
-            test_path,
+            _COQ_EXAMPLES_PATH,
             "split_by_sentence_expected.json")
         with open(test_filename, "rt") as f:
             self.test_contents = f.read()
+        self.document = CoqDocument(test_filename, self.test_contents)
         with open(expected_filename, "rt") as f:
             contents = json.load(f)
             self.test_list = contents["test_list"]
@@ -36,7 +38,7 @@ class TestProjectBase(unittest.TestCase):
         """
         Test method for splitting Coq code by sentence.
         """
-        actual_outcome = ProjectBase.split_by_sentence(self.test_contents)
+        actual_outcome = ProjectBase.split_by_sentence(self.document)
         self.assertEqual(actual_outcome, self.test_list)
 
 
@@ -77,7 +79,7 @@ class TestProjectRepo(unittest.TestCase):
             os.path.join(self.repo_path,
                          "cfrontend",
                          "Ctypes.v"))
-        self.assertGreater(len(file_object.file_contents), 0)
+        self.assertGreater(len(file_object.source_code), 0)
 
     def test_get_random_commit(self):
         """
@@ -92,7 +94,7 @@ class TestProjectRepo(unittest.TestCase):
         """
         random_file = self.project.get_random_file(commit_name=self.master_hash)
         self.assertTrue(random_file.abspath.endswith(".v"))
-        self.assertGreater(len(random_file.file_contents), 0)
+        self.assertGreater(len(random_file.source_code), 0)
 
     def test_get_random_sentence(self):
         """
@@ -199,7 +201,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
             os.path.join(self.repo_path_1,
                          "cfrontend",
                          "Ctypes.v"))
-        self.assertGreater(len(file_object.file_contents), 0)
+        self.assertGreater(len(file_object.source_code), 0)
 
     def test_get_random_file(self):
         """
@@ -209,7 +211,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
             project_name="circuits",
             commit_name=self.master_hash_2)
         self.assertTrue(random_file.abspath.endswith(".v"))
-        self.assertGreater(len(random_file.file_contents), 0)
+        self.assertGreater(len(random_file.source_code), 0)
 
     def test_get_random_sentence(self):
         """
@@ -319,7 +321,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         cfg = self.dataset.files()
         for file_obj in cfg:
             self.assertTrue(os.path.isfile(file_obj.abspath))
-            self.assertIsInstance(file_obj.file_contents, str)
+            self.assertIsInstance(file_obj.source_code, str)
 
     def test_coq_sentence_generator(self):
         """

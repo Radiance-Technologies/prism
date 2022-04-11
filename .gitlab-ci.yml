@@ -13,16 +13,18 @@ cache:
   paths:
     - .cache/pip
     - venv/
+    - .opam
 
 stages:
   - test
 
 before_script:
   - apt-get -y update
-  - apt-get -y install pkg-config make
+  - apt-get -y install pkg-config make opam
   - pip install virtualenv
   - virtualenv venv
   - source venv/bin/activate
+  - export VENV=venv
   - make install
 
 precommit:
@@ -64,4 +66,11 @@ precommit:
 runTests:
   stage: test
   script:
+    - export OPAMROOT=${PWD}/.opam
+    - |
+      if [ ! -d ${OPAMROOT} ]; then
+        opam init --disable-sandboxing github git+https://github.com/ocaml/opam-repository.git
+      fi
+    - eval $(opam env)
+    - source setup_coq.sh -n
     - make test

@@ -3,15 +3,16 @@ Module providing the base dataset object for the CoqGym interface.
 """
 import json
 import os
+import pathlib
 import random
 from io import TextIOWrapper
 from typing import Dict, Generator, List, Optional, Type, TypeVar, Union
 
 from git import InvalidGitRepositoryError
 
-from coqgym_interface.project import (
+from prism.data.document import CoqDocument
+from prism.data.project import (
     DirHasNoCoqFiles,
-    FileObject,
     ProjectBase,
     ProjectDir,
     ProjectRepo,
@@ -107,9 +108,6 @@ class CoqGymBaseDataset:
         projects.
     sentences(commit_names, glom_proofs)
         Returns a generator that yields Coq sentences from the object.
-    _get_random_project()
-        Returns a random project from the list of internal projects,
-        with sampling weighted by `weights`.
     """
 
     projects: ProjectDict = {}
@@ -207,11 +205,29 @@ class CoqGymBaseDataset:
         self.weights = {pn: p.size_bytes for pn,
                         p in self.projects.items()}
 
+    def _get_random_project(self) -> str:
+        """
+        Get a random project from the dataset's internal selection.
+
+        The selection is weighted by ``self.weights``.
+
+        Returns
+        -------
+        str
+            The name of a randomly chosen project.
+        """
+        weights = []
+        project_names = list(self.projects.keys())
+        for proj in project_names:
+            weights.append(self.weights[proj])
+        chosen_proj = random.choices(project_names, weights, k=1)[0]
+        return chosen_proj
+
     def files(
         self,
         commit_names: Optional[Dict[str,
                                     str]] = None,
-        ignore_decode_errors: bool = False) -> Generator[FileObject,
+        ignore_decode_errors: bool = False) -> Generator[CoqDocument,
                                                          None,
                                                          None]:
         """
@@ -228,21 +244,24 @@ class CoqGymBaseDataset:
 
         Yields
         ------
-        str
+        CoqDocument
             Contents of a Coq file in the group of projects
         """
-        project_names = sorted(list(self.projects.keys()))
         if commit_names is None:
-            commit_names = {pn: 'master' for pn in project_names}
-        for project in project_names:
-            file_list = self.projects[project].get_file_list(
-                commit_name=commit_names[project])
+            commit_names = {}
+        for project_name, project in self.projects.items():
+            file_list = project.get_file_list(
+                commit_name=commit_names.get(project_name,
+                                             None))
             for file in file_list:
                 try:
                     with open(file, "r") as f:
                         f: TextIOWrapper
                         contents = f.read()
-                        yield FileObject(file, contents)
+                        yield CoqDocument(
+                            pathlib.Path(file).relative_to(project.path),
+                            project_path=project.path,
+                            source_code=contents)
                 except UnicodeDecodeError as e:
                     if not ignore_decode_errors:
                         raise e
@@ -250,7 +269,7 @@ class CoqGymBaseDataset:
     def get_random_file(
             self,
             project_name: Optional[str] = None,
-            commit_name: Optional[str] = None) -> FileObject:
+            commit_name: Optional[str] = None) -> CoqDocument:
         """
         Return a random Coq source file from one of the projects.
 
@@ -267,8 +286,8 @@ class CoqGymBaseDataset:
 
         Returns
         -------
-        FileObject
-            A random Coq source file in the form of a FileObject
+        CoqDocument
+            A random Coq source file in the form of a CoqDocument
         """
         if project_name is None:
             project_name = self._get_random_project()
@@ -279,7 +298,7 @@ class CoqGymBaseDataset:
             self,
             filename: str,
             project_name: str,
-            commit_name: str = 'master') -> FileObject:
+            commit_name: str = 'master') -> CoqDocument:
         """
         Return specific Coq source file from specific project & commit.
 
@@ -295,8 +314,8 @@ class CoqGymBaseDataset:
 
         Returns
         -------
-        FileObject
-            A FileObject corresponding to the selected Coq source file
+        CoqDocument
+            A CoqDocument corresponding to the selected Coq source file
         """
         return self.projects[project_name].get_file(
             filename,
@@ -408,15 +427,7 @@ class CoqGymBaseDataset:
             ignore_decode_errors=ignore_decode_errors)
         for file_obj in coq_file_generator:
             sentence_list = ProjectBase.split_by_sentence(
-                file_obj.file_contents,
+                file_obj,
                 glom_proofs=glom_proofs)
             for sentence in sentence_list:
                 yield sentence
-
-    def _get_random_project(self) -> str:
-        weights = []
-        project_names = list(self.projects.keys())
-        for proj in project_names:
-            weights.append(self.weights[proj])
-        chosen_proj = random.choices(project_names, weights, k=1)[0]
-        return chosen_proj
