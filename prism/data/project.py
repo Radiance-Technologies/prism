@@ -15,7 +15,7 @@ from git import Commit, Repo
 from seutil import BashUtils, io
 
 from prism.data.document import CoqDocument
-from prism.language.gallina.parser import CoqParser, ParserUtils
+from prism.language.gallina.parser import CoqParser
 from prism.util.logging import default_log_level
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -479,16 +479,10 @@ class ProjectBase(ABC):
             serapi_options = " ".join(possible_serapi_options)
         else:
             serapi_options = ""
-        unicode_offsets = ParserUtils.get_unicode_offsets(source_code)
-        # Parse ast sexp
-        ast_sexp_list = CoqParser.parse_asts(coq_file, serapi_options)
-        tok_sexp_list = CoqParser.parse_tokens(coq_file, serapi_options)
-        # Parse the document
-        vernac_sentences = CoqParser.parse_sentences_from_sexps(
+        vernac_sentences, _, _ = CoqParser.parse_all(
+            coq_file,
             source_code,
-            ast_sexp_list,
-            tok_sexp_list,
-            unicode_offsets=unicode_offsets)
+            serapi_options)
         sentences = [vs.str_with_space() for vs in vernac_sentences]
         return sentences
 
