@@ -258,7 +258,7 @@ class ProjectBase(ABC):
             obj = self.get_random_file(**kwargs)
         else:
             obj = self.get_file(filename, **kwargs)
-        sentences = self.split_by_sentence(obj, 'utf-8', glom_proofs)
+        sentences = self.extract_sentences(obj, 'utf-8', glom_proofs)
         sentence = random.choice(sentences)
         return sentence
 
@@ -300,7 +300,7 @@ class ProjectBase(ABC):
                 obj = self.get_random_file(**kwargs)
             else:
                 obj = self.get_file(filename, **kwargs)
-            sentences = self.split_by_sentence(obj, 'utf-8', glom_proofs)
+            sentences = self.extract_sentences(obj, 'utf-8', glom_proofs)
             counter += 1
         first_sentence_idx = random.randint(0, len(sentences) - 2)
         return sentences[first_sentence_idx : first_sentence_idx + 2]
@@ -498,7 +498,7 @@ class ProjectBase(ABC):
         return str_no_comments
 
     @classmethod
-    def split_by_sentence(
+    def extract_sentences(
         cls,
         document: CoqDocument,
         encoding: str = 'utf-8',
@@ -509,8 +509,12 @@ class ProjectBase(ABC):
         """
         Split the Coq file text by sentences.
 
-        By default, proofs are then re-glommed into their own entries.
-        This behavior can be switched off.
+        If the heuristic sentence extraction method is used, by default,
+        proofs are then re-glommed into their own entries. This behavior
+        can be switched off.
+
+        If the serapi sentence extraction method is used, proof glomming
+        is not available.
 
         Parameters
         ----------

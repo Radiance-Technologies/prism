@@ -426,7 +426,7 @@ class CoqGymBaseDataset:
             commit_names,
             ignore_decode_errors=ignore_decode_errors)
         for file_obj in coq_file_generator:
-            sentence_list = ProjectBase.split_by_sentence(
+            sentence_list = ProjectBase.extract_sentences(
                 file_obj,
                 glom_proofs=glom_proofs)
             for sentence in sentence_list:
