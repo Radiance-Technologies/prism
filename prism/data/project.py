@@ -258,7 +258,11 @@ class ProjectBase(ABC):
             obj = self.get_random_file(**kwargs)
         else:
             obj = self.get_file(filename, **kwargs)
-        sentences = self.extract_sentences(obj, 'utf-8', glom_proofs)
+        sentences = self.extract_sentences(
+            obj,
+            'utf-8',
+            glom_proofs,
+            self.sentence_extraction_method)
         sentence = random.choice(sentences)
         return sentence
 
@@ -300,7 +304,11 @@ class ProjectBase(ABC):
                 obj = self.get_random_file(**kwargs)
             else:
                 obj = self.get_file(filename, **kwargs)
-            sentences = self.extract_sentences(obj, 'utf-8', glom_proofs)
+            sentences = self.extract_sentences(
+                obj,
+                'utf-8',
+                glom_proofs,
+                self.sentence_extraction_method)
             counter += 1
         first_sentence_idx = random.randint(0, len(sentences) - 2)
         return sentences[first_sentence_idx : first_sentence_idx + 2]
@@ -596,7 +604,8 @@ class ProjectRepo(Repo, ProjectBase):
         return CoqDocument(
             rel_filename,
             project_path=self.path,
-            source_code=(commit.tree / rel_filename).data_stream.read())
+            source_code=(commit.tree
+                         / rel_filename).data_stream.read().decode("utf-8"))
 
     def _pre_get_file(self, **kwargs):
         """
@@ -623,7 +632,7 @@ class ProjectRepo(Repo, ProjectBase):
             CoqDocument(
                 f.path,
                 project_path=self.path,
-                source_code=f.data_stream.read()) for f in files
+                source_code=f.data_stream.read().decode("utf-8")) for f in files
         ]
 
     def get_file_list(self, commit_name: Optional[str] = None) -> List[str]:

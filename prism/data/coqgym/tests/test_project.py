@@ -9,7 +9,12 @@ import unittest
 import git
 
 from prism.data.document import CoqDocument
-from prism.data.project import ProjectBase, ProjectDir, ProjectRepo
+from prism.data.project import (
+    ProjectBase,
+    ProjectDir,
+    ProjectRepo,
+    SentenceExtractionMethod,
+)
 
 
 class TestProjectBase(unittest.TestCase):
@@ -33,11 +38,13 @@ class TestProjectBase(unittest.TestCase):
             contents = json.load(f)
             self.test_list = contents["test_list"]
 
-    def test_split_by_sentence(self):
+    def test_extract_sentences_heuristic(self):
         """
         Test method for splitting Coq code by sentence.
         """
-        actual_outcome = ProjectBase.extract_sentences(self.document)
+        actual_outcome = ProjectBase.extract_sentences(
+            self.document,
+            sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
         self.assertEqual(actual_outcome, self.test_list)
 
 
