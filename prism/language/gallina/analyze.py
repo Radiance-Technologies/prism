@@ -101,6 +101,26 @@ class SexpInfo:
         beg_charno: int
         end_charno: int
 
+        def __contains__(
+                self,
+                other: Union['SexpInfo.Loc',
+                             int,
+                             float]) -> bool:
+            """
+            Return whether this location contains another.
+
+            In other words, is the `other` location a point or
+            subinterval of this location?
+            """
+            if isinstance(other, type(self)):
+                return (
+                    self.end_charno >= other.end_charno
+                    and self.beg_charno <= other.beg_charno)
+            elif isinstance(other, (int, float)):
+                return self.beg_charno <= other and self.end_charno >= other
+            else:
+                return NotImplemented
+
         def __lt__(self, other: Union['SexpInfo.Loc', int, float]) -> bool:
             """
             Return whether this location is less than another.
