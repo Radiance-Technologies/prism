@@ -4,7 +4,11 @@ Pretraining for Proof Repair with Imposed Syntax Modeling
 
 ## Description
 
-An in-depth paragraph about your project and overview of use.
+PRISM is a framework to enable the augmentation of pretrained language models (LMs) with syntactical\
+ and semantic relational knowledge captured via graph neural networks (GNNs) for efficient proof generation\
+  and repair with limited data. The LM aids in the generation of well-structured code while reinforcement learning (RL)\
+   ensures proof correctness and localization. PRISM will culminate in a prototype IDE extension that uses the developed\
+    machine learning (ML) model to propose proofs or proof(-related) repairs for regions of code prompted by the user.
 
 ## Getting Started
 
