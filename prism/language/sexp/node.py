@@ -389,7 +389,7 @@ class SexpNode(abc.ABC):
     @abc.abstractmethod
     def pretty_format(self, max_depth: int = np.PINF) -> str:
         """
-        Format this s-expression into an human-readable string.
+        Format this s-expression into a human-readable string.
 
         Returns
         -------

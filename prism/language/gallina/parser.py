@@ -710,7 +710,7 @@ class CoqParser:
                             content=".",
                             beg_charno=sertok_token.loc.beg_charno,
                             end_charno=sertok_token.loc.beg_charno + 1,
-                            lineno=sertok_token.loc.lineno,
+                            lineno=sertok_token.loc.lineno_last,
                         ))
                     sertok_token.kind = TokenConsts.KIND_ID
                     sertok_token.loc.beg_charno += 1
@@ -751,10 +751,10 @@ class CoqParser:
                         content=sertok_token.content,
                         beg_charno=sertok_token.loc.beg_charno,
                         end_charno=sertok_token.loc.end_charno,
-                        lineno=sertok_token.loc.lineno,
+                        lineno=sertok_token.loc.lineno_last,
                     ))
 
-                cur_lineno = sertok_token.loc.lineno
+                cur_lineno = sertok_token.loc.lineno_last
                 cur_charno = sertok_token.loc.end_charno
             # end for
             vernac_sentences.append(vernac_sentence)
@@ -1017,7 +1017,7 @@ class CoqParser:
         for vernac_i, vernac_sentence in enumerate(vernac_sentences):
             vernac_ast = vernac_asts[vernac_i]
             vernac_type = vernac_ast.vernac_type
-            loc = vernac_ast.loc
+            loc: SexpInfo.Loc = vernac_ast.loc
 
             # Detect sentence lid from the vernacular type
             if vernac_type in CoqParserConsts.VERNAC_TYPES_GALLINA_OR_VERNAC_CONTROL:
@@ -1028,7 +1028,7 @@ class CoqParser:
                 if vernac_type not in unseen_vernacular_types:
                     cls.logger.warning(
                         f"Unknown vernacular type {vernac_type} at line "
-                        f"{loc.lineno} of {loc.filename}")
+                        f"{loc.lineno_last} of {loc.filename}")
                     unseen_vernacular_types.add(vernac_type)
                 # end if
                 sentence_lid = LanguageId.Vernac
