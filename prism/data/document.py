@@ -27,6 +27,8 @@ class CoqDocument:
     ----------
     name : str
         Path to file containing document relative to the project folder.
+    source_code : str or bytes
+        Contents of the file, either in string or byte-string form.
     project_path : str or None
         The path to the project whence comes the file or None if this
         document is not part of a project.
@@ -34,15 +36,13 @@ class CoqDocument:
         String identifying the commit of the project from which the file
         originates or None if this file's project is None or not a
         repository.
-    source_code : str or bytes
-        Contents of the file, either in string or byte-string form.
     sentences : Optional[List[VernacularSentence]]
         A list of sentences (which are lists of tokens) from this Coq
         document
-    ast_sexp_list : List[SexpNode]
+    ast_sexp_list : List[SexpNode] or None
         A list of s-expression nodes representing the ASTs of
         sentences in the order of their definition in the document.
-    tok_sexp_list : List[SexpNode]
+    tok_sexp_list : List[SexpNode] or None
         A list of s-expression nodes representing the sequences of
         lexical tokens in each sentence in the order of their
         definition in the document.
@@ -90,6 +90,20 @@ class CoqDocument:
         Get the name of the project or the empty string if None.
         """
         return pathlib.Path(self.project_path_).stem
+
+    @cached_property
+    def serapi_options(self) -> str:
+        """
+        Get the SerAPI options for parsing this file.
+
+        Returns
+        -------
+        str
+            The command-line options for invoking SerAPI tools, e.g.,
+            ``f"sercomp {serapi_options} {self.name}"``.
+        """
+        # TODO: Get from project metadata.
+        return ""
 
     @cached_property
     def unicode_offsets(self) -> List[int]:
