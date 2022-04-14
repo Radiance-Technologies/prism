@@ -63,7 +63,11 @@ class ProjectBase(ABC):
         The terminal command used to install the project..
     """
 
-    proof_enders = ["Qed.", "Save.", "Defined.", "Admitted.", "Abort."]
+    proof_enders = {"Qed.",
+                    "Save.",
+                    "Defined.",
+                    "Admitted.",
+                    "Abort."}
 
     def __init__(
             self,
@@ -333,6 +337,17 @@ class ProjectBase(ABC):
         return str_no_comments
 
     @staticmethod
+    def is_proof_ender(sentence: str) -> bool:
+        """
+        Return whether the given sentence concludes a proof.
+        """
+        last_token = sentence.split(" ")[-1]
+        for ender in ProjectBase.proof_enders:
+            if last_token.endswith(ender):
+                return True
+        return False
+
+    @staticmethod
     def split_by_sentence(
             document: CoqDocument,
             encoding: str = 'utf-8',
@@ -391,7 +406,7 @@ class ProjectBase(ABC):
                     if sentences[idx] == "Proof." or sentences[idx].startswith(
                             "Proof "):
                         intermediate_list = []
-                        while sentences[idx] not in ProjectBase.proof_enders:
+                        while not ProjectBase.is_proof_ender(sentences[idx]):
                             intermediate_list.append(sentences[idx])
                             idx += 1
                         intermediate_list.append(sentences[idx])

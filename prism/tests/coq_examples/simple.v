@@ -26,8 +26,10 @@ Theorem length_corr : forall (n : nat) (s : seq n), length n s = n.
 Proof.
   intros n s.
   induction s.
-    trivial.
+  - trivial.
+  - {
     simpl.
     rewrite IHs.
     reflexivity.
+    }
 Qed.
