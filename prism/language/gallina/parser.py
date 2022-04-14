@@ -1155,7 +1155,7 @@ class CoqParser:
         SourceCode
             The uninterpreted source code of the Coq file.
         """
-        with open(file_path, "r", newline="") as f:
+        with open(file_path, "r", newline="", errors="replace") as f:
             source_code = f.read()
         return source_code
 
