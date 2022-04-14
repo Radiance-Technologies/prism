@@ -23,7 +23,6 @@ to propose proofs or proof(-related) repairs for regions of code prompted by the
   ```
 * Install Coq (default version is 8.10.2, alternative versions not currently supported)
 * May need to run `opam init` to sucessfully install Coq
-<<<<<<< HEAD
   ```
   source setup_coq.sh
   ```
@@ -32,7 +31,7 @@ to propose proofs or proof(-related) repairs for regions of code prompted by the
   make install
   ```
   As a side-effect, this command will install and upgrade all PRISM installation dependencies, equivalent to `pip install -Ur requirements.txt`.
-* Verify installation by running unit tests. Note that this requires one to have activated an OPAM switch in the current shell (e.g., with `setup_coq.sh`)/
+* Verify installation by running unit tests. Note that this requires one to have activated an OPAM switch in the current shell (e.g., with `setup_coq.sh`)
   ```
   make test
   ```
@@ -62,12 +61,3 @@ Visual Studio Code with the following minimal extensions installed and enabled i
 * [autoDocstring](https://marketplace.visualstudio.com/items?itemName=njpwerner.autodocstring): For automatically generating docstring stubs from type hints.
   One should ensure that the extension settings are configured to use the `numpy` format, use `"""` quote style, start the docstring on a new line, and to **not** include the function name at the start of the docstring.
 * [select highlight in minimap](https://marketplace.visualstudio.com/items?itemName=mde.select-highlight-minimap): For better visibility of selections in the minimap.
-=======
-```
-source setup_coq.sh
-```
-* Install additional dependencies in virtual environment
-```
-pip install -r requirements.txt
-```
->>>>>>> d7e6fd32488879098d8003e4993e5fc6bf7e9b62
