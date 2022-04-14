@@ -6,7 +6,16 @@ import os
 import pathlib
 import random
 from io import TextIOWrapper
-from typing import Dict, Generator, List, Optional, Type, TypeVar, Union
+from typing import (
+    Dict,
+    Generator,
+    Iterable,
+    List,
+    Optional,
+    Type,
+    TypeVar,
+    Union,
+)
 
 from git import InvalidGitRepositoryError
 
@@ -118,7 +127,7 @@ class CoqGymBaseDataset:
             project_class: Optional[Type[ProjectBase]] = None,
             projects: Optional[ProjectDict] = None,
             base_dir: Optional[str] = None,
-            dir_list: Optional[List[str]] = None):
+            dir_list: Optional[Iterable[str]] = None):
         """
         Initialize the CoqGymDataset object.
 
@@ -137,7 +146,7 @@ class CoqGymBaseDataset:
             If provided, build `Project` objects from the subdirectories
             in this directory. Any subdirectories that are not
             repositories are ignored, by default None
-        dir_list : Optional[List[str]], optional
+        dir_list : Optional[Iterable[str]], optional
             If provided, build a `Project` from each of these
             directories. If any of these directories are not
             repositories, an exception is raised, by default None
