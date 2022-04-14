@@ -5,11 +5,11 @@ Pretraining for Proof Repair with Imposed Syntax Modeling
 ## Description
 
 PRISM is a framework to enable the augmentation of pretrained language models (LMs) with syntactical
-and semantic relational knowledge captured via graph neural networks (GNNs) for efficient proof 
-generation and repair with limited data. 
-The LM aids in the generation of well-structured code while reinforcement learning (RL) ensures proof 
-correctness and localization. 
-PRISM will culminate in a prototype IDE extension that uses the developed machine learning (ML) model 
+and semantic relational knowledge captured via graph neural networks (GNNs) for efficient proof
+generation and repair with limited data.
+The LM aids in the generation of well-structured code while reinforcement learning (RL) ensures proof
+correctness and localization.
+PRISM will culminate in a prototype IDE extension that uses the developed machine learning (ML) model
 to propose proofs or proof(-related) repairs for regions of code prompted by the user.
 
 
@@ -27,7 +27,7 @@ to propose proofs or proof(-related) repairs for regions of code prompted by the
   ```
   source setup_coq.sh
   ```
-* Install PRISM. Note that this requires one to have activated a virtual environment in the current shell (e.g., with `setup_python.sh` above). 
+* Install PRISM. Note that this requires one to have activated a virtual environment in the current shell (e.g., with `setup_python.sh` above).
   ```
   make install
   ```
@@ -53,13 +53,13 @@ Visual Studio Code with the following minimal extensions installed and enabled i
 * [Remote - WSL](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-wsl): For developing locally in the Windows Subsystem for Linux.
 * [Python](https://marketplace.visualstudio.com/items?itemName=ms-python.python), [Pylance](https://marketplace.visualstudio.com/items?itemName=ms-python.vscode-pylance): For developing Python packages and scripts.
   One should configure the extension to use `yapf` and `flake8` as the formatting and linting providers, respectively, with linting set to run upon saving of a file.
-  A file may be manually formatted by opening the command palette with <kbd>F1</kbd> and selecting `Format Document`. 
+  A file may be manually formatted by opening the command palette with <kbd>F1</kbd> and selecting `Format Document`.
   Imports may also be sorted through the `Python Refactor: Sort Imports` command in the command palette.
 * [VSCoq](https://marketplace.visualstudio.com/items?itemName=maximedenes.vscoq): For syntax highlighting of Coq source files and possible eventual integration in Phase 2.
 * [GitLens](https://marketplace.visualstudio.com/items?itemName=eamodio.gitlens): For viewing line-by-line history while editing.
-* [Trailing Whitespace](https://marketplace.visualstudio.com/items?itemName=jkiviluoto.tws): For visualizing and removing trailing whitespace on save. 
+* [Trailing Whitespace](https://marketplace.visualstudio.com/items?itemName=jkiviluoto.tws): For visualizing and removing trailing whitespace on save.
   The extension settings should be configured to highlight the trailing whitespace and trim it on save.
-* [autoDocstring](https://marketplace.visualstudio.com/items?itemName=njpwerner.autodocstring): For automatically generating docstring stubs from type hints. 
+* [autoDocstring](https://marketplace.visualstudio.com/items?itemName=njpwerner.autodocstring): For automatically generating docstring stubs from type hints.
   One should ensure that the extension settings are configured to use the `numpy` format, use `"""` quote style, start the docstring on a new line, and to **not** include the function name at the start of the docstring.
 * [select highlight in minimap](https://marketplace.visualstudio.com/items?itemName=mde.select-highlight-minimap): For better visibility of selections in the minimap.
 =======
