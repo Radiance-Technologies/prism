@@ -13,6 +13,12 @@ test: venv_check venv switch_check
 	echo "Running tests"
 	pytest --pyargs --cov=prism prism
 
+.PHONY: dev
+dev: venv_check venv
+	echo "Installing developer requirements"
+	pip install -Ur requirements/dev.txt
+	echo "Installing pre-commit hooks"
+	pre-commit install
 
 venv: $(VENV)/bin/activate
 
