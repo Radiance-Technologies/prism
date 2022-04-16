@@ -331,7 +331,10 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         csg = self.dataset.sentences()
         for sentence in csg:
             self.assertGreater(len(sentence), 0)
-            self.assertTrue(sentence.endswith('.'))
+            self.assertTrue(
+                sentence.endswith('.') or sentence == '{' or sentence == "}"
+                or sentence.endswith("-") or sentence.endswith("+")
+                or sentence.endswith("*"))
 
     @classmethod
     def tearDownClass(cls):

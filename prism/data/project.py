@@ -7,6 +7,7 @@ import random
 import re
 import warnings
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union
 from warnings import warn
 
@@ -63,11 +64,276 @@ class ProjectBase(ABC):
         The terminal command used to install the project..
     """
 
+    program_starters = {"Program",
+                        "Global Program",
+                        "Local Program"}
     proof_enders = {"Qed.",
-                    "Save.",
-                    "Defined.",
+                    "Save",
+                    "Defined",
                     "Admitted.",
-                    "Abort."}
+                    "Abort"}
+    proof_starters = {
+        "Proof",
+        "Next Obligation",
+        "Solve Obligation",
+        "Solve All Obligations",
+        "Obligation",
+        "Goal",
+    }
+    proof_non_starters = {"Obligation Tactic",
+                          "Obligations"}
+    theorem_starters = {
+        "Theorem",
+        "Lemma",
+        "Fact",
+        "Remark",
+        "Corollary",
+        "Proposition",
+        "Property",
+        "Definition",
+        "Example",
+        "Instance"
+    }
+    theorem_starters.update(
+        {f"Global {st}" for st in theorem_starters}.union(
+            {f"Local {st}" for st in theorem_starters}))
+    # See https://coq.inria.fr/refman/coq-tacindex.html
+    tactics = {
+        "abstract",
+        "absurd",
+        "admit",
+        "all",
+        "apply",
+        "assert",
+        "assert_fails",
+        "assert_succeeds",
+        "assumption",
+        "auto",
+        "autoapply",
+        "autorewrite",
+        "autounfold",
+        "bfs",
+        "btauto",
+        "by",
+        "case",
+        "case_eq",
+        "casetype",
+        "cbn",
+        "cbv",
+        "change",
+        "change_no_check",
+        "classical_left",
+        "classical_right",
+        "clear",
+        "clearbody",
+        "cofix",
+        "compare",
+        "compute",
+        "congr",
+        "congruence",
+        "constr_eq",
+        "constr_eq_nounivs",
+        "constr_eq_strict",
+        "constructor",
+        "context",
+        "contradict",
+        "contradiction",
+        "cut",
+        "cutrewrite",
+        "cycle",
+        "debug",
+        "decide",
+        "decompose",
+        "dependent",
+        "destruct",
+        "dintuition",
+        "discriminate",
+        "discrR",
+        "do",
+        "done",
+        "dtauto",
+        "eapply",
+        "eassert",
+        "eassumption",
+        "easy",
+        "eauto",
+        "ecase",
+        "econstructor",
+        "edestruct",
+        "ediscriminate",
+        "eelim",
+        "eenough",
+        "eexact",
+        "eexists",
+        "einduction",
+        "einjection",
+        "eintros",
+        "eleft",
+        "elim",
+        "elimtype",
+        "enough",
+        "epose",
+        "epose",
+        "eremember",
+        "erewrite",
+        "eright",
+        "eset",
+        "esimplify_eq",
+        "esplit",
+        "etransitivity",
+        "eval",
+        "evar",
+        "exact",
+        "exact_no_check",
+        "exactly_once",
+        "exfalso",
+        "exists",
+        "f_equal",
+        "fail",
+        "field",
+        "field_simplify",
+        "field_simplify_eq",
+        "finish_timing",
+        "first",
+        "first",
+        "firstorder",
+        "fix",
+        "fold",
+        "fresh",
+        "fun",
+        "functional",
+        "generalize",
+        "generally",
+        "gfail",
+        "give_up",
+        "guard",
+        "has_evar",
+        "have",
+        "hnf",
+        "idtac",
+        "if-then-else",
+        "in",
+        "induction",
+        "info_auto",
+        "info_eauto",
+        "info_trivial",
+        "injection",
+        "instantiate",
+        "intro",
+        "intros",
+        "intuition",
+        "inversion",
+        "inversion_clear",
+        "inversion_sigma",
+        "is_cofix",
+        "is_const",
+        "is_constructor",
+        "is_evar",
+        "is_fix",
+        "is_ground",
+        "is_ind",
+        "is_proj",
+        "is_var",
+        "lapply",
+        "last",
+        "lazy",
+        "lazy_match",
+        "lazymatch",
+        "left",
+        "let",
+        "lia",
+        "lra",
+        "ltac-seq",
+        "match",
+        "move",
+        "multi_match",
+        "multimatch",
+        "native_cast_no_check",
+        "native_compute",
+        "nia",
+        "notypeclasses",
+        "now",
+        "now_show",
+        "nra",
+        "nsatz",
+        "numgoals",
+        "omega",
+        "once",
+        "only",
+        "optimize_heap",
+        "over",
+        "pattern",
+        "pose",
+        "progress",
+        "psatz",
+        "rapply",
+        "red",
+        "refine",
+        "reflexivity",
+        "remember",
+        "rename",
+        "repeat",
+        "replace",
+        "reset",
+        "restart_timer",
+        "revert",
+        "revgoals"
+        "rewrite",
+        "rewrite_db",
+        "rewrite_strat",
+        "right",
+        "ring",
+        "ring_simplify",
+        "rtauto",
+        "set",
+        "setoid_reflexivity",
+        "setoid_replace",
+        "setoid_rewrite",
+        "setoid_symmetry",
+        "setoid_transitivity",
+        "shelve",
+        "shelve_unifiable",
+        "show",
+        "simpl",
+        "simple",
+        "simplify_eq",
+        "solve",
+        "solve_constraints",
+        "specialize",
+        "split",
+        "split_Rabs",
+        "split_Rmult",
+        "start",
+        "subst",
+        "substitute",
+        "suff",
+        "suffices",
+        "swap",
+        "symmetry",
+        "tauto",
+        "time",
+        "time_constr",
+        "timeout",
+        "transitivity",
+        "transparent_abstract",
+        "trivial",
+        "try",
+        "tryif",
+        "type",
+        "type_term",
+        "typeclasses",
+        "under",
+        "unfold",
+        "unify",
+        "unlock",
+        "unshelve",
+        "vm_cast_no_check",
+        "vm_compute",
+        "with_strategy",
+        "without",
+        "wlog",
+        "zify"
+    }
 
     def __init__(
             self,
@@ -342,24 +608,180 @@ class ProjectBase(ABC):
             file_contents: Union[str,
                                  bytes],
             encoding: str = 'utf-8') -> str:
-        comment_pattern = r"[(]+\*(.|\n|\r)*?\*[)]+"
         if isinstance(file_contents, bytes):
             file_contents = ProjectBase._decode_byte_stream(
                 file_contents,
                 encoding)
-        str_no_comments = re.sub(comment_pattern, '', file_contents)
+        comment_depth = 0
+        comment_delimited = re.split(r"(\(\*|\*\))", file_contents)
+        str_no_comments = []
+        for segment in comment_delimited:
+            if segment == '(*':
+                comment_depth += 1
+            if comment_depth == 0:
+                str_no_comments.append(segment)
+            if segment == '*)':
+                comment_depth -= 1
+        str_no_comments = ''.join(str_no_comments)
         return str_no_comments
+
+    @staticmethod
+    def is_program_starter(sentence: str) -> bool:
+        """
+        Return whether the given sentence starts a program.
+
+        See https://coq.inria.fr/refman/addendum/program.html.
+        """
+        for starter in ProjectBase.program_starters:
+            if sentence.startswith(starter):
+                return True
+        return False
+
+    @staticmethod
+    def is_proof_starter(sentence: str) -> bool:
+        """
+        Return whether the given sentence starts a proof.
+        """
+        for non_starter in ProjectBase.proof_non_starters:
+            if sentence.startswith(non_starter):
+                return False
+        for starter in ProjectBase.proof_starters:
+            if sentence.startswith(starter):
+                return True
+        return False
 
     @staticmethod
     def is_proof_ender(sentence: str) -> bool:
         """
         Return whether the given sentence concludes a proof.
         """
-        last_token = sentence.split(" ")[-1]
         for ender in ProjectBase.proof_enders:
-            if last_token.endswith(ender):
+            if sentence.startswith(ender):
+                return True
+        # Proof <term> starts and ends a proof in one command.
+        return (
+            sentence.startswith("Proof ") and sentence[6 : 11] != "with "
+            and sentence[6 :].lstrip() != ".")
+
+    @staticmethod
+    def is_tactic(sentence: str) -> bool:
+        """
+        Return whether the given sentence is a tactic.
+        """
+        # as long as we're using heuristics...
+        return sentence[0].islower()
+        # for tactic in ProjectBase.tactics:
+        #     if sentence.startswith(tactic):
+        #         return True
+        # return False
+
+    @staticmethod
+    def is_theorem_starter(sentence: str) -> bool:
+        """
+        Return whether the given sentence starts a theorem.
+        """
+        for starter in ProjectBase.theorem_starters:
+            if sentence.startswith(starter):
                 return True
         return False
+
+    @staticmethod
+    def split_brace(sentence: str) -> Tuple[str, str]:
+        """
+        Split the bullets from the start of a sentence.
+
+        Parameters
+        ----------
+        sentence : str
+            A sentence.
+
+        Returns
+        -------
+        bullet : str
+            The brace or an empty string if no bullets are found.
+        remainder : str
+            The rest of the sentence after the bullet.
+
+        Notes
+        -----
+        The sentence is assumed to have already been split from a
+        document based upon ending periods.
+        Thus we assume that `sentence` concludes with a period.
+        """
+        bullet_re = re.split(r"^\s*(\{|\})", sentence, maxsplit=1)
+        if len(bullet_re) > 1:
+            # throw away empty first token
+            # by structure of regex, there can be only 2 sections
+            return bullet_re[1], bullet_re[2]
+        else:
+            return "", sentence
+
+    @staticmethod
+    def split_braces_and_bullets(sentence: str) -> Tuple[List[str], str]:
+        """
+        Split braces and bullets from the start of a sentence.
+
+        Parameters
+        ----------
+        sentence : str
+            A sentence.
+
+        Returns
+        -------
+        braces_and_bullets : List[str]
+            The braces or bullets.
+            If none are found, then an empty list is returned.
+        remainder : str
+            The rest of the sentence after the braces and bullets.
+
+        Notes
+        -----
+        The sentence is assumed to have already been split from a
+        document based upon ending periods.
+        Thus we assume that `sentence` concludes with a period.
+        """
+        braces_and_bullets = []
+        while True:
+            maybe_bullet, sentence = ProjectBase.split_bullet(sentence)
+            maybe_brace, sentence = ProjectBase.split_brace(sentence)
+            if maybe_bullet:
+                braces_and_bullets.append(maybe_bullet)
+            if maybe_brace:
+                braces_and_bullets.append(maybe_brace)
+            if maybe_bullet == "" and maybe_brace == "":
+                break
+        return braces_and_bullets, sentence.lstrip()
+
+    @staticmethod
+    def split_bullet(sentence: str) -> Tuple[str, str]:
+        """
+        Split a bullet from the start of a sentence.
+
+        Parameters
+        ----------
+        sentence : str
+            A sentence.
+
+        Returns
+        -------
+        bullet : str
+            The bullet or an empty string if no bullets are found.
+        remainder : str
+            The rest of the sentence after the bullet.
+
+        Notes
+        -----
+        The sentence is assumed to have already been split from a
+        document based upon ending periods.
+        Thus we assume that `sentence` concludes with a period.
+        """
+        bullet_re = re.split(r"^\s*(-+|\++|\*+)", sentence, maxsplit=1)
+        if len(bullet_re) > 1:
+            # throw away empty first token
+            # by structure of regex, there can be only 2 sections
+            return bullet_re[1], bullet_re[2]
+        else:
+            return "", sentence
 
     @staticmethod
     def split_by_sentence(
@@ -403,45 +825,125 @@ class ProjectBase(ABC):
         # whitespace. Double (or more) periods are specifically
         # excluded.
         sentences = re.split(r"(?<!\.)\.\s", file_contents_no_comments)
-        for i in range(len(sentences)):
+
+        @dataclass
+        class Assertion:
+            statement: Optional[str]
+            proofs: List[List[str]]  # or obligations
+
+            @property
+            def is_program(self) -> bool:
+                return self.statement is None
+
+            @property
+            def in_proof(self) -> bool:
+                return (
+                    self.proofs and self.proofs[-1]
+                    and not ProjectBase.is_proof_ender(self.proofs[-1][-1]))
+
+            def start_proof(
+                    self,
+                    starter: Optional[str],
+                    braces_and_bullets: List[str]) -> None:
+                # assert there is either
+                # * a theorem statement without proof, or
+                # * a program with zero or more proofs
+                assert self.is_program or (
+                    not self.is_program and len(self.proofs) <= 1)
+                assert not braces_and_bullets
+                if self.in_proof:
+                    assert starter is not None
+                    self.proofs[-1].append(starter)
+                else:
+                    self.proofs.append([] if starter is None else [starter])
+
+            def apply_tactic(
+                    self,
+                    tactic: str,
+                    braces_and_bullets: List[str]) -> None:
+                if not self.proofs:
+                    self.start_proof(None, [])
+                self.proofs[-1].extend(braces_and_bullets)
+                self.proofs[-1].append(tactic)
+
+            def end_proof(
+                    self,
+                    ender: str,
+                    braces_and_bullets: List[str]) -> None:
+                # assert we are in a proof
+                assert self.proofs and self.proofs[-1]
+                self.proofs[-1].extend(braces_and_bullets)
+                self.proofs[-1].append(ender)
+
+            @classmethod
+            def discharge(cls, theorem: 'Assertion', result: List[str]) -> None:
+                nonlocal glom_proofs
+                if theorem.statement is not None:
+                    result.append(theorem.statement)
+                proofs = theorem.proofs
+                for proof in proofs:
+                    if not ProjectBase.is_proof_ender(proof[-1]):
+                        warn(
+                            "Found an unterminated proof environment in "
+                            f"{document.index}. "
+                            "Abandoning proof glomming.")
+                        glom_proofs = False
+                accum = result.extend
+                if glom_proofs:
+                    proofs = [" ".join(proof) for proof in proofs]
+                    accum = result.append
+                for proof in proofs:
+                    accum(proof)
+
+            @classmethod
+            def discharge_all(
+                    cls,
+                    theorems: List['Assertion'],
+                    result: List[str]) -> None:
+                for theorem in reversed(theorems):
+                    cls.discharge(theorem, result)
+
+        theorems: List[Assertion] = []
+        result: List[str] = []
+        for sentence in sentences:
             # Replace any whitespace or group of whitespace with a
             # single space.
-            sentences[i] = re.sub(r"(\s)+", " ", sentences[i])
-            sentences[i] = sentences[i].strip()
-            sentences[i] += "."
-        if glom_proofs:
-            # Reconstruct proofs onto one line.
-            result = []
-            idx = 0
-            while idx < len(sentences):
-                try:
-                    # Proofs can start with "Proof." or "Proof <other
-                    # words>."
-                    if sentences[idx] == "Proof." or sentences[idx].startswith(
-                            "Proof "):
-                        intermediate_list = []
-                        while not ProjectBase.is_proof_ender(sentences[idx]):
-                            intermediate_list.append(sentences[idx])
-                            idx += 1
-                        intermediate_list.append(sentences[idx])
-                        result.append(" ".join(intermediate_list))
-                    else:
-                        result.append(sentences[idx])
-                    idx += 1
-                except IndexError:
-                    # If we've gotten here, there's a proof-related
-                    # syntax error, and we should stop trying to glom
-                    # proofs that are possibly incorrectly formed.
-                    warn(
-                        "Found an unterminated proof environment in "
-                        f"{document.index}. "
-                        "Abandoning proof glomming.")
-                    return sentences
-            # Lop off the final line if it's just a period, i.e., blank.
-            if result[-1] == ".":
-                result.pop()
-        else:
-            result = sentences
+            sentence = re.sub(r"(\s)+", " ", sentence)
+            sentence = sentence.strip()
+            sentence += "."
+            (braces_and_bullets,
+             sentence) = ProjectBase.split_braces_and_bullets(sentence)
+            if ProjectBase.is_theorem_starter(sentence):
+                # push new context onto stack
+                assert not braces_and_bullets
+                theorems.append(Assertion(sentence, []))
+            elif ProjectBase.is_proof_starter(sentence):
+                if not theorems:
+                    theorems.append(Assertion(None, []))
+                theorems[-1].start_proof(sentence, braces_and_bullets)
+            elif (ProjectBase.is_tactic(sentence)
+                  or (theorems and theorems[-1].in_proof)):
+                if not theorems:
+                    theorems.append(Assertion(None, []))
+                theorems[-1].apply_tactic(sentence, braces_and_bullets)
+            elif ProjectBase.is_proof_ender(sentence):
+                theorems[-1].end_proof(sentence, braces_and_bullets)
+                Assertion.discharge(theorems.pop(), result)
+            else:
+                # not a theorem, tactic, proof starter, or proof ender
+                # discharge theorem stack
+                Assertion.discharge_all(theorems, result)
+                theorems = []
+                if ProjectBase.is_program_starter(sentence):
+                    # push new context onto stack
+                    theorems.append(Assertion(None, []))
+                assert not braces_and_bullets
+                result.append(sentence)
+        # End of file; discharge any remaining theorems
+        Assertion.discharge_all(theorems, result)
+        # Lop off the final line if it's just a period, i.e., blank.
+        if result[-1] == ".":
+            result.pop()
         return result
 
 
