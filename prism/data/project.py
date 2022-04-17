@@ -92,6 +92,20 @@ class ProjectBase(ABC):
         """
         pass
 
+    @property
+    def serapi_options(self) -> str:
+        """
+        Get the SerAPI options for parsing this project's files.
+
+        Returns
+        -------
+        str
+            The command-line options for invoking SerAPI tools, e.g.,
+            ``f"sercomp {serapi_options} file.v"``.
+        """
+        # TODO: Get from project metadata.
+        return ""
+
     @abstractmethod
     def _get_file(self, filename: str, *args, **kwargs) -> CoqDocument:
         """
