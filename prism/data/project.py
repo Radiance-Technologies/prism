@@ -621,7 +621,8 @@ class ProjectBase(ABC):
             if comment_depth == 0:
                 str_no_comments.append(segment)
             if segment == '*)':
-                comment_depth -= 1
+                if comment_depth > 0:
+                    comment_depth -= 1
         str_no_comments = ''.join(str_no_comments)
         return str_no_comments
 
@@ -905,12 +906,15 @@ class ProjectBase(ABC):
 
         theorems: List[Assertion] = []
         result: List[str] = []
-        for sentence in sentences:
+        i = 0
+        while i < len(sentences):  # sentences length may change
             # Replace any whitespace or group of whitespace with a
             # single space.
+            sentence = sentences[i]
             sentence = re.sub(r"(\s)+", " ", sentence)
             sentence = sentence.strip()
-            sentence += "."
+            if not sentence.endswith("."):
+                sentence += "."
             (braces_and_bullets,
              sentence) = ProjectBase.split_braces_and_bullets(sentence)
             if ProjectBase.is_theorem_starter(sentence):
@@ -923,6 +927,15 @@ class ProjectBase(ABC):
                 theorems[-1].start_proof(sentence, braces_and_bullets)
             elif (ProjectBase.is_tactic(sentence)
                   or (theorems and theorems[-1].in_proof)):
+                # split on ellipses
+                new_sentences = re.split(r"\.\.\.", sentence)
+                offset = len(new_sentences) - 1
+                if offset > 0:
+                    sentences[i : i + 1] = [
+                        (s + "...") if j < offset else s for j,
+                        s in enumerate(new_sentences)
+                    ]
+                    sentence = sentences[i]
                 if not theorems:
                     theorems.append(Assertion(None, []))
                 theorems[-1].apply_tactic(sentence, braces_and_bullets)
@@ -939,6 +952,7 @@ class ProjectBase(ABC):
                     theorems.append(Assertion(None, []))
                 assert not braces_and_bullets
                 result.append(sentence)
+            i += 1
         # End of file; discharge any remaining theorems
         Assertion.discharge_all(theorems, result)
         # Lop off the final line if it's just a period, i.e., blank.

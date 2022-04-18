@@ -33,13 +33,25 @@ class TestProjectBase(unittest.TestCase):
         with open(expected_filename, "rt") as f:
             contents = json.load(f)
             self.test_list = contents["test_list"]
+            self.test_glom_list = contents["test_glom_list"]
 
     def test_split_by_sentence(self):
         """
         Test method for splitting Coq code by sentence.
         """
-        actual_outcome = ProjectBase.split_by_sentence(self.document)
+        actual_outcome = ProjectBase.split_by_sentence(
+            self.document,
+            glom_proofs=False)
         self.assertEqual(actual_outcome, self.test_list)
+
+    def test_split_by_sentence_glom(self):
+        """
+        Test method for splitting Coq code by sentence.
+        """
+        actual_outcome = ProjectBase.split_by_sentence(
+            self.document,
+            glom_proofs=True)
+        self.assertEqual(actual_outcome, self.test_glom_list)
 
 
 class TestProjectRepo(unittest.TestCase):

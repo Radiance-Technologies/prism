@@ -29,7 +29,7 @@ Theorem length_corr : forall (n : nat) (s : seq n), length n s = n.
   - trivial.
   -+{*{{
     simpl.
-    rewrite IHs.
+    rewrite IHs;
     reflexivity...
     } }}
 Qed.
