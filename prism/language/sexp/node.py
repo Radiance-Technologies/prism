@@ -69,7 +69,7 @@ class SexpNode(abc.ABC):
             if index < -len(children) or index >= len(children):
                 raise IllegalSexpOperationException(
                     f"Cannot get child ({index}), "
-                    f"this list only have {len(children)} children.")
+                    f"this list only has {len(children)} children.")
             # end if
         # end if
 
@@ -266,7 +266,7 @@ class SexpNode(abc.ABC):
                                           Iterable["SexpNode"]] = lambda x: x,
         use_parathesis: bool = False,
     ) -> List[str]:
-        """
+        r"""
         Filter the content of this s-expression in order.
 
         Parameters
@@ -310,6 +310,20 @@ class SexpNode(abc.ABC):
         str or None
             The node's content if this is a string node, otherwise None.
         """
+        return None
+
+    def head(self) -> str:
+        """
+        Get the first piece of content in this node's subtree.
+        """
+        # default implementation works for string subclass
+        return self.get_content()
+
+    def tail(self) -> Optional['SexpNode']:
+        """
+        Get all but the head of this node's subtree.
+        """
+        # default implementation works for string subclass
         return None
 
     def is_list(self) -> bool:
@@ -375,7 +389,7 @@ class SexpNode(abc.ABC):
     @abc.abstractmethod
     def pretty_format(self, max_depth: int = np.PINF) -> str:
         """
-        Format this s-expression into an human-readable string.
+        Format this s-expression into a human-readable string.
 
         Returns
         -------

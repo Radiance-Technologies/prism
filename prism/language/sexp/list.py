@@ -76,12 +76,12 @@ class SexpList(SexpNode):
         # end for
         return False
 
-    def forward_depth_first_sequence(
+    def forward_depth_first_sequence(  # noqa: D102
         self,
         children_filtering_func: Callable[[Sequence["SexpNode"]],
                                           Iterable["SexpNode"]] = lambda x: x,
         use_parenthesis: bool = False,
-    ) -> List[str]:  # noqa: D102
+    ) -> List[str]:
         core = [
             t for c in children_filtering_func(self.children)
             for t in c.forward_depth_first_sequence(
@@ -96,6 +96,28 @@ class SexpList(SexpNode):
 
     def get_children(self):  # noqa: D102
         return self.children
+
+    def head(self) -> str:  # noqa: D102
+        if self.children:
+            return self.children[0].head()
+        else:
+            return ""
+
+    def tail(self) -> Optional[SexpNode]:  # noqa: D102
+        if self.children:
+            tail = self.children[0].tail()
+            if tail is not None:
+                tail = [tail] + self.children[1 :]
+            else:
+                tail = self.children[1 :]
+            if len(tail) == 1:
+                return tail[0]
+            elif tail:
+                return SexpList(tail)
+            else:
+                return None
+        else:
+            return None
 
     def is_list(self):  # noqa: D102
         return True
@@ -134,8 +156,15 @@ class SexpList(SexpNode):
         sexp = post_children_modify(sexp)
         return sexp
 
-    def pretty_format(self, max_depth: int = np.PINF) -> str:  # noqa: D102
-        return self.pretty_format_recur(self, max_depth, 0).strip()
+    def pretty_format(
+            self,
+            max_depth: int = np.PINF,
+            depth: int = 0,
+            strip: bool = True) -> str:  # noqa: D102
+        formatted = self.pretty_format_recur(self, max_depth, depth)
+        if strip:
+            formatted = formatted.strip()
+        return formatted
 
     def to_python_ds(self) -> list:  # noqa: D102
         return [child.to_python_ds() for child in self.children]
@@ -180,10 +209,9 @@ class SexpList(SexpNode):
                     cls.pprint_newline + depth * cls.pprint_tab + "("
                     + " ".join(
                         [
-                            cls.pretty_format_recur(
-                                c,
-                                max_depth - 1,
-                                depth + 1) for c in sexp.children
+                            c.pretty_format(max_depth - 1,
+                                            depth + 1,
+                                            False) for c in sexp.children
                         ]) + ")")
             # end if
         # end if

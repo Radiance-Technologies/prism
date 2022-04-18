@@ -8,13 +8,25 @@ import collections
 import logging
 import re
 from dataclasses import dataclass
-from typing import Counter, List, Optional, Set, Tuple, Union
+from typing import (
+    Any,
+    Callable,
+    Counter,
+    Iterable,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
 
 from deprecated.sphinx import deprecated
 from radpytools.dataclasses import default_field, immutable_dataclass
 
 from prism.language.gallina.util import ParserUtils
 from prism.language.sexp import IllegalSexpOperationException, SexpNode
+from prism.language.sexp.list import SexpList
+from prism.language.sexp.string import SexpString
 from prism.language.token import TokenConsts
 
 from .exception import SexpAnalyzingException
@@ -98,8 +110,31 @@ class SexpInfo:
 
         filename: str
         lineno: int
+        bol_pos: int
+        lineno_last: int
+        bol_pos_last: int
         beg_charno: int
         end_charno: int
+
+        def __contains__(
+                self,
+                other: Union['SexpInfo.Loc',
+                             int,
+                             float]) -> bool:
+            """
+            Return whether this location contains another.
+
+            In other words, is the `other` location a point or
+            subinterval of this location?
+            """
+            if isinstance(other, type(self)):
+                return (
+                    self.end_charno >= other.end_charno
+                    and self.beg_charno <= other.beg_charno)
+            elif isinstance(other, (int, float)):
+                return self.beg_charno <= other and self.end_charno >= other
+            else:
+                return NotImplemented
 
         def __lt__(self, other: Union['SexpInfo.Loc', int, float]) -> bool:
             """
@@ -155,7 +190,79 @@ class SexpInfo:
                 return True
             else:
                 return False
-            # end if
+
+        def shift(self, offset: int) -> 'SexpInfo.Loc':
+            """
+            Shift the character positions of this location.
+
+            Parameters
+            ----------
+            offset : int
+                The amount, positive or negative, by which this location
+                should be shifted.
+
+            Returns
+            -------
+            SexpInfo.Loc
+                The shifted location.
+            """
+            return SexpInfo.Loc(
+                self.filename,
+                self.lineno,
+                self.bol_pos,
+                self.lineno_last,
+                self.bol_pos_last,
+                self.beg_charno + offset,
+                self.end_charno + offset)
+
+        def to_sexp(self) -> SexpList:
+            """
+            Convert this location back into an s-expression.
+
+            Returns
+            -------
+            SexpList
+                The corresponding ``loc``s-expression.
+            """
+            filename = SexpList(
+                [
+                    SexpString('fname'),
+                    SexpList([SexpString("InFile"),
+                              SexpString(self.filename)])
+                ])
+            lineno = SexpList(
+                [SexpString("line_nb"),
+                 SexpString(str(self.lineno))])
+            bol_pos = SexpList(
+                [SexpString("bol_pos"),
+                 SexpString(str(self.bol_pos))])
+            lineno_last = SexpList(
+                [SexpString("line_nb_last"),
+                 SexpString(str(self.lineno_last))])
+            bol_pos_last = SexpList(
+                [
+                    SexpString("bol_pos_last"),
+                    SexpString(str(self.bol_pos_last))
+                ])
+            bp = SexpList([SexpString("bp"), SexpString(str(self.beg_charno))])
+            ep = SexpList([SexpString("ep"), SexpString(str(self.end_charno))])
+            return SexpList(
+                [
+                    SexpString("loc"),
+                    SexpList(
+                        [
+                            SexpList(
+                                [
+                                    filename,
+                                    lineno,
+                                    bol_pos,
+                                    lineno_last,
+                                    bol_pos_last,
+                                    bp,
+                                    ep
+                                ])
+                        ])
+                ])
 
     @dataclass
     class SertokSentence:
@@ -394,7 +501,9 @@ class SexpAnalyzer:
         if sexp[0][0].content == "v" and sexp[0][1][
                 0].content in SexpInfo.ConstrExprRConsts.types:
             loc_child = sexp[1]
-            claimed_loc = cls.analyze_loc(loc_child, unicode_offsets)
+            claimed_loc: SexpInfo.Loc = cls.analyze_loc(
+                loc_child,
+                unicode_offsets)
             expr_type = sexp[0][1][0].content
             expr_sexp = sexp
 
@@ -416,6 +525,9 @@ class SexpAnalyzer:
                 loc = SexpInfo.Loc(
                     filename=claimed_loc.filename,
                     lineno=claimed_loc.lineno,
+                    bol_pos=claimed_loc.bol_pos,
+                    lineno_last=claimed_loc.lineno_last,
+                    bol_pos_last=claimed_loc.bol_pos_last,
                     beg_charno=min([loc.beg_charno for loc in locs]),
                     end_charno=max([loc.end_charno for loc in locs]),
                 )
@@ -478,6 +590,9 @@ class SexpAnalyzer:
             loc = SexpInfo.Loc(
                 filename=loc_part_1.filename,
                 lineno=loc_part_1.lineno,
+                bol_pos=loc_part_1.bol_pos,
+                lineno_last=loc_part_1.lineno_last,
+                bol_pos_last=loc_part_1.bol_pos_last,
                 beg_charno=min(
                     [loc_part_1.beg_charno,
                      constr_expr_r.loc.beg_charno]),
@@ -747,6 +862,21 @@ class SexpAnalyzer:
             If the s-expression does not conform to the expected
             structure.
         """
+
+        def check_and_parse(
+            child: SexpNode,
+            expected: str,
+            parser: Callable[[str],
+                             Any] = int,
+            indices: Iterable[int] = (1,
+                                      )
+        ) -> str:
+            if child[0].content != expected:
+                raise SexpAnalyzingException(sexp)
+            for index in indices:
+                child = child[index]
+            return parser(child.content)
+
         try:
             if len(sexp) != 2:
                 raise SexpAnalyzingException(sexp)
@@ -761,44 +891,43 @@ class SexpAnalyzer:
                 raise SexpAnalyzingException(sexp)
             # end if
 
-            filename_child = data_child[0]
-            if filename_child[0].content != "fname":
-                raise SexpAnalyzingException(sexp)
-            # end if
-            filename = filename_child[1][1].content
-
-            lineno_last_child = data_child[3]
-            if lineno_last_child[0].content != "line_nb_last":
-                raise SexpAnalyzingException(sexp)
-            # end if
-            lineno = int(lineno_last_child[1].content)
-
-            bp_child = data_child[5]
-            if bp_child[0].content != "bp":
-                raise SexpAnalyzingException(sexp)
-            # end if
-            beg_charno = int(bp_child[1].content)
-
-            ep_child = data_child[6]
-            if ep_child[0].content != "ep":
-                raise SexpAnalyzingException(sexp)
-            # end if
-            end_charno = int(ep_child[1].content)
+            kwargs = {
+                "filename":
+                    check_and_parse(
+                        data_child[0],
+                        'fname',
+                        indices=(1,
+                                 1),
+                        parser=str),
+                "lineno":
+                    check_and_parse(data_child[1],
+                                    "line_nb"),
+                "bol_pos":
+                    check_and_parse(data_child[2],
+                                    "bol_pos"),
+                "lineno_last":
+                    check_and_parse(data_child[3],
+                                    "line_nb_last"),
+                "bol_pos_last":
+                    check_and_parse(data_child[4],
+                                    "bol_pos_last"),
+                "beg_charno":
+                    check_and_parse(data_child[5],
+                                    "bp"),
+                "end_charno":
+                    check_and_parse(data_child[6],
+                                    "ep")
+            }
 
             if unicode_offsets is not None:
-                beg_charno = ParserUtils.coq_charno_to_actual_charno(
-                    beg_charno,
+                kwargs['beg_charno'] = ParserUtils.coq_charno_to_actual_charno(
+                    kwargs['beg_charno'],
                     unicode_offsets)
-                end_charno = ParserUtils.coq_charno_to_actual_charno(
-                    end_charno,
+                kwargs['end_charno'] = ParserUtils.coq_charno_to_actual_charno(
+                    kwargs['end_charno'],
                     unicode_offsets)
-            # end if
 
-            return SexpInfo.Loc(
-                filename=filename,
-                lineno=lineno,
-                beg_charno=beg_charno,
-                end_charno=end_charno)
+            return SexpInfo.Loc(**kwargs)
         except IllegalSexpOperationException:
             raise SexpAnalyzingException(sexp)
 
