@@ -3,9 +3,7 @@ Module providing the base dataset object for the CoqGym interface.
 """
 import json
 import os
-import pathlib
 import random
-from io import TextIOWrapper
 from typing import (
     Dict,
     Generator,
@@ -264,13 +262,7 @@ class CoqGymBaseDataset:
                                              None))
             for file in file_list:
                 try:
-                    with open(file, "r") as f:
-                        f: TextIOWrapper
-                        contents = f.read()
-                        yield CoqDocument(
-                            pathlib.Path(file).relative_to(project.path),
-                            project_path=project.path,
-                            source_code=contents)
+                    yield project.get_file(file)
                 except UnicodeDecodeError as e:
                     if not ignore_decode_errors:
                         raise e
