@@ -12,7 +12,6 @@ from git import InvalidGitRepositoryError
 
 from prism.data.document import CoqDocument
 from prism.data.project import (
-    SEM,
     DirHasNoCoqFiles,
     ProjectBase,
     ProjectDir,
@@ -121,8 +120,7 @@ class CoqGymBaseDataset:
             projects: Optional[ProjectDict] = None,
             base_dir: Optional[str] = None,
             dir_list: Optional[List[str]] = None,
-            sentence_extraction_method: SEM = SentenceExtractionMethod.HEURISTIC
-    ):
+            **project_class_kwargs):
         """
         Initialize the CoqGymDataset object.
 
@@ -145,9 +143,6 @@ class CoqGymBaseDataset:
             If provided, build a `Project` from each of these
             directories. If any of these directories are not
             repositories, an exception is raised, by default None
-        sentence_extraction_method : SEM, optional
-            Method for performing sentence extraction, by default
-            Heuristic
 
         Raises
         ------
@@ -186,8 +181,7 @@ class CoqGymBaseDataset:
                         project = project_class(
                             os.path.join(base_dir,
                                          proj_dir),
-                            sentence_extraction_method=sentence_extraction_method
-                        )
+                            **project_class_kwargs)
                         self.projects[project.name] = project
                     except (InvalidGitRepositoryError, DirHasNoCoqFiles):
                         # If we're using ProjectRepo and a directory is
@@ -201,9 +195,7 @@ class CoqGymBaseDataset:
                     "given as well.")
             for directory in dir_list:
                 try:
-                    project = project_class(
-                        directory,
-                        sentence_extraction_method=sentence_extraction_method)
+                    project = project_class(directory, **project_class_kwargs)
                     self.projects[project.name] = project
                 except InvalidGitRepositoryError as e:
                     raise ValueError(
@@ -215,7 +207,9 @@ class CoqGymBaseDataset:
         # Store project weights for sampling later.
         self.weights = {pn: p.size_bytes for pn,
                         p in self.projects.items()}
-        self.sentence_extraction_method = sentence_extraction_method
+        self.sentence_extraction_method = project_class_kwargs.get(
+            "sentence_extraction_method",
+            SentenceExtractionMethod.HEURISTIC)
 
     def _get_random_project(self) -> str:
         """

@@ -123,7 +123,8 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         """
         dataset = CoqGymBaseDataset(
             project_class=ProjectDir,
-            base_dir=self.test_path)
+            base_dir=self.test_path,
+            sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
         random_sentence = dataset.get_random_sentence(project_name="CompCert")
         self.assertIsInstance(random_sentence, str)
         self.assertTrue(random_sentence.endswith('.'))
@@ -138,7 +139,8 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         dataset = CoqGymBaseDataset(
             project_class=ProjectDir,
             dir_list=[self.repo_path_1,
-                      self.repo_path_2])
+                      self.repo_path_2],
+            sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
         random_sentence = dataset.get_random_sentence(project_name="CompCert")
         self.assertIsInstance(random_sentence, str)
         self.assertTrue(random_sentence.endswith('.'))
@@ -152,7 +154,8 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         """
         dataset = CoqGymBaseDataset(
             project_class=ProjectRepo,
-            base_dir=self.test_path)
+            base_dir=self.test_path,
+            sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
         random_sentence = dataset.get_random_sentence(
             project_name="CompCert",
             commit_name=self.master_hash_1)
@@ -171,7 +174,8 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         dataset = CoqGymBaseDataset(
             project_class=ProjectRepo,
             dir_list=[self.repo_path_1,
-                      self.repo_path_2])
+                      self.repo_path_2],
+            sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
         random_sentence = dataset.get_random_sentence(
             project_name="CompCert",
             commit_name=self.master_hash_1)
