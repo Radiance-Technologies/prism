@@ -642,6 +642,31 @@ class CoqParser:
         logger.setLevel(logging.DEBUG)
 
     @classmethod
+    def decode_byte_string(
+            cls,
+            byte_string: bytes,
+            errors: str = "replace",
+            encoding: str = "utf-8") -> str:
+        """
+        Decode byte-string to string with different defaults.
+
+        Parameters
+        ----------
+        byte_string : bytes
+            The byte-string to be decoded
+        errors : str, optional
+            How to handle decoding errors, by default "replace"
+        encoding : str, optional
+            What encoding to use for decoding, by default "utf-8"
+
+        Returns
+        -------
+        str
+            The decoded byte-string
+        """
+        return byte_string.decode(encoding=encoding, errors=errors)
+
+    @classmethod
     def parse_sertok_sentences(  # noqa: C901
             cls,
             sertok_sentences: List[SexpInfo.SertokSentence],
@@ -1162,8 +1187,8 @@ class CoqParser:
         SourceCode
             The uninterpreted source code of the Coq file.
         """
-        with open(file_path, "r", newline="") as f:
-            source_code = f.read()
+        with open(file_path, "rb") as f:
+            source_code = cls.decode_byte_string(f.read())
         return source_code
 
     @classmethod

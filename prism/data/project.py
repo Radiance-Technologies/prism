@@ -634,8 +634,8 @@ class ProjectRepo(Repo, ProjectBase):
         return CoqDocument(
             rel_filename,
             project_path=self.path,
-            source_code=(commit.tree
-                         / rel_filename).data_stream.read().decode("utf-8"))
+            source_code=CoqParser.decode_byte_string(
+                (commit.tree / rel_filename).data_stream.read()))
 
     def _pre_get_file(self, **kwargs):
         """
@@ -662,7 +662,8 @@ class ProjectRepo(Repo, ProjectBase):
             CoqDocument(
                 f.path,
                 project_path=self.path,
-                source_code=f.data_stream.read().decode("utf-8")) for f in files
+                source_code=CoqParser.decode_byte_string(f.data_stream.read()))
+            for f in files
         ]
 
     def get_file_list(self, commit_name: Optional[str] = None) -> List[str]:

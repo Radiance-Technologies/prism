@@ -17,6 +17,7 @@ from prism.data.project import (
     ProjectDir,
     ProjectRepo,
 )
+from prism.language.gallina.parser import CoqParser
 
 ProjectDict = Dict[str, Union[ProjectRepo, ProjectDir]]
 MetadataDict = TypeVar("MetadataDict")
@@ -259,9 +260,9 @@ class CoqGymBaseDataset:
                                              None))
             for file in file_list:
                 try:
-                    with open(file, "r") as f:
+                    with open(file, "rb") as f:
                         f: TextIOWrapper
-                        contents = f.read()
+                        contents = CoqParser.decode_byte_string(f.read())
                         yield CoqDocument(
                             pathlib.Path(file).relative_to(project.path),
                             project_path=project.path,
