@@ -16,7 +16,6 @@ from prism.data.project import (
     ProjectBase,
     ProjectDir,
     ProjectRepo,
-    SentenceExtractionMethod,
 )
 
 ProjectDict = Dict[str, Union[ProjectRepo, ProjectDir]]
@@ -207,9 +206,8 @@ class CoqGymBaseDataset:
         # Store project weights for sampling later.
         self.weights = {pn: p.size_bytes for pn,
                         p in self.projects.items()}
-        self.sentence_extraction_method = project_class_kwargs.get(
-            "sentence_extraction_method",
-            SentenceExtractionMethod.HEURISTIC)
+        self.sentence_extraction_method = next(
+            iter(self.projects.values())).sentence_extraction_method
 
     def _get_random_project(self) -> str:
         """
