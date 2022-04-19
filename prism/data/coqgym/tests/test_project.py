@@ -99,6 +99,48 @@ class TestProjectBase(unittest.TestCase):
             test_list = contents["test_list"]
         self.assertEqual(actual_outcome, test_list)
 
+    def test_extract_sentences_serapi_glom_nested(self):
+        """
+        Test glomming with serpai-based extractor w/ nested proofs.
+
+        This test is disabled for now until a good caching scheme can be
+        developed for a built GeoCoq. However, it does pass as of
+        2022-04-19.
+        """
+        return
+        project_name = "GeoCoq"
+        master_hash = "25917f56a3b46843690457b2bfd83168bed1321c"
+        target_project = "GeoCoq/GeoCoq"
+        test_path = os.path.dirname(__file__)
+        repo_path = os.path.join(test_path, project_name)
+        if not os.path.exists(repo_path):
+            test_repo = git.Repo.clone_from(
+                "https://github.com/" + target_project,
+                repo_path)
+        else:
+            test_repo = git.Repo(repo_path)
+        # Checkout HEAD of master as of March 14, 2022
+        test_repo.git.checkout(master_hash)
+        old_dir = os.path.abspath(os.curdir)
+        os.chdir(repo_path)
+        subprocess.run("./configure.sh")
+        subprocess.run("make")
+        document = CoqDocument(
+            name="Tactics/Coinc/CoincR.v",
+            project_path=repo_path)
+        with open(document.abspath, "rt") as f:
+            document.source_code = f.read()
+        actual_outcome = ProjectBase.extract_sentences(
+            document,
+            sentence_extraction_method=SentenceExtractionMethod.SERAPI,
+            glom_proofs=True)
+        for sentence in actual_outcome:
+            self.assertTrue(sentence.endswith('.'))
+        # Clean up
+        os.chdir(old_dir)
+        del test_repo
+        shutil.rmtree(os.path.join(repo_path))
+
 
 class TestProjectRepo(unittest.TestCase):
     """
