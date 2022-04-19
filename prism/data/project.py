@@ -664,7 +664,7 @@ class ProjectBase(ABC):
                 encoding,
                 glom_proofs)
         elif sentence_extraction_method == SentenceExtractionMethod.SERAPI:
-            return cls._extract_sentences_serapi(document)
+            return cls._extract_sentences_serapi(document, glom_proofs)
 
 
 class ProjectRepo(Repo, ProjectBase):

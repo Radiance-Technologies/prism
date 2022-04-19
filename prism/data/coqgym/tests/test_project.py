@@ -33,15 +33,15 @@ class TestProjectBase(unittest.TestCase):
             _COQ_EXAMPLES_PATH,
             "split_by_sentence_expected.json")
         with open(test_filename, "rt") as f:
-            self.test_contents = f.read()
-        document = CoqDocument(test_filename, self.test_contents)
+            test_contents = f.read()
+        document = CoqDocument(test_filename, test_contents)
         with open(expected_filename, "rt") as f:
             contents = json.load(f)
-            self.test_list = contents["test_list"]
+            test_list = contents["test_list"]
         actual_outcome = ProjectBase.extract_sentences(
             document,
             sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
-        self.assertEqual(actual_outcome, self.test_list)
+        self.assertEqual(actual_outcome, test_list)
 
     def test_extract_sentences_serapi(self):
         """
@@ -66,7 +66,8 @@ class TestProjectBase(unittest.TestCase):
             document.source_code = f.read()
         sentences = ProjectBase.extract_sentences(
             document,
-            sentence_extraction_method=SentenceExtractionMethod.SERAPI)
+            sentence_extraction_method=SentenceExtractionMethod.SERAPI,
+            glom_proofs=False)
         for sentence in sentences:
             self.assertTrue(
                 sentence.endswith('.') or sentence == '{' or sentence == "}"
@@ -76,6 +77,27 @@ class TestProjectBase(unittest.TestCase):
         os.chdir(old_dir)
         del test_repo
         shutil.rmtree(os.path.join(repo_path))
+
+    def test_extract_sentences_serapi_glom(self):
+        """
+        Test proof glomming with serapi-based sentence extractor.
+        """
+        document = CoqDocument(
+            name="simple_extra_nonsense.v",
+            project_path=_COQ_EXAMPLES_PATH)
+        with open(document.abspath, "rt") as f:
+            document.source_code = f.read()
+        actual_outcome = ProjectBase.extract_sentences(
+            document,
+            sentence_extraction_method=SentenceExtractionMethod.SERAPI,
+            glom_proofs=True)
+        expected_filename = os.path.join(
+            _COQ_EXAMPLES_PATH,
+            "simple_extra_nonsense_glommed_expected.json")
+        with open(expected_filename, "rt") as f:
+            contents = json.load(f)
+            test_list = contents["test_list"]
+        self.assertEqual(actual_outcome, test_list)
 
 
 class TestProjectRepo(unittest.TestCase):
