@@ -49,9 +49,12 @@ class TestProjectBase(unittest.TestCase):
         """
         test_path = os.path.dirname(__file__)
         repo_path = os.path.join(test_path, "circuits")
-        test_repo = git.Repo.clone_from(
-            "https://github.com/coq-contribs/circuits",
-            repo_path)
+        if not os.path.exists(repo_path):
+            test_repo = git.Repo.clone_from(
+                "https://github.com/coq-contribs/circuits",
+                repo_path)
+        else:
+            test_repo = git.Repo(repo_path)
         # Checkout HEAD of master as of March 14, 2022
         master_hash = "f2cec6067f2c58e280c5b460e113d738b387be15"
         test_repo.git.checkout(master_hash)

@@ -18,6 +18,7 @@ from seutil import BashUtils, io
 from prism.data.document import CoqDocument
 from prism.data.sentence import VernacularSentence
 from prism.language.gallina.parser import CoqParser
+from prism.language.id import LanguageId
 from prism.util.logging import default_log_level
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -369,8 +370,9 @@ class ProjectBase(ABC):
         """
         return data.decode(encoding) if isinstance(data, bytes) else data
 
-    @staticmethod
+    @classmethod
     def _extract_sentences_heuristic(
+            cls,
             document: CoqDocument,
             encoding: str = 'utf-8',
             glom_proofs: bool = True) -> List[str]:
@@ -401,12 +403,8 @@ class ProjectBase(ABC):
         """
         file_contents = document.source_code
         if isinstance(file_contents, bytes):
-            file_contents = ProjectBase._decode_byte_stream(
-                file_contents,
-                encoding)
-        file_contents_no_comments = ProjectBase._strip_comments(
-            file_contents,
-            encoding)
+            file_contents = cls._decode_byte_stream(file_contents, encoding)
+        file_contents_no_comments = cls._strip_comments(file_contents, encoding)
         # Split sentences by instances of single periods followed by
         # whitespace. Double (or more) periods are specifically
         # excluded.
@@ -428,7 +426,7 @@ class ProjectBase(ABC):
                     if sentences[idx] == "Proof." or sentences[idx].startswith(
                             "Proof "):
                         intermediate_list = []
-                        while sentences[idx] not in ProjectBase.proof_enders:
+                        while sentences[idx] not in cls.proof_enders:
                             intermediate_list.append(sentences[idx])
                             idx += 1
                         intermediate_list.append(sentences[idx])
@@ -452,8 +450,11 @@ class ProjectBase(ABC):
             result = sentences
         return result
 
-    @staticmethod
-    def _extract_sentences_serapi(document: CoqDocument) -> List[str]:
+    @classmethod
+    def _extract_sentences_serapi(
+            cls,
+            document: CoqDocument,
+            glom_proofs: bool = True) -> List[str]:
         """
         Extract sentences from a Coq document using SerAPI.
 
@@ -461,6 +462,9 @@ class ProjectBase(ABC):
         ----------
         document : CoqDocument
             The document from which to extract sentences.
+        glom_proofs : bool, optional
+            A flag indicating whether or not proofs should be re-glommed
+            after sentences are split, by default `True`
 
         Returns
         -------
@@ -504,22 +508,125 @@ class ProjectBase(ABC):
                 coq_file,
                 source_code,
                 serapi_options)
+        sentences = cls._process_vernac_sentences_serapi(
+            vernac_sentences,
+            glom_proofs)
+        return sentences
+
+    @classmethod
+    def _process_vernac_sentences_serapi(
+            cls,
+            vernac_sentences: List[VernacularSentence],
+            glom_proofs: bool) -> List[str]:
+        """
+        Process vernacular sentences into strings.
+
+        Parameters
+        ----------
+        vernac_sentences : List[VernacularSentence]
+            Lis of vernacular sentences to convert to strings
+        glom_proofs : bool
+            If True, glom proofs while processing the vernacular
+            sentences into strings
+
+        Returns
+        -------
+        List[str]
+            Processed vernacular sentences
+        """
+
+        def _is_proof_starter(x: VernacularSentence):
+            # <TODO>: When wip-fix-mlm gets merged with this, use the
+            # built-in tools from the heuristic package to handle this.
+            proof_starters = {
+                "Proof",
+                "Next Obligation",
+                "Solve Obligation",
+                "Solve All Obligations",
+                "Obligation",
+                "Goal",
+            }
+            proof_non_starters = {"Obligation Tactic",
+                                  "Obligations"}
+            for starter in proof_non_starters:
+                if _process_vernac_sentence(x).startswith(starter):
+                    return False
+            is_proof_starter = False
+            for starter in proof_starters:
+                if _process_vernac_sentence(x).startswith(starter):
+                    is_proof_starter = True
+            return is_proof_starter
 
         def _process_vernac_sentence(sentence: VernacularSentence) -> str:
             return re.sub(r"(\s)+", " ", sentence.str_with_space()).strip()
 
-        return [_process_vernac_sentence(vs) for vs in vernac_sentences]
+        if not glom_proofs:
+            return [_process_vernac_sentence(vs) for vs in vernac_sentences]
+        else:
+            in_proof = False
+            previous_sentence: Optional[VernacularSentence] = None
+            output_sentences: List[VernacularSentence] = []
+            for sentence in vernac_sentences:
+                if sentence.tokens[
+                        0].lang_id == LanguageId.Ltac or sentence.tokens[
+                            0].lang_id == LanguageId.LtacMixedWithGallina:
+                    # The current sentence is Ltac and is part of a
+                    # proof body
+                    if len(output_sentences) > 0 and _is_proof_starter(
+                            previous_sentence):
+                        # The previous non-Ltac sentence was a
+                        # proof-starter, so attach the current
+                        # Ltac sentence to the previous sentence.
+                        output_sentences[-1] = " ".join(
+                            [
+                                output_sentences[-1],
+                                _process_vernac_sentence(sentence)
+                            ])
+                    elif in_proof:
+                        # The current Ltac sentence should be
+                        # attached to the last sentence.
+                        output_sentences[-1] = " ".join(
+                            [
+                                output_sentences[-1],
+                                _process_vernac_sentence(sentence)
+                            ])
+                    elif not in_proof:
+                        # The current sentence is Ltac, but it
+                        # should start a new glommed sentence.
+                        output_sentences.append(
+                            _process_vernac_sentence(sentence))
+                    # We are now (or are still) processing a proof.
+                    in_proof = True
+                else:
+                    if in_proof:
+                        # Treat this as the Vernac ending of the
+                        # proof.
+                        output_sentences[-1] = " ".join(
+                            [
+                                output_sentences[-1],
+                                _process_vernac_sentence(sentence)
+                            ])
+                    else:
+                        # This sentence has nothing to do with a
+                        # proof, or it's a proof starter, which
+                        # we'll deal with on the next pass
+                        output_sentences.append(
+                            _process_vernac_sentence(sentence))
+                    # We are not (or are just finished) processing a
+                    # proof.
+                    in_proof = False
+                previous_sentence = sentence
+            return output_sentences
 
-    @staticmethod
+    @classmethod
     def _strip_comments(
+            cls,
             file_contents: Union[str,
                                  bytes],
             encoding: str = 'utf-8') -> str:
         comment_pattern = r"[(]+\*(.|\n|\r)*?\*[)]+"
         if isinstance(file_contents, bytes):
-            file_contents = ProjectBase._decode_byte_stream(
-                file_contents,
-                encoding)
+            file_contents = cls._decode_byte_stream(file_contents, encoding)
         str_no_comments = re.sub(comment_pattern, '', file_contents)
         return str_no_comments
 
