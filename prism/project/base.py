@@ -329,9 +329,7 @@ class Project(ABC):
             encoding: str = 'utf-8') -> str:
         comment_pattern = r"[(]+\*(.|\n|\r)*?\*[)]+"
         if isinstance(file_contents, bytes):
-            file_contents = Project._decode_byte_stream(
-                file_contents,
-                encoding)
+            file_contents = Project._decode_byte_stream(file_contents, encoding)
         str_no_comments = re.sub(comment_pattern, '', file_contents)
         return str_no_comments
 
@@ -367,9 +365,7 @@ class Project(ABC):
         """
         file_contents = document.source_code
         if isinstance(file_contents, bytes):
-            file_contents = Project._decode_byte_stream(
-                file_contents,
-                encoding)
+            file_contents = Project._decode_byte_stream(file_contents, encoding)
         file_contents_no_comments = Project._strip_comments(
             file_contents,
             encoding)

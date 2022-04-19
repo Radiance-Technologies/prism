@@ -15,8 +15,8 @@ from seutil import BashUtils
 
 from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
-from prism.util.logging import default_log_level
 from prism.project.base import Project
+from prism.util.logging import default_log_level
 
 logger: logging.Logger = logging.getLogger(__name__)
 logger.setLevel(default_log_level())
