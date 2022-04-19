@@ -13,4 +13,3 @@ venv*
 .pytest_cache/
 .cache/
 *.coverage
-math-comp-corpus
