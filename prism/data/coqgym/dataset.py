@@ -12,7 +12,7 @@ from git import InvalidGitRepositoryError
 
 from prism.data.document import CoqDocument
 from prism.project.base import Project
-from prism.project.dir import ProjectDir, DirHasNoCoqFiles
+from prism.project.dir import DirHasNoCoqFiles, ProjectDir
 from prism.project.repo import ProjectRepo
 
 ProjectDict = Dict[str, Union[ProjectRepo, ProjectDir]]
