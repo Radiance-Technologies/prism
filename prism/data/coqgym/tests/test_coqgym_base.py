@@ -10,11 +10,11 @@ import git
 
 from prism.data.coqgym.dataset import CoqGymBaseDataset
 from prism.data.document import CoqDocument
-from prism.data.project import ProjectBase, ProjectDir, ProjectRepo
+from prism.project import Project, ProjectDir, ProjectRepo
 from prism.tests import _COQ_EXAMPLES_PATH
 
 
-class TestProjectBase(unittest.TestCase):
+class TestProject(unittest.TestCase):
     """
     Class for testing coqgym_base module.
     """
@@ -38,7 +38,7 @@ class TestProjectBase(unittest.TestCase):
         """
         Test method for splitting Coq code by sentence.
         """
-        actual_outcome = ProjectBase.split_by_sentence(self.document)
+        actual_outcome = Project.split_by_sentence(self.document)
         self.assertEqual(actual_outcome, self.test_list)
 
 
