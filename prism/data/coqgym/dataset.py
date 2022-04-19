@@ -18,12 +18,7 @@ from typing import (
 from git import InvalidGitRepositoryError
 
 from prism.data.document import CoqDocument
-from prism.data.project import (
-    DirHasNoCoqFiles,
-    ProjectBase,
-    ProjectDir,
-    ProjectRepo,
-)
+from prism.project import DirHasNoCoqFiles, Project, ProjectDir, ProjectRepo
 
 ProjectDict = Dict[str, Union[ProjectRepo, ProjectDir]]
 MetadataDict = TypeVar("MetadataDict")
@@ -122,7 +117,7 @@ class CoqGymBaseDataset:
     def __init__(
             self,
             *,
-            project_class: Optional[Type[ProjectBase]] = None,
+            project_class: Optional[Type[Project]] = None,
             projects: Optional[ProjectDict] = None,
             base_dir: Optional[str] = None,
             dir_list: Optional[Iterable[str]] = None):
@@ -133,7 +128,7 @@ class CoqGymBaseDataset:
 
         Parameters
         ----------
-        project_class : Optional[Type[ProjectBase]], optional
+        project_class : Optional[Type[Project]], optional
             Class name for Project objects. Either ProjectRepo or
             ProjectDir. Must be given if `base_dir` or `dir_list` is
             given. Ignored if `projects` is given.
@@ -414,7 +409,7 @@ class CoqGymBaseDataset:
         """
         coq_file_generator = self.files(commit_names)
         for file_obj in coq_file_generator:
-            sentence_list = ProjectBase.split_by_sentence(
+            sentence_list = Project.split_by_sentence(
                 file_obj,
                 glom_proofs=glom_proofs)
             for sentence in sentence_list:
