@@ -12,9 +12,11 @@ from typing import List, Optional, Tuple, Union
 from warnings import warn
 
 from git import Commit, Repo
+from radpytools.os import pushd
 from seutil import BashUtils, io
 
 from prism.data.document import CoqDocument
+from prism.data.sentence import VernacularSentence
 from prism.language.gallina.parser import CoqParser
 from prism.util.logging import default_log_level
 
@@ -475,30 +477,38 @@ class ProjectBase(ABC):
         """
         # Constants
         RE_SERAPI_OPTIONS = re.compile(r"-R (?P<src>\S+) (?P<tgt>\S+)")
-        # Get unicode offsets
         source_code = document.source_code
         coq_file = document.abspath
         # Try to infer from _CoqProject
-        coq_project_file = pathlib.Path(document.project_path) / "_CoqProject"
+        coq_project_files = [
+            pathlib.Path(document.project_path) / "_CoqProject",
+            pathlib.Path(document.project_path) / "Make"
+        ]
         possible_serapi_options = []
-        if coq_project_file.exists():
-            coq_project = io.load(coq_project_file, io.Fmt.txt)
-            for line in coq_project.splitlines():
-                match = RE_SERAPI_OPTIONS.fullmatch(line.strip())
-                if match is not None:
-                    possible_serapi_options.append(
-                        f"-R {match.group('src')},{match.group('tgt')}")
+        for coq_project_file in coq_project_files:
+            if coq_project_file.exists():
+                coq_project = io.load(coq_project_file, io.Fmt.txt)
+                for line in coq_project.splitlines():
+                    match = RE_SERAPI_OPTIONS.fullmatch(line.strip())
+                    if match is not None:
+                        possible_serapi_options.append(
+                            f"-R {match.group('src')},{match.group('tgt')}")
+                break
 
         if len(possible_serapi_options) > 0:
             serapi_options = " ".join(possible_serapi_options)
         else:
             serapi_options = ""
-        vernac_sentences, _, _ = CoqParser.parse_all(
-            coq_file,
-            source_code,
-            serapi_options)
-        sentences = [vs.str_with_space() for vs in vernac_sentences]
-        return sentences
+        with pushd(document.project_path):
+            vernac_sentences, _, _ = CoqParser.parse_all(
+                coq_file,
+                source_code,
+                serapi_options)
+
+        def _process_vernac_sentence(sentence: VernacularSentence) -> str:
+            return re.sub(r"(\s)+", " ", sentence.str_with_space()).strip()
+
+        return [_process_vernac_sentence(vs) for vs in vernac_sentences]
 
     @staticmethod
     def _strip_comments(
@@ -569,12 +579,24 @@ class ProjectRepo(Repo, ProjectBase):
     Based on GitPython's `Repo` class.
     """
 
-    def __init__(self, dir_abspath: str):
+    def __init__(
+            self,
+            dir_abspath: str,
+            build_cmd: Optional[str] = None,
+            clean_cmd: Optional[str] = None,
+            install_cmd: Optional[str] = None,
+            sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI):
         """
         Initialize Project object.
         """
         Repo.__init__(self, dir_abspath)
-        ProjectBase.__init__(self, dir_abspath)
+        ProjectBase.__init__(
+            self,
+            dir_abspath,
+            build_cmd,
+            clean_cmd,
+            install_cmd,
+            sentence_extraction_method)
         self.current_commit_name = None  # i.e., HEAD
 
     @property
@@ -777,12 +799,23 @@ class ProjectDir(ProjectBase):
     is a git repository or not.
     """
 
-    def __init__(self, dir_abspath: str, *args, **kwargs):
+    def __init__(
+            self,
+            dir_abspath: str,
+            build_cmd: Optional[str] = None,
+            clean_cmd: Optional[str] = None,
+            install_cmd: Optional[str] = None,
+            sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI):
         """
         Initialize Project object.
         """
         self.working_dir = dir_abspath
-        super().__init__(dir_abspath, *args, **kwargs)
+        super().__init__(
+            dir_abspath,
+            build_cmd,
+            clean_cmd,
+            install_cmd,
+            sentence_extraction_method)
         if not self._traverse_file_tree():
             raise DirHasNoCoqFiles(f"{dir_abspath} has no Coq files.")
 

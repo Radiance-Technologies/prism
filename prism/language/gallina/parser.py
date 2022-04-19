@@ -713,7 +713,14 @@ class CoqParser:
                             lineno=sertok_token.loc.lineno_last,
                         ))
                     sertok_token.kind = TokenConsts.KIND_ID
-                    sertok_token.loc.beg_charno += 1
+                    sertok_token.loc = SexpInfo.Loc(
+                        filename=sertok_token.loc.filename,
+                        lineno=sertok_token.loc.lineno,
+                        bol_pos=sertok_token.loc.bol_pos,
+                        lineno_last=sertok_token.loc.lineno_last,
+                        bol_pos_last=sertok_token.loc.bol_pos_last,
+                        beg_charno=sertok_token.loc.beg_charno + 1,
+                        end_charno=sertok_token.loc.end_charno)
                 # end if
 
                 # Adjustment token kind: sertok put KEYWORD and SYMBOL

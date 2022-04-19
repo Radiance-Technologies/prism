@@ -4,6 +4,7 @@ Test module for prism.data.project module.
 import json
 import os
 import shutil
+import subprocess
 import unittest
 
 import git
@@ -15,6 +16,7 @@ from prism.data.project import (
     ProjectRepo,
     SentenceExtractionMethod,
 )
+from prism.tests import _COQ_EXAMPLES_PATH
 
 
 class TestProjectBase(unittest.TestCase):
@@ -22,30 +24,55 @@ class TestProjectBase(unittest.TestCase):
     Class for testing coqgym_base module.
     """
 
-    def setUp(self):
-        """
-        Set up class for testing coqgym_base module.
-        """
-        test_path = os.path.dirname(__file__)
-        test_filename = os.path.join(test_path, "split_by_sentence_test_file.v")
-        expected_filename = os.path.join(
-            test_path,
-            "split_by_sentence_expected.json")
-        with open(test_filename, "rt") as f:
-            self.test_contents = f.read()
-        self.document = CoqDocument(test_filename, self.test_contents)
-        with open(expected_filename, "rt") as f:
-            contents = json.load(f)
-            self.test_list = contents["test_list"]
-
     def test_extract_sentences_heuristic(self):
         """
         Test method for splitting Coq code by sentence.
         """
+        test_filename = os.path.join(_COQ_EXAMPLES_PATH, "simple.v")
+        expected_filename = os.path.join(
+            _COQ_EXAMPLES_PATH,
+            "split_by_sentence_expected.json")
+        with open(test_filename, "rt") as f:
+            self.test_contents = f.read()
+        document = CoqDocument(test_filename, self.test_contents)
+        with open(expected_filename, "rt") as f:
+            contents = json.load(f)
+            self.test_list = contents["test_list"]
         actual_outcome = ProjectBase.extract_sentences(
-            self.document,
+            document,
             sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
         self.assertEqual(actual_outcome, self.test_list)
+
+    def test_extract_sentences_serapi(self):
+        """
+        Test method for splitting Coq code using SERAPI.
+        """
+        test_path = os.path.dirname(__file__)
+        repo_path = os.path.join(test_path, "circuits")
+        test_repo = git.Repo.clone_from(
+            "https://github.com/coq-contribs/circuits",
+            repo_path)
+        # Checkout HEAD of master as of March 14, 2022
+        master_hash = "f2cec6067f2c58e280c5b460e113d738b387be15"
+        test_repo.git.checkout(master_hash)
+        old_dir = os.path.abspath(os.curdir)
+        os.chdir(repo_path)
+        subprocess.run("make")
+        document = CoqDocument(name="ADDER/Adder.v", project_path=repo_path)
+        with open(document.abspath, "rt") as f:
+            document.source_code = f.read()
+        sentences = ProjectBase.extract_sentences(
+            document,
+            sentence_extraction_method=SentenceExtractionMethod.SERAPI)
+        for sentence in sentences:
+            self.assertTrue(
+                sentence.endswith('.') or sentence == '{' or sentence == "}"
+                or sentence.endswith("-") or sentence.endswith("+")
+                or sentence.endswith("*"))
+        # Clean up
+        os.chdir(old_dir)
+        del test_repo
+        shutil.rmtree(os.path.join(repo_path))
 
 
 class TestProjectRepo(unittest.TestCase):
@@ -69,7 +96,9 @@ class TestProjectRepo(unittest.TestCase):
         # Checkout HEAD of master as of March 14, 2022
         cls.master_hash = "9d3521b4db46773239a2c5f9f6970de826075508"
         cls.test_repo.git.checkout(cls.master_hash)
-        cls.project = ProjectRepo(cls.repo_path)
+        cls.project = ProjectRepo(
+            cls.repo_path,
+            sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
 
     def test_get_file(self):
         """
@@ -142,7 +171,9 @@ class TestProjectDir(TestProjectRepo):
         Set the project to use `ProjectDir` instead of `ProjectRepo`.
         """
         super().setUpClass()
-        cls.project = ProjectDir(cls.repo_path)
+        cls.project = ProjectDir(
+            cls.repo_path,
+            sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
 
     def test_get_random_commit(self):
         """
