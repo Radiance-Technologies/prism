@@ -10,7 +10,7 @@ import git
 
 from prism.data.coqgym.dataset import CoqGymBaseDataset
 from prism.data.document import CoqDocument
-from prism.data.project import ProjectBase, ProjectDir, ProjectRepo
+from prism.project.base import ProjectBase, ProjectDir, ProjectRepo
 from prism.tests import _COQ_EXAMPLES_PATH
 
 

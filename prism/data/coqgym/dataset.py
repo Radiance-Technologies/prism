@@ -11,7 +11,7 @@ from typing import Dict, Generator, List, Optional, Type, TypeVar, Union
 from git import InvalidGitRepositoryError
 
 from prism.data.document import CoqDocument
-from prism.data.project import (
+from prism.project.base import (
     DirHasNoCoqFiles,
     ProjectBase,
     ProjectDir,
