@@ -564,35 +564,25 @@ class ProjectBase(ABC):
             return [_process_vernac_sentence(vs) for vs in vernac_sentences]
         else:
             in_proof = False
-            previous_sentence: Optional[VernacularSentence] = None
             output_sentences: List[VernacularSentence] = []
             for sentence in vernac_sentences:
-                if sentence.tokens[
-                        0].lang_id == LanguageId.Ltac or sentence.tokens[
-                            0].lang_id == LanguageId.LtacMixedWithGallina:
+                if sentence.classify_lid(
+                ) == LanguageId.Ltac or sentence.classify_lid(
+                ) == LanguageId.LtacMixedWithGallina or _is_proof_starter(
+                        sentence):
                     # The current sentence is Ltac and is part of a
-                    # proof body
-                    if len(output_sentences) > 0 and _is_proof_starter(
-                            previous_sentence):
-                        # The previous non-Ltac sentence was a
-                        # proof-starter, so attach the current
-                        # Ltac sentence to the previous sentence.
+                    # proof body, or the sentence is a proof starter
+                    if in_proof:
+                        # The current sentence should be attached to the
+                        # last sentence.
                         output_sentences[-1] = " ".join(
                             [
                                 output_sentences[-1],
                                 _process_vernac_sentence(sentence)
                             ])
-                    elif in_proof:
-                        # The current Ltac sentence should be
-                        # attached to the last sentence.
-                        output_sentences[-1] = " ".join(
-                            [
-                                output_sentences[-1],
-                                _process_vernac_sentence(sentence)
-                            ])
-                    elif not in_proof:
-                        # The current sentence is Ltac, but it
-                        # should start a new glommed sentence.
+                    else:
+                        # The current sentence should start a new
+                        # glommed sentence.
                         output_sentences.append(
                             _process_vernac_sentence(sentence))
                     # We are now (or are still) processing a proof.
@@ -608,14 +598,12 @@ class ProjectBase(ABC):
                             ])
                     else:
                         # This sentence has nothing to do with a
-                        # proof, or it's a proof starter, which
-                        # we'll deal with on the next pass
+                        # proof.
                         output_sentences.append(
                             _process_vernac_sentence(sentence))
                     # We are not (or are just finished) processing a
                     # proof.
                     in_proof = False
-                previous_sentence = sentence
             return output_sentences
 
     @classmethod
