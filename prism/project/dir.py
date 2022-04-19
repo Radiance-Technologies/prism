@@ -1,36 +1,14 @@
 """
 Module providing CoqGym project directory class representations.
 """
-import logging
 import pathlib
-import random
-import re
 import warnings
-from abc import ABC, abstractmethod
-from typing import List, Optional, Tuple, Union
-from warnings import warn
-
-from git import Commit, Repo
-from seutil import BashUtils
+from typing import List
 
 from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
 from prism.project.base import Project
-from prism.util.logging import default_log_level
-
-logger: logging.Logger = logging.getLogger(__name__)
-logger.setLevel(default_log_level())
-
-
-class DirHasNoCoqFiles(Exception):
-    """
-    Exception indicating that the current directory has no Coq files.
-
-    Sub-directories should be checked as well before raising this
-    exception.
-    """
-
-    pass
+from prism.project.exception import DirHasNoCoqFiles
 
 
 class ProjectDir(Project):

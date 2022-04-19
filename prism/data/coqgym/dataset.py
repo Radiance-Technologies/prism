@@ -11,9 +11,7 @@ from typing import Dict, Generator, List, Optional, Type, TypeVar, Union
 from git import InvalidGitRepositoryError
 
 from prism.data.document import CoqDocument
-from prism.project.base import Project
-from prism.project.dir import DirHasNoCoqFiles, ProjectDir
-from prism.project.repo import ProjectRepo
+from prism.project import DirHasNoCoqFiles, Project, ProjectDir, ProjectRepo
 
 ProjectDict = Dict[str, Union[ProjectRepo, ProjectDir]]
 MetadataDict = TypeVar("MetadataDict")

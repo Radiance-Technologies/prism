@@ -5,16 +5,13 @@ import logging
 import pathlib
 import random
 import re
-import warnings
 from abc import ABC, abstractmethod
 from typing import List, Optional, Tuple, Union
 from warnings import warn
 
-from git import Commit, Repo
 from seutil import BashUtils
 
 from prism.data.document import CoqDocument
-from prism.language.gallina.parser import CoqParser
 from prism.util.logging import default_log_level
 
 logger: logging.Logger = logging.getLogger(__name__)
