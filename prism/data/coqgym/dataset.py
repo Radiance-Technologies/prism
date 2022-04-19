@@ -234,9 +234,9 @@ class CoqGymBaseDataset:
         self,
         commit_names: Optional[Dict[str,
                                     str]] = None,
-        ignore_decode_errors: bool = False) -> Generator[CoqDocument,
-                                                         None,
-                                                         None]:
+    ) -> Generator[CoqDocument,
+                   None,
+                   None]:
         """
         Yield Coq files from CoqGymBaseDataset.
 
@@ -245,9 +245,6 @@ class CoqGymBaseDataset:
         commit_names : Optional[Dict[str, str]], optional
             The commit (named by branch, hash, or tag) to load from, if
             relevant, for each project, by default None
-        ignore_decode_errors : bool
-            Skip files with UnicodeDecodeError and ignore the exception
-            if True, otherwise raise the exception.
 
         Yields
         ------
@@ -261,11 +258,7 @@ class CoqGymBaseDataset:
                 commit_name=commit_names.get(project_name,
                                              None))
             for file in file_list:
-                try:
-                    yield project.get_file(file)
-                except UnicodeDecodeError as e:
-                    if not ignore_decode_errors:
-                        raise e
+                yield project.get_file(file)
 
     def get_random_file(
             self,
@@ -400,10 +393,9 @@ class CoqGymBaseDataset:
             self,
             commit_names: Optional[Dict[str,
                                         str]] = None,
-            glom_proofs: bool = True,
-            ignore_decode_errors: bool = False) -> Generator[str,
-                                                             None,
-                                                             None]:
+            glom_proofs: bool = True) -> Generator[str,
+                                                   None,
+                                                   None]:
         """
         Yield Coq sentences from CoqGymBaseDataset.
 
@@ -412,9 +404,6 @@ class CoqGymBaseDataset:
         commit_names : Optional[Dict[str, str]], optional
             The commit (named by branch, hash, or tag) to load from, if
             relevant, for each project, by default None
-        ignore_decode_errors : bool
-            Skip files with UnicodeDecodeError and ignore the exception
-            if True, otherwise raise the exception.
 
         Yields
         ------
@@ -423,9 +412,7 @@ class CoqGymBaseDataset:
             `glom_proofs` is True, from a Coq file within the group of
             projects in the dataset
         """
-        coq_file_generator = self.files(
-            commit_names,
-            ignore_decode_errors=ignore_decode_errors)
+        coq_file_generator = self.files(commit_names)
         for file_obj in coq_file_generator:
             sentence_list = ProjectBase.split_by_sentence(
                 file_obj,
