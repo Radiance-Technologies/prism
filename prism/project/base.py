@@ -32,7 +32,7 @@ class DirHasNoCoqFiles(Exception):
     pass
 
 
-class ProjectBase(ABC):
+class Project(ABC):
     """
     Abstract base class for representing a Coq project.
 
@@ -109,7 +109,7 @@ class ProjectBase(ABC):
 
         See Also
         --------
-        ProjectBase.get_file : For public API.
+        Project.get_file : For public API.
         """
         pass
 
@@ -340,7 +340,7 @@ class ProjectBase(ABC):
             encoding: str = 'utf-8') -> str:
         comment_pattern = r"[(]+\*(.|\n|\r)*?\*[)]+"
         if isinstance(file_contents, bytes):
-            file_contents = ProjectBase._decode_byte_stream(
+            file_contents = Project._decode_byte_stream(
                 file_contents,
                 encoding)
         str_no_comments = re.sub(comment_pattern, '', file_contents)
@@ -378,10 +378,10 @@ class ProjectBase(ABC):
         """
         file_contents = document.source_code
         if isinstance(file_contents, bytes):
-            file_contents = ProjectBase._decode_byte_stream(
+            file_contents = Project._decode_byte_stream(
                 file_contents,
                 encoding)
-        file_contents_no_comments = ProjectBase._strip_comments(
+        file_contents_no_comments = Project._strip_comments(
             file_contents,
             encoding)
         # Split sentences by instances of single periods followed by
@@ -405,7 +405,7 @@ class ProjectBase(ABC):
                     if sentences[idx] == "Proof." or sentences[idx].startswith(
                             "Proof "):
                         intermediate_list = []
-                        while sentences[idx] not in ProjectBase.proof_enders:
+                        while sentences[idx] not in Project.proof_enders:
                             intermediate_list.append(sentences[idx])
                             idx += 1
                         intermediate_list.append(sentences[idx])
@@ -430,7 +430,7 @@ class ProjectBase(ABC):
         return result
 
 
-class ProjectRepo(Repo, ProjectBase):
+class ProjectRepo(Repo, Project):
     """
     Class for representing a Coq project.
 
@@ -442,7 +442,7 @@ class ProjectRepo(Repo, ProjectBase):
         Initialize Project object.
         """
         Repo.__init__(self, dir_abspath)
-        ProjectBase.__init__(self, dir_abspath)
+        Project.__init__(self, dir_abspath)
         self.current_commit_name = None  # i.e., HEAD
 
     @property
@@ -636,7 +636,7 @@ class ProjectRepo(Repo, ProjectBase):
             commit_name=commit_name)
 
 
-class ProjectDir(ProjectBase):
+class ProjectDir(Project):
     """
     Class for representing a Coq project.
 
