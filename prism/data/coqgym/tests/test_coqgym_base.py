@@ -331,10 +331,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         cfg = self.dataset.files()
         for file_obj in cfg:
             self.assertTrue(os.path.isfile(file_obj.abspath))
-            source_code_bytes = file_obj.source_code
-            self.assertIsInstance(source_code_bytes, bytes)
-            source_code_str = ProjectBase._decode_byte_stream(source_code_bytes)
-            self.assertIsInstance(source_code_str, str)
+            self.assertIsInstance(file_obj.source_code, str)
 
     def test_coq_sentence_generator(self):
         """
