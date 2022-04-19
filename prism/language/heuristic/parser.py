@@ -32,6 +32,35 @@ class HeuristicParser:
     """
 
     @classmethod
+    def parse_proofs(
+            cls,
+            file_path: str,
+            encoding: str = 'utf-8',
+            glom_proofs: bool = True) -> List[Assertion]:
+        """
+        Extract proofs from the given file.
+
+        Parameters
+        ----------
+        file_path : str
+            The path to a Coq source file.
+        encoding : str, optional
+            The encoding to use for decoding if a bytestring is
+            provided, by default 'utf-8'
+        glom_proofs : bool, optional
+            A flag indicating whether or not proofs should be re-glommed
+            after sentences are split, by default `True`
+
+        Returns
+        -------
+        List[Assertion]
+            A list of proofs paired with their corresponding assertion
+            statements.
+        """
+        raise NotImplementedError(
+            "Heuristic proof extraction not yet implemented")
+
+    @classmethod
     def parse_sentences(
             cls,
             file_path: str,
@@ -60,42 +89,11 @@ class HeuristicParser:
             sentences, with proofs glommed (or not) depending on input
             flag.
         """
-        return cls.parse_sentences(
+        return cls.parse_sentences_from_source(
             file_path,
             CoqParser.parse_source(file_path),
             encoding,
             glom_proofs)
-
-    @classmethod
-    def parse_proofs(
-            cls,
-            file_path: str,
-            encoding: str = 'utf-8',
-            glom_proofs: bool = True) -> List[Assertion]:
-        """
-        Extract proofs from the given file.
-
-        _extended_summary_
-
-        Parameters
-        ----------
-        file_path : str
-            The path to a Coq source file.
-        encoding : str, optional
-            The encoding to use for decoding if a bytestring is
-            provided, by default 'utf-8'
-        glom_proofs : bool, optional
-            A flag indicating whether or not proofs should be re-glommed
-            after sentences are split, by default `True`
-
-        Returns
-        -------
-        List[Assertion]
-            A list of proofs paired with their corresponding assertion
-            statements.
-        """
-        raise NotImplementedError(
-            "Heuristic proof extraction not yet implemented")
 
     @classmethod
     def parse_sentences_from_source(
