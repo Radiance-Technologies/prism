@@ -8,7 +8,7 @@ import unittest
 import git
 
 from prism.data.coqgym.dataset import CoqGymBaseDataset
-from prism.data.project import ProjectDir, ProjectRepo, SentenceExtractionMethod
+from prism.project import ProjectDir, ProjectRepo, SentenceExtractionMethod
 
 
 class TestCoqGymBaseDataset(unittest.TestCase):

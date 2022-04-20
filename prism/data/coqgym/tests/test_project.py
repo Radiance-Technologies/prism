@@ -37,7 +37,7 @@ class TestProjectBase(unittest.TestCase):
         document = CoqDocument(test_filename, test_contents)
         with open(expected_filename, "rt") as f:
             contents = json.load(f)
-            test_list = contents["test_list"]
+            test_list = contents["test_glom_list"]
         actual_outcome = Project.extract_sentences(
             document,
             sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
