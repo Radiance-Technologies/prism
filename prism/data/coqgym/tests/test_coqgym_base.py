@@ -33,13 +33,25 @@ class TestProject(unittest.TestCase):
         with open(expected_filename, "rt") as f:
             contents = json.load(f)
             self.test_list = contents["test_list"]
+            self.test_glom_list = contents["test_glom_list"]
 
     def test_split_by_sentence(self):
         """
         Test method for splitting Coq code by sentence.
         """
-        actual_outcome = Project.split_by_sentence(self.document)
+        actual_outcome = Project.split_by_sentence(
+            self.document,
+            glom_proofs=False)
         self.assertEqual(actual_outcome, self.test_list)
+
+    def test_split_by_sentence_glom(self):
+        """
+        Test method for splitting Coq code by sentence.
+        """
+        actual_outcome = Project.split_by_sentence(
+            self.document,
+            glom_proofs=True)
+        self.assertEqual(actual_outcome, self.test_glom_list)
 
 
 class TestProjectRepo(unittest.TestCase):
@@ -156,49 +168,51 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         Use the base constructor, with some additions.
         """
         cls.test_path = os.path.dirname(__file__)
-        cls.repo_path_1 = os.path.join(cls.test_path, "CompCert")
-        try:
-            cls.test_repo_1 = git.Repo.clone_from(
-                "https://github.com/AbsInt/CompCert.git",
-                cls.repo_path_1)
-        except git.GitCommandError:
-            cls.test_repo_1 = git.Repo(cls.repo_path_1)
-        # Checkout HEAD of master as of March 14, 2022
-        cls.master_hash_1 = "9d3521b4db46773239a2c5f9f6970de826075508"
-        cls.test_repo_1.git.checkout(cls.master_hash_1)
-        cls.project_1 = ProjectRepo(cls.repo_path_1)
-        cls.repo_path_2 = os.path.join(cls.test_path, "circuits")
-        try:
-            cls.test_repo_2 = git.Repo.clone_from(
-                "https://github.com/coq-contribs/circuits",
-                cls.repo_path_2)
-        except git.GitCommandError:
-            cls.test_repo_2 = git.Repo(cls.repo_path_2)
-        # Checkout HEAD of master as of March 14, 2022
-        cls.master_hash_2 = "f2cec6067f2c58e280c5b460e113d738b387be15"
-        cls.test_repo_2.git.checkout(cls.master_hash_2)
-        cls.project_1 = ProjectRepo(cls.repo_path_1)
-        cls.project_2 = ProjectRepo(cls.repo_path_2)
+        # HEAD commits as of March 14, 2022
+        cls.project_names = {"CompCert",
+                             "circuits",
+                             "GeoCoq"}
+        cls.master_hashes = {
+            "CompCert": "9d3521b4db46773239a2c5f9f6970de826075508",
+            "circuits": "f2cec6067f2c58e280c5b460e113d738b387be15",
+            "GeoCoq": "25917f56a3b46843690457b2bfd83168bed1321c"
+        }
+        cls.target_projects = {
+            "CompCert": "AbsInt/CompCert",
+            "circuits": "coq-contribs/circuits",
+            "GeoCoq": "GeoCoq/GeoCoq"
+        }
+        cls.repo_paths = {}
+        cls.repos = {}
+        cls.projects = {}
+        for project_name, project in cls.target_projects.items():
+            project_path = os.path.join(cls.test_path, project_name)
+            cls.repo_paths[project_name] = project_path
+            try:
+                repo = git.Repo.clone_from(
+                    f"https://github.com/{project}",
+                    project_path)
+            except git.GitCommandError:
+                repo = git.Repo(project_path)
+            cls.repos[project_name] = repo
+            cls.projects[project_name] = ProjectRepo(project_path)
         cls.dataset = CoqGymBaseDataset(
             project_class=ProjectRepo,
-            projects={
-                "CompCert": cls.project_1,
-                "circuits": cls.project_2
-            })
+            projects=cls.projects)
 
     def test_get_file(self):
         """
         Ensure get_file method returns a file as expected.
         """
         file_object = self.dataset.get_file(
-            os.path.join(self.repo_path_1,
+            os.path.join(self.repo_paths["CompCert"],
                          "cfrontend",
                          "Ctypes.v"),
             'CompCert',
-            self.master_hash_1)
+            self.master_hashes["CompCert"])
         self.assertEqual(
             file_object.abspath,
-            os.path.join(self.repo_path_1,
+            os.path.join(self.repo_paths["CompCert"],
                          "cfrontend",
                          "Ctypes.v"))
         self.assertGreater(len(file_object.source_code), 0)
@@ -209,7 +223,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         """
         random_file = self.dataset.get_random_file(
             project_name="circuits",
-            commit_name=self.master_hash_2)
+            commit_name=self.master_hashes["circuits"])
         self.assertTrue(random_file.abspath.endswith(".v"))
         self.assertGreater(len(random_file.source_code), 0)
 
@@ -219,7 +233,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         """
         random_sentence = self.dataset.get_random_sentence(
             project_name="CompCert",
-            commit_name=self.master_hash_1)
+            commit_name=self.master_hashes["CompCert"])
         self.assertIsInstance(random_sentence, str)
         self.assertTrue(random_sentence.endswith('.'))
 
@@ -229,7 +243,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         """
         random_pair = self.dataset.get_random_sentence_pair_adjacent(
             project_name="CompCert",
-            commit_name=self.master_hash_1)
+            commit_name=self.master_hashes["CompCert"])
         for sentence in random_pair:
             self.assertIsInstance(sentence, str)
             self.assertTrue(sentence.endswith('.'))
@@ -247,6 +261,10 @@ class TestCoqGymBaseDataset(unittest.TestCase):
             self.dataset.weights["circuits"],
             264238,
             delta=100000)
+        self.assertAlmostEqual(
+            self.dataset.weights["GeoCoq"],
+            12236477,
+            delta=100000)
 
     def test_init_with_project_dir_and_base_dir(self):
         """
@@ -255,12 +273,12 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         dataset = CoqGymBaseDataset(
             project_class=ProjectDir,
             base_dir=self.test_path)
-        random_sentence = dataset.get_random_sentence(project_name="CompCert")
-        self.assertIsInstance(random_sentence, str)
-        self.assertTrue(random_sentence.endswith('.'))
-        random_sentence = dataset.get_random_sentence(project_name="circuits")
-        self.assertIsInstance(random_sentence, str)
-        self.assertTrue(random_sentence.endswith('.'))
+        for project_name in self.project_names:
+            with self.subTest(project_name):
+                random_sentence = dataset.get_random_sentence(
+                    project_name=project_name)
+                self.assertIsInstance(random_sentence, str)
+                self.assertTrue(random_sentence.endswith('.'))
 
     def test_init_with_project_dir_and_dir_list(self):
         """
@@ -268,14 +286,13 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         """
         dataset = CoqGymBaseDataset(
             project_class=ProjectDir,
-            dir_list=[self.repo_path_1,
-                      self.repo_path_2])
-        random_sentence = dataset.get_random_sentence(project_name="CompCert")
-        self.assertIsInstance(random_sentence, str)
-        self.assertTrue(random_sentence.endswith('.'))
-        random_sentence = dataset.get_random_sentence(project_name="circuits")
-        self.assertIsInstance(random_sentence, str)
-        self.assertTrue(random_sentence.endswith('.'))
+            dir_list=self.repo_paths.values())
+        for project_name in self.project_names:
+            with self.subTest(project_name):
+                random_sentence = dataset.get_random_sentence(
+                    project_name=project_name)
+                self.assertIsInstance(random_sentence, str)
+                self.assertTrue(random_sentence.endswith('.'))
 
     def test_init_with_project_repo_and_base_dir(self):
         """
@@ -284,16 +301,13 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         dataset = CoqGymBaseDataset(
             project_class=ProjectRepo,
             base_dir=self.test_path)
-        random_sentence = dataset.get_random_sentence(
-            project_name="CompCert",
-            commit_name=self.master_hash_1)
-        self.assertIsInstance(random_sentence, str)
-        self.assertTrue(random_sentence.endswith('.'))
-        random_sentence = dataset.get_random_sentence(
-            project_name="circuits",
-            commit_name=self.master_hash_2)
-        self.assertIsInstance(random_sentence, str)
-        self.assertTrue(random_sentence.endswith('.'))
+        for project_name in self.project_names:
+            with self.subTest(project_name):
+                random_sentence = dataset.get_random_sentence(
+                    project_name=project_name,
+                    commit_name=self.master_hashes[project_name])
+                self.assertIsInstance(random_sentence, str)
+                self.assertTrue(random_sentence.endswith('.'))
 
     def test_init_with_project_repo_and_dir_list(self):
         """
@@ -301,18 +315,14 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         """
         dataset = CoqGymBaseDataset(
             project_class=ProjectRepo,
-            dir_list=[self.repo_path_1,
-                      self.repo_path_2])
-        random_sentence = dataset.get_random_sentence(
-            project_name="CompCert",
-            commit_name=self.master_hash_1)
-        self.assertIsInstance(random_sentence, str)
-        self.assertTrue(random_sentence.endswith('.'))
-        random_sentence = dataset.get_random_sentence(
-            project_name="circuits",
-            commit_name=self.master_hash_2)
-        self.assertIsInstance(random_sentence, str)
-        self.assertTrue(random_sentence.endswith('.'))
+            dir_list=self.repo_paths.values())
+        for project_name in self.project_names:
+            with self.subTest(project_name):
+                random_sentence = dataset.get_random_sentence(
+                    project_name=project_name,
+                    commit_name=self.master_hashes[project_name])
+                self.assertIsInstance(random_sentence, str)
+                self.assertTrue(random_sentence.endswith('.'))
 
     def test_coq_file_generator(self):
         """
@@ -330,17 +340,19 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         csg = self.dataset.sentences()
         for sentence in csg:
             self.assertGreater(len(sentence), 0)
-            self.assertTrue(sentence.endswith('.'))
+            self.assertTrue(
+                sentence.endswith('.') or sentence == '{' or sentence == "}"
+                or sentence.endswith("-") or sentence.endswith("+")
+                or sentence.endswith("*"))
 
     @classmethod
     def tearDownClass(cls):
         """
         Remove the cloned repos.
         """
-        del cls.test_repo_1
-        shutil.rmtree(os.path.join(cls.repo_path_1))
-        del cls.test_repo_2
-        shutil.rmtree(os.path.join(cls.repo_path_2))
+        for project_name, repo in cls.repos.items():
+            del repo
+            shutil.rmtree(os.path.join(cls.repo_paths[project_name]))
 
 
 if __name__ == "__main__":

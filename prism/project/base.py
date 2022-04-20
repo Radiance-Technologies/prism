@@ -4,14 +4,13 @@ Module providing CoqGym project class representations.
 import logging
 import pathlib
 import random
-import re
 from abc import ABC, abstractmethod
-from typing import List, Optional, Tuple, Union
-from warnings import warn
+from typing import List, Optional, Tuple
 
 from seutil import BashUtils
 
 from prism.data.document import CoqDocument
+from prism.language.heuristic.parser import HeuristicParser
 from prism.util.logging import default_log_level
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -48,8 +47,6 @@ class Project(ABC):
     install_cmd : str or None
         The terminal command used to install the project..
     """
-
-    proof_enders = ["Qed.", "Save.", "Defined.", "Admitted.", "Abort."]
 
     def __init__(
             self,
@@ -298,39 +295,6 @@ class Project(ABC):
         return (r.return_code, r.stdout, r.stderr)
 
     @staticmethod
-    def _decode_byte_stream(
-            data: Union[bytes,
-                        str],
-            encoding: str = 'utf-8') -> str:
-        """
-        Decode the incoming data if it's a byte string.
-
-        Parameters
-        ----------
-        data : Union[bytes, str]
-            Byte-string or string data to be decoded if byte-string
-        encoding : str, optional
-            Encoding to use in decoding, by default 'utf-8'
-
-        Returns
-        -------
-        str
-            String representation of input data
-        """
-        return data.decode(encoding) if isinstance(data, bytes) else data
-
-    @staticmethod
-    def _strip_comments(
-            file_contents: Union[str,
-                                 bytes],
-            encoding: str = 'utf-8') -> str:
-        comment_pattern = r"[(]+\*(.|\n|\r)*?\*[)]+"
-        if isinstance(file_contents, bytes):
-            file_contents = Project._decode_byte_stream(file_contents, encoding)
-        str_no_comments = re.sub(comment_pattern, '', file_contents)
-        return str_no_comments
-
-    @staticmethod
     def split_by_sentence(
             document: CoqDocument,
             encoding: str = 'utf-8',
@@ -343,9 +307,8 @@ class Project(ABC):
 
         Parameters
         ----------
-        file_contents : Union[str, bytes]
-            Complete contents of the Coq source file, either in
-            bytestring or string form.
+        document : CoqDocument
+            A Coq document.
         encoding : str, optional
             The encoding to use for decoding if a bytestring is
             provided, by default 'utf-8'
@@ -360,53 +323,8 @@ class Project(ABC):
             sentences, with proofs glommed (or not) depending on input
             flag.
         """
-        file_contents = document.source_code
-        if isinstance(file_contents, bytes):
-            file_contents = Project._decode_byte_stream(file_contents, encoding)
-        file_contents_no_comments = Project._strip_comments(
-            file_contents,
-            encoding)
-        # Split sentences by instances of single periods followed by
-        # whitespace. Double (or more) periods are specifically
-        # excluded.
-        sentences = re.split(r"(?<!\.)\.\s", file_contents_no_comments)
-        for i in range(len(sentences)):
-            # Replace any whitespace or group of whitespace with a
-            # single space.
-            sentences[i] = re.sub(r"(\s)+", " ", sentences[i])
-            sentences[i] = sentences[i].strip()
-            sentences[i] += "."
-        if glom_proofs:
-            # Reconstruct proofs onto one line.
-            result = []
-            idx = 0
-            while idx < len(sentences):
-                try:
-                    # Proofs can start with "Proof." or "Proof <other
-                    # words>."
-                    if sentences[idx] == "Proof." or sentences[idx].startswith(
-                            "Proof "):
-                        intermediate_list = []
-                        while sentences[idx] not in Project.proof_enders:
-                            intermediate_list.append(sentences[idx])
-                            idx += 1
-                        intermediate_list.append(sentences[idx])
-                        result.append(" ".join(intermediate_list))
-                    else:
-                        result.append(sentences[idx])
-                    idx += 1
-                except IndexError:
-                    # If we've gotten here, there's a proof-related
-                    # syntax error, and we should stop trying to glom
-                    # proofs that are possibly incorrectly formed.
-                    warn(
-                        "Found an unterminated proof environment in "
-                        f"{document.index}. "
-                        "Abandoning proof glomming.")
-                    return sentences
-            # Lop off the final line if it's just a period, i.e., blank.
-            if result[-1] == ".":
-                result.pop()
-        else:
-            result = sentences
-        return result
+        return HeuristicParser.parse_sentences_from_source(
+            document.index,
+            document.source_code,
+            encoding,
+            glom_proofs)

@@ -7,6 +7,7 @@ from typing import List, Optional
 from git import Commit, Repo
 
 from prism.data.document import CoqDocument
+from prism.language.gallina.parser import CoqParser
 from prism.project.base import Project
 
 
@@ -60,7 +61,8 @@ class ProjectRepo(Repo, Project):
         return CoqDocument(
             rel_filename,
             project_path=self.path,
-            source_code=(commit.tree / rel_filename).data_stream.read())
+            source_code=CoqParser.parse_source(
+                (commit.tree / rel_filename).abspath))
 
     def _pre_get_file(self, **kwargs):
         """
@@ -87,7 +89,7 @@ class ProjectRepo(Repo, Project):
             CoqDocument(
                 f.path,
                 project_path=self.path,
-                source_code=f.data_stream.read()) for f in files
+                source_code=CoqParser.parse_source(f.abspath)) for f in files
         ]
 
     def get_file_list(self, commit_name: Optional[str] = None) -> List[str]:
