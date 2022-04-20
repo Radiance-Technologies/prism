@@ -43,6 +43,26 @@ class TestProjectBase(unittest.TestCase):
             sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
         self.assertEqual(actual_outcome, test_list)
 
+    def test_extract_sentences_heuristic_no_glom(self):
+        """
+        Test method for splitting Coq code by sentence.
+        """
+        test_filename = os.path.join(_COQ_EXAMPLES_PATH, "simple.v")
+        expected_filename = os.path.join(
+            _COQ_EXAMPLES_PATH,
+            "split_by_sentence_expected.json")
+        with open(test_filename, "rt") as f:
+            test_contents = f.read()
+        document = CoqDocument(test_filename, test_contents)
+        with open(expected_filename, "rt") as f:
+            contents = json.load(f)
+            test_list = contents["test_list"]
+        actual_outcome = Project.extract_sentences(
+            document,
+            sentence_extraction_method=SentenceExtractionMethod.HEURISTIC,
+            glom_proofs=False)
+        self.assertEqual(actual_outcome, test_list)
+
     def test_extract_sentences_serapi(self):
         """
         Test method for splitting Coq code using SERAPI.
