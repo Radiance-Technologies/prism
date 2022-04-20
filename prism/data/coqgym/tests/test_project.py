@@ -10,8 +10,8 @@ import unittest
 import git
 
 from prism.data.document import CoqDocument
-from prism.data.project import (
-    ProjectBase,
+from prism.project import (
+    Project,
     ProjectDir,
     ProjectRepo,
     SentenceExtractionMethod,
@@ -38,7 +38,7 @@ class TestProjectBase(unittest.TestCase):
         with open(expected_filename, "rt") as f:
             contents = json.load(f)
             test_list = contents["test_list"]
-        actual_outcome = ProjectBase.extract_sentences(
+        actual_outcome = Project.extract_sentences(
             document,
             sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
         self.assertEqual(actual_outcome, test_list)
@@ -64,7 +64,7 @@ class TestProjectBase(unittest.TestCase):
         document = CoqDocument(name="ADDER/Adder.v", project_path=repo_path)
         with open(document.abspath, "rt") as f:
             document.source_code = f.read()
-        sentences = ProjectBase.extract_sentences(
+        sentences = Project.extract_sentences(
             document,
             sentence_extraction_method=SentenceExtractionMethod.SERAPI,
             glom_proofs=False)
@@ -87,7 +87,7 @@ class TestProjectBase(unittest.TestCase):
             project_path=_COQ_EXAMPLES_PATH)
         with open(document.abspath, "rt") as f:
             document.source_code = f.read()
-        actual_outcome = ProjectBase.extract_sentences(
+        actual_outcome = Project.extract_sentences(
             document,
             sentence_extraction_method=SentenceExtractionMethod.SERAPI,
             glom_proofs=True)
@@ -130,7 +130,7 @@ class TestProjectBase(unittest.TestCase):
             project_path=repo_path)
         with open(document.abspath, "rt") as f:
             document.source_code = f.read()
-        actual_outcome = ProjectBase.extract_sentences(
+        actual_outcome = Project.extract_sentences(
             document,
             sentence_extraction_method=SentenceExtractionMethod.SERAPI,
             glom_proofs=True)
