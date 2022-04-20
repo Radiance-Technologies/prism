@@ -180,8 +180,16 @@ class HeuristicParser:
                 if not theorems:
                     theorems.append(Assertion(result[-1], True))
                 theorems[-1].start_proof(sentence, braces_and_bullets)
+            elif ParserUtils.is_proof_ender(sentence):
+                theorems[-1].end_proof(sentence, braces_and_bullets)
+                glom_proofs = Assertion.discharge(
+                    document_index,
+                    theorems.pop(),
+                    result,
+                    glom_proofs)
             elif (ParserUtils.is_tactic(sentence)
                   or (theorems and theorems[-1].in_proof)):
+                # the second condition is to catch custom tactics
                 # split on ellipses
                 new_sentences = re.split(r"\.\.\.", sentence)
                 offset = len(new_sentences) - 1
@@ -194,13 +202,6 @@ class HeuristicParser:
                 if not theorems:
                     theorems.append(Assertion(result[-1], True))
                 theorems[-1].apply_tactic(sentence, braces_and_bullets)
-            elif ParserUtils.is_proof_ender(sentence):
-                theorems[-1].end_proof(sentence, braces_and_bullets)
-                glom_proofs = Assertion.discharge(
-                    document_index,
-                    theorems.pop(),
-                    result,
-                    glom_proofs)
             else:
                 # not a theorem, tactic, proof starter, or proof ender
                 # discharge theorem stack
