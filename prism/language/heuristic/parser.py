@@ -31,6 +31,13 @@ class HeuristicParser:
     sentences.
     """
 
+    unlikely_mask = "<_uNlIkElY_mAsK_>"
+    """
+    A sequence that is unlikely to occur in natural Coq code.
+
+    This sequence is used to replace
+    """
+
     @classmethod
     def parse_proofs(
             cls,
@@ -137,20 +144,30 @@ class HeuristicParser:
         file_contents_no_comments = ParserUtils._strip_comments(
             file_contents,
             encoding)
+
         # Split sentences by instances of single periods followed by
         # whitespace. Double (or more) periods are specifically
         # excluded.
+        notations = re.findall(r"Notation\s+\".*\"", file_contents_no_comments)
+        file_contents_no_comments = re.sub(
+            r"Notation \".*\"",
+            cls.unlikely_mask,
+            file_contents_no_comments)
         sentences = re.split(r"(?<!\.)\.\s", file_contents_no_comments)
 
         theorems: List[Assertion] = []
         result: List[str] = []
         i = 0
+        n = 0
         while i < len(sentences):  # `sentences` length may change
             # Replace any whitespace or group of whitespace with a
             # single space.
             sentence = sentences[i]
             sentence = re.sub(r"(\s)+", " ", sentence)
             sentence = sentence.strip()
+            if sentence.startswith(cls.unlikely_mask):
+                sentence = sentence.replace(cls.unlikely_mask, notations[n])
+                n += 1
             if not sentence.endswith("."):
                 sentence += "."
             (braces_and_bullets,
