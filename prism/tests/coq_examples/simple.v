@@ -23,9 +23,12 @@ Fixpoint length (n : nat) (s : seq n) {struct s} : nat :=
   end.
 
 Theorem length_corr : forall (n : nat) (s : seq n), length n s = n.
+  About seq.
   intros n s.
+  Check n.
   Proof.
   induction s...
+  Print length.
   - trivial.
   -+{*{{
     simpl.
@@ -33,3 +36,4 @@ Theorem length_corr : forall (n : nat) (s : seq n), length n s = n.
     reflexivity...
     } }}
 Qed.
+Check length_corr.

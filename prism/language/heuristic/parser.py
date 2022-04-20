@@ -2,6 +2,7 @@
 Provides quick parsing utilities relying on heuristics.
 """
 import re
+import warnings
 from typing import List, Union
 
 from prism.language.gallina.parser import CoqParser
@@ -156,6 +157,7 @@ class HeuristicParser:
         sentences = re.split(r"(?<!\.)\.\s", file_contents_no_comments)
 
         theorems: List[Assertion] = []
+        custom_tactics: List[str] = []
         result: List[str] = []
         i = 0
         n = 0
@@ -165,30 +167,37 @@ class HeuristicParser:
             sentence = sentences[i]
             sentence = re.sub(r"(\s)+", " ", sentence)
             sentence = sentence.strip()
-            if sentence.startswith(cls.unlikely_mask):
-                sentence = sentence.replace(cls.unlikely_mask, notations[n])
-                n += 1
             if not sentence.endswith("."):
                 sentence += "."
             (braces_and_bullets,
              sentence) = ParserUtils.split_braces_and_bullets(sentence)
-            if ParserUtils.is_theorem_starter(sentence):
+            # TODO: hide control stripping behind ParserUtils?
+            sentence_sans_control = ParserUtils.strip_control(sentence)
+            if ParserUtils.is_theorem_starter(sentence_sans_control):
                 # push new context onto stack
                 assert not braces_and_bullets
                 theorems.append(Assertion(sentence, False))
-            elif ParserUtils.is_proof_starter(sentence):
+            elif ParserUtils.is_proof_starter(sentence_sans_control):
                 if not theorems:
                     theorems.append(Assertion(result[-1], True))
                 theorems[-1].start_proof(sentence, braces_and_bullets)
-            elif ParserUtils.is_proof_ender(sentence):
+                if ParserUtils.is_proof_ender(sentence_sans_control):
+                    theorems[-1].end_proof(sentence, [])
+                    glom_proofs = Assertion.discharge(
+                        document_index,
+                        theorems.pop(),
+                        result,
+                        glom_proofs)
+            elif ParserUtils.is_proof_ender(sentence_sans_control):
                 theorems[-1].end_proof(sentence, braces_and_bullets)
                 glom_proofs = Assertion.discharge(
                     document_index,
                     theorems.pop(),
                     result,
                     glom_proofs)
-            elif (ParserUtils.is_tactic(sentence)
-                  or (theorems and theorems[-1].in_proof)):
+            elif (ParserUtils.is_tactic(sentence_sans_control,
+                                        custom_tactics)
+                  or theorems and theorems[-1].in_proof):
                 # the second condition is to catch custom tactics
                 # split on ellipses
                 new_sentences = re.split(r"\.\.\.", sentence)
@@ -204,18 +213,29 @@ class HeuristicParser:
                 theorems[-1].apply_tactic(sentence, braces_and_bullets)
             else:
                 # not a theorem, tactic, proof starter, or proof ender
-                # discharge theorem stack
-                glom_proofs = Assertion.discharge_all(
-                    document_index,
-                    theorems,
-                    result,
-                    glom_proofs)
-                theorems = []
-                if ParserUtils.is_program_starter(sentence):
+                if sentence_sans_control.startswith(cls.unlikely_mask):
+                    sentence = sentence.replace(cls.unlikely_mask, notations[n])
+                    n += 1
+                elif ParserUtils.is_program_starter(sentence_sans_control):
                     # push new context onto stack
                     theorems.append(Assertion(None, True))
-                assert not braces_and_bullets
+                elif ParserUtils.defines_tactic(sentence_sans_control):
+                    custom_tactics.append(
+                        ParserUtils.extract_tactic_name(sentence_sans_control))
+                if braces_and_bullets:
+                    warnings.warn(
+                        f"Suspected syntax error in {document_index}: "
+                        "brace or bullet outside of proof mode.")
+                    result.extend(braces_and_bullets)
                 result.append(sentence)
+                if not ParserUtils.is_query(sentence_sans_control):
+                    # discharge theorem stack
+                    glom_proofs = Assertion.discharge_all(
+                        document_index,
+                        theorems,
+                        result,
+                        glom_proofs)
+                    theorems = []
             i += 1
         # End of file; discharge any remaining theorems
         Assertion.discharge_all(document_index, theorems, result, glom_proofs)

@@ -78,7 +78,8 @@ class Assertion:
         # * a program with zero or more proofs
         assert self.is_program or (
             not self.is_program and len(self.proofs) <= 1)
-        assert braces_and_bullets is None or not braces_and_bullets
+        assert braces_and_bullets is None or not braces_and_bullets or (
+            braces_and_bullets and ParserUtils.is_proof_ender(starter))
         if self.in_proof:
             assert starter is not None
             self.proofs[-1].append(starter)

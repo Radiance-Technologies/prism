@@ -2,7 +2,7 @@
 Provides internal utilities for heuristic parsing of Coq source files.
 """
 import re
-from typing import List, Tuple, Union
+from typing import Iterable, List, Tuple, Union
 
 from prism.util.re import regex_from_options
 
@@ -29,11 +29,15 @@ class ParserUtils:
     See https://coq.inria.fr/refman/addendum/program.html.
     """
     proof_enders = regex_from_options(
-        {"Qed.",
-         "Save",
-         "Defined",
-         "Admitted.",
-         "Abort"},
+        {
+            "Qed.",
+            "Save",
+            "Defined",
+            "Admitted.",
+            "Abort",
+            "Solve All Obligations",
+            "Solve Obligations"
+        },
         True,
         False)
     """
@@ -48,7 +52,8 @@ class ParserUtils:
             "Solve Obligation",
             "Solve All Obligations",
             "Obligation",
-            "Goal",
+            "Admitted",
+            "Abort",
         },
         True,
         False)
@@ -66,6 +71,7 @@ class ParserUtils:
     Commands that could be mistakenly attributed as proof starters.
     """
     theorem_starters = {
+        "Goal",
         "Theorem",
         "Lemma",
         "Fact",
@@ -333,6 +339,40 @@ class ParserUtils:
 
     See https://coq.inria.fr/refman/coq-tacindex.html
     """
+    tactic_definers = regex_from_options({"Ltac",
+                                          "Local Ltac"},
+                                         True,
+                                         False)
+    """
+    Commands that define custom tactics.
+
+    See https://coq.inria.fr/refman/proof-engine/ltac.html?highlight=ltac#coq:cmd.Ltac.
+    """  # noqa: W505
+    controllers = regex_from_options(
+        {"Time",
+         "Redirect",
+         "Fail",
+         "Succeed"},
+        True,
+        False)
+    """
+    Control commands that modify arbitrary sentences.
+
+    See https://coq.inria.fr/refman/proof-engine/vernacular-commands.html?highlight=time#coq:cmd.Time.
+    """  # noqa: W505, B950
+    queries = regex_from_options(
+        {"About",
+         "Check",
+         "Search",
+         "Print",
+         "Locate"},
+        True,
+        False)
+    """
+    Queries are not part of the program and should be ignored.
+
+    See https://coq.inria.fr/refman/proof-engine/vernacular-commands.html?highlight=time#query-commands
+    """  # noqa: W505, B950
 
     @staticmethod
     def _decode_byte_stream(
@@ -384,6 +424,39 @@ class ParserUtils:
         return str_no_comments
 
     @staticmethod
+    def strip_control(sentence: str) -> str:
+        """
+        Strip any control commands from the start of the sentence.
+        """
+        if re.match(ParserUtils.controllers, sentence) is not None:
+            return re.split(
+                ParserUtils.controllers,
+                sentence,
+                maxsplit=1)[1].lstrip()
+        else:
+            return sentence
+
+    @staticmethod
+    def defines_tactic(sentence: str) -> bool:
+        """
+        Return whether the given sentence defines a tactic.
+        """
+        return re.match(ParserUtils.tactic_definers, sentence) is not None
+
+    @staticmethod
+    def extract_tactic_name(sentence: str) -> str:
+        """
+        Get the name of a custom tactic from its definition.
+
+        Assumes `ParserUtils.defines_tactic` is True for the sentence.
+        """
+        remainder = re.split(
+            ParserUtils.tactic_definers,
+            sentence,
+            maxsplit=1)[1].lstrip()
+        return re.split(r"\s+", remainder, maxsplit=1)[0]
+
+    @staticmethod
     def is_program_starter(sentence: str) -> bool:
         """
         Return whether the given sentence starts a program.
@@ -414,16 +487,25 @@ class ParserUtils:
             and sentence[6 :].lstrip() != ".")
 
     @staticmethod
-    def is_tactic(sentence: str) -> bool:
+    def is_query(sentence: str) -> bool:
+        """
+        Return whether the given sentence is a query.
+        """
+        return re.match(ParserUtils.queries, sentence) is not None
+
+    @staticmethod
+    def is_tactic(sentence: str, custom_tactics: Iterable[str]) -> bool:
         """
         Return whether the given sentence is a tactic.
         """
         # as long as we're using heuristics...
-        return sentence[0].islower()
-        # for tactic in ProjectBase.tactics:
-        #     if sentence.startswith(tactic):
-        #         return True
-        # return False
+        if sentence[0].islower():
+            return True
+        else:
+            for tactic in custom_tactics:
+                if sentence.startswith(tactic):
+                    return True
+            return False
 
     @staticmethod
     def is_theorem_starter(sentence: str) -> bool:
