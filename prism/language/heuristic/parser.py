@@ -104,9 +104,7 @@ class HeuristicParser:
     @classmethod
     def parse_sentences_from_source(
             cls,
-            document_index: str,
-            file_contents: Union[str,
-                                 bytes],
+            document: CoqDocument,
             encoding: str = 'utf-8',
             glom_proofs: bool = True) -> List[str]:
         """
@@ -117,11 +115,8 @@ class HeuristicParser:
 
         Parameters
         ----------
-        document_index : str
-            A unique identifier for the document.
-        file_contents : Union[str, bytes]
-            Complete contents of the Coq source file, either in
-            bytestring or string form.
+        document : str
+            CoqDocument to be parsed
         encoding : str, optional
             The encoding to use for decoding if a bytestring is
             provided, by default 'utf-8'
@@ -136,7 +131,8 @@ class HeuristicParser:
             sentences, with proofs glommed (or not) depending on input
             flag.
         """
-        if isinstance(file_contents, bytes):
+        file_contents = document.source_code
+        if isinstance(document.source_code, bytes):
             file_contents = ParserUtils._decode_byte_stream(
                 file_contents,
                 encoding)
@@ -186,7 +182,7 @@ class HeuristicParser:
             elif ParserUtils.is_proof_ender(sentence):
                 theorems[-1].end_proof(sentence, braces_and_bullets)
                 glom_proofs = Assertion.discharge(
-                    document_index,
+                    document.index,
                     theorems.pop(),
                     result,
                     glom_proofs)
@@ -194,7 +190,7 @@ class HeuristicParser:
                 # not a theorem, tactic, proof starter, or proof ender
                 # discharge theorem stack
                 glom_proofs = Assertion.discharge_all(
-                    document_index,
+                    document.index,
                     theorems,
                     result,
                     glom_proofs)
@@ -206,7 +202,7 @@ class HeuristicParser:
                 result.append(sentence)
             i += 1
         # End of file; discharge any remaining theorems
-        Assertion.discharge_all(document_index, theorems, result, glom_proofs)
+        Assertion.discharge_all(document.index, theorems, result, glom_proofs)
         # Lop off the final line if it's just a period, i.e., blank.
         if result[-1] == ".":
             result.pop()
@@ -222,6 +218,7 @@ class SerAPIParser:
     def parse_sentences_from_source(
             cls,
             document: CoqDocument,
+            _encoding: str = "utf-8",
             glom_proofs: bool = True) -> List[str]:
         """
         Extract sentences from a Coq document using SerAPI.
@@ -230,6 +227,8 @@ class SerAPIParser:
         ----------
         document : CoqDocument
             The document from which to extract sentences.
+        _encoding : str, optional
+            Ignore, by default "utf-8"
         glom_proofs : bool, optional
             A flag indicating whether or not proofs should be re-glommed
             after sentences are split, by default `True`

@@ -6,7 +6,7 @@ import pathlib
 import random
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 from seutil import BashUtils
 
@@ -32,6 +32,20 @@ class SentenceExtractionMethod(Enum):
 
     SERAPI = auto()
     HEURISTIC = auto()
+
+    def parser(self) -> Union[HeuristicParser, SerAPIParser]:
+        """
+        Return the appropriate parser for the SEM.
+        """
+        method_enum = SentenceExtractionMethod(self.value)
+        if method_enum is SentenceExtractionMethod.SERAPI:
+            return SerAPIParser
+        elif method_enum is SentenceExtractionMethod.HEURISTIC:
+            return HeuristicParser
+        else:
+            raise ValueError(
+                f"Extraction method {method_enum} doesn't have specified parser"
+            )
 
 
 SEM = SentenceExtractionMethod
@@ -360,13 +374,7 @@ class Project(ABC):
             sentences, with proofs glommed (or not) depending on input
             flag.
         """
-        if sentence_extraction_method == SEM.HEURISTIC:
-            return HeuristicParser.parse_sentences_from_source(
-                document.index,
-                document.source_code,
-                encoding,
-                glom_proofs)
-        elif sentence_extraction_method == SEM.SERAPI:
-            return SerAPIParser.parse_sentences_from_source(
-                document,
-                glom_proofs)
+        return sentence_extraction_method.parser().parse_sentences_from_source(
+            document,
+            encoding,
+            glom_proofs)
