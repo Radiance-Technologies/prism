@@ -136,6 +136,22 @@ class Project(ABC):
         """
         pass
 
+    def _get_random_sentence_internal(
+            self,
+            filename: Optional[str],
+            glom_proofs: bool,
+            **kwargs):
+        if filename is None:
+            obj = self.get_random_file(**kwargs)
+        else:
+            obj = self.get_file(filename, **kwargs)
+        sentences = self.extract_sentences(
+            obj,
+            'utf-8',
+            glom_proofs,
+            self.sentence_extraction_method)
+        return sentences
+
     def _get_size_bytes(self) -> int:
         """
         Get size in bytes of working directory.
@@ -265,15 +281,10 @@ class Project(ABC):
         str
             A random sentence from the project
         """
-        if filename is None:
-            obj = self.get_random_file(**kwargs)
-        else:
-            obj = self.get_file(filename, **kwargs)
-        sentences = self.extract_sentences(
-            obj,
-            'utf-8',
+        sentences = self._get_random_sentence_internal(
+            filename,
             glom_proofs,
-            self.sentence_extraction_method)
+            **kwargs)
         sentence = random.choice(sentences)
         return sentence
 
@@ -311,15 +322,10 @@ class Project(ABC):
                     "Can't find file with more than 1 sentence after",
                     THRESHOLD,
                     "attempts. Try different inputs.")
-            if filename is None:
-                obj = self.get_random_file(**kwargs)
-            else:
-                obj = self.get_file(filename, **kwargs)
-            sentences = self.extract_sentences(
-                obj,
-                'utf-8',
+            sentences = self._get_random_sentence_internal(
+                filename,
                 glom_proofs,
-                self.sentence_extraction_method)
+                **kwargs)
             counter += 1
         first_sentence_idx = random.randint(0, len(sentences) - 2)
         return sentences[first_sentence_idx : first_sentence_idx + 2]
