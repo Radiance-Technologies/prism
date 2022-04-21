@@ -4,7 +4,16 @@ Module providing the base dataset object for the CoqGym interface.
 import json
 import os
 import random
-from typing import Dict, Generator, List, Optional, Type, TypeVar, Union
+from typing import (
+    Dict,
+    Generator,
+    Iterable,
+    List,
+    Optional,
+    Type,
+    TypeVar,
+    Union,
+)
 
 from git import InvalidGitRepositoryError
 
@@ -111,7 +120,7 @@ class CoqGymBaseDataset:
             project_class: Optional[Type[Project]] = None,
             projects: Optional[ProjectDict] = None,
             base_dir: Optional[str] = None,
-            dir_list: Optional[List[str]] = None,
+            dir_list: Optional[Iterable[str]] = None,
             **project_class_kwargs):
         """
         Initialize the CoqGymDataset object.
