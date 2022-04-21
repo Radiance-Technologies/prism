@@ -5,6 +5,7 @@ import re
 from typing import List, Tuple, Union
 
 from prism.data.sentence import VernacularSentence
+from prism.language.gallina.parser import CoqParser
 from prism.language.id import LanguageId
 from prism.util.re import regex_from_options
 
@@ -337,36 +338,29 @@ class ParserUtils:
     """
 
     @staticmethod
-    def _decode_byte_stream(
-            data: Union[bytes,
-                        str],
+    def strip_comments(
+            file_contents: Union[str,
+                                 bytes],
             encoding: str = 'utf-8') -> str:
         """
-        Decode the incoming data if it's a byte string.
+        Strip comments from given Coq code.
 
         Parameters
         ----------
-        data : Union[bytes, str]
-            Byte-string or string data to be decoded if byte-string
+        file_contents : Union[str, bytes]
+            Coq file contents
         encoding : str, optional
-            Encoding to use in decoding, by default 'utf-8'
+            Encoding of Coq file, by default 'utf-8'
 
         Returns
         -------
         str
-            String representation of input data
+            Coq code stripped of comments
         """
-        return data.decode(encoding) if isinstance(data, bytes) else data
-
-    @staticmethod
-    def _strip_comments(
-            file_contents: Union[str,
-                                 bytes],
-            encoding: str = 'utf-8') -> str:
         if isinstance(file_contents, bytes):
-            file_contents = ParserUtils._decode_byte_stream(
+            file_contents = CoqParser.decode_byte_string(
                 file_contents,
-                encoding)
+                encoding=encoding)
         # comments can be nested, so a single regex cannot be used
         # to detect this recursive structure.
         # Instead, split on comment boundaries and manually match

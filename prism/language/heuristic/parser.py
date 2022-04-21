@@ -133,10 +133,10 @@ class HeuristicParser:
         """
         file_contents = document.source_code
         if isinstance(document.source_code, bytes):
-            file_contents = ParserUtils._decode_byte_stream(
+            file_contents = CoqParser.decode_byte_string(
                 file_contents,
-                encoding)
-        file_contents_no_comments = ParserUtils._strip_comments(
+                encoding=encoding)
+        file_contents_no_comments = ParserUtils.strip_comments(
             file_contents,
             encoding)
         # Split sentences by instances of single periods followed by
