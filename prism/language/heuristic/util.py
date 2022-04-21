@@ -386,13 +386,14 @@ class ParserUtils:
 
         See https://coq.inria.fr/refman/addendum/program.html.
         """
-        return re.match(ParserUtils.program_starters, sentence) is not None
+        return re.match(ParserUtils.program_starters, str(sentence)) is not None
 
     @staticmethod
     def is_proof_starter(sentence: str) -> bool:
         """
         Return whether the given sentence starts a proof.
         """
+        sentence = str(sentence)
         if re.match(ParserUtils.proof_non_starters, sentence) is not None:
             return False
         return re.match(ParserUtils.proof_starters, sentence) is not None
@@ -402,6 +403,7 @@ class ParserUtils:
         """
         Return whether the given sentence concludes a proof.
         """
+        sentence = str(sentence)
         if re.match(ParserUtils.proof_enders, sentence) is not None:
             return True
         # Proof <term> starts and ends a proof in one command.
@@ -426,7 +428,7 @@ class ParserUtils:
         """
         Return whether the given sentence starts a theorem.
         """
-        return re.match(ParserUtils.theorem_starters, sentence) is not None
+        return re.match(ParserUtils.theorem_starters, str(sentence)) is not None
 
     @staticmethod
     def split_brace(sentence: str) -> Tuple[str, str]:
@@ -544,44 +546,6 @@ class ParserUtilsSerAPI(ParserUtils):
             sentence.str_minimal_whitespace()) is not None
 
     @staticmethod
-    def is_program_starter(sentence: VernacularSentence) -> bool:
-        """
-        Return whether the given sentence starts a program.
-
-        See https://coq.inria.fr/refman/addendum/program.html.
-        """
-        return re.match(
-            ParserUtils.program_starters,
-            sentence.str_minimal_whitespace()) is not None
-
-    @staticmethod
-    def is_proof_starter(sentence: VernacularSentence) -> bool:
-        """
-        Return whether the given sentence starts a proof.
-        """
-        if re.match(ParserUtils.proof_non_starters,
-                    sentence.str_minimal_whitespace()) is not None:
-            return False
-        return re.match(
-            ParserUtils.proof_starters,
-            sentence.str_minimal_whitespace()) is not None
-
-    @staticmethod
-    def is_proof_ender(sentence: VernacularSentence) -> bool:
-        """
-        Return whether the given sentence concludes a proof.
-        """
-        if re.match(ParserUtils.proof_enders,
-                    sentence.str_minimal_whitespace()) is not None:
-            return True
-        str_sentence = sentence.str_minimal_whitespace()
-        # Proof <term> starts and ends a proof in one command.
-        return (
-            str_sentence.startswith("Proof ")
-            and str_sentence[6 : 11] != "with "
-            and str_sentence[6 :].lstrip() != ".")
-
-    @staticmethod
     def is_tactic(sentence: VernacularSentence) -> bool:
         """
         Return whether the given sentence is a tactic.
@@ -590,15 +554,6 @@ class ParserUtilsSerAPI(ParserUtils):
         return (
             sclid == LanguageId.Ltac
             or sclid == LanguageId.LtacMixedWithGallina)
-
-    @staticmethod
-    def is_theorem_starter(sentence: VernacularSentence) -> bool:
-        """
-        Return whether the given sentence starts a theorem.
-        """
-        return re.match(
-            ParserUtils.theorem_starters,
-            sentence.str_minimal_whitespace()) is not None
 
     @staticmethod
     def split_brace(sentence: VernacularSentence):
