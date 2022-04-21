@@ -4,6 +4,8 @@ Provides internal utilities for heuristic parsing of Coq source files.
 import re
 from typing import List, Tuple, Union
 
+from prism.data.sentence import VernacularSentence
+from prism.language.id import LanguageId
 from prism.util.re import regex_from_options
 
 
@@ -529,3 +531,98 @@ class ParserUtils:
             return bullet_re[1], bullet_re[2]
         else:
             return "", sentence
+
+
+class ParserUtilsSerAPI(ParserUtils):
+    """
+    Namespace for utilities for SerAPI parsing.
+
+    Provides functions for splitting sentence elements.
+    """
+
+    @staticmethod
+    def is_brace_or_bullet(sentence: VernacularSentence) -> bool:
+        """
+        Return whether given sentence is a brace or a bullet.
+        """
+        return re.match(
+            r"^(\{|\}|\*+|\++|\-+)$",
+            sentence.str_minimal_whitespace()) is not None
+
+    @staticmethod
+    def is_program_starter(sentence: VernacularSentence) -> bool:
+        """
+        Return whether the given sentence starts a program.
+
+        See https://coq.inria.fr/refman/addendum/program.html.
+        """
+        return re.match(
+            ParserUtils.program_starters,
+            sentence.str_minimal_whitespace()) is not None
+
+    @staticmethod
+    def is_proof_starter(sentence: VernacularSentence) -> bool:
+        """
+        Return whether the given sentence starts a proof.
+        """
+        if re.match(ParserUtils.proof_non_starters,
+                    sentence.str_minimal_whitespace()) is not None:
+            return False
+        return re.match(
+            ParserUtils.proof_starters,
+            sentence.str_minimal_whitespace()) is not None
+
+    @staticmethod
+    def is_proof_ender(sentence: VernacularSentence) -> bool:
+        """
+        Return whether the given sentence concludes a proof.
+        """
+        if re.match(ParserUtils.proof_enders,
+                    sentence.str_minimal_whitespace()) is not None:
+            return True
+        str_sentence = sentence.str_minimal_whitespace()
+        # Proof <term> starts and ends a proof in one command.
+        return (
+            str_sentence.startswith("Proof ")
+            and str_sentence[6 : 11] != "with "
+            and str_sentence[6 :].lstrip() != ".")
+
+    @staticmethod
+    def is_tactic(sentence: VernacularSentence) -> bool:
+        """
+        Return whether the given sentence is a tactic.
+        """
+        sclid = sentence.classify_lid()
+        return (
+            sclid == LanguageId.Ltac
+            or sclid == LanguageId.LtacMixedWithGallina)
+
+    @staticmethod
+    def is_theorem_starter(sentence: VernacularSentence) -> bool:
+        """
+        Return whether the given sentence starts a theorem.
+        """
+        return re.match(
+            ParserUtils.theorem_starters,
+            sentence.str_minimal_whitespace()) is not None
+
+    @staticmethod
+    def split_brace(sentence: VernacularSentence):
+        """
+        Do not use.
+        """
+        pass
+
+    @staticmethod
+    def split_braces_and_bullets(sentence: VernacularSentence):
+        """
+        Do not use.
+        """
+        pass
+
+    @staticmethod
+    def split_bullet(sentence: VernacularSentence):
+        """
+        Do not use.
+        """
+        pass

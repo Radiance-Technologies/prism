@@ -11,10 +11,9 @@ from seutil import io
 from prism.data.document import CoqDocument
 from prism.data.sentence import VernacularSentence
 from prism.language.gallina.parser import CoqParser
-from prism.language.id import LanguageId
 
 from .assertion import Assertion
-from .util import ParserUtils
+from .util import ParserUtils, ParserUtilsSerAPI
 
 
 class HeuristicParser:
@@ -216,7 +215,7 @@ class HeuristicParser:
 
 class SerAPIParser:
     """
-    SerAPI-based sentence parser.
+    SerAPI-based sentence extracter/parser.
     """
 
     @classmethod
@@ -277,13 +276,17 @@ class SerAPIParser:
                 coq_file,
                 source_code,
                 serapi_options)
-        sentences = cls.process_vernac_sentences(vernac_sentences, glom_proofs)
+        sentences = cls.process_vernac_sentences(
+            document.index,
+            vernac_sentences,
+            glom_proofs)
         return sentences
 
     @classmethod
     def process_vernac_sentences(
             cls,
-            vernac_sentences: List[VernacularSentence],
+            document_index: str,
+            sentences: List[VernacularSentence],
             glom_proofs: bool) -> List[str]:
         """
         Process vernacular sentences into strings.
@@ -301,74 +304,82 @@ class SerAPIParser:
         List[str]
             Processed vernacular sentences
         """
-
-        def _is_proof_starter(x: VernacularSentence):
-            # <TODO>: When wip-fix-mlm gets merged with this, use the
-            # built-in tools from the heuristic package to handle this.
-            proof_starters = {
-                "Proof",
-                "Next Obligation",
-                "Solve Obligation",
-                "Solve All Obligations",
-                "Obligation",
-                "Goal",
-            }
-            proof_non_starters = {"Obligation Tactic",
-                                  "Obligations"}
-            for starter in proof_non_starters:
-                if _process_vernac_sentence(x).startswith(starter):
-                    return False
-            is_proof_starter = False
-            for starter in proof_starters:
-                if _process_vernac_sentence(x).startswith(starter):
-                    is_proof_starter = True
-            return is_proof_starter
-
-        def _process_vernac_sentence(sentence: VernacularSentence) -> str:
-            return re.sub(r"(\s)+", " ", sentence.str_with_space()).strip()
-
         if not glom_proofs:
-            return [_process_vernac_sentence(vs) for vs in vernac_sentences]
+            return [vs.str_minimal_whitespace() for vs in sentences]
         else:
-            in_proof = False
-            output_sentences: List[VernacularSentence] = []
-            for sentence in vernac_sentences:
-                if sentence.classify_lid(
-                ) == LanguageId.Ltac or sentence.classify_lid(
-                ) == LanguageId.LtacMixedWithGallina or _is_proof_starter(
-                        sentence):
-                    # The current sentence is Ltac and is part of a
-                    # proof body, or the sentence is a proof starter
-                    if in_proof:
-                        # The current sentence should be attached to the
-                        # last sentence.
-                        output_sentences[-1] = " ".join(
-                            [
-                                output_sentences[-1],
-                                _process_vernac_sentence(sentence)
-                            ])
-                    else:
-                        # The current sentence should start a new
-                        # glommed sentence.
-                        output_sentences.append(
-                            _process_vernac_sentence(sentence))
-                    # We are now (or are still) processing a proof.
-                    in_proof = True
+            theorems: List[Assertion[VernacularSentence]] = []
+            result: List[Union[VernacularSentence, str]] = []
+            i = 0
+            while i < len(sentences):  # `sentences` length may change
+                # Replace any whitespace or group of whitespace with a
+                # single space.
+                sentence = sentences[i]
+                is_brace_or_bullet = ParserUtilsSerAPI.is_brace_or_bullet(
+                    sentence)
+                if ParserUtilsSerAPI.is_theorem_starter(sentence):
+                    # push new context onto stack
+                    assert not is_brace_or_bullet
+                    theorems.append(
+                        Assertion(
+                            sentence,
+                            False,
+                            parser_utils_cls=ParserUtilsSerAPI))
+                elif ParserUtilsSerAPI.is_proof_starter(sentence):
+                    if not theorems:
+                        theorems.append(
+                            Assertion(
+                                result[-1],
+                                True,
+                                parser_utils_cls=ParserUtilsSerAPI))
+                    theorems[-1].start_proof(sentence, None)
+                elif (ParserUtilsSerAPI.is_tactic(sentence)
+                      or (theorems and theorems[-1].in_proof)):
+                    if not theorems:
+                        theorems.append(
+                            Assertion(
+                                result[-1],
+                                True,
+                                parser_utils_cls=ParserUtilsSerAPI))
+                    theorems[-1].apply_tactic(sentence, [])
+                elif ParserUtilsSerAPI.is_proof_ender(sentence):
+                    theorems[-1].end_proof(sentence, [])
+                    glom_proofs = Assertion.discharge(
+                        document_index,
+                        theorems.pop(),
+                        result,
+                        glom_proofs,
+                        ParserUtilsSerAPI)
                 else:
-                    if in_proof:
-                        # Treat this as the Vernac ending of the
-                        # proof.
-                        output_sentences[-1] = " ".join(
-                            [
-                                output_sentences[-1],
-                                _process_vernac_sentence(sentence)
-                            ])
-                    else:
-                        # This sentence has nothing to do with a
-                        # proof.
-                        output_sentences.append(
-                            _process_vernac_sentence(sentence))
-                    # We are not (or are just finished) processing a
-                    # proof.
-                    in_proof = False
-            return output_sentences
+                    # not a theorem, tactic, proof starter, or proof
+                    # ender discharge theorem stack
+                    glom_proofs = Assertion[VernacularSentence].discharge_all(
+                        document_index,
+                        theorems,
+                        result,
+                        glom_proofs,
+                        ParserUtilsSerAPI)
+                    theorems = []
+                    if ParserUtilsSerAPI.is_program_starter(sentence):
+                        # push new context onto stack
+                        theorems.append(
+                            Assertion(
+                                None,
+                                True,
+                                parser_utils_cls=ParserUtilsSerAPI))
+                    assert not is_brace_or_bullet
+                    result.append(sentence)
+                i += 1
+            # End of file; discharge any remaining theorems
+            Assertion[VernacularSentence].discharge_all(
+                document_index,
+                theorems,
+                result,
+                glom_proofs,
+                parser_utils_cls=ParserUtilsSerAPI)
+            # Convert any remaining VernacularSentences in the result to
+            # str
+            result = [str(r) for r in result]
+            # Lop off the final line if it's just a period, i.e., blank.
+            if result[-1] == ".":
+                result.pop()
+            return result

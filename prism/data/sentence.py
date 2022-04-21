@@ -5,6 +5,7 @@ Adapted from `roosterize.data.CoqDocument`
 at https://github.com/EngineeringSoftware/roosterize/.
 """
 import copy
+import re
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -35,6 +36,17 @@ class VernacularSentence:
             Copy of the current object
         """
         return VernacularSentence(tokens=copy.deepcopy(self.tokens),)
+
+    def __str__(self) -> str:
+        """
+        Return the minimal str representation of the sentence.
+
+        Returns
+        -------
+        str
+            String repr of the sentence
+        """
+        return self.str_minimal_whitespace()
 
     def classify_lid(self) -> LanguageId:
         """
@@ -71,3 +83,14 @@ class VernacularSentence:
             String representation of tokens in sentence
         """
         return "".join([t.str_with_space() for t in self.tokens])
+
+    def str_minimal_whitespace(self) -> str:
+        """
+        Get a string repr of the sentence with minimal whitespace.
+
+        Returns
+        -------
+        str
+            String representation of tokens in sentence
+        """
+        return re.sub(r"(\s)+", " ", self.str_with_space()).strip()

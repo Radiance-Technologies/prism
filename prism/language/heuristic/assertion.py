@@ -2,21 +2,23 @@
 Supplies heuristic utilities for parsing theorems and proofs.
 """
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Generic, Iterable, List, Optional, Type, TypeVar
 from warnings import warn
 
 from radpytools.dataclasses import default_field
 
 from .util import ParserUtils
 
+T = TypeVar('T')
+
 
 @dataclass
-class Assertion:
+class Assertion(Generic[T]):
     """
     An abstraction of something that needs to be proved.
     """
 
-    statement: Optional[str]  # None if a program
+    statement: Optional[T]  # None if a program
     """
     The statement that requires a proof.
     """
@@ -26,11 +28,15 @@ class Assertion:
 
     A Program may require multiple proofs.
     """
-    proofs: List[List[str]] = default_field([])  # or obligations
+    proofs: List[List[T]] = default_field([])  # or obligations
     """
     The proof(s) of the statement.
 
     Multiple proofs are only expected if the statement is a Program.
+    """
+    parser_utils_cls: Type[ParserUtils] = ParserUtils
+    """
+    The class to use that provides parser utilities.
     """
 
     @property
@@ -40,17 +46,17 @@ class Assertion:
         """
         return (
             self.proofs and self.proofs[-1]
-            and not ParserUtils.is_proof_ender(self.proofs[-1][-1]))
+            and not self.parser_utils_cls.is_proof_ender(self.proofs[-1][-1]))
 
-    def apply_tactic(self, tactic: str, braces_and_bullets: List[str]) -> None:
+    def apply_tactic(self, tactic: T, braces_and_bullets: List[T]) -> None:
         """
         Apply a tactic to proving the statement.
 
         Parameters
         ----------
-        tactic : str
+        tactic : T
             The tactic sentence.
-        braces_and_bullets : List[str]
+        braces_and_bullets : List[T]
             Any preceding brace or bullet sentences.
         """
         if not self.proofs:
@@ -60,16 +66,16 @@ class Assertion:
 
     def start_proof(
             self,
-            starter: Optional[str],
-            braces_and_bullets: Optional[List[str]] = None) -> None:
+            starter: Optional[T],
+            braces_and_bullets: Optional[List[T]] = None) -> None:
         """
         Start a new proof.
 
         Parameters
         ----------
-        starter : str
+        starter : T
             The sentence starting the proof, e.g., ``"Proof."``.
-        braces_and_bullets : List[str] | None
+        braces_and_bullets : List[T] | None
             Any preceding brace or bullet sentences, asserted to be
             empty.
         """
@@ -85,15 +91,15 @@ class Assertion:
         else:
             self.proofs.append([] if starter is None else [starter])
 
-    def end_proof(self, ender: str, braces_and_bullets: List[str]) -> None:
+    def end_proof(self, ender: T, braces_and_bullets: List[T]) -> None:
         """
         Conclude a proof.
 
         Parameters
         ----------
-        starter : str
+        starter : T
             The sentence ending the proof, e.g., ``"Qed."``.
-        braces_and_bullets : List[str]
+        braces_and_bullets : List[T]
             Any preceding brace or bullet sentences.
         """
         # assert we are in a proof
@@ -107,7 +113,8 @@ class Assertion:
             document_index: str,
             theorem: 'Assertion',
             result: List[str],
-            glom_proofs: bool) -> bool:
+            glom_proofs: bool,
+            parser_utils_cls: Type[ParserUtils] = ParserUtils) -> bool:
         """
         Discharge an assertion's sentences to the end of a list.
 
@@ -117,12 +124,14 @@ class Assertion:
             A unique identifier of the theorem's corresponding document.
         theorem : Assertion
             The assertion.
-        result : List[str]
+        result : List[T]
             A list of sentences in order of their appearance in the
             document identified by `document_index`.
         glom_proofs : bool
             Whether to join the sentences of each proof together
             (resulting in a single "sentence" per proof) or not.
+        parser_utils_cls : Type[ParserUtils], optional
+            ParserUtils class to use, by default `ParserUtils`
 
         Returns
         -------
@@ -137,15 +146,19 @@ class Assertion:
             result.append(theorem.statement)
         proofs = theorem.proofs
         for proof in proofs:
-            if not ParserUtils.is_proof_ender(proof[-1]):
+            if not parser_utils_cls.is_proof_ender(proof[-1]):
                 warn(
                     "Found an unterminated proof environment in "
                     f"{document_index}. "
                     "Abandoning proof glomming.")
                 glom_proofs = False
         accum = result.extend
+
+        def _join(join_char: str, x: Iterable) -> str:
+            return join_char.join([str(i) for i in x])
+
         if glom_proofs:
-            proofs = [" ".join(proof) for proof in proofs]
+            proofs = [_join(" ", proof) for proof in proofs]
             accum = result.append
         for proof in proofs:
             accum(proof)
@@ -157,7 +170,8 @@ class Assertion:
             document_index: str,
             theorems: List['Assertion'],
             result: List[str],
-            glom_proofs: bool) -> bool:
+            glom_proofs: bool,
+            parser_utils_cls: Type[ParserUtils] = ParserUtils) -> bool:
         """
         Discharge a stack of theorems sequentially.
 
@@ -176,6 +190,8 @@ class Assertion:
         glom_proofs : bool
             Whether to join the sentences of each proof together
             (resulting in a single "sentence" per proof) or not.
+        parser_utils_cls : Type[ParserUtils], optional
+            ParserUtils class to use, by default `ParserUtils`
 
         Returns
         -------
@@ -191,5 +207,6 @@ class Assertion:
                 document_index,
                 theorem,
                 result,
-                glom_proofs)
+                glom_proofs,
+                parser_utils_cls)
         return glom_proofs

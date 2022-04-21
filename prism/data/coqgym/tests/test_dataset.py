@@ -120,7 +120,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         self.assertAlmostEqual(
             self.dataset.weights["GeoCoq"],
             12236477,
-            delta=100000)
+            delta=200000)
 
     def test_init_with_project_dir_and_base_dir(self):
         """
