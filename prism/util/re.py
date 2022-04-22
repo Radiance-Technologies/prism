@@ -2,10 +2,10 @@
 Utilities for regular expressions.
 """
 import re
-from typing import Any, Iterable, Union
+from typing import Iterable, Union
 
 # An uncompiled or compiled regular expression.
-RegEx = Union[str, Any]
+RegEx = Union[str, re.Pattern]
 
 
 def regex_from_options(
