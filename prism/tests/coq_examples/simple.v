@@ -12,6 +12,7 @@
 
 (** Here's another comment *)
 
+
 Inductive seq : nat -> Set :=
   | niln : seq 0
   | consn : forall n : nat, nat -> seq n -> seq (S n).
@@ -23,6 +24,7 @@ Fixpoint length (n : nat) (s : seq n) {struct s} : nat :=
   end.
 
 Theorem length_corr : forall (n : nat) (s : seq n), length n s = n.
+Let m := seq 0. (* Additional effort may identify length_corr as instigator of proof. *)
   About seq.
   intros n s.
   Check n.
