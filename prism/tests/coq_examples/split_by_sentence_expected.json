@@ -1,5 +1,5 @@
 {
-    "test_list": [
+    "simple_test_list": [
         "Inductive seq : nat -> Set := | niln : seq 0 | consn : forall n : nat, nat -> seq n -> seq (S n).",
         "Fixpoint length (n : nat) (s : seq n) {struct s} : nat := match s with | niln => 0 | consn i _ s' => S (length i s') end.",
         "Theorem length_corr : forall (n : nat) (s : seq n), length n s = n.",
@@ -26,12 +26,42 @@
         "Qed.",
         "Check length_corr."
     ],
-    "test_glom_list": [
+    "simple_test_glom_list": [
         "Inductive seq : nat -> Set := | niln : seq 0 | consn : forall n : nat, nat -> seq n -> seq (S n).",
         "Fixpoint length (n : nat) (s : seq n) {struct s} : nat := match s with | niln => 0 | consn i _ s' => S (length i s') end.",
         "Theorem length_corr : forall (n : nat) (s : seq n), length n s = n.",
         "Let m := seq 0.",
         "About seq. intros n s. Check n. Proof. induction s... Print length. - trivial. - + { * { { simpl. rewrite IHs; reflexivity... } } } Qed.",
         "Check length_corr."
+    ],
+    "nested_test_list": [
+        "Definition idw (A : Type) := A.",
+        "Lemma foobar : unit.",
+        "Proof.",
+        "Require Import Program.",
+        "apply (const tt tt).",
+        "Qed.",
+        "Set Nested Proofs Allowed.",
+        "Lemma foobar' : unit.",
+        "Lemma aux : forall A : Type, A -> unit.",
+        "Proof.",
+        "intros.",
+        "pose (foo := idw A).",
+        "exact tt.",
+        "Qed.",
+        "apply (@aux unit tt).",
+        "Qed.",
+        "Check foobar'."
+    ],
+    "nested_test_glom_list": [
+        "Definition idw (A : Type) := A.",
+        "Lemma foobar : unit.",
+        "Proof. Require Import Program. apply (const tt tt). Qed.",
+        "Set Nested Proofs Allowed.",
+        "Lemma aux : forall A : Type, A -> unit.",
+        "Proof. intros. pose (foo := idw A). exact tt. Qed.",
+        "Lemma foobar' : unit.",
+        "apply (@aux unit tt). Qed.",
+        "Check foobar'."
     ]
 }
