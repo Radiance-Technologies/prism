@@ -94,7 +94,7 @@ class HeuristicParser:
         """
         Indices of sentences that are unambiguously part of a proof.
         """
-        query_indices: List[int] = default_field([])
+        query_indices: Set[int] = default_field(set())
         """
         Indices of commands that are effectively no-ops.
         """
@@ -132,12 +132,25 @@ class HeuristicParser:
         """
 
         def __post_init__(self):  # noqa: D105
+            self.depths = list(self.depths)
+            self.theorem_indices = set(self.theorem_indices)
+            self.starter_indices = set(self.starter_indices)
+            self.tactic_indices = set(self.tactic_indices)
+            self.ender_indices = list(self.ender_indices)
+            self.program_indices = list(self.program_indices)
+            self.obligation_indices = list(self.obligation_indices)
+            self.query_indices = set(self.query_indices)
+            self.fail_indices = set(self.fail_indices)
+            self.nesting_allowed = list(self.nesting_allowed)
+            self.custom_tactics = set(self.custom_tactics)
             assert self.starter_indices.issuperset(self.obligation_indices)
             assert self.theorem_indices.issuperset(self.program_indices)
             assert self.proof_indices.issuperset(self.tactic_indices)
             assert self.proof_indices.issuperset(self.theorem_indices)
             assert self.proof_indices.issuperset(self.starter_indices)
             assert self.proof_indices.issuperset(self.ender_indices)
+            assert self.proof_indices.issuperset(self.program_indices)
+            assert self.proof_indices.issuperset(self.obligation_indices)
             self._depth = self.depths[-1] if self.depths else 0
             self._max_proof_index = max(-1, -1, *self.proof_indices)
 
@@ -349,7 +362,7 @@ class HeuristicParser:
                 else:
                     if ParserUtils.is_query(sentence_sans_attributes):
                         index = self.num_sentences
-                        self.query_indices.append(index)
+                        self.query_indices.add(index)
                     self._increment_depth(0)
 
     @classmethod
