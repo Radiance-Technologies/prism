@@ -40,6 +40,9 @@ def load_metadata_from_yaml(filepath) -> list:
             field for field in METADATA_FIELDS
             if field not in metadata_dict.keys()
         ]
+
+        # Print if a project in YAML file is missing any
+        # required metadata and skip
         if len(missing_fields) > 0:
             print(
                 "Missing the follwing metadata from %s: %s" %
@@ -85,7 +88,7 @@ class ProjectMetadata:
 
     def serialize_to_str(self) -> str:
         """
-        Serialize metadata to string format as .yml data.
+        Serialize metadata to string format.
 
         Returns
         -------
