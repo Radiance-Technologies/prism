@@ -20,7 +20,7 @@ class Assertion:
     """
     The document in which the assertion resides.
     """
-    statement: Optional[str]  # None if a program
+    statement: Optional[str]
     """
     The statement that requires a proof.
     """
@@ -184,7 +184,7 @@ class Assertion:
         defined_only : bool, optional
             Whether to discharge only defined assertions or not.
         """
-        if theorem.statement is not None and not theorem.is_program:
+        if theorem.statement is not None:
             result.append(theorem.statement)
         if not theorem.is_complete:
             if not defined_only:

@@ -30,7 +30,7 @@ class TestProject(unittest.TestCase):
         self.document = {}
         self.test_list = {}
         self.test_glom_list = {}
-        coq_example_files = ["simple", "nested"]
+        coq_example_files = ["simple", "nested", "Alphabet"]
         for coq_file in coq_example_files:
             test_filename = os.path.join(_COQ_EXAMPLES_PATH, f"{coq_file}.v")
             with open(test_filename, "rt") as f:
@@ -48,37 +48,23 @@ class TestProject(unittest.TestCase):
         """
         Test method for splitting Coq code by sentence.
         """
-        actual_outcome = Project.split_by_sentence(
-            self.document['simple'],
-            glom_proofs=False)
-        self.assertEqual(actual_outcome, self.test_list["simple"])
+        for coq_file, document in self.document.items():
+            with self.subTest(coq_file):
+                actual_outcome = Project.split_by_sentence(
+                    document,
+                    glom_proofs=False)
+                self.assertEqual(actual_outcome, self.test_list[coq_file])
 
     def test_split_by_sentence_glom(self):
         """
         Test method for splitting Coq code by sentence.
         """
-        actual_outcome = Project.split_by_sentence(
-            self.document['simple'],
-            glom_proofs=True)
-        self.assertEqual(actual_outcome, self.test_glom_list["simple"])
-
-    def test_split_by_sentence_nested(self):
-        """
-        Test method for splitting Coq code by sentence.
-        """
-        actual_outcome = Project.split_by_sentence(
-            self.document["nested"],
-            glom_proofs=False)
-        self.assertEqual(actual_outcome, self.test_list["nested"])
-
-    def test_split_by_sentence_glom_nested(self):
-        """
-        Test method for splitting Coq code by sentence.
-        """
-        actual_outcome = Project.split_by_sentence(
-            self.document["nested"],
-            glom_proofs=True)
-        self.assertEqual(actual_outcome, self.test_glom_list["nested"])
+        for coq_file, document in self.document.items():
+            with self.subTest(coq_file):
+                actual_outcome = Project.split_by_sentence(
+                    document,
+                    glom_proofs=True)
+                self.assertEqual(actual_outcome, self.test_glom_list[coq_file])
 
 
 class TestProjectRepo(unittest.TestCase):
