@@ -13,3 +13,6 @@ venv*
 .pytest_cache/
 .cache/
 *.coverage
+*.aux
+*.glob
+*.vo

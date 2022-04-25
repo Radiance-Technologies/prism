@@ -23,35 +23,48 @@ class TestProject(unittest.TestCase):
         """
         Set up class for testing coqgym_base module.
         """
-        test_filename = os.path.join(_COQ_EXAMPLES_PATH, "simple.v")
         expected_filename = os.path.join(
             _COQ_EXAMPLES_PATH,
             "split_by_sentence_expected.json")
-        with open(test_filename, "rt") as f:
-            self.test_contents = f.read()
-        self.document = CoqDocument(test_filename, self.test_contents)
-        with open(expected_filename, "rt") as f:
-            contents = json.load(f)
-            self.test_list = contents["test_list"]
-            self.test_glom_list = contents["test_glom_list"]
+        self.test_contents = {}
+        self.document = {}
+        self.test_list = {}
+        self.test_glom_list = {}
+        coq_example_files = ["simple", "nested", "Alphabet"]
+        for coq_file in coq_example_files:
+            test_filename = os.path.join(_COQ_EXAMPLES_PATH, f"{coq_file}.v")
+            with open(test_filename, "rt") as f:
+                self.test_contents[coq_file] = f.read()
+            self.document[coq_file] = CoqDocument(
+                test_filename,
+                self.test_contents[coq_file])
+            with open(expected_filename, "rt") as f:
+                contents = json.load(f)
+                self.test_list[coq_file] = contents[f"{coq_file}_test_list"]
+                self.test_glom_list[coq_file] = contents[
+                    f"{coq_file}_test_glom_list"]
 
     def test_split_by_sentence(self):
         """
         Test method for splitting Coq code by sentence.
         """
-        actual_outcome = Project.split_by_sentence(
-            self.document,
-            glom_proofs=False)
-        self.assertEqual(actual_outcome, self.test_list)
+        for coq_file, document in self.document.items():
+            with self.subTest(coq_file):
+                actual_outcome = Project.split_by_sentence(
+                    document,
+                    glom_proofs=False)
+                self.assertEqual(actual_outcome, self.test_list[coq_file])
 
     def test_split_by_sentence_glom(self):
         """
         Test method for splitting Coq code by sentence.
         """
-        actual_outcome = Project.split_by_sentence(
-            self.document,
-            glom_proofs=True)
-        self.assertEqual(actual_outcome, self.test_glom_list)
+        for coq_file, document in self.document.items():
+            with self.subTest(coq_file):
+                actual_outcome = Project.split_by_sentence(
+                    document,
+                    glom_proofs=True)
+                self.assertEqual(actual_outcome, self.test_glom_list[coq_file])
 
 
 class TestProjectRepo(unittest.TestCase):
@@ -263,7 +276,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
             delta=100000)
         self.assertAlmostEqual(
             self.dataset.weights["GeoCoq"],
-            12236477,
+            12110822,
             delta=100000)
 
     def test_init_with_project_dir_and_base_dir(self):
