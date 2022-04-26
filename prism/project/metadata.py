@@ -87,17 +87,6 @@ class ProjectMetadata:
     serapi_options: str
     group: str
 
-    def serialize_to_str(self) -> str:
-        """
-        Serialize metadata to string format.
-
-        Returns
-        -------
-        str
-            A formatted string representation of the metadata.
-        """
-        return su.io.serialize(self, fmt='yaml')
-
     def serialize_to_file(self, output_filepath: os.PathLike) -> None:
         """
         Serialize metadata and writes to .yml file.
