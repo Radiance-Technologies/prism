@@ -2,6 +2,7 @@
 Contains all metadata related to paticular GitHub repositories.
 """
 
+import os
 from dataclasses import dataclass
 
 import seutil as su
@@ -45,7 +46,7 @@ def load_metadata_from_yaml(filepath) -> list:
         # required metadata and skip
         if len(missing_fields) > 0:
             print(
-                "Missing the follwing metadata from %s: %s" %
+                "Missing the following metadata from %s: %s" %
                 (metadata_dict['full_name'],
                  ", ".join(missing_fields)))
             continue
@@ -70,7 +71,7 @@ def load_metadata_from_yaml(filepath) -> list:
 @dataclass
 class ProjectMetadata:
     """
-    Class containing the metadata for a single GitHub repo.
+    Class containing the metadata for a single project.
     """
 
     full_name: str
@@ -92,16 +93,18 @@ class ProjectMetadata:
 
         Returns
         -------
-            str: string representation of metadata dataclass
+        str
+            A formatted string representation of the metadata.
         """
-        return su.io.serialize(self.__dict__, fmt='yaml')
+        return su.io.serialize(self, fmt='yaml')
 
-    def serialize_to_file(self, output_filepath):
+    def serialize_to_file(self, output_filepath: os.PathLike) -> None:
         """
         Serialize metadata and writes to .yml file.
 
-        Args:
-        ----
-            output_filepath (str): filepath to .yml file
+        Parameters
+        ----------
+        output_filepath : os.PathLike
+            The path of the file to which the metadata will be written.
         """
         su.io.dump(output_filepath, self.__dict__, fmt=su.io.Fmt.yaml)
