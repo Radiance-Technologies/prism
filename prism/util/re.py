@@ -2,10 +2,7 @@
 Utilities for regular expressions.
 """
 import re
-from typing import Any, Iterable, Union
-
-# An uncompiled or compiled regular expression.
-RegEx = Union[str, Any]
+from typing import Iterable
 
 
 def regex_from_options(
@@ -13,7 +10,7 @@ def regex_from_options(
         must_start: bool,
         must_end: bool,
         group: bool = False,
-        compile: bool = True) -> RegEx:
+        compile: bool = True) -> re.Pattern:
     """
     Make a regular expression for matching mutually exclusive options.
 
@@ -33,7 +30,7 @@ def regex_from_options(
 
     Returns
     -------
-    RegEx
+    re.Pattern
         The regular expression.
     """
     regex = '|'.join(options)
