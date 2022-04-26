@@ -1,6 +1,13 @@
 import json
 
 if __name__ == "__main__":
+  """
+  Check which names in CoqGym are not in the repos file,
+  and which names in the repos file are not in CoqGym.
+
+  This script prints the difference between the repos file
+  and the actual_repos.txt file.
+  """
   with open('repos.json') as json_file:
     repos = json.load(json_file)
   repo_names = [x[0] for x in repos]

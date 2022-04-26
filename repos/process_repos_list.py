@@ -3,6 +3,20 @@ import re
 
 
 if __name__ == "__main__":
+    """
+    Extract repository name, link, and number of commits.
+
+    This script processes the hand-annotated repos file 
+    made by Maxwell Reeser to assist in establishing correct 
+    correspondence between CoqGym's projects and their 
+    publicly available github repositories. Each repository's
+    name was searched on google and the repository which seemed
+    to best fit that included in CoqGym was listed as the proper
+    link. The number of commits for each repo was also included.
+
+    This script turns that information into a json file of triples
+    for ease of use and manipulation in python.
+    """
 
     file_in = open("./repos", 'r')
     lines = []
