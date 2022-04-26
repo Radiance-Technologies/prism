@@ -25,7 +25,7 @@ METADATA_FIELDS = [
 
 def load_metadata_from_yaml(filepath) -> list:
     """
-    Create list of ProjectMetadata() objects.
+    Create list of `ProjectMetadata` objects.
     """
     yaml_lst = su.io.load(filepath)
 
