@@ -68,7 +68,7 @@ def load_metadata_from_yaml(filepath) -> list:
     return project_metadata
 
 
-@dataclass
+@dataclass(order=True)
 class ProjectMetadata:
     """
     Class containing the metadata for a single project.
@@ -107,4 +107,15 @@ class ProjectMetadata:
         output_filepath : os.PathLike
             The path of the file to which the metadata will be written.
         """
-        su.io.dump(output_filepath, self.__dict__, fmt=su.io.Fmt.yaml)
+        # Manual bypass for writing multiple projects to an existing
+        # file since seutil.io doesn't support this feature for YAML
+        if not os.path.isfile(output_filepath):
+            su.io.dump(output_filepath, [self], fmt=su.io.Fmt.yaml)
+        else:
+            # Serialize
+            serialized = su.io.serialize([self], fmt='yaml')
+
+            # Write to file
+            with open(output_filepath, 'a') as output_file:
+                output_file.write("\n")
+                su.io.Fmt.yaml.writer(output_file, serialized)
