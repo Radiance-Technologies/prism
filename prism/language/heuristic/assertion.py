@@ -98,9 +98,9 @@ class Assertion:
 
         Parameters
         ----------
-        tactic : T
+        tactic : str
             The tactic sentence.
-        braces_and_bullets : List[T]
+        braces_and_bullets : List[str]
             Any preceding brace or bullet sentences.
         """
         if not self.proofs:
@@ -117,9 +117,9 @@ class Assertion:
 
         Parameters
         ----------
-        starter : T
+        starter : str
             The sentence starting the proof, e.g., ``"Proof."``.
-        braces_and_bullets : List[T] | None
+        braces_and_bullets : List[str] | None
             Any preceding brace or bullet sentences, asserted to be
             empty.
         """
@@ -143,9 +143,9 @@ class Assertion:
 
         Parameters
         ----------
-        starter : T
+        starter : str
             The sentence ending the proof, e.g., ``"Qed."``.
-        braces_and_bullets : List[T]
+        braces_and_bullets : List[str]
             Any preceding brace or bullet sentences.
         """
         # assert we are in a proof
@@ -175,7 +175,7 @@ class Assertion:
             A unique identifier of the theorem's corresponding document.
         theorem : Assertion
             The assertion.
-        result : List[T]
+        result : List[str]
             A list of sentences in order of their appearance in the
             document identified by `document_index`.
         glom_proofs : bool
