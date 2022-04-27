@@ -2,7 +2,7 @@
 Supplies heuristic utilities for parsing theorems and proofs.
 """
 from dataclasses import dataclass
-from typing import Iterable, List, Optional
+from typing import List, Optional
 from warnings import warn
 
 from radpytools.dataclasses import default_field
@@ -195,12 +195,8 @@ class Assertion:
                 theorem.admit()
         proofs = theorem.proofs
         accum = result.extend
-
-        def _join(join_char: str, x: Iterable) -> str:
-            return join_char.join([str(i) for i in x])
-
         if glom_proofs:
-            proofs = [_join(" ", proof) for proof in proofs]
+            proofs = [" ".join(proof) for proof in proofs]
             accum = result.append
         for proof in proofs:
             accum(proof)
