@@ -17,11 +17,19 @@ class TestProjectMetadata(unittest.TestCase):
         """
         Ensure import .yaml file can be deserialized properly.
         """
-        yaml_path = "prism/project/tests/projects.yml"
-        metadata_objs = load_metadata_from_yaml(yaml_path)
+        yaml_path_complete = "prism/project/tests/projects.yml"
+        yaml_path_incomplete = "prism/project/tests/projects_incomplete.yml"
+        metadata_objs = load_metadata_from_yaml(yaml_path_complete)
 
-        # Only two projects in the YAML file contain all 12 attributes
+        # Only two projects in the YAML file contain
+        # all required attributes
         self.assertEqual(len(metadata_objs), 2)
+
+        # Assert error is thrown when required field missing
+        self.assertRaises(
+            TypeError,
+            load_metadata_from_yaml,
+            yaml_path_incomplete)
 
     def test_serialize_to_file(self):
         """
@@ -30,18 +38,19 @@ class TestProjectMetadata(unittest.TestCase):
         yaml_path = "prism/project/tests/projects.yml"
         metadata_objs = load_metadata_from_yaml(yaml_path)
         metadata_obj = metadata_objs[0]
-        metadata_obj.serialize_to_file("test.yml")
+        metadata_obj.serialize_to_file("prism/project/tests/test.yml")
 
         # Test that .yml file is created properly
-        self.assertTrue(os.path.isfile("test.yml"))
+        self.assertTrue(os.path.isfile("prism/project/tests/test.yml"))
 
-        new_metadata_obj = load_metadata_from_yaml("test.yml")[0]
+        new_metadata_obj = load_metadata_from_yaml(
+            "prism/project/tests/test.yml")[0]
 
         # Test that data is consistent after being
         # serialized/deserialized
         self.assertEqual(metadata_obj, new_metadata_obj)
 
-        os.remove("test.yml")
+        os.remove("prism/project/tests/test.yml")
 
     def test_serialize_to_file_multi(self):
         """
