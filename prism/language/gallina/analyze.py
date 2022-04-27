@@ -1113,7 +1113,14 @@ class SexpAnalyzer:
             # Fix for charno mismatch
             # TODO: this should be eventually fixed in Coq
             if (loc.end_charno - loc.beg_charno < len(content)):
-                loc.end_charno = len(content) + loc.beg_charno
+                loc = SexpInfo.Loc(
+                    filename=loc.filename,
+                    lineno=loc.lineno,
+                    bol_pos=loc.bol_pos,
+                    lineno_last=loc.lineno_last,
+                    bol_pos_last=loc.bol_pos_last,
+                    beg_charno=loc.beg_charno,
+                    end_charno=len(content) + loc.beg_charno)
 
             return SexpInfo.SertokToken(kind, content, loc)
         except IllegalSexpOperationException:

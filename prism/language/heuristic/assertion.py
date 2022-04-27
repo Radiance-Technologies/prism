@@ -2,18 +2,16 @@
 Supplies heuristic utilities for parsing theorems and proofs.
 """
 from dataclasses import dataclass
-from typing import Generic, Iterable, List, Optional, Type, TypeVar
+from typing import Iterable, List, Optional
 from warnings import warn
 
 from radpytools.dataclasses import default_field
 
 from .util import ParserUtils
 
-T = TypeVar('T')
-
 
 @dataclass
-class Assertion(Generic[T]):
+class Assertion:
     """
     An abstraction of something that needs to be proved.
     """
@@ -32,15 +30,11 @@ class Assertion(Generic[T]):
 
     A Program may require multiple proofs.
     """
-    proofs: List[List[T]] = default_field([])  # or obligations
+    proofs: List[List[str]] = default_field([])  # or obligations
     """
     The proof(s) of the statement.
 
     Multiple proofs are only expected if the statement is a Program.
-    """
-    parser_utils_cls: Type[ParserUtils] = ParserUtils
-    """
-    The class to use that provides parser utilities.
     """
 
     @property
@@ -98,7 +92,7 @@ class Assertion(Generic[T]):
             if not proof or not ParserUtils.is_proof_ender(proof[-1], True):
                 proof.append('Admitted.')
 
-    def apply_tactic(self, tactic: T, braces_and_bullets: List[T]) -> None:
+    def apply_tactic(self, tactic: str, braces_and_bullets: List[str]) -> None:
         """
         Apply a tactic to proving the statement.
 
@@ -116,8 +110,8 @@ class Assertion(Generic[T]):
 
     def start_proof(
             self,
-            starter: Optional[T],
-            braces_and_bullets: Optional[List[T]] = None) -> None:
+            starter: Optional[str],
+            braces_and_bullets: Optional[List[str]] = None) -> None:
         """
         Start a new proof.
 
@@ -143,7 +137,7 @@ class Assertion(Generic[T]):
         else:
             self.proofs.append([] if starter is None else [starter])
 
-    def end_proof(self, ender: T, braces_and_bullets: List[T]) -> None:
+    def end_proof(self, ender: str, braces_and_bullets: List[str]) -> None:
         """
         Conclude a proof.
 

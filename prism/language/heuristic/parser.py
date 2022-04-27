@@ -5,19 +5,18 @@ import pathlib
 import re
 import warnings
 from dataclasses import dataclass, field
-from typing import List, Set, Union
+from typing import List, Set
 
 from radpytools.dataclasses import default_field
 from radpytools.os import pushd
 from seutil import io
 
 from prism.data.document import CoqDocument
-from prism.data.sentence import VernacularSentence
 from prism.language.gallina.parser import CoqParser
 from prism.util.iterable import CallableIterator, CompareIterator
 
 from .assertion import Assertion
-from .util import ParserUtils, ParserUtilsSerAPI
+from .util import ParserUtils
 
 
 class HeuristicParser:
@@ -714,7 +713,7 @@ class HeuristicParser:
         return result
 
 
-class SerAPIParser:
+class SerAPIParser(HeuristicParser):
     """
     SerAPI-based sentence extracter/parser.
     """
@@ -780,110 +779,8 @@ class SerAPIParser:
                 coq_file,
                 source_code,
                 serapi_options)
-        sentences = cls.process_vernac_sentences(
-            document.index,
-            vernac_sentences,
-            glom_proofs)
+        sentences = [str(vs) for vs in vernac_sentences]
+        if glom_proofs:
+            stats = cls._compute_sentence_statistics(sentences)
+            sentences = cls._glom_proofs(document.index, sentences, stats)
         return sentences
-
-    @classmethod
-    def process_vernac_sentences(
-            cls,
-            document_index: str,
-            sentences: List[VernacularSentence],
-            glom_proofs: bool) -> List[str]:
-        """
-        Process vernacular sentences into strings.
-
-        Parameters
-        ----------
-        vernac_sentences : List[VernacularSentence]
-            Lis of vernacular sentences to convert to strings
-        glom_proofs : bool
-            If True, glom proofs while processing the vernacular
-            sentences into strings
-
-        Returns
-        -------
-        List[str]
-            Processed vernacular sentences
-        """
-        if not glom_proofs:
-            return [vs.str_minimal_whitespace() for vs in sentences]
-        else:
-            theorems: List[Assertion[VernacularSentence]] = []
-            result: List[Union[VernacularSentence, str]] = []
-            i = 0
-            while i < len(sentences):  # `sentences` length may change
-                # Replace any whitespace or group of whitespace with a
-                # single space.
-                sentence = sentences[i]
-                is_brace_or_bullet = ParserUtilsSerAPI.is_brace_or_bullet(
-                    sentence)
-                if ParserUtilsSerAPI.is_theorem_starter(sentence):
-                    # push new context onto stack
-                    assert not is_brace_or_bullet
-                    theorems.append(
-                        Assertion(
-                            sentence,
-                            False,
-                            parser_utils_cls=ParserUtilsSerAPI))
-                elif ParserUtilsSerAPI.is_proof_starter(sentence):
-                    if not theorems:
-                        theorems.append(
-                            Assertion(
-                                result[-1],
-                                True,
-                                parser_utils_cls=ParserUtilsSerAPI))
-                    theorems[-1].start_proof(sentence, None)
-                elif (ParserUtilsSerAPI.is_tactic(sentence)
-                      or (theorems and theorems[-1].in_proof)):
-                    if not theorems:
-                        theorems.append(
-                            Assertion(
-                                result[-1],
-                                True,
-                                parser_utils_cls=ParserUtilsSerAPI))
-                    theorems[-1].apply_tactic(sentence, [])
-                elif ParserUtilsSerAPI.is_proof_ender(sentence):
-                    theorems[-1].end_proof(sentence, [])
-                    glom_proofs = Assertion.discharge(
-                        document_index,
-                        theorems.pop(),
-                        result,
-                        glom_proofs,
-                        ParserUtilsSerAPI)
-                else:
-                    # not a theorem, tactic, proof starter, or proof
-                    # ender discharge theorem stack
-                    glom_proofs = Assertion[VernacularSentence].discharge_all(
-                        document_index,
-                        theorems,
-                        result,
-                        glom_proofs,
-                        ParserUtilsSerAPI)
-                    theorems = []
-                    if ParserUtilsSerAPI.is_program_starter(sentence):
-                        # push new context onto stack
-                        theorems.append(
-                            Assertion(
-                                None,
-                                True,
-                                parser_utils_cls=ParserUtilsSerAPI))
-                    assert not is_brace_or_bullet
-                    result.append(sentence)
-                i += 1
-            # End of file; discharge any remaining theorems
-            Assertion[VernacularSentence].discharge_all(
-                document_index,
-                theorems,
-                result,
-                glom_proofs,
-                parser_utils_cls=ParserUtilsSerAPI)
-            # Convert any remaining VernacularSentences in the result to
-            # str
-            result = [str(r) for r in result]
-            # Lop off the final line if it's just a period, i.e., blank.
-            if result[-1] == ".":
-                result.pop()
-            return result

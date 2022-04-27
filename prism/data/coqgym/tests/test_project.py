@@ -44,7 +44,8 @@ class TestProject(unittest.TestCase):
                 cls.test_contents[coq_file] = f.read()
             cls.document[coq_file] = CoqDocument(
                 test_filename,
-                cls.test_contents[coq_file])
+                cls.test_contents[coq_file],
+                project_path=_COQ_EXAMPLES_PATH)
             with open(expected_filename, "rt") as f:
                 contents = json.load(f)
                 cls.test_list[coq_file] = contents[f"{coq_file}_test_list"]
@@ -120,7 +121,7 @@ class TestProject(unittest.TestCase):
                     document,
                     glom_proofs=False,
                     sentence_extraction_method=SEM.SERAPI)
-                self.assertEqual(actual_outcome, self.test_glom_list[coq_file])
+                self.assertEqual(actual_outcome, self.test_list[coq_file])
 
     def test_extract_sentences_serapi_simple_glom(self):
         """

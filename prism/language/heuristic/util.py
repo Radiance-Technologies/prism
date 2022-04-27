@@ -6,8 +6,6 @@ import re
 from functools import partialmethod
 from typing import Iterable, List, Optional, Tuple
 
-from prism.data.sentence import VernacularSentence
-from prism.language.id import LanguageId
 from prism.util.re import regex_from_options
 
 
@@ -683,51 +681,3 @@ class ParserUtils:
             return bullet_re[1], bullet_re[2]
         else:
             return "", sentence
-
-
-class ParserUtilsSerAPI(ParserUtils):
-    """
-    Namespace for utilities for SerAPI parsing.
-
-    Provides functions for splitting sentence elements.
-    """
-
-    @staticmethod
-    def is_brace_or_bullet(sentence: VernacularSentence) -> bool:
-        """
-        Return whether given sentence is a brace or a bullet.
-        """
-        return re.match(
-            r"^(\{|\}|\*+|\++|\-+)$",
-            sentence.str_minimal_whitespace()) is not None
-
-    @staticmethod
-    def is_tactic(sentence: VernacularSentence) -> bool:
-        """
-        Return whether the given sentence is a tactic.
-        """
-        sclid = sentence.classify_lid()
-        return (
-            sclid == LanguageId.Ltac
-            or sclid == LanguageId.LtacMixedWithGallina)
-
-    @staticmethod
-    def split_brace(sentence: VernacularSentence):
-        """
-        Do not use.
-        """
-        pass
-
-    @staticmethod
-    def split_braces_and_bullets(sentence: VernacularSentence):
-        """
-        Do not use.
-        """
-        pass
-
-    @staticmethod
-    def split_bullet(sentence: VernacularSentence):
-        """
-        Do not use.
-        """
-        pass
