@@ -16,10 +16,11 @@ from prism.project import (
     ProjectRepo,
     SentenceExtractionMethod,
 )
+from prism.project.base import SEM
 from prism.tests import _COQ_EXAMPLES_PATH
 
 
-class TestProjectBase(unittest.TestCase):
+class TestProject(unittest.TestCase):
     """
     Class for testing coqgym_base module.
     """
@@ -27,42 +28,52 @@ class TestProjectBase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """
-        Load files used by several tests.
+        Set up class for testing coqgym_base module.
         """
-        test_filename = os.path.join(_COQ_EXAMPLES_PATH, "simple.v")
         expected_filename = os.path.join(
             _COQ_EXAMPLES_PATH,
             "split_by_sentence_expected.json")
-        with open(test_filename, "rt") as f:
-            test_contents = f.read()
-        cls.document = CoqDocument(
-            test_filename,
-            test_contents,
-            project_path=_COQ_EXAMPLES_PATH)
-        with open(expected_filename, "rt") as f:
-            contents = json.load(f)
-            cls.test_glom_list = contents["test_glom_list"]
-            cls.test_list = contents["test_list"]
+        cls.test_contents = {}
+        cls.document = {}
+        cls.test_list = {}
+        cls.test_glom_list = {}
+        coq_example_files = ["simple", "nested", "Alphabet"]
+        for coq_file in coq_example_files:
+            test_filename = os.path.join(_COQ_EXAMPLES_PATH, f"{coq_file}.v")
+            with open(test_filename, "rt") as f:
+                cls.test_contents[coq_file] = f.read()
+            cls.document[coq_file] = CoqDocument(
+                test_filename,
+                cls.test_contents[coq_file])
+            with open(expected_filename, "rt") as f:
+                contents = json.load(f)
+                cls.test_list[coq_file] = contents[f"{coq_file}_test_list"]
+                cls.test_glom_list[coq_file] = contents[
+                    f"{coq_file}_test_glom_list"]
 
     def test_extract_sentences_heuristic(self):
         """
         Test method for splitting Coq code by sentence.
         """
-        actual_outcome = Project.extract_sentences(
-            self.document,
-            sentence_extraction_method=SentenceExtractionMethod.HEURISTIC,
-            glom_proofs=True)
-        self.assertEqual(actual_outcome, self.test_glom_list)
+        for coq_file, document in self.document.items():
+            with self.subTest(coq_file):
+                actual_outcome = Project.extract_sentences(
+                    document,
+                    glom_proofs=False,
+                    sentence_extraction_method=SEM.HEURISTIC)
+                self.assertEqual(actual_outcome, self.test_list[coq_file])
 
-    def test_extract_sentences_heuristic_no_glom(self):
+    def test_extract_sentences_heuristic_glom(self):
         """
         Test method for splitting Coq code by sentence.
         """
-        actual_outcome = Project.extract_sentences(
-            self.document,
-            sentence_extraction_method=SentenceExtractionMethod.HEURISTIC,
-            glom_proofs=False)
-        self.assertEqual(actual_outcome, self.test_list)
+        for coq_file, document in self.document.items():
+            with self.subTest(coq_file):
+                actual_outcome = Project.extract_sentences(
+                    document,
+                    glom_proofs=True,
+                    sentence_extraction_method=SEM.HEURISTIC)
+                self.assertEqual(actual_outcome, self.test_glom_list[coq_file])
 
     def test_extract_sentences_serapi(self):
         """
@@ -103,21 +114,25 @@ class TestProjectBase(unittest.TestCase):
         """
         Test method for splitting Coq code using SERAPI.
         """
-        actual_outcome = Project.extract_sentences(
-            self.document,
-            sentence_extraction_method=SentenceExtractionMethod.SERAPI,
-            glom_proofs=False)
-        self.assertEqual(actual_outcome, self.test_list)
+        for coq_file, document in self.document.items():
+            with self.subTest(coq_file):
+                actual_outcome = Project.extract_sentences(
+                    document,
+                    glom_proofs=False,
+                    sentence_extraction_method=SEM.SERAPI)
+                self.assertEqual(actual_outcome, self.test_glom_list[coq_file])
 
     def test_extract_sentences_serapi_simple_glom(self):
         """
         Test proof glomming with serapi-based sentence extractor.
         """
-        actual_outcome = Project.extract_sentences(
-            self.document,
-            sentence_extraction_method=SentenceExtractionMethod.SERAPI,
-            glom_proofs=True)
-        self.assertEqual(actual_outcome, self.test_glom_list)
+        for coq_file, document in self.document.items():
+            with self.subTest(coq_file):
+                actual_outcome = Project.extract_sentences(
+                    document,
+                    glom_proofs=True,
+                    sentence_extraction_method=SEM.SERAPI)
+                self.assertEqual(actual_outcome, self.test_glom_list[coq_file])
 
     def test_extract_sentences_serapi_glom_nested(self):
         """
