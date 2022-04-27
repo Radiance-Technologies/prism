@@ -639,7 +639,8 @@ class HeuristicParser:
             cls,
             file_path: str,
             encoding: str = 'utf-8',
-            glom_proofs: bool = True) -> List[str]:
+            glom_proofs: bool = True,
+            project_path: str = "") -> List[str]:
         """
         Split the Coq file text by sentences.
 
@@ -655,6 +656,8 @@ class HeuristicParser:
         glom_proofs : bool, optional
             A flag indicating whether or not proofs should be re-glommed
             after sentences are split, by default `True`
+        project_path : str, optional
+            Path to the project this file is from, by default ""
 
         Returns
         -------
@@ -663,11 +666,11 @@ class HeuristicParser:
             sentences, with proofs glommed (or not) depending on input
             flag.
         """
-        return cls.parse_sentences_from_source(
+        document = CoqDocument(
             file_path,
             CoqParser.parse_source(file_path),
-            encoding,
-            glom_proofs)
+            project_path=project_path)
+        return cls.parse_sentences_from_source(document, encoding, glom_proofs)
 
     @classmethod
     def parse_sentences_from_source(
