@@ -5,16 +5,50 @@ import logging
 import pathlib
 import random
 from abc import ABC, abstractmethod
-from typing import List, Optional, Tuple
+from enum import Enum, auto
+from typing import List, Optional, Tuple, Union
 
 from seutil import BashUtils
 
 from prism.data.document import CoqDocument
-from prism.language.heuristic.parser import HeuristicParser
+from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
 from prism.util.logging import default_log_level
 
 logger: logging.Logger = logging.getLogger(__name__)
 logger.setLevel(default_log_level())
+
+
+class SentenceExtractionMethod(Enum):
+    """
+    Enum for available sentence extraction methods.
+
+    Attributes
+    ----------
+    SERAPI
+        Use serapi to extract sentences
+    HEURISTIC
+        Use custom heuristic method to extract sentences
+    """
+
+    SERAPI = auto()
+    HEURISTIC = auto()
+
+    def parser(self) -> Union[HeuristicParser, SerAPIParser]:
+        """
+        Return the appropriate parser for the SEM.
+        """
+        method_enum = SentenceExtractionMethod(self.value)
+        if method_enum is SentenceExtractionMethod.SERAPI:
+            return SerAPIParser
+        elif method_enum is SentenceExtractionMethod.HEURISTIC:
+            return HeuristicParser
+        else:
+            raise ValueError(
+                f"Extraction method {method_enum} doesn't have specified parser"
+            )
+
+
+SEM = SentenceExtractionMethod
 
 
 class Project(ABC):
@@ -32,6 +66,8 @@ class Project(ABC):
     install_cmd : str or None
         The terminal command used to install the project, by default
         None.
+    sentence_extraction_method : SentenceExtractionMethod
+        The method by which sentences are extracted.
 
     Attributes
     ----------
@@ -45,7 +81,9 @@ class Project(ABC):
     clean_cmd : str or None
         The terminal command used to clean the project.
     install_cmd : str or None
-        The terminal command used to install the project..
+        The terminal command used to install the project.
+    sentence_extraction_method : SentenceExtractionMethod
+        The method by which sentences are extracted.
     """
 
     def __init__(
@@ -53,7 +91,8 @@ class Project(ABC):
             dir_abspath: str,
             build_cmd: Optional[str] = None,
             clean_cmd: Optional[str] = None,
-            install_cmd: Optional[str] = None):
+            install_cmd: Optional[str] = None,
+            sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI):
         """
         Initialize Project object.
         """
@@ -62,6 +101,7 @@ class Project(ABC):
         self.build_cmd: Optional[str] = build_cmd
         self.clean_cmd: Optional[str] = clean_cmd
         self.install_cmd: Optional[str] = install_cmd
+        self.sentence_extraction_method = sentence_extraction_method
 
     @property
     @abstractmethod
@@ -95,6 +135,22 @@ class Project(ABC):
         Project.get_file : For public API.
         """
         pass
+
+    def _get_random_sentence_internal(
+            self,
+            filename: Optional[str],
+            glom_proofs: bool,
+            **kwargs):
+        if filename is None:
+            obj = self.get_random_file(**kwargs)
+        else:
+            obj = self.get_file(filename, **kwargs)
+        sentences = self.extract_sentences(
+            obj,
+            'utf-8',
+            glom_proofs,
+            self.sentence_extraction_method)
+        return sentences
 
     def _get_size_bytes(self) -> int:
         """
@@ -225,11 +281,10 @@ class Project(ABC):
         str
             A random sentence from the project
         """
-        if filename is None:
-            obj = self.get_random_file(**kwargs)
-        else:
-            obj = self.get_file(filename, **kwargs)
-        sentences = self.split_by_sentence(obj, 'utf-8', glom_proofs)
+        sentences = self._get_random_sentence_internal(
+            filename,
+            glom_proofs,
+            **kwargs)
         sentence = random.choice(sentences)
         return sentence
 
@@ -267,11 +322,10 @@ class Project(ABC):
                     "Can't find file with more than 1 sentence after",
                     THRESHOLD,
                     "attempts. Try different inputs.")
-            if filename is None:
-                obj = self.get_random_file(**kwargs)
-            else:
-                obj = self.get_file(filename, **kwargs)
-            sentences = self.split_by_sentence(obj, 'utf-8', glom_proofs)
+            sentences = self._get_random_sentence_internal(
+                filename,
+                glom_proofs,
+                **kwargs)
             counter += 1
         first_sentence_idx = random.randint(0, len(sentences) - 2)
         return sentences[first_sentence_idx : first_sentence_idx + 2]
@@ -295,10 +349,11 @@ class Project(ABC):
         return (r.return_code, r.stdout, r.stderr)
 
     @staticmethod
-    def split_by_sentence(
+    def extract_sentences(
             document: CoqDocument,
             encoding: str = 'utf-8',
-            glom_proofs: bool = True) -> List[str]:
+            glom_proofs: bool = True,
+            sentence_extraction_method: SEM = SEM.SERAPI) -> List[str]:
         """
         Split the Coq file text by sentences.
 
@@ -315,6 +370,8 @@ class Project(ABC):
         glom_proofs : bool, optional
             A flag indicating whether or not proofs should be re-glommed
             after sentences are split, by default `True`
+        sentence_extraction_method : SentenceExtractionMethod
+            Method by which sentences should be extracted
 
         Returns
         -------
@@ -323,8 +380,7 @@ class Project(ABC):
             sentences, with proofs glommed (or not) depending on input
             flag.
         """
-        return HeuristicParser.parse_sentences_from_source(
-            document.index,
-            document.source_code,
+        return sentence_extraction_method.parser().parse_sentences_from_source(
+            document,
             encoding,
             glom_proofs)

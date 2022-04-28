@@ -120,7 +120,8 @@ class CoqGymBaseDataset:
             project_class: Optional[Type[Project]] = None,
             projects: Optional[ProjectDict] = None,
             base_dir: Optional[str] = None,
-            dir_list: Optional[Iterable[str]] = None):
+            dir_list: Optional[Iterable[str]] = None,
+            **project_class_kwargs):
         """
         Initialize the CoqGymDataset object.
 
@@ -180,7 +181,8 @@ class CoqGymBaseDataset:
                     try:
                         project = project_class(
                             os.path.join(base_dir,
-                                         proj_dir))
+                                         proj_dir),
+                            **project_class_kwargs)
                         self.projects[project.name] = project
                     except (InvalidGitRepositoryError, DirHasNoCoqFiles):
                         # If we're using ProjectRepo and a directory is
@@ -194,7 +196,7 @@ class CoqGymBaseDataset:
                     "given as well.")
             for directory in dir_list:
                 try:
-                    project = project_class(directory)
+                    project = project_class(directory, **project_class_kwargs)
                     self.projects[project.name] = project
                 except InvalidGitRepositoryError as e:
                     raise ValueError(
@@ -206,6 +208,8 @@ class CoqGymBaseDataset:
         # Store project weights for sampling later.
         self.weights = {pn: p.size_bytes for pn,
                         p in self.projects.items()}
+        self.sentence_extraction_method = next(
+            iter(self.projects.values())).sentence_extraction_method
 
     def _get_random_project(self) -> str:
         """
@@ -409,8 +413,9 @@ class CoqGymBaseDataset:
         """
         coq_file_generator = self.files(commit_names)
         for file_obj in coq_file_generator:
-            sentence_list = Project.split_by_sentence(
+            sentence_list = Project.extract_sentences(
                 file_obj,
-                glom_proofs=glom_proofs)
+                glom_proofs=glom_proofs,
+                sentence_extraction_method=self.sentence_extraction_method)
             for sentence in sentence_list:
                 yield sentence

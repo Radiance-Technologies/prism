@@ -4,7 +4,7 @@ Provides internal utilities for heuristic parsing of Coq source files.
 
 import re
 from functools import partialmethod
-from typing import Iterable, List, Optional, Tuple, Union
+from typing import Iterable, List, Optional, Tuple
 
 from prism.util.re import regex_from_options
 
@@ -405,28 +405,6 @@ class ParserUtils:
 
     See https://coq.inria.fr/refman/language/core/basic.html#attributes.
     """
-
-    @staticmethod
-    def _decode_byte_stream(
-            data: Union[bytes,
-                        str],
-            encoding: str = 'utf-8') -> str:
-        """
-        Decode the incoming data if it's a byte string.
-
-        Parameters
-        ----------
-        data : Union[bytes, str]
-            Byte-string or string data to be decoded if byte-string
-        encoding : str, optional
-            Encoding to use in decoding, by default 'utf-8'
-
-        Returns
-        -------
-        str
-            String representation of input data
-        """
-        return data.decode(encoding) if isinstance(data, bytes) else data
 
     @classmethod
     def _is_command_type(
