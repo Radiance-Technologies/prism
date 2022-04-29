@@ -1,0 +1,549 @@
+100 https://github.com/AbsInt/CompCert
+100 https://github.com/HoTT/HoTT *
+100 https://github.com/UniMath/UniMath *
+100 https://github.com/jwiegley/category-theory *
+100 https://github.com/achlipala/frap *
+100 https://github.com/uwplse/verdi
+100 https://github.com/mit-plv/fiat-crypto lotta assembly
+100 https://github.com/tchajed/coq-tricks
+100 https://github.com/PrincetonUniversity/VST
+100 https://github.com/antalsz/hs-to-coq lotta haskell
+100 https://github.com/MetaCoq/metacoq *
+100 https://github.com/QuickChick/QuickChick
+100 https://github.com/riscv/sail-riscv lotta Isabelle and Standard ML
+100 https://github.com/jscert/jscert lotta JS
+100 https://github.com/mit-plv/bedrock2 *
+100 https://github.com/stepchowfun/proofs *
+100 https://github.com/mattam82/Coq-Equations lotta OCaml
+100 https://github.com/sifive/Kami *
+100 https://github.com/uwplse/verdi-raft
+100 https://github.com/jwiegley/coq-haskell *
+100 https://github.com/DeepSpec/InteractionTrees *
+100 https://github.com/coq-community/math-classes *
+100 https://github.com/accordproject/ergo lotta JS and OCaml
+100 https://github.com/mit-plv/fiat *
+100 https://github.com/discus-lang/iron *
+100 https://github.com/math-comp/analysis *
+100 https://github.com/ilyasergey/pnp *
+100 https://github.com/smtcoq/smtcoq lotta OCaml
+100 https://github.com/verse-lab/ceramist *
+100 https://github.com/coq-community/coq-ext-lib
+100 https://github.com/mit-plv/kami *
+100 https://github.com/certichain/toychain *
+100 https://github.com/UniMath/TypeTheory *
+100 https://github.com/project-oak/silveroak *
+100 https://github.com/DistributedComponents/disel
+100 https://github.com/TheoWinterhalter/formal-type-theory *
+100 https://github.com/jasmin-lang/jasmin decent bit of OCaml
+100 https://github.com/CertiCoq/certicoq *
+100 https://github.com/mit-plv/koika lotta OCaml, some C++
+100 https://github.com/mit-pdos/perennial *
+100 https://github.com/uds-psl/coq-library-undecidability *
+100 https://github.com/mit-plv/riscv-coq lotta C and Python
+100 https://github.com/inQWIRE/QWIRE *
+100 https://github.com/sfja/sfja Does Japanese create problems for us?
+100 https://github.com/plclub/metalib
+100 https://github.com/affeldt-aist/monae *
+100 https://github.com/coq-community/coqeal *
+100 https://github.com/ymherklotz/vericert kinda a lot of OCaml
+100 https://github.com/choukh/Set-Theory *
+100 https://github.com/AU-COBRA/ConCert *
+100 https://github.com/WasmCert/WasmCert-Coq *
+100 https://github.com/sigurdschneider/lvc *
+100 https://github.com/affeldt-aist/infotheo *
+100 https://github.com/inQWIRE/SQIR *
+100 https://github.com/plclub/hs-to-coq
+100 https://github.com/peterlefanulumsdaine/general-type-theories *
+100 https://github.com/querycert/qcert bit of Java and OCaml
+100 https://github.com/math-comp/finmap *
+100 https://github.com/bedrocksystems/BRiCk fair amount of C++
+100 https://github.com/coq-community/paramcoq lots of OCaml
+100 https://github.com/arthuraa/poleiro for a blog
+100 https://github.com/coq-community/autosubst lotta TeX
+100 https://github.com/coq-community/topology
+100 https://github.com/mit-plv/bedrock *
+100 https://github.com/INRIA/velus *
+100 https://github.com/OUPL/MLCert lotta python Makefile and haskell
+100 https://github.com/damien-pous/relation-algebra lotta OCaml
+100 https://github.com/IBM/FormalML *
+100 https://github.com/vellvm/vellvm-legacy *
+100 https://github.com/imdea-software/htt *
+100 https://github.com/coq-community/coq-100-theorems lotta html
+100 https://github.com/tchajed/coq-record-update *
+100 https://github.com/bmsherman/topology lotta haskell
+100 https://github.com/jwiegley/bytestring-fiat decent bit of haskell
+100 https://github.com/mit-plv/coqutil *
+100 https://github.com/pedrotst/coquedille lotta Makefile
+100 https://github.com/coq-community/hydra-battles
+100 https://github.com/math-comp/Coq-Combi *
+100 https://github.com/snu-sf/promising-coq *
+100 https://github.com/rafaelcgs10/W-in-Coq haskell
+100 https://github.com/coq-ext-lib/coq-compile *
+100 https://github.com/math-comp/Abel *
+100 https://github.com/coq-community/dblib
+100 https://github.com/charguer/tlc *
+100 https://github.com/arthuraa/extructures *
+100 https://github.com/QinxiangCao/UnifySL *
+100 https://github.com/mit-plv/bbv
+100 https://github.com/fblanqui/color *
+100 https://github.com/vafeiadis/hahn *
+100 https://github.com/Blaisorblade/dot-iris *
+100 https://github.com/smorimoto/coq-to-ocaml-to-js lots and lots of TS
+100 https://github.com/runtimeverification/algorand-verification lotta TeX
+100 https://github.com/coq-community/lemma-overloading
+100 https://github.com/SSProve/ssprove *
+100 https://github.com/sifive/ProcKami *
+100 https://github.com/CategoricalData/HoTT-categories *
+100 https://github.com/Lysxia/coq-simple-io lotta OCaml
+100 https://github.com/thery/coqprime lotta C
+100 https://github.com/smtcoq/sniper lotta Makefile
+100 https://github.com/coq-community/atbr *
+100 https://github.com/UCSD-PL/proverbot9001 lotta html
+100 https://github.com/mit-plv/rupicola lotta OCaml
+100 https://github.com/uwplse/StructTact
+100 https://github.com/math-comp/algebra-tactics lotta prolog
+100 https://github.com/affeldt-aist/coq-robot *
+100 https://github.com/uwplse/cheerios
+100 https://github.com/jonsterling/coq-guarded-computational-type-theory *
+100 https://github.com/gmalecha/mirror-core *
+100 https://github.com/coq-community/graph-theory *
+100 https://github.com/PrincetonUniversity/DeepSpecDB *
+100 https://github.com/coq-community/bignums *
+100 https://github.com/micro-policies/micro-policies-coq *
+100 https://github.com/arthuraa/deriving *
+100 https://github.com/ynot-harvard/ynot *
+100 https://github.com/robbertkrebbers/compcert
+100 https://github.com/thery/hanoi *
+100 https://github.com/mit-plv/rewriter *
+100 https://github.com/jonsterling/coq-domains
+100 https://github.com/jwiegley/linearscan *
+100 https://github.com/uwplse/oeuf *
+100 https://github.com/arthuraa/memory-safe-language *
+100 https://github.com/jwiegley/constructive-ltl *
+100 https://github.com/coq-community/bits *
+100 https://github.com/JasonGross/lob lotta agda
+100 https://github.com/coq-community/sudoku *
+100 https://github.com/GaloisInc/cryptol-semantics lotta verilog
+100 https://github.com/roglo/banach_tarski *
+100 https://github.com/2xs/pipcore *
+100 https://github.com/imfd/GraphCoQL *
+100 https://github.com/braibant/Synthesis lotta TeX
+100 https://github.com/Lysxia/coq-ceres *
+100 https://github.com/weakmemory/imm *
+100 https://github.com/awalterschulze/regex-reexamined-coq *
+100 https://github.com/cpdt-japanese/cpdt-japanese *
+100 https://github.com/vzaliva/helix *
+100 https://github.com/uds-psl/coq-library-complexity *
+100 https://github.com/relrod/ct *
+100 https://github.com/coq-community/huffman
+100 https://github.com/rfindler/395-2013 lot of Racket
+100 https://github.com/math-comp/multinomials *
+100 https://github.com/logsem/cerise *
+100 https://github.com/samuelgruetter/riscv-coq *
+100 https://github.com/pi8027/formalized-postscript in japanese
+100 https://github.com/PrincetonUniversity/compcomp lots of C
+100 https://github.com/arthuraa/coq-utils *
+100 https://github.com/Coq-Polyhedra/Coq-Polyhedra *
+100 https://github.com/coq-community/coqtail-math *
+100 https://github.com/olaure01/yalla *
+100 https://github.com/GaloisInc/BESSPIN-Voting-System-Demonstrator-2019 lot of C
+100 https://github.com/FFaissole/Valuations *
+100 https://github.com/CategoricalData/catdb weird repo
+100 https://github.com/katamaran-project/katamaran *
+100 https://github.com/takanuva/cps *
+100 https://github.com/CertiKOS/compcert.old
+100 https://github.com/QuickChick/IFC *
+100 https://github.com/DistributedComponents/verdi-chord *
+100 https://github.com/UniMath/largecatmodules *
+100 https://github.com/eddywestbrook/predicate-monads no readme
+100 https://github.com/julesjacobs/cgraphs *
+100 https://github.com/mit-pdos/cspec *
+100 https://github.com/snu-sf/crellvm *
+100 https://github.com/mit-pdos/argosy *
+100 https://github.com/arthuraa/cryptis *
+100 https://github.com/gmalecha/mirror-shard *
+100 https://github.com/CoqHott/coq-forcing *
+100 https://github.com/roglo/coq_real *
+100 https://github.com/uds-psl/CoqTM lotta TeX and Haskell
+100 https://github.com/math-comp/tarjan *
+100 https://github.com/liyishuai/coq-http *
+100 https://github.com/DanGrayson/Ktheory *
+100 https://github.com/secure-compilation/exploring-robust-property-preservation *
+100 https://github.com/CertiGraph/CertiGraph *
+100 https://github.com/CoqHott/univalent_parametricity *
+100 https://github.com/trommler/VeriGHC *
+100 https://github.com/CTSRD-CHERI/sail-cheri-mips lots of Isabelle
+100 https://github.com/coq-contribs/containers *
+100 https://github.com/aa755/paramcoq-iff *
+100 https://github.com/Eelis/hybrid *
+100 https://github.com/martijnvermaat/infinitary-rewriting-coq *
+100 https://github.com/secure-compilation/when-good-components-go-bad *
+100 https://github.com/ppedrot/coq-forcing *
+100 https://github.com/artart78/coq-bitset *
+100 https://github.com/Zimmi48/transfer *
+100 https://github.com/gmalecha/bedrock-mirror-shard *
+100 https://github.com/sifive/StdLibKami *
+100 https://github.com/gstew5/cage *
+100 https://github.com/mit-plv/engine-bench *
+100 https://github.com/digamma-ai/asn1fpcoq *
+100 https://github.com/snu-sf/CompCertM *
+100 https://github.com/Tuplanolla/dez *
+100 https://github.com/certichain/probchain *
+100 https://github.com/robdockins/domains *
+100 https://github.com/txyyss/FormalMath no readme
+100 https://github.com/TheoWinterhalter/sirtt *
+100 https://github.com/clementblaudeau/celsius *
+100 https://github.com/dricketts/quadcopter *
+100 https://github.com/aa755/SquiggleEq *
+100 https://github.com/QinxiangCao/LOGIC *
+100 https://github.com/QinxiangCao/ClassicalReal *
+100 https://github.com/benediktahrens/rezk_completion *
+100 https://github.com/liyishuai/coq-http2 *
+100 https://github.com/riscvarchive/riscv-sail-archive archived, lots of Isabelle and ML
+100 https://github.com/Event-Structures/event-struct *
+100 https://github.com/TheoWinterhalter/ett-to-wtt *
+100 https://github.com/snu-sf/CompCertR *
+100 https://github.com/micro-policies/verified-ifc *
+100 https://github.com/verified-network-toolchain/Verified-FEC *
+100 https://github.com/namefanwjcom/MapleS *
+100 https://github.com/sec-bit/loopring-protocol2-verification *
+100 https://github.com/harp-project/AML-Formalization *
+100 https://github.com/ejgallego/ssrbit *
+100 https://github.com/roglo/puiseuxth *
+100 https://github.com/fmlab-iis/certified_qhasm_vcg lotta html
+100 https://github.com/izgzhen/iris-coq *
+100 https://github.com/co-dan/SeLoC *
+100 https://github.com/fmlab-iis/coq-nbits no readme
+100 https://github.com/Matafou/ill_narratives
+100 https://github.com/combinators/cls-coq *
+100 https://github.com/harp-project/Core-Erlang-Formalization *
+100 https://github.com/vmurali/SeqConsistency
+100 https://github.com/ps-tuebingen/decomposition-diversity lotta JS and java and HTML
+100 https://github.com/coq-community/coq-performance-tests *
+100 https://github.com/JasonGross/parsing-parses *
+100 https://github.com/cartazio/coq-hetmet no readme
+100 https://github.com/weakmemory/weakestmoToImm *
+100 https://github.com/snu-sf/llvmtwin-coq *
+100 https://github.com/GaloisInc/Coq-Flow-Equivalence *
+100 https://github.com/inQWIRE/QuantumLib *
+100 https://github.com/snu-sf/paco *
+99 https://api.github.com/repos/andrejbauer/dedekind-reals
+98 https://api.github.com/repos/pedagand/MPRI-2.4-DTP
+98 https://api.github.com/repos/DistributedComponents/InfSeqExt
+98 https://api.github.com/repos/myuon/CatQ
+97 https://api.github.com/repos/coq-community/qarith-stern-brocot
+97 https://api.github.com/repos/CertiGraph/CertiGC
+95 https://api.github.com/repos/coq-contribs/relation-algebra
+93 https://api.github.com/repos/Lysxia/advent-of-coq-2018
+93 https://api.github.com/repos/math-comp/odd-order
+91 https://api.github.com/repos/tchajed/goedel-t
+90 https://api.github.com/repos/coq-community/chapar
+90 https://api.github.com/repos/coq-community/bertrand
+88 https://api.github.com/repos/coq-community/goedel
+86 https://api.github.com/repos/uwplse/crimp
+85 https://api.github.com/repos/CoqHott/parametricity-a-la-carte
+85 https://api.github.com/repos/scaup/fae-gtlc-mu
+84 https://api.github.com/repos/arthuraa/cufp-2015-tutorial
+83 https://api.github.com/repos/cmeiklejohn/vvclocks
+81 https://api.github.com/repos/coq-community/fourcolor
+81 https://api.github.com/repos/jwiegley/refine-freer
+79 https://api.github.com/repos/julbinb/concept-params
+78 https://api.github.com/repos/logsem/free-theorems-sl
+78 https://api.github.com/repos/tm507211/CoqPerceptron
+78 https://api.github.com/repos/volodeyka/okasaki
+77 https://api.github.com/repos/jasmin-lang/coqword
+76 https://api.github.com/repos/pirapira/dry-analyzer
+75 https://api.github.com/repos/math-comp/real-closed
+74 https://api.github.com/repos/jwiegley/coq-pipes
+74 https://api.github.com/repos/TyGuS/ssl-htt
+74 https://api.github.com/repos/CoqHott/coq-effects
+73 https://api.github.com/repos/coq-community/semantics
+72 https://api.github.com/repos/DeepSpec/dsss17
+71 https://api.github.com/repos/minkiminki/Ordinal
+70 https://api.github.com/repos/coq-community/reglang
+70 https://api.github.com/repos/joscoh/graph-proofs
+69 https://api.github.com/repos/imdea-software/fcsl-pcm
+69 https://api.github.com/repos/michaelsproul/dblib-linear
+69 https://api.github.com/repos/mit-plv/network-configurations
+68 https://api.github.com/repos/clayrat/fav-ssr
+68 https://api.github.com/repos/wilcoxjay/mechanized-metatheory2
+67 https://api.github.com/repos/coq-community/coq-art
+67 https://api.github.com/repos/wouter-swierstra/xmonad
+67 https://api.github.com/repos/choukh/Baby-Set-Theory
+67 https://api.github.com/repos/math-comp/mczify
+67 https://api.github.com/repos/tuura/selective-theory-coq
+67 https://api.github.com/repos/yforster/stlc-norm
+66 https://api.github.com/repos/foreverbell/verified
+66 https://api.github.com/repos/Barry-Jay/Intensional-computation
+66 https://api.github.com/repos/coq-contribs/lin-alg
+66 https://api.github.com/repos/wenkokke/EnumeratingTheRationals
+65 https://api.github.com/repos/adampetcher/fcf
+65 https://api.github.com/repos/itleigns/CoqLibrary
+65 https://api.github.com/repos/armoredsoftware/session
+65 https://api.github.com/repos/palmskog/pcc
+64 https://api.github.com/repos/tchajed/iris-simp-lang
+64 https://api.github.com/repos/annenkov/futhark-extract
+63 https://api.github.com/repos/dboulytchev/miniKanren-coq
+63 https://api.github.com/repos/peterlefanulumsdaine/hott-limits
+62 https://api.github.com/repos/Ekdohibs/PolyGen
+62 https://api.github.com/repos/OKU1987/FJ_whoas
+60 https://api.github.com/repos/UniMath/Foundations
+59 https://api.github.com/repos/sec-bit/tokenlibs-with-proofs
+59 https://api.github.com/repos/palmskog/chip
+57 https://api.github.com/repos/jdoughertyii/hott-exercises
+56 https://api.github.com/repos/konne88/SpaceSearch
+56 https://api.github.com/repos/thery/PolTac
+56 https://api.github.com/repos/UniMath/lBsystems
+55 https://api.github.com/repos/damien-pous/coinduction
+55 https://api.github.com/repos/palmskog/coind-sem-while
+55 https://api.github.com/repos/tchajed/coq-array
+54 https://api.github.com/repos/coq-community/zorns-lemma
+54 https://api.github.com/repos/tchajed/coq-sep-logic
+54 https://api.github.com/repos/coq-community/comp-dec-modal
+52 https://api.github.com/repos/Ptival/HaysTac
+51 https://api.github.com/repos/jonleivent/mindless-coding
+50 https://api.github.com/repos/olivierverdier/GeometricAlgebra
+50 https://api.github.com/repos/gstew5/games
+50 https://api.github.com/repos/mit-plv/stencils
+50 https://api.github.com/repos/jeanpehk/doubly-generic
+50 https://api.github.com/repos/coq-contribs/random
+49 https://api.github.com/repos/jonleivent/mindless-coding-phase2
+49 https://api.github.com/repos/coq-community/coqoban
+49 https://api.github.com/repos/cornell-netlab/sigcomm21-tutorial
+49 https://api.github.com/repos/coq-contribs/finger-tree
+49 https://api.github.com/repos/nobrakal/coq-alga
+48 https://api.github.com/repos/pi8027/stablesort
+48 https://api.github.com/repos/drouhling/LaSalle
+48 https://api.github.com/repos/letouzey/coq-mmaps
+48 https://api.github.com/repos/coq-contribs/coinductive-reals
+47 https://api.github.com/repos/coq-contribs/tree-automata
+47 https://api.github.com/repos/coq-contribs/continuations
+47 https://api.github.com/repos/KyushuUniversityMathematics/RelationalCalculus
+46 https://api.github.com/repos/maximedenes/coq-amd64
+46 https://api.github.com/repos/DistributedComponents/verdi-lockserv
+46 https://api.github.com/repos/coq-community/almost-full
+45 https://api.github.com/repos/coq-community/gaia
+44 https://api.github.com/repos/Yosuke-Ito-345/Actuary
+44 https://api.github.com/repos/coq-contribs/cats-in-zfc
+44 https://api.github.com/repos/CertiCoq/VeriFFI
+43 https://api.github.com/repos/gmalecha/coq-printf
+43 https://api.github.com/repos/dunnl/tealeaves
+43 https://api.github.com/repos/jdrprod/SATurne
+43 https://api.github.com/repos/ANSSI-FR/coq-prelude
+43 https://api.github.com/repos/Lysxia/coq-mtl
+43 https://api.github.com/repos/lukaszcz/COQ-IMP
+42 https://api.github.com/repos/mmcco/Verified-BPF
+41 https://api.github.com/repos/jtassarotti/coq-proba
+41 https://api.github.com/repos/llee454/functional-algebra
+41 https://api.github.com/repos/coq-contribs/algebra
+41 https://api.github.com/repos/thery/Plouffe
+41 https://api.github.com/repos/coq-contribs/nfix
+41 https://api.github.com/repos/marshall-lee/software_foundations
+40 https://api.github.com/repos/amutake/a-pi
+39 https://api.github.com/repos/pa-ba/calc-comp
+39 https://api.github.com/repos/coq-community/hoare-tut
+39 https://api.github.com/repos/DmxLarchey/ite-normalisation
+39 https://api.github.com/repos/coq-contribs/pts
+39 https://api.github.com/repos/thery/grobner
+38 https://api.github.com/repos/coq-contribs/quicksort-complexity
+37 https://api.github.com/repos/inQWIRE/LinearTypingContexts
+37 https://api.github.com/repos/facebookresearch/shack
+37 https://api.github.com/repos/Armael/minicooper
+36 https://api.github.com/repos/Sobernard/Lindemann
+36 https://api.github.com/repos/holmuk/coq-zipper
+36 https://api.github.com/repos/jonsterling/coq-synthetic-realizability
+35 https://api.github.com/repos/barry-jay-personal/tree-calculus
+35 https://api.github.com/repos/coq-contribs/ieee754
+35 https://api.github.com/repos/uwplse/peek
+35 https://api.github.com/repos/coq-contribs/icharate
+34 https://api.github.com/repos/coq-contribs/coq-in-coq
+33 https://api.github.com/repos/coq-community/alea
+33 https://api.github.com/repos/coq-community/apery
+33 https://api.github.com/repos/tchajed/coq-tactical
+33 https://api.github.com/repos/logsem/aneris
+33 https://api.github.com/repos/coq-contribs/area-method
+32 https://api.github.com/repos/lastland/ClairvoyanceMonad
+32 https://api.github.com/repos/aslanix/SmallStepNI
+32 https://api.github.com/repos/stanislaw/berlin-software-verification-meetup
+32 https://api.github.com/repos/sifive/FpuKami
+32 https://api.github.com/repos/coq-contribs/fermat4
+32 https://api.github.com/repos/coq-contribs/matrices
+32 https://api.github.com/repos/liyishuai/cps
+31 https://api.github.com/repos/k-qy/linear-logic
+31 https://api.github.com/repos/bedrocksystems/coq-lens
+30 https://api.github.com/repos/gmalecha/coq-ltac-iter
+30 https://api.github.com/repos/tchajed/coq-ltac2-experiments
+30 https://api.github.com/repos/tabareau/Cocasse
+30 https://api.github.com/repos/lukaszcz/infinitary-confluence
+30 https://api.github.com/repos/hablapps/koky
+30 https://api.github.com/repos/JasonGross/ct4s
+30 https://api.github.com/repos/jonsterling/coq-sgdt
+29 https://api.github.com/repos/coq-contribs/ltl
+29 https://api.github.com/repos/coq-contribs/gc
+29 https://api.github.com/repos/aspiwack/cosa
+28 https://api.github.com/repos/xavierleroy/cdf-sem-meca
+28 https://api.github.com/repos/LuisScoccola/cubicaltypes
+28 https://api.github.com/repos/ccyip/coq-idt
+28 https://api.github.com/repos/gancherj/lingstuff
+27 https://api.github.com/repos/xavierleroy/cdf-program-logics
+27 https://api.github.com/repos/Zilliqa/scilla-coq
+27 https://api.github.com/repos/charguer/formalmetacoq
+27 https://api.github.com/repos/FTRobbin/Ironwood
+27 https://api.github.com/repos/bendy/SFExtras
+27 https://api.github.com/repos/wrengr/coq-wrengr-util
+27 https://api.github.com/repos/VERIMAG-Polyhedra/VplTactic
+26 https://api.github.com/repos/coq-community/HighSchoolGeometry
+26 https://api.github.com/repos/coq-contribs/paradoxes
+26 https://api.github.com/repos/coq-contribs/persistent-union-find
+26 https://api.github.com/repos/uwplse/bagpipe
+26 https://api.github.com/repos/dricketts/barrier-sampled-data
+25 https://api.github.com/repos/tchajed/regex-derivative
+25 https://api.github.com/repos/appliedfm/coq-vsu-int_or_ptr
+25 https://api.github.com/repos/pa-ba/cps-defun
+24 https://api.github.com/repos/coq-contribs/graph-basics
+24 https://api.github.com/repos/bacam/handlers-in-ott
+24 https://api.github.com/repos/bollu/polyir
+24 https://api.github.com/repos/volodeyka/coqspec
+24 https://api.github.com/repos/choukh/Googology
+23 https://api.github.com/repos/coq-community/regexp-Brzozowski
+23 https://api.github.com/repos/thery/lemonde
+23 https://api.github.com/repos/coq-contribs/coalgebras
+21 https://api.github.com/repos/ymanerka/pipecheck_tutorial
+21 https://api.github.com/repos/coq-contribs/concat
+20 https://api.github.com/repos/coq-contribs/automata
+20 https://api.github.com/repos/coq-contribs/pi-calc
+20 https://api.github.com/repos/coq-community/generic-environments
+20 https://api.github.com/repos/coq-contribs/fundamental-arithmetics
+20 https://api.github.com/repos/logsem/iris-tini
+20 https://api.github.com/repos/ezrakilty/sn-stlc-de-bruijn-coq
+19 https://api.github.com/repos/kunalg123/riscv_workshop_collaterals
+19 https://api.github.com/repos/math-comp/tutorial_material
+19 https://api.github.com/repos/CoqHott/DICoq
+19 https://api.github.com/repos/rod-lin/sf-lf
+19 https://api.github.com/repos/DmxLarchey/PC19
+19 https://api.github.com/repos/coq-contribs/lambek
+18 https://api.github.com/repos/mmcco/verified-parser-example
+18 https://api.github.com/repos/coq-contribs/zfc
+18 https://api.github.com/repos/coq-contribs/group-theory
+18 https://api.github.com/repos/gerlion/secure-e-voting-with-coq
+18 https://api.github.com/repos/choukh/Computational-Metaphysics
+18 https://api.github.com/repos/tchajed/seplogic-demo
+17 https://api.github.com/repos/xavierleroy/cdf-mech-sem
+17 https://api.github.com/repos/pa-ba/McCarthy-Painter
+17 https://api.github.com/repos/skeuchel/gdtc
+17 https://api.github.com/repos/coq-contribs/miniml
+16 https://api.github.com/repos/gogabr/lambekMikulas
+16 https://api.github.com/repos/fsmith1024/scales
+16 https://api.github.com/repos/affeldt-aist/seplog
+15 https://api.github.com/repos/herd/CoqCat
+15 https://api.github.com/repos/thery/FlocqLecture
+15 https://api.github.com/repos/math-comp/bigenough
+15 https://api.github.com/repos/mrhaandi/ipc2
+14 https://api.github.com/repos/coq-contribs/euclidean-geometry
+14 https://api.github.com/repos/zoep/safe-for-space
+14 https://api.github.com/repos/tchajed/cardinality
+13 https://api.github.com/repos/tchajed/ltac2-tutorial
+13 https://api.github.com/repos/csgordon/coq-fsharp
+13 https://api.github.com/repos/tchajed/coq-io
+13 https://api.github.com/repos/clayrat/dialectica
+12 https://api.github.com/repos/tymmym/software-foundations
+12 https://api.github.com/repos/mit-pdos/6.826-2019-labs
+12 https://api.github.com/repos/fpottier/loop
+12 https://api.github.com/repos/finrod/Refocusing
+11 https://api.github.com/repos/Lysxia/coq-recursion-schemes
+11 https://api.github.com/repos/coq-contribs/regexp
+11 https://api.github.com/repos/gmalecha/coq-extensible-records
+11 https://api.github.com/repos/MathiasVP/ni-formal-gc
+11 https://api.github.com/repos/ipdl/ipdl
+11 https://api.github.com/repos/aa755/CFGV
+11 https://api.github.com/repos/Mbodin/coq-alternative-facts
+11 https://api.github.com/repos/plietar/pony-proofs
+11 https://api.github.com/repos/uds-psl/ill-undecidability
+10 https://api.github.com/repos/MichaelBurge/pornview
+10 https://api.github.com/repos/AU-COBRA/PoS-NSB
+10 https://api.github.com/repos/finrod/System-T
+10 https://api.github.com/repos/mit-pdos/6.826-2017-labs
+10 https://api.github.com/repos/kaist-cp/study-csl
+10 https://api.github.com/repos/jwiegley/set-theory
+10 https://api.github.com/repos/gmalecha/coq-temporal
+10 https://api.github.com/repos/wangjwchn/sparcv8-coq
+10 https://api.github.com/repos/mathink/mslambda
+10 https://api.github.com/repos/davidnowak/cecoa
+10 https://api.github.com/repos/hyonzin/wallace-tree
+10 https://api.github.com/repos/dasuxullebt/DampFnudeL
+10 https://api.github.com/repos/skeuchel/mtc
+9 https://api.github.com/repos/dbp/howtoproveacompiler
+9 https://api.github.com/repos/palmskog/coq-program-verification-template
+9 https://api.github.com/repos/l2ctsinghua/l2c
+9 https://api.github.com/repos/mit-pdos/deepspec-pocs
+9 https://api.github.com/repos/coq-contribs/propcalc
+9 https://api.github.com/repos/YaZko/Game_Semantics
+9 https://api.github.com/repos/folone/sf-building
+8 https://api.github.com/repos/thery/T2048
+8 https://api.github.com/repos/vrahli/Velisarios
+8 https://api.github.com/repos/pleiad/Refinements
+8 https://api.github.com/repos/jwiegley/coq-lattice
+8 https://api.github.com/repos/phadej/lens-laws
+8 https://api.github.com/repos/wilcoxjay/tactics
+7 https://api.github.com/repos/EasyCrypt/certicrypt
+7 https://api.github.com/repos/dbp/howtoprovefullabstraction
+7 https://api.github.com/repos/mit-pdos/6.826-2020-labs
+7 https://api.github.com/repos/palmskog/ocaml-light
+7 https://api.github.com/repos/haslab/CircGen
+7 https://api.github.com/repos/stepchowfun/coq-intro
+7 https://api.github.com/repos/rems-project/armv8a-address-translation-coq
+7 https://api.github.com/repos/wricciot/nullSQL
+6 https://api.github.com/repos/ankitku/TAL0
+6 https://api.github.com/repos/gmalecha/coq-interaction-trees
+6 https://api.github.com/repos/SimonBoulier/TypingFlags
+6 https://api.github.com/repos/xavierleroy/canonical-binary-tries
+6 https://api.github.com/repos/ymanerka/pipeproof
+6 https://api.github.com/repos/csvoss/coqingbird
+6 https://api.github.com/repos/jtassarotti/polaris
+6 https://api.github.com/repos/dbp/literatecoq
+6 https://api.github.com/repos/gmalecha/coq-markov
+6 https://api.github.com/repos/yoshihiro503/coqQuickCheck
+6 https://api.github.com/repos/foreverbell/permutation-solver
+6 https://api.github.com/repos/xobs/ice40-multest
+6 https://api.github.com/repos/lematt1991/ICFP15-Coq-Proofs
+5 https://api.github.com/repos/bobatkey/system-f-parametricity-model
+5 https://api.github.com/repos/thoughtpolice/coq-skeleton
+5 https://api.github.com/repos/neshkeev/Logical-Foundations
+5 https://api.github.com/repos/smunaut/ecp5-speed
+4 https://api.github.com/repos/braibant/exploit-plugin
+4 https://api.github.com/repos/roglo/cauchy_schwarz
+4 https://api.github.com/repos/jtcriswell/Pudding
+4 https://api.github.com/repos/frenetic-lang/featherweight-openflow
+4 https://api.github.com/repos/yoshihiro503/coqio
+4 https://api.github.com/repos/snu-sf/cpdtlib
+4 https://api.github.com/repos/draperlaboratory/parts
+3 https://api.github.com/repos/daniellustig/pipecheck
+3 https://api.github.com/repos/acowley/LinearLogic
+3 https://api.github.com/repos/JetBrains/ot-coq
+3 https://api.github.com/repos/volodeyka/trust-coq
+3 https://api.github.com/repos/daniellustig/coatcheck
+3 https://api.github.com/repos/llbit/Pigeonhole-Principle
+3 https://api.github.com/repos/SkySkimmer/ZF
+3 https://api.github.com/repos/bixuanzju/phd-thesis-artifact
+3 https://api.github.com/repos/Gopiandcode/othudd
+2 https://api.github.com/repos/NVlabs/ptxmemorymodel
+2 https://api.github.com/repos/dschepler/coq-topology
+2 https://api.github.com/repos/arthuraa/beaq
+2 https://api.github.com/repos/tangentforks/FourColorTheorem
+2 https://api.github.com/repos/m0rphism/definitional
+2 https://api.github.com/repos/dschepler/coq-zorns-lemma
+2 https://api.github.com/repos/jaredly/coqdocs
+2 https://api.github.com/repos/wangpengmit/ssmatrix-theory
+2 https://api.github.com/repos/vafeiadis/cslsound
+2 https://api.github.com/repos/yizhouzhang/olaf-coq
+2 https://api.github.com/repos/jpaykin/ControlHTT
+2 https://api.github.com/repos/jomaa/MIMIC
+2 https://api.github.com/repos/pqwy/colorless-green-ideas
+2 https://api.github.com/repos/qcfu-bu/dtest-coq
+2 https://api.github.com/repos/kisom/okasaki-coq
+1 https://api.github.com/repos/novifinancial/LibraChain
+1 https://api.github.com/repos/rnrand/VPHL
+1 https://api.github.com/repos/aronisstav/formal-trace-theory
+1 https://api.github.com/repos/jonsterling/coq-algebra-experiments
+1 https://api.github.com/repos/uds-psl/coq-synthetic-computability
+1 https://api.github.com/repos/strub/glv
