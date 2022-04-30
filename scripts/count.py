@@ -1,15 +1,14 @@
 """
-Module for downloading projects
+Module for downloading projects.
 """
-from multiprocessing.sharedctypes import Value
-import os
 import json
+import os
 from multiprocessing import Pool
+from multiprocessing.sharedctypes import Value
 
-
-from prism.project.repo import ProjectRepo
-from prism.project.base import SEM
 from prism.language.heuristic.util import ParserUtils
+from prism.project.base import SEM
+from prism.project.repo import ProjectRepo
 
 
 def proofs(path: os.PathLike):
@@ -22,9 +21,10 @@ def proofs(path: os.PathLike):
     count: int = 0
     for file in file_list:
         document = project.get_file(file)
-        sentences = ProjectRepo.extract_sentences(document,
-                                                  glom_proofs=False,
-                                                  sentence_extraction_method=project.sentence_extraction_method)
+        sentences = ProjectRepo.extract_sentences(
+            document,
+            glom_proofs=False,
+            sentence_extraction_method=project.sentence_extraction_method)
         stats = parser._compute_sentence_statistics(sentences)
         count += len(stats.ender_indices)
     return os.path.basename(path), count
@@ -32,16 +32,17 @@ def proofs(path: os.PathLike):
 
 def sentences(path: os.PathLike):
     """
-    Count number of sentences
+    Count number of sentences.
     """
     project = ProjectRepo(path, sentence_extraction_method=SEM.HEURISTIC)
     file_list = project.get_file_list()
     count: int = 0
     for file in file_list:
         document = project.get_file(file)
-        sentences = ProjectRepo.extract_sentences(document,
-                                                  glom_proofs=False,
-                                                  sentence_extraction_method=project.sentence_extraction_method)
+        sentences = ProjectRepo.extract_sentences(
+            document,
+            glom_proofs=False,
+            sentence_extraction_method=project.sentence_extraction_method)
         count += len(sentences)
     return os.path.basename(path), count
 
