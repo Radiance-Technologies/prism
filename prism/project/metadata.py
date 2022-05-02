@@ -10,19 +10,6 @@ from typing import List, Optional
 import seutil as su
 
 
-def load_metadata_from_yaml(filepath) -> list:
-    """
-    Create list of `ProjectMetadata` objects.
-    """
-    data = su.io.load(filepath, su.io.Fmt.yaml)
-    project_metadata: List[ProjectMetadata] = [
-        su.io.deserialize(project,
-                          ProjectMetadata) for project in data
-    ]
-
-    return project_metadata
-
-
 @dataclass(order=True)
 class ProjectMetadata:
     """
@@ -55,8 +42,9 @@ class ProjectMetadata:
                 "Missing following required field(s): %s"
                 % ", ".join(missing_required_fields))
 
+    @classmethod
     def dump(
-            self,
+            cls,
             projects: Iterable['ProjectMetadata'],
             output_filepath: os.PathLike,
             fmt: su.io.Fmt = su.io.Fmt.yaml) -> None:
@@ -85,3 +73,31 @@ class ProjectMetadata:
             # Write to file
             with open(output_filepath, 'a') as output_file:
                 fmt.writer(output_file, serialized)
+
+    @classmethod
+    def load(cls,
+             filepath: os.PathLike,
+             fmt: su.io.Fmt = su.io.Fmt.yaml) -> List['ProjectMetadata']:
+        """
+        Create list of `ProjectMetadata` objects from input file.
+
+        Parameters
+        ----------
+        filepath : os.PathLike
+            Filepath of YAML file containing project metadata
+        fmt : su.io.Fmt, optional
+            Designated format of the input file,
+            by default su.io.Fmt.yaml
+
+        Returns
+        -------
+        List[ProjectMetadata]
+            List of `ProjectMetadata` objects
+        """
+        data = su.io.load(filepath, su.io.Fmt.yaml)
+        project_metadata: List[ProjectMetadata] = [
+            su.io.deserialize(project,
+                              ProjectMetadata) for project in data
+        ]
+
+        return project_metadata
