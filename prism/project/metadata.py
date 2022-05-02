@@ -3,6 +3,7 @@ Contains all metadata related to paticular GitHub repositories.
 """
 
 import os
+from collections import Iterable
 from dataclasses import dataclass, fields
 from typing import List, Optional
 
@@ -54,24 +55,33 @@ class ProjectMetadata:
                 "Missing following required field(s): %s"
                 % ", ".join(missing_required_fields))
 
-    def serialize_to_file(self, output_filepath: os.PathLike) -> None:
+    def dump(
+            self,
+            projects: Iterable['ProjectMetadata'],
+            output_filepath: os.PathLike,
+            fmt: su.io.Fmt = su.io.Fmt.yaml) -> None:
         """
         Serialize metadata and writes to .yml file.
 
         Parameters
         ----------
+        projects : Iterable[ProjectMetadata]
+            List of `ProjectMetadata` class objects to be serialized
         output_filepath : os.PathLike
-            The path of the file to which the metadata will be written.
+            Filepath of YAML file to be written containing metadata
+            for 1+ projects
+        fmt : su.io.Fmt, optional
+            Designated format of the output file,
+            by default su.io.Fmt.yaml
         """
         # Manual bypass for writing multiple projects to an existing
         # file since seutil.io doesn't support this feature for YAML
         if not os.path.isfile(output_filepath):
-            su.io.dump(output_filepath, [self], fmt=su.io.Fmt.yaml)
+            su.io.dump(output_filepath, projects, fmt=fmt)
         else:
             # Serialize
-            serialized = su.io.serialize([self], fmt='yaml')
+            serialized = su.io.serialize(projects, fmt=fmt)
 
             # Write to file
             with open(output_filepath, 'a') as output_file:
-                output_file.write("\n")
-                su.io.Fmt.yaml.writer(output_file, serialized)
+                fmt.writer(output_file, serialized)
