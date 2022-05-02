@@ -17,16 +17,18 @@ class ProjectMetadata:
     """
 
     project_name: str = None
-    project_url: str = None
     serapi_options: str = None
-    coq_version: List[str] = None
-    serapi_version: List[str] = None
-    build_cmd: str = None
-    opam_repos: Optional[List[str]] = None
+    coq_version: str = None
+    serapi_version: str = None
+    ignore_path_regex: List[str] = None
+    coq_dependencies: List[str] = None
+    build_cmd: List[str] = None
+    install_cmd: List[str] = None
+    clean_cmd: List[str] = None
+    opam_repos: List[str] = None
+    opam_dependencies: List[str] = None
+    project_url: Optional[str] = None
     commit_sha: Optional[str] = None
-    ignore_path_regex: Optional[List[str]] = None
-    install_cmd: Optional[str] = None
-    clean_cmd: Optional[str] = None
 
     def __post_init__(self) -> None:
         """
