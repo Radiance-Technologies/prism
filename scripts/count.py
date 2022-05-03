@@ -3,10 +3,9 @@ Module for downloading projects.
 """
 import json
 import os
+import sys
 from multiprocessing import Pool
-from multiprocessing.sharedctypes import Value
 
-from prism.language.heuristic.util import ParserUtils
 from prism.project.base import SEM
 from prism.project.repo import ProjectRepo
 
@@ -47,8 +46,22 @@ def sentences(path: os.PathLike):
     return os.path.basename(path), count
 
 
+def all_counts(path: os.PathLike):
+    """
+    Generate counting for sentences and proofs.
+    """
+    name, p = proofs(path)
+    name, s = sentences(path)
+    return {
+        name: {
+            "proofs": p,
+            "sentences": s
+        }
+    }
+
+
 if __name__ == '__main__':
-    import sys
+
     root_dir = sys.argv[1]
     json_file = sys.argv[2]
     n_procs = sys.argv[3]
@@ -61,8 +74,16 @@ if __name__ == '__main__':
         func = sentences
     else:
         raise ValueError(f"Invalid mode: {mode}")
+
+    counts = {}
     with Pool(int(n_procs)) as p:
-        counts = p.map(proofs, dirs)
-    counts = dict(counts)
+        data = p.map(all_counts, dirs)
+    for d in data:
+        counts.update(d)
+
+    total_proof = 0
+    total_sentence = 0
     with open(json_file, 'w') as fp:
         json.dump(counts, fp)
+    print(f"Total proofs: {total_proof}")
+    print(f"Total sentences: {total_sentence}")
