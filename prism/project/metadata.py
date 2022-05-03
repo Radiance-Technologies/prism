@@ -3,7 +3,7 @@ Contains all metadata related to paticular GitHub repositories.
 """
 
 import os
-from collections import Iterable
+from collections.abc import Iterable
 from dataclasses import dataclass, fields
 from typing import List, Optional
 
@@ -99,7 +99,7 @@ class ProjectMetadata:
         data = su.io.load(filepath, su.io.Fmt.yaml)
         project_metadata: List[ProjectMetadata] = [
             su.io.deserialize(project,
-                              ProjectMetadata) for project in data
+                              cls) for project in data
         ]
 
         return project_metadata
