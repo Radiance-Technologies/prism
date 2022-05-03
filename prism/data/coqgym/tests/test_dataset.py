@@ -1,7 +1,6 @@
 """
-Test module for coqgym_interface.coqgym_base.
+Test module for prism.data.coqgym.dataset module.
 """
-import json
 import os
 import shutil
 import unittest
@@ -9,165 +8,7 @@ import unittest
 import git
 
 from prism.data.coqgym.dataset import CoqGymBaseDataset
-from prism.data.document import CoqDocument
-from prism.project import Project, ProjectDir, ProjectRepo
-from prism.tests import _COQ_EXAMPLES_PATH
-
-
-class TestProject(unittest.TestCase):
-    """
-    Class for testing coqgym_base module.
-    """
-
-    def setUp(self):
-        """
-        Set up class for testing coqgym_base module.
-        """
-        expected_filename = os.path.join(
-            _COQ_EXAMPLES_PATH,
-            "split_by_sentence_expected.json")
-        self.test_contents = {}
-        self.document = {}
-        self.test_list = {}
-        self.test_glom_list = {}
-        coq_example_files = ["simple", "nested", "Alphabet"]
-        for coq_file in coq_example_files:
-            test_filename = os.path.join(_COQ_EXAMPLES_PATH, f"{coq_file}.v")
-            with open(test_filename, "rt") as f:
-                self.test_contents[coq_file] = f.read()
-            self.document[coq_file] = CoqDocument(
-                test_filename,
-                self.test_contents[coq_file])
-            with open(expected_filename, "rt") as f:
-                contents = json.load(f)
-                self.test_list[coq_file] = contents[f"{coq_file}_test_list"]
-                self.test_glom_list[coq_file] = contents[
-                    f"{coq_file}_test_glom_list"]
-
-    def test_split_by_sentence(self):
-        """
-        Test method for splitting Coq code by sentence.
-        """
-        for coq_file, document in self.document.items():
-            with self.subTest(coq_file):
-                actual_outcome = Project.split_by_sentence(
-                    document,
-                    glom_proofs=False)
-                self.assertEqual(actual_outcome, self.test_list[coq_file])
-
-    def test_split_by_sentence_glom(self):
-        """
-        Test method for splitting Coq code by sentence.
-        """
-        for coq_file, document in self.document.items():
-            with self.subTest(coq_file):
-                actual_outcome = Project.split_by_sentence(
-                    document,
-                    glom_proofs=True)
-                self.assertEqual(actual_outcome, self.test_glom_list[coq_file])
-
-
-class TestProjectRepo(unittest.TestCase):
-    """
-    Class for testing `ProjectRepo`.
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        """
-        Resolve the module path and clone CompCert repo.
-        """
-        cls.test_path = os.path.dirname(__file__)
-        cls.repo_path = os.path.join(cls.test_path, "CompCert")
-        try:
-            cls.test_repo = git.Repo.clone_from(
-                "https://github.com/AbsInt/CompCert.git",
-                cls.repo_path)
-        except git.GitCommandError:
-            cls.test_repo = git.Repo(cls.repo_path)
-        # Checkout HEAD of master as of March 14, 2022
-        cls.master_hash = "9d3521b4db46773239a2c5f9f6970de826075508"
-        cls.test_repo.git.checkout(cls.master_hash)
-        cls.project = ProjectRepo(cls.repo_path)
-
-    def test_get_file(self):
-        """
-        Ensure get_file method returns a file as expected.
-        """
-        file_object = self.project.get_file(
-            os.path.join(self.repo_path,
-                         "cfrontend",
-                         "Ctypes.v"),
-            self.master_hash)
-        self.assertEqual(
-            file_object.abspath,
-            os.path.join(self.repo_path,
-                         "cfrontend",
-                         "Ctypes.v"))
-        self.assertGreater(len(file_object.source_code), 0)
-
-    def test_get_random_commit(self):
-        """
-        Ensure a sensible commit object is returned.
-        """
-        commit_hash = self.project.get_random_commit()
-        self.assertEqual(len(commit_hash.hexsha), 40)
-
-    def test_get_random_file(self):
-        """
-        Ensure a correctly-formed random file is returned.
-        """
-        random_file = self.project.get_random_file(commit_name=self.master_hash)
-        self.assertTrue(random_file.abspath.endswith(".v"))
-        self.assertGreater(len(random_file.source_code), 0)
-
-    def test_get_random_sentence(self):
-        """
-        Ensure a properly-formed random sentence is returned.
-        """
-        random_sentence = self.project.get_random_sentence(
-            commit_name=self.master_hash)
-        self.assertIsInstance(random_sentence, str)
-        self.assertTrue(random_sentence.endswith('.'))
-
-    def test_get_random_sentence_pair(self):
-        """
-        Ensure correctly-formed sentence pairs are returned.
-        """
-        random_pair = self.project.get_random_sentence_pair_adjacent(
-            commit_name=self.master_hash)
-        for sentence in random_pair:
-            self.assertIsInstance(sentence, str)
-            self.assertTrue(sentence.endswith('.'))
-            self.assertGreater(len(sentence), 0)
-
-    @classmethod
-    def tearDownClass(cls):
-        """
-        Remove the cloned CompCert repo.
-        """
-        del cls.test_repo
-        shutil.rmtree(os.path.join(cls.repo_path))
-
-
-class TestProjectDir(TestProjectRepo):
-    """
-    Tests for `ProjectDir`, based on `TestProjectRepo`.
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        """
-        Set the project to use `ProjectDir` instead of `ProjectRepo`.
-        """
-        super().setUpClass()
-        cls.project = ProjectDir(cls.repo_path)
-
-    def test_get_random_commit(self):
-        """
-        Ignore; this method is not implemented in `ProjectDir`.
-        """
-        pass
+from prism.project import ProjectDir, ProjectRepo, SentenceExtractionMethod
 
 
 class TestCoqGymBaseDataset(unittest.TestCase):
@@ -208,7 +49,9 @@ class TestCoqGymBaseDataset(unittest.TestCase):
             except git.GitCommandError:
                 repo = git.Repo(project_path)
             cls.repos[project_name] = repo
-            cls.projects[project_name] = ProjectRepo(project_path)
+            cls.projects[project_name] = ProjectRepo(
+                project_path,
+                sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
         cls.dataset = CoqGymBaseDataset(
             project_class=ProjectRepo,
             projects=cls.projects)
@@ -285,7 +128,8 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         """
         dataset = CoqGymBaseDataset(
             project_class=ProjectDir,
-            base_dir=self.test_path)
+            base_dir=self.test_path,
+            sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
         for project_name in self.project_names:
             with self.subTest(project_name):
                 random_sentence = dataset.get_random_sentence(
@@ -299,7 +143,8 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         """
         dataset = CoqGymBaseDataset(
             project_class=ProjectDir,
-            dir_list=self.repo_paths.values())
+            dir_list=self.repo_paths.values(),
+            sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
         for project_name in self.project_names:
             with self.subTest(project_name):
                 random_sentence = dataset.get_random_sentence(
@@ -313,7 +158,8 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         """
         dataset = CoqGymBaseDataset(
             project_class=ProjectRepo,
-            base_dir=self.test_path)
+            base_dir=self.test_path,
+            sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
         for project_name in self.project_names:
             with self.subTest(project_name):
                 random_sentence = dataset.get_random_sentence(
@@ -328,7 +174,8 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         """
         dataset = CoqGymBaseDataset(
             project_class=ProjectRepo,
-            dir_list=self.repo_paths.values())
+            dir_list=self.repo_paths.values(),
+            sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
         for project_name in self.project_names:
             with self.subTest(project_name):
                 random_sentence = dataset.get_random_sentence(

@@ -642,6 +642,31 @@ class CoqParser:
         logger.setLevel(logging.DEBUG)
 
     @classmethod
+    def decode_byte_string(
+            cls,
+            byte_string: bytes,
+            errors: str = "replace",
+            encoding: str = "utf-8") -> str:
+        """
+        Decode byte-string to string with different defaults.
+
+        Parameters
+        ----------
+        byte_string : bytes
+            The byte-string to be decoded
+        errors : str, optional
+            How to handle decoding errors, by default "replace"
+        encoding : str, optional
+            What encoding to use for decoding, by default "utf-8"
+
+        Returns
+        -------
+        str
+            The decoded byte-string
+        """
+        return byte_string.decode(encoding=encoding, errors=errors)
+
+    @classmethod
     def parse_sertok_sentences(  # noqa: C901
             cls,
             sertok_sentences: List[SexpInfo.SertokSentence],
@@ -713,7 +738,14 @@ class CoqParser:
                             lineno=sertok_token.loc.lineno_last,
                         ))
                     sertok_token.kind = TokenConsts.KIND_ID
-                    sertok_token.loc.beg_charno += 1
+                    sertok_token.loc = SexpInfo.Loc(
+                        filename=sertok_token.loc.filename,
+                        lineno=sertok_token.loc.lineno,
+                        bol_pos=sertok_token.loc.bol_pos,
+                        lineno_last=sertok_token.loc.lineno_last,
+                        bol_pos_last=sertok_token.loc.bol_pos_last,
+                        beg_charno=sertok_token.loc.beg_charno + 1,
+                        end_charno=sertok_token.loc.end_charno)
                 # end if
 
                 # Adjustment token kind: sertok put KEYWORD and SYMBOL
@@ -1155,8 +1187,8 @@ class CoqParser:
         SourceCode
             The uninterpreted source code of the Coq file.
         """
-        with open(file_path, "r", newline="", errors="replace") as f:
-            source_code = f.read()
+        with open(file_path, "rb") as f:
+            source_code = cls.decode_byte_string(f.read())
         return source_code
 
     @classmethod
