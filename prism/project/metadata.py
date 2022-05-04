@@ -4,7 +4,7 @@ Contains all metadata related to paticular GitHub repositories.
 
 import os
 from collections.abc import Iterable
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from typing import List, Optional
 
 import seutil as su
@@ -16,33 +16,19 @@ class ProjectMetadata:
     Class contains the metadata for a single project.
     """
 
-    project_name: str = None
-    serapi_options: str = None
-    coq_version: str = None
-    serapi_version: str = None
-    ignore_path_regex: List[str] = None
-    coq_dependencies: List[str] = None
-    build_cmd: List[str] = None
-    install_cmd: List[str] = None
-    clean_cmd: List[str] = None
-    opam_repos: List[str] = None
+    project_name: str
+    serapi_options: str
+    coq_version: str
+    serapi_version: str
+    ignore_path_regex: List[str]
+    coq_dependencies: List[str]
+    build_cmd: List[str]
+    install_cmd: List[str]
+    clean_cmd: List[str]
+    opam_repos: List[str]
     opam_dependencies: List[str] = None
     project_url: Optional[str] = None
     commit_sha: Optional[str] = None
-
-    def __post_init__(self) -> None:
-        """
-        Raise exception if required fields missing.
-        """
-        missing_required_fields = [
-            field.name for field in fields(self) if
-            field.type != Optional[field.type] and getattr(self,
-                                                           field.name) is None
-        ]
-        if len(missing_required_fields) > 0:
-            raise TypeError(
-                "Missing following required field(s): %s"
-                % ", ".join(missing_required_fields))
 
     @classmethod
     def dump(
