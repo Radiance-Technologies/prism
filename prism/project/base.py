@@ -12,6 +12,7 @@ from seutil import BashUtils
 
 from prism.data.document import CoqDocument
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
+from prism.project.metadata import ProjectMetadata
 from prism.util.logging import default_log_level
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -92,16 +93,28 @@ class Project(ABC):
             build_cmd: Optional[str] = None,
             clean_cmd: Optional[str] = None,
             install_cmd: Optional[str] = None,
+            metadata: Optional[ProjectMetadata] = None,
             sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI):
         """
         Initialize Project object.
         """
         self.name = pathlib.Path(dir_abspath).stem
         self.size_bytes = self._get_size_bytes()
-        self.build_cmd: Optional[str] = build_cmd
-        self.clean_cmd: Optional[str] = clean_cmd
-        self.install_cmd: Optional[str] = install_cmd
         self.sentence_extraction_method = sentence_extraction_method
+        self.metadata = metadata
+
+        # Initialize build, clean, and install commands if
+        # no metadata present
+        if metadata is None:
+            self.build_cmd: Optional[str] = build_cmd
+            self.clean_cmd: Optional[str] = clean_cmd
+            self.install_cmd: Optional[str] = install_cmd
+        # Currently assume provided metadata overrides optional
+        # parameters
+        else:
+            self.build_cmd: Optional[str] = self.metadata.build_cmd
+            self.clean_cmd: Optional[str] = self.metadata.clean_cmd
+            self.install_cmd: Optional[str] = self.metadata.install_cmd
 
     @property
     @abstractmethod
@@ -181,7 +194,7 @@ class Project(ABC):
         """
         if self.build_cmd is None:
             raise RuntimeError(f"Build command not set for {self.name}.")
-        r = BashUtils.run(self.build_cmd)
+        r = BashUtils.run(" && ".join(self.build_cmd))
         if r.return_code != 0:
             raise Exception(
                 f"Compilation failed! Return code is {r.return_code}! "
@@ -198,7 +211,7 @@ class Project(ABC):
         """
         if self.clean_cmd is None:
             raise RuntimeError(f"Clean command not set for {self.name}.")
-        r = BashUtils.run(self.clean_cmd)
+        r = BashUtils.run(" && ".join(self.clean_cmd))
         if r.return_code != 0:
             raise Exception(
                 f"Cleaning failed! Return code is {r.return_code}! "
@@ -337,7 +350,7 @@ class Project(ABC):
         if self.install_cmd is None:
             raise RuntimeError(f"Install command not set for {self.name}.")
         self.build()
-        r = BashUtils.run(self.install_cmd)
+        r = BashUtils.run(" && ".join(self.install_cmd))
         if r.return_code != 0:
             raise Exception(
                 f"Installation failed! Return code is {r.return_code}! "
