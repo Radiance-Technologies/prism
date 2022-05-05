@@ -19,11 +19,11 @@ class ProjectMetadata:
 
     project_name: str
     serapi_options: str
-    coq_version: str
     serapi_version: str
     build_cmd: List[str]
     install_cmd: List[str]
     clean_cmd: List[str]
+    coq_version: Optional[str] = None
     ignore_path_regex: List[str] = default_field([])
     coq_dependencies: List[str] = default_field([])
     opam_repos: List[str] = default_field([])
