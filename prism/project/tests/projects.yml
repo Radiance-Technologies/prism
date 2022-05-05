@@ -1,0 +1,49 @@
+# Example YAML file from https://github.com/EngineeringSoftware/roosterize/blob/master/training/projects.yml
+
+# All data provided
+- project_name: gstew5_games
+  project_url: https://github.com/gstew5/games
+  serapi_options: '-R .,Games'
+  coq_version: 1.0.0
+  serapi_version: 1.0.0
+  opam_repos:
+  - 1.0.0
+  - 1.0.1
+  opam_dependencies:
+  - 'numpy'
+  - 'pandas'
+  commit_sha: 3d3bd31c7e4d1ea6f4b5a6815bca5c0a039b204f
+  ignore_path_regex:
+  - 'gstew5_games/test_suite/.*'
+  coq_dependencies:
+  - 'dependency_1'
+  build_cmd:
+  - 'make -j8'
+  install_cmd:
+  - 'make'
+  - 'make install'
+  clean_cmd:
+  - 'make clean'
+
+# Optional fields missing
+- project_name: gstew5_games
+  serapi_options: '-R .,Games'
+  coq_version: 1.0.0
+  serapi_version: 1.0.0
+  opam_repos:
+  - 1.0.0
+  - 1.0.1
+  opam_dependencies:
+  - 'numpy'
+  - 'pandas'
+  ignore_path_regex:
+  - 'gstew5_games/test_suite/.*'
+  coq_dependencies:
+  - 'dependency_1'
+  build_cmd:
+  - 'make -j8'
+  install_cmd:
+  - 'make'
+  - 'make install'
+  clean_cmd:
+  - 'make clean'
