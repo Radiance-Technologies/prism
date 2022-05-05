@@ -49,6 +49,8 @@ class ProjectRepo(Repo, Project):
         """
         Return a specific Coq source file from a specific commit.
 
+        This function may change the git repo HEAD on disk.
+
         Parameters
         ----------
         filename : str
@@ -68,6 +70,7 @@ class ProjectRepo(Repo, Project):
             If given `filename` does not end in ".v"
         """
         commit = self.commit(commit_name)
+        self.git.checkout(commit_name)
         # Compute relative path
         rel_filename = filename.replace(commit.tree.abspath, "")[1 :]
         return CoqDocument(
@@ -94,8 +97,11 @@ class ProjectRepo(Repo, Project):
     def _traverse_file_tree(self) -> List[CoqDocument]:
         """
         Traverse the file tree and return a full list of file objects.
+
+        This function may change the git repo HEAD on disk.
         """
         commit = self.commit(self.current_commit_name)
+        self.git.checkout(self.current_commit_name)
         files = [f for f in commit.tree.traverse() if f.abspath.endswith(".v")]
         return [
             CoqDocument(
