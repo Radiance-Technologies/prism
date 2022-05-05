@@ -155,11 +155,16 @@ class Project(ABC):
     def _get_size_bytes(self) -> int:
         """
         Get size in bytes of working directory.
+
+        This size should exclude the contents of any .git directories.
         """
         return sum(
             f.stat().st_size
             for f in pathlib.Path(self.path).glob('**/*')
-            if f.is_file())
+            if f.is_file()) - sum(
+                f.stat().st_size
+                for f in pathlib.Path(self.path).glob('**/.git/**/*')
+                if f.is_file())
 
     @abstractmethod
     def _pre_get_random(self, **kwargs):
