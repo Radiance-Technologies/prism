@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 import seutil as su
+from radpytools.dataclasses import default_field
 
 
 @dataclass(order=True)
@@ -20,13 +21,13 @@ class ProjectMetadata:
     serapi_options: str
     coq_version: str
     serapi_version: str
-    ignore_path_regex: List[str]
-    coq_dependencies: List[str]
     build_cmd: List[str]
     install_cmd: List[str]
     clean_cmd: List[str]
-    opam_repos: List[str]
-    opam_dependencies: List[str] = None
+    ignore_path_regex: List[str] = default_field([])
+    coq_dependencies: List[str] = default_field([])
+    opam_repos: List[str] = default_field([])
+    opam_dependencies: List[str] = default_field([])
     project_url: Optional[str] = None
     commit_sha: Optional[str] = None
 
@@ -45,22 +46,12 @@ class ProjectMetadata:
             List of `ProjectMetadata` class objects to be serialized
         output_filepath : os.PathLike
             Filepath of YAML file to be written containing metadata
-            for 1+ projects
+            for projects
         fmt : su.io.Fmt, optional
             Designated format of the output file,
             by default su.io.Fmt.yaml
         """
-        # Manual bypass for writing multiple projects to an existing
-        # file since seutil.io doesn't support this feature for YAML
-        if not os.path.isfile(output_filepath):
-            su.io.dump(output_filepath, projects, fmt=fmt)
-        else:
-            # Serialize
-            serialized = su.io.serialize(projects, fmt=fmt)
-
-            # Write to file
-            with open(output_filepath, 'a') as output_file:
-                fmt.writer(output_file, serialized)
+        su.io.dump(output_filepath, projects, fmt=fmt)
 
     @classmethod
     def load(cls,
@@ -82,10 +73,9 @@ class ProjectMetadata:
         List[ProjectMetadata]
             List of `ProjectMetadata` objects
         """
-        data = su.io.load(filepath, su.io.Fmt.yaml)
+        data = su.io.load(filepath, fmt)
         project_metadata: List[ProjectMetadata] = [
             su.io.deserialize(project,
                               cls) for project in data
         ]
-
         return project_metadata
