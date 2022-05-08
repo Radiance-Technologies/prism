@@ -6,7 +6,7 @@ import pathlib
 import random
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-from os.path import PathLike
+from os import PathLike
 from typing import List, Optional, Tuple, Union
 
 from seutil import BashUtils
@@ -140,7 +140,7 @@ class Project(ABC):
         return self.metadata.install_cmd
 
     @property
-    def name(self):
+    def name(self) -> str:
         """
         Return ``self.metadata.project_name``.
 
@@ -170,8 +170,7 @@ class Project(ABC):
             The command-line options for invoking SerAPI tools, e.g.,
             ``f"sercomp {serapi_options} file.v"``.
         """
-        # TODO: Get from project metadata.
-        return ""
+        return self.metadata.serapi_options
 
     @abstractmethod
     def _get_file(self, filename: str, *args, **kwargs) -> CoqDocument:
