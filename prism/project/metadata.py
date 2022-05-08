@@ -16,10 +16,10 @@ EXT_MAP = {
     "json_nosort": su.io.Fmt.jsonNoSort,
     "json-min": su.io.Fmt.json,
     "json_min": su.io.Fmt.json,
-    "pkl": su.io.Fmt.pkl,
+    "pkl": su.io.Fmt.pickle,
     "yml": su.io.Fmt,
     "yaml": su.io.Fmt.yaml,
-    "unknown": su.io.Fmt.text
+    "unknown": su.io.Fmt.txt
 }
 
 
