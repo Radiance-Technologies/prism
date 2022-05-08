@@ -6,6 +6,7 @@ import pathlib
 import random
 from abc import ABC, abstractmethod
 from enum import Enum, auto
+from os.path import PathLike
 from typing import List, Optional, Tuple, Union
 
 from seutil import BashUtils
@@ -72,49 +73,83 @@ class Project(ABC):
 
     Attributes
     ----------
-    name : str
-        The stem of the working directory, used as the project name
+    metadata: ProjectMetadata
+        Project metadata containing information such as project name
+        and commands.
     size_bytes : int
         The total space on disk occupied by the files in the dir in
         bytes
-    build_cmd : str or None
-        The terminal command used to build the project.
-    clean_cmd : str or None
-        The terminal command used to clean the project.
-    install_cmd : str or None
-        The terminal command used to install the project.
     sentence_extraction_method : SentenceExtractionMethod
         The method by which sentences are extracted.
     """
 
     def __init__(
             self,
-            dir_abspath: str,
-            build_cmd: Optional[str] = None,
-            clean_cmd: Optional[str] = None,
-            install_cmd: Optional[str] = None,
-            metadata: Optional[ProjectMetadata] = None,
+            metadata: Union[PathLike,
+                            ProjectMetadata],
             sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI):
         """
         Initialize Project object.
         """
-        self.name = pathlib.Path(dir_abspath).stem
+        if isinstance(metadata, str):
+            formatter = ProjectMetadata.infer_formatter(metadata)
+            data = ProjectMetadata.load(metadata, fmt=formatter)
+            if len(data) > 1:
+                raise ValueError(
+                    f"{len(data)} metadata instances found in ({metadata})."
+                    f"Manually pass a single ProjectMetadata instance instead.")
+            metadata = data[0]
         self.size_bytes = self._get_size_bytes()
         self.sentence_extraction_method = sentence_extraction_method
         self.metadata = metadata
 
-        # Initialize build, clean, and install commands if
-        # no metadata present
-        if metadata is None:
-            self.build_cmd: Optional[str] = build_cmd
-            self.clean_cmd: Optional[str] = clean_cmd
-            self.install_cmd: Optional[str] = install_cmd
-        # Currently assume provided metadata overrides optional
-        # parameters
-        else:
-            self.build_cmd: Optional[str] = self.metadata.build_cmd
-            self.clean_cmd: Optional[str] = self.metadata.clean_cmd
-            self.install_cmd: Optional[str] = self.metadata.install_cmd
+    @property
+    def build_cmd(self):
+        """
+        Return ``self.metadata.build_cmd``.
+
+        Returns
+        -------
+        Optional[str]
+            The build command located in project metadata.
+        """
+        return self.metadata.build_cmd
+
+    @property
+    def clean_cmd(self):
+        """
+        Return ``self.metadata.clean_cmd``.
+
+        Returns
+        -------
+        Optional[str]
+            The clean command located in project metadata.
+        """
+        return self.metadata.clean_cmd
+
+    @property
+    def install_cmd(self):
+        """
+        Return ``self.metadata.install_cmd``.
+
+        Returns
+        -------
+        Optional[str]
+            The install command located in project metadata.
+        """
+        return self.metadata.install_cmd
+
+    @property
+    def name(self):
+        """
+        Return ``self.metadata.project_name``.
+
+        Returns
+        -------
+        str
+            Project name located in project metadata.
+        """
+        return self.metadata.project_name
 
     @property
     @abstractmethod
