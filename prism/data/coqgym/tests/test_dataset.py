@@ -9,6 +9,7 @@ import git
 
 from prism.data.coqgym.dataset import CoqGymBaseDataset
 from prism.project import ProjectDir, ProjectRepo, SentenceExtractionMethod
+from prism.project.metadata import ProjectMetadata
 
 
 class TestCoqGymBaseDataset(unittest.TestCase):
@@ -22,6 +23,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         Use the base constructor, with some additions.
         """
         cls.test_path = os.path.dirname(__file__)
+
         # HEAD commits as of March 14, 2022
         cls.project_names = {"CompCert",
                              "circuits",
@@ -39,6 +41,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         cls.repo_paths = {}
         cls.repos = {}
         cls.projects = {}
+        cls.metadatas = {}
         for project_name, project in cls.target_projects.items():
             project_path = os.path.join(cls.test_path, project_name)
             cls.repo_paths[project_name] = project_path
@@ -49,8 +52,16 @@ class TestCoqGymBaseDataset(unittest.TestCase):
             except git.GitCommandError:
                 repo = git.Repo(project_path)
             cls.repos[project_name] = repo
+            cls.metadatas[project_name] = ProjectMetadata(
+                project_name,
+                "",
+                "1.0.0",
+                ["make"],
+                ["make install"],
+                ["make clean"])
             cls.projects[project_name] = ProjectRepo(
                 project_path,
+                cls.metadatas[project_name],
                 sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
         cls.dataset = CoqGymBaseDataset(
             project_class=ProjectRepo,

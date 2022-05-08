@@ -17,6 +17,7 @@ from prism.project import (
     SentenceExtractionMethod,
 )
 from prism.project.base import SEM
+from prism.project.metadata import ProjectMetadata
 from prism.tests import _COQ_EXAMPLES_PATH
 
 
@@ -199,8 +200,16 @@ class TestProjectRepo(unittest.TestCase):
         # Checkout HEAD of master as of March 14, 2022
         cls.master_hash = "9d3521b4db46773239a2c5f9f6970de826075508"
         cls.test_repo.git.checkout(cls.master_hash)
+        cls.metadata = ProjectMetadata(
+            os.path.basename(cls.repo_path),
+            "",
+            "1.0.0",
+            ["make"],
+            ["make install"],
+            ["make clean"])
         cls.project = ProjectRepo(
             cls.repo_path,
+            cls.metadata,
             sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
 
     def test_get_file(self):
@@ -276,6 +285,7 @@ class TestProjectDir(TestProjectRepo):
         super().setUpClass()
         cls.project = ProjectDir(
             cls.repo_path,
+            cls.metadata,
             sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
 
     def test_get_random_commit(self):
