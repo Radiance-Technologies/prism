@@ -61,18 +61,16 @@ class Project(ABC):
     ----------
     dir_abspath : str
         The absolute path to the project's root directory.
-    build_cmd : str or None
-        The terminal command used to build the project, by default None.
-    clean_cmd : str or None
-        The terminal command used to clean the project, by default None.
-    install_cmd : str or None
-        The terminal command used to install the project, by default
-        None.
+    metadata : os.PathLike or `ProjectMetadata`
+        ProjectMetadata object containing metadata
+        for project or the path to a .yml file where it can be extracted
     sentence_extraction_method : SentenceExtractionMethod
         The method by which sentences are extracted.
 
     Attributes
     ----------
+    dir_abspath : str
+        The absolute path to the project's root directory.
     metadata: ProjectMetadata
         Project metadata containing information such as project name
         and commands.
@@ -85,6 +83,7 @@ class Project(ABC):
 
     def __init__(
             self,
+            dir_abspath: str,
             metadata: Union[PathLike,
                             ProjectMetadata],
             sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI):
@@ -99,6 +98,7 @@ class Project(ABC):
                     f"{len(data)} metadata instances found in ({metadata})."
                     f"Manually pass a single ProjectMetadata instance instead.")
             metadata = data[0]
+        self.dir_abspath = dir_abspath
         self.size_bytes = self._get_size_bytes()
         self.sentence_extraction_method = sentence_extraction_method
         self.metadata = metadata
