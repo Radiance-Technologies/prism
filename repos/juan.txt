@@ -91,6 +91,5 @@ https://github.com/verse-lab/ceramist
 https://github.com/vzaliva/helix
 https://github.com/weakmemory/imm
 https://github.com/weakmemory/weakestmoToImm
-https://github.com/xavierleroy/coq2html
 https://github.com/ynot-harvard/ynot
 https://gitlab.inria.fr/coquelicot/coquelicot

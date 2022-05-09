@@ -80,8 +80,6 @@ coq-procrastination - https://github.com/Armael/coq-procrastination
 58 commits
 coq-simple-io - https://github.com/Lysxia/coq-simple-io
 208 commits
-coq2html - https://github.com/xavierleroy/coq2html
-22 commits
 coqoban - https://github.com/coq-community/coqoban
 49 commits
 coqrel - https://github.com/CertiKOS/coqrel
