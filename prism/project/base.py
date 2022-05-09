@@ -231,7 +231,7 @@ class Project(ABC):
         """
         Build the project.
         """
-        if self.build_cmd is None:
+        if len(''.join(self.build_cmd)) == 0:
             raise RuntimeError(f"Build command not set for {self.name}.")
         r = BashUtils.run(" && ".join(self.build_cmd))
         if r.return_code != 0:
@@ -248,7 +248,7 @@ class Project(ABC):
         """
         Clean the build status of the project.
         """
-        if self.clean_cmd is None:
+        if len(''.join(self.clean_cmd)) == 0:
             raise RuntimeError(f"Clean command not set for {self.name}.")
         r = BashUtils.run(" && ".join(self.clean_cmd))
         if r.return_code != 0:
@@ -386,7 +386,7 @@ class Project(ABC):
         """
         Install the project system-wide in "coq-contrib".
         """
-        if self.install_cmd is None:
+        if len(''.join(self.install_cmd)) == 0:
             raise RuntimeError(f"Install command not set for {self.name}.")
         self.build()
         r = BashUtils.run(" && ".join(self.install_cmd))
