@@ -61,13 +61,16 @@ class Project(ABC):
     ----------
     dir_abspath : str
         The absolute path to the project's root directory.
-    metadata : Union[PathLike, ProjectMetadata]
-        Intialized ProjectMetaData
+    metadata : os.PathLike or `ProjectMetadata`
+        ProjectMetadata object containing metadata
+        for project or the path to a .yml file where it can be extracted
     sentence_extraction_method : SentenceExtractionMethod
         The method by which sentences are extracted.
 
     Attributes
     ----------
+    dir_abspath : str
+        The absolute path to the project's root directory.
     metadata: ProjectMetadata
         Project metadata containing information such as project name
         and commands.
@@ -80,6 +83,7 @@ class Project(ABC):
 
     def __init__(
             self,
+            dir_abspath: str,
             metadata: Union[PathLike,
                             ProjectMetadata],
             sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI):
@@ -94,6 +98,7 @@ class Project(ABC):
                     f"{len(data)} metadata instances found in ({metadata})."
                     f"Manually pass a single ProjectMetadata instance instead.")
             metadata = data[0]
+        self.dir_abspath = dir_abspath
         self.size_bytes = self._get_size_bytes()
         self.sentence_extraction_method = sentence_extraction_method
         self.metadata = metadata
@@ -135,7 +140,7 @@ class Project(ABC):
         return self.metadata.install_cmd
 
     @property
-    def name(self):
+    def name(self) -> str:
         """
         Return ``self.metadata.project_name``.
 
@@ -165,8 +170,7 @@ class Project(ABC):
             The command-line options for invoking SerAPI tools, e.g.,
             ``f"sercomp {serapi_options} file.v"``.
         """
-        # TODO: Get from project metadata.
-        return ""
+        return self.metadata.serapi_options
 
     @abstractmethod
     def _get_file(self, filename: str, *args, **kwargs) -> CoqDocument:

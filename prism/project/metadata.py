@@ -10,6 +10,18 @@ from typing import Iterable, List, Optional
 import seutil as su
 from radpytools.dataclasses import default_field
 
+EXT_MAP = {
+    "json": su.io.Fmt.jsonPretty,
+    "json-nosort": su.io.Fmt.jsonNoSort,
+    "json_nosort": su.io.Fmt.jsonNoSort,
+    "json-min": su.io.Fmt.json,
+    "json_min": su.io.Fmt.json,
+    "pkl": su.io.Fmt.pickle,
+    "yml": su.io.Fmt,
+    "yaml": su.io.Fmt.yaml,
+    "unknown": su.io.Fmt.txt
+}
+
 
 @dataclass(order=True)
 class ProjectMetadata:

@@ -3,7 +3,8 @@ Module providing CoqGym project directory class representations.
 """
 import pathlib
 import warnings
-from typing import List
+from os import PathLike
+from typing import List, Union
 
 from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
@@ -23,7 +24,8 @@ class ProjectDir(Project):
     def __init__(
             self,
             dir_abspath: str,
-            metadata: ProjectMetadata,
+            metadata: Union[PathLike,
+                            ProjectMetadata],
             sentence_extraction_method: SEM = SEM.SERAPI):
         """
         Initialize Project object.

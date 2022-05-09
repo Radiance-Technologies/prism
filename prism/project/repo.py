@@ -2,7 +2,8 @@
 Module providing CoqGym project repository class representations.
 """
 import random
-from typing import List, Optional
+from os import PathLike
+from typing import List, Optional, Union
 
 from git import Commit, Repo
 
@@ -22,11 +23,20 @@ class ProjectRepo(Repo, Project):
     def __init__(
             self,
             dir_abspath: str,
-            metadata: ProjectMetadata,
+            metadata: Union[PathLike,
+                            ProjectMetadata],
             sentence_extraction_method: SEM = SEM.SERAPI):
         """
         Initialize Project object.
         """
+        if isinstance(metadata, str):
+            formatter = ProjectMetadata.infer_formatter(metadata)
+            data = ProjectMetadata.load(metadata, fmt=formatter)
+            if len(data) > 1:
+                raise ValueError(
+                    f"{len(data)} metadata instances found in ({metadata})."
+                    f"Manually pass a single ProjectMetadata instance instead.")
+            metadata = data[0]
         Repo.__init__(self, dir_abspath)
         Project.__init__(
             self,
