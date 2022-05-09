@@ -3,14 +3,12 @@ Module providing CoqGym project directory class representations.
 """
 import pathlib
 import warnings
-from os import PathLike
-from typing import List, Union
+from typing import List
 
 from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
-from prism.project.base import SEM, Project
+from prism.project.base import Project
 from prism.project.exception import DirHasNoCoqFiles
-from prism.project.metadata import ProjectMetadata
 
 
 class ProjectDir(Project):
@@ -21,19 +19,14 @@ class ProjectDir(Project):
     is a git repository or not.
     """
 
-    def __init__(
-            self,
-            dir_abspath: str,
-            metadata: Union[PathLike,
-                            ProjectMetadata],
-            sentence_extraction_method: SEM = SEM.SERAPI):
+    def __init__(self, *args, **kwargs):
         """
         Initialize Project object.
         """
-        self.working_dir = dir_abspath
-        super().__init__(dir_abspath, metadata, sentence_extraction_method)
+        self.working_dir = args[0]
+        super().__init__(*args, **kwargs)
         if not self._traverse_file_tree():
-            raise DirHasNoCoqFiles(f"{dir_abspath} has no Coq files.")
+            raise DirHasNoCoqFiles(f"{self.working_dir} has no Coq files.")
 
     @property
     def path(self) -> str:  # noqa: D102

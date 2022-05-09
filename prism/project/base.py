@@ -6,7 +6,7 @@ import pathlib
 import random
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-from os import PathLike
+from os import PathLike, path
 from typing import List, Optional, Tuple, Union
 
 from seutil import BashUtils
@@ -84,13 +84,21 @@ class Project(ABC):
     def __init__(
             self,
             dir_abspath: str,
-            metadata: Union[PathLike,
-                            ProjectMetadata],
+            metadata: Optional[Union[PathLike,
+                                     ProjectMetadata]] = None,
             sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI):
         """
         Initialize Project object.
         """
-        if isinstance(metadata, str):
+        if metadata is None:
+            metadata = ProjectMetadata(
+                path.basename(dir_abspath),
+                serapi_options='',
+                serapi_version='',
+                build_cmd=[],
+                clean_cmd=[],
+                install_cmd=[])
+        elif isinstance(metadata, str):
             formatter = ProjectMetadata.infer_formatter(metadata)
             data = ProjectMetadata.load(metadata, fmt=formatter)
             if len(data) > 1:

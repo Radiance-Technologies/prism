@@ -2,15 +2,13 @@
 Module providing CoqGym project repository class representations.
 """
 import random
-from os import PathLike
-from typing import List, Optional, Union
+from typing import List, Optional
 
 from git import Commit, Repo
 
 from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
-from prism.project.base import SEM, Project
-from prism.project.metadata import ProjectMetadata
+from prism.project.base import Project
 
 
 class ProjectRepo(Repo, Project):
@@ -20,29 +18,12 @@ class ProjectRepo(Repo, Project):
     Based on GitPython's `Repo` class.
     """
 
-    def __init__(
-            self,
-            dir_abspath: str,
-            metadata: Union[PathLike,
-                            ProjectMetadata],
-            sentence_extraction_method: SEM = SEM.SERAPI):
+    def __init__(self, *args, **kwargs):
         """
         Initialize Project object.
         """
-        if isinstance(metadata, str):
-            formatter = ProjectMetadata.infer_formatter(metadata)
-            data = ProjectMetadata.load(metadata, fmt=formatter)
-            if len(data) > 1:
-                raise ValueError(
-                    f"{len(data)} metadata instances found in ({metadata})."
-                    f"Manually pass a single ProjectMetadata instance instead.")
-            metadata = data[0]
-        Repo.__init__(self, dir_abspath)
-        Project.__init__(
-            self,
-            dir_abspath,
-            metadata,
-            sentence_extraction_method)
+        Repo.__init__(self, args[0])
+        Project.__init__(self, *args, **kwargs)
         self.current_commit_name = None  # i.e., HEAD
 
     @property
