@@ -1,0 +1,40 @@
+repos:
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.7.0
+    hooks:
+      - id: isort
+  - repo: https://github.com/google/yapf
+    rev: c6077954245bc3add82dafd853a1c7305a6ebd20
+    hooks:
+      - id: yapf
+        additional_dependencies: [toml]
+  - repo: https://github.com/myint/docformatter
+    rev: v1.4
+    hooks:
+      - id: docformatter
+        args: [-i,
+               --wrap-summaries,
+               '72',
+               --make-summary-multi-line,
+               --pre-summary-newline]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v3.4.0
+    hooks:
+      - id: trailing-whitespace
+      - id: check-docstring-first
+      - id: debug-statements
+      - id: requirements-txt-fixer
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+  - repo: https://github.com/PyCQA/flake8
+    rev: 3.8.4
+    hooks:
+      - id: flake8
+        additional_dependencies: [
+          'flake8-bugbear==20.11.1',
+          'flake8-docstrings==1.5.0'
+        ]
+  - repo: meta
+    hooks:
+      - id: check-hooks-apply
+      - id: check-useless-excludes
