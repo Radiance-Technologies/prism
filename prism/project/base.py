@@ -104,38 +104,38 @@ class Project(ABC):
         self.metadata = metadata
 
     @property
-    def build_cmd(self):
+    def build_cmd(self) -> List[str]:
         """
         Return ``self.metadata.build_cmd``.
 
         Returns
         -------
-        Optional[str]
-            The build command located in project metadata.
+        List[str]
+            List of build commands located in project metadata.
         """
         return self.metadata.build_cmd
 
     @property
-    def clean_cmd(self):
+    def clean_cmd(self) -> List[str]:
         """
         Return ``self.metadata.clean_cmd``.
 
         Returns
         -------
-        Optional[str]
-            The clean command located in project metadata.
+        List[str]
+            List of clean commands located in project metadata.
         """
         return self.metadata.clean_cmd
 
     @property
-    def install_cmd(self):
+    def install_cmd(self) -> List[str]:
         """
         Return ``self.metadata.install_cmd``.
 
         Returns
         -------
-        Optional[str]
-            The install command located in project metadata.
+        List[str]
+            List of install commands located in project metadata.
         """
         return self.metadata.install_cmd
 
