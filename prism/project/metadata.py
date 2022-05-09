@@ -3,24 +3,12 @@ Contains all metadata related to paticular GitHub repositories.
 """
 
 import os
-from collections.abc import Iterable
+# from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Iterable, List, Optional
 
 import seutil as su
 from radpytools.dataclasses import default_field
-
-EXT_MAP = {
-    "json": su.io.Fmt.jsonPretty,
-    "json-nosort": su.io.Fmt.jsonNoSort,
-    "json_nosort": su.io.Fmt.jsonNoSort,
-    "json-min": su.io.Fmt.json,
-    "json_min": su.io.Fmt.json,
-    "pkl": su.io.Fmt.pkl,
-    "yml": su.io.Fmt,
-    "yaml": su.io.Fmt.yaml,
-    "unknown": su.io.Fmt.text
-}
 
 
 @dataclass(order=True)
@@ -109,6 +97,34 @@ class ProjectMetadata:
         -------
         su.io.Fmt
             Seutil formatter to handle loading files based on format.
+
+        Raises
+        ------
+        ValueError
+            Exception is raised when file extension of ``filepath`` is
+            not an extension supported by any ``su.io.Fmt`` types.
+
+        See Also
+        --------
+        su.io.Fmt:
+            Each enumeration value has a list of valid extensions under
+            the ``su.io.Fmt.<name>.exts`` attribute.
+
+        Notes
+        -----
+        If multiple ``su.io.Fmt`` values have the same extensions,
+        (i.e. json, jsonFlexible, jsonPretty, jsonNoSort), the first
+        value defined in ``su.io.Fmt`` will be used.
         """
+        formatter: su.io.Fmt
         extension = os.path.splitext(filepath)[-1].strip(".")
-        return EXT_MAP.get(extension, "unknown")
+        for fmt in su.io.Fmt:
+            if extension in fmt.exts:
+                formatter = fmt
+                # Break early, ignore other formatters that may support
+                # the extension.
+                break
+        if formatter is None:
+            raise ValueError(
+                f"Filepath ({filepath}) has unknown extension ({extension})")
+        return formatter

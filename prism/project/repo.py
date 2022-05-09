@@ -9,6 +9,7 @@ from git import Commit, Repo
 from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
 from prism.project.base import SEM, Project
+from prism.project.metadata import ProjectMetadata
 
 
 class ProjectRepo(Repo, Project):
@@ -21,9 +22,7 @@ class ProjectRepo(Repo, Project):
     def __init__(
             self,
             dir_abspath: str,
-            build_cmd: Optional[str] = None,
-            clean_cmd: Optional[str] = None,
-            install_cmd: Optional[str] = None,
+            metadata: ProjectMetadata,
             sentence_extraction_method: SEM = SEM.SERAPI):
         """
         Initialize Project object.
@@ -32,9 +31,7 @@ class ProjectRepo(Repo, Project):
         Project.__init__(
             self,
             dir_abspath,
-            build_cmd,
-            clean_cmd,
-            install_cmd,
+            metadata,
             sentence_extraction_method)
         self.current_commit_name = None  # i.e., HEAD
 

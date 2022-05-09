@@ -6,7 +6,7 @@ import pathlib
 import random
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-from os.path import PathLike
+from os import PathLike
 from typing import List, Optional, Tuple, Union
 
 from seutil import BashUtils
@@ -61,13 +61,8 @@ class Project(ABC):
     ----------
     dir_abspath : str
         The absolute path to the project's root directory.
-    build_cmd : str or None
-        The terminal command used to build the project, by default None.
-    clean_cmd : str or None
-        The terminal command used to clean the project, by default None.
-    install_cmd : str or None
-        The terminal command used to install the project, by default
-        None.
+    metadata : Union[PathLike, ProjectMetadata]
+        Intialized ProjectMetaData
     sentence_extraction_method : SentenceExtractionMethod
         The method by which sentences are extracted.
 
