@@ -18,12 +18,12 @@ class ProjectRepo(Repo, Project):
     Based on GitPython's `Repo` class.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, dir_abspath, *args, **kwargs):
         """
         Initialize Project object.
         """
-        Repo.__init__(self, args[0])
-        Project.__init__(self, *args, **kwargs)
+        Repo.__init__(self, dir_abspath)
+        Project.__init__(self, dir_abspath, *args, **kwargs)
         self.current_commit_name = None  # i.e., HEAD
 
     @property

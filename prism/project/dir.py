@@ -19,12 +19,12 @@ class ProjectDir(Project):
     is a git repository or not.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, dir_abspath: str, *args, **kwargs):
         """
         Initialize Project object.
         """
-        self.working_dir = args[0]
-        super().__init__(*args, **kwargs)
+        self.working_dir = dir_abspath
+        super().__init__(dir_abspath, *args, **kwargs)
         if not self._traverse_file_tree():
             raise DirHasNoCoqFiles(f"{self.working_dir} has no Coq files.")
 
