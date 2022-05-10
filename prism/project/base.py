@@ -15,6 +15,7 @@ from prism.data.document import CoqDocument
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
 from prism.project.metadata import ProjectMetadata
 from prism.util.logging import default_log_level
+from prism.util.metadata import infer_format
 
 logger: logging.Logger = logging.getLogger(__name__)
 logger.setLevel(default_log_level())
@@ -98,8 +99,8 @@ class Project(ABC):
                 build_cmd=[],
                 clean_cmd=[],
                 install_cmd=[])
-        elif isinstance(metadata, str):
-            formatter = ProjectMetadata.infer_formatter(metadata)
+        elif isinstance(metadata, (str, pathlib.PosixPath)):
+            formatter = infer_format(metadata)
             data = ProjectMetadata.load(metadata, fmt=formatter)
             if len(data) > 1:
                 raise ValueError(

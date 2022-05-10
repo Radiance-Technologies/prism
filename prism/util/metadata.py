@@ -6,7 +6,6 @@ import os
 import seutil as su
 
 
-@staticmethod
 def infer_format(filepath: os.PathLike) -> su.io.Fmt:
     """
     Infer format for loading serialized metadata.
