@@ -14,8 +14,8 @@ from seutil import BashUtils
 from prism.data.document import CoqDocument
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
 from prism.project.metadata import ProjectMetadata
-from prism.util.logging import default_log_level
 from prism.util.io import infer_format
+from prism.util.logging import default_log_level
 
 logger: logging.Logger = logging.getLogger(__name__)
 logger.setLevel(default_log_level())
