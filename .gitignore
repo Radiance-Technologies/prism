@@ -16,3 +16,6 @@ venv*
 *.aux
 *.glob
 *.vo
+*.vio
+*.vos
+*.vok
