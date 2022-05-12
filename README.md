@@ -84,3 +84,8 @@ Visual Studio Code with the following minimal extensions installed and enabled i
   start the docstring on a new line, and to **not** include the function name at the start of the docstring.
 * [select highlight in minimap](https://marketplace.visualstudio.com/items?itemName=mde.select-highlight-minimap): For
   better visibility of selections in the minimap.
+
+In addition, one is recommended to set the following variables in their settings JSON:
+`"editor.rulers": [72, 80, 88]` and
+`"python.defaultInterpreterPath": "path/to/prism/venv-X.Y.Z/bin/pythonX.Y"`
+with the latter appropriately modified to match the location of the preferred Python interpreter.
