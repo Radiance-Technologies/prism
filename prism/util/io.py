@@ -1,5 +1,5 @@
 """
-Provides utility functions for metadata files.
+Provides utility functions for serialized data files.
 """
 import os
 
@@ -8,30 +8,27 @@ import seutil as su
 
 def infer_format(filepath: os.PathLike) -> su.io.Fmt:
     """
-    Infer format for loading serialized metadata.
-
-    Use this function to infer a value to pass to the ``fmt``
-    argument when using ``ProjectMetadata.loads``.
+    Infer format for loading serialized data.
 
     Parameters
     ----------
     filepath : os.PathLike
-        A filepath to a file containing serialized ProjectMetadata.
+        A filepath to a file containing serialized data.
 
     Returns
     -------
     su.io.Fmt
-        Seutil formatter to handle loading files based on format.
+        `seutil` format to handle loading files based on format.
 
     Raises
     ------
     ValueError
-        Exception is raised when file extension of ``filepath`` is
-        not an extension supported by any ``su.io.Fmt`` types.
+        Exception is raised when file extension of `filepath` is
+        not an extension supported by any `su.io.Fmt` format.
 
     See Also
     --------
-    su.io.Fmt:
+    su.io.Fmt :
         Each enumeration value has a list of valid extensions under
         the ``su.io.Fmt.<name>.exts`` attribute.
 
