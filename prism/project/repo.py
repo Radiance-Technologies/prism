@@ -8,7 +8,7 @@ from git import Commit, Repo
 
 from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
-from prism.project.base import SEM, Project
+from prism.project.base import Project
 
 
 class ProjectRepo(Repo, Project):
@@ -18,24 +18,12 @@ class ProjectRepo(Repo, Project):
     Based on GitPython's `Repo` class.
     """
 
-    def __init__(
-            self,
-            dir_abspath: str,
-            build_cmd: Optional[str] = None,
-            clean_cmd: Optional[str] = None,
-            install_cmd: Optional[str] = None,
-            sentence_extraction_method: SEM = SEM.SERAPI):
+    def __init__(self, dir_abspath: str, *args, **kwargs):
         """
         Initialize Project object.
         """
         Repo.__init__(self, dir_abspath)
-        Project.__init__(
-            self,
-            dir_abspath,
-            build_cmd,
-            clean_cmd,
-            install_cmd,
-            sentence_extraction_method)
+        Project.__init__(self, dir_abspath, *args, **kwargs)
         self.current_commit_name = None  # i.e., HEAD
 
     @property

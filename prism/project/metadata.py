@@ -3,9 +3,9 @@ Contains all metadata related to paticular GitHub repositories.
 """
 
 import os
-from collections.abc import Iterable
+# from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Iterable, List, Optional
 
 import seutil as su
 from radpytools.dataclasses import default_field

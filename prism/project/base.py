@@ -6,12 +6,17 @@ import pathlib
 import random
 from abc import ABC, abstractmethod
 from enum import Enum, auto
+from functools import partialmethod
+from os import PathLike, path
 from typing import List, Optional, Tuple, Union
 
 from seutil import BashUtils
 
 from prism.data.document import CoqDocument
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
+from prism.project.exception import ProjectBuildError
+from prism.project.metadata import ProjectMetadata
+from prism.util.io import infer_format
 from prism.util.logging import default_log_level
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -59,29 +64,22 @@ class Project(ABC):
     ----------
     dir_abspath : str
         The absolute path to the project's root directory.
-    build_cmd : str or None
-        The terminal command used to build the project, by default None.
-    clean_cmd : str or None
-        The terminal command used to clean the project, by default None.
-    install_cmd : str or None
-        The terminal command used to install the project, by default
-        None.
+    metadata : os.PathLike or `ProjectMetadata`
+        ProjectMetadata object containing metadata
+        for project or the path to a .yml file where it can be extracted
     sentence_extraction_method : SentenceExtractionMethod
         The method by which sentences are extracted.
 
     Attributes
     ----------
-    name : str
-        The stem of the working directory, used as the project name
+    dir_abspath : str
+        The absolute path to the project's root directory.
+    metadata: ProjectMetadata
+        Project metadata containing information such as project name
+        and commands.
     size_bytes : int
         The total space on disk occupied by the files in the dir in
         bytes
-    build_cmd : str or None
-        The terminal command used to build the project.
-    clean_cmd : str or None
-        The terminal command used to clean the project.
-    install_cmd : str or None
-        The terminal command used to install the project.
     sentence_extraction_method : SentenceExtractionMethod
         The method by which sentences are extracted.
     """
@@ -89,19 +87,80 @@ class Project(ABC):
     def __init__(
             self,
             dir_abspath: str,
-            build_cmd: Optional[str] = None,
-            clean_cmd: Optional[str] = None,
-            install_cmd: Optional[str] = None,
+            metadata: Optional[Union[PathLike,
+                                     ProjectMetadata]] = None,
             sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI):
         """
         Initialize Project object.
         """
-        self.name = pathlib.Path(dir_abspath).stem
+        if metadata is None:
+            metadata = ProjectMetadata(
+                path.basename(dir_abspath),
+                serapi_options='',
+                serapi_version='',
+                build_cmd=[],
+                clean_cmd=[],
+                install_cmd=[])
+        elif isinstance(metadata, (str, pathlib.PosixPath)):
+            formatter = infer_format(metadata)
+            data = ProjectMetadata.load(metadata, fmt=formatter)
+            if len(data) > 1:
+                raise ValueError(
+                    f"{len(data)} metadata instances found in ({metadata})."
+                    f"Manually pass a single ProjectMetadata instance instead.")
+            metadata = data[0]
+        self.dir_abspath = dir_abspath
         self.size_bytes = self._get_size_bytes()
-        self.build_cmd: Optional[str] = build_cmd
-        self.clean_cmd: Optional[str] = clean_cmd
-        self.install_cmd: Optional[str] = install_cmd
         self.sentence_extraction_method = sentence_extraction_method
+        self.metadata = metadata
+
+    @property
+    def build_cmd(self) -> List[str]:
+        """
+        Return ``self.metadata.build_cmd``.
+
+        Returns
+        -------
+        List[str]
+            List of build commands located in project metadata.
+        """
+        return self.metadata.build_cmd
+
+    @property
+    def clean_cmd(self) -> List[str]:
+        """
+        Return ``self.metadata.clean_cmd``.
+
+        Returns
+        -------
+        List[str]
+            List of clean commands located in project metadata.
+        """
+        return self.metadata.clean_cmd
+
+    @property
+    def install_cmd(self) -> List[str]:
+        """
+        Return ``self.metadata.install_cmd``.
+
+        Returns
+        -------
+        List[str]
+            List of install commands located in project metadata.
+        """
+        return self.metadata.install_cmd
+
+    @property
+    def name(self) -> str:
+        """
+        Return ``self.metadata.project_name``.
+
+        Returns
+        -------
+        str
+            Project name located in project metadata.
+        """
+        return self.metadata.project_name
 
     @property
     @abstractmethod
@@ -122,8 +181,7 @@ class Project(ABC):
             The command-line options for invoking SerAPI tools, e.g.,
             ``f"sercomp {serapi_options} file.v"``.
         """
-        # TODO: Get from project metadata.
-        return ""
+        return self.metadata.serapi_options
 
     @abstractmethod
     def _get_file(self, filename: str, *args, **kwargs) -> CoqDocument:
@@ -166,6 +224,51 @@ class Project(ABC):
                 for f in pathlib.Path(self.path).glob('**/.git/**/*')
                 if f.is_file())
 
+    def _make(self, target: str, action: str) -> Tuple[int, str, str]:
+        """
+        Make a build target (one of build, clean, or install).
+
+        Parameters
+        ----------
+        target : str
+            One of ``"build"``, ``"clean"``, or ``"install"``.
+        action : str
+            A more descriptive term for the action represented by the
+            build target, e.g., ``"compilation"``.
+
+        Returns
+        -------
+        return_code : int
+            The return code, expected to be 0.
+        stdout : str
+            The standard output of the command.
+        stderr : str
+            The standard error output of the command.
+
+        Raises
+        ------
+        RuntimeError
+            If no commands for this target are specified.
+        ProjectBuildError
+            If commands are specified but fail with nonzero exit code.
+        """
+        # wrap in parentheses to preserve operator precedence when
+        # joining commands with &&
+        commands = [f"({cmd})" for cmd in getattr(self, f"{target}_cmd")]
+        if not commands:
+            raise RuntimeError(
+                f"{target.capitalize()} command not set for {self.name}.")
+        r = BashUtils.run(" && ".join(commands))
+        status = "failed" if r.return_code != 0 else "finished"
+        msg = (
+            f"{action} {status}! Return code is {r.return_code}! "
+            f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
+        if r.return_code != 0:
+            raise ProjectBuildError(msg)
+        else:
+            logger.debug(msg)
+        return (r.return_code, r.stdout, r.stderr)
+
     @abstractmethod
     def _pre_get_random(self, **kwargs):
         """
@@ -180,39 +283,15 @@ class Project(ABC):
         """
         pass
 
-    def build(self) -> Tuple[int, str, str]:
-        """
-        Build the project.
-        """
-        if self.build_cmd is None:
-            raise RuntimeError(f"Build command not set for {self.name}.")
-        r = BashUtils.run(self.build_cmd)
-        if r.return_code != 0:
-            raise Exception(
-                f"Compilation failed! Return code is {r.return_code}! "
-                f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
-        else:
-            logger.debug(
-                f"Compilation finished. Return code is {r.return_code}. "
-                f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
-        return (r.return_code, r.stdout, r.stderr)
+    build = partialmethod(_make, "build", "Compilation")
+    """
+    Build the project.
+    """
 
-    def clean(self) -> Tuple[int, str, str]:
-        """
-        Clean the build status of the project.
-        """
-        if self.clean_cmd is None:
-            raise RuntimeError(f"Clean command not set for {self.name}.")
-        r = BashUtils.run(self.clean_cmd)
-        if r.return_code != 0:
-            raise Exception(
-                f"Cleaning failed! Return code is {r.return_code}! "
-                f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
-        else:
-            logger.debug(
-                f"Cleaning finished. Return code is {r.return_code}. "
-                f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
-        return (r.return_code, r.stdout, r.stderr)
+    clean = partialmethod(_make, "clean", "Cleaning")
+    """
+    Clean the build status of the project.
+    """
 
     def get_file(self, filename: str, *args, **kwargs) -> CoqDocument:
         """
@@ -335,23 +414,10 @@ class Project(ABC):
         first_sentence_idx = random.randint(0, len(sentences) - 2)
         return sentences[first_sentence_idx : first_sentence_idx + 2]
 
-    def install(self) -> Tuple[int, str, str]:
-        """
-        Install the project system-wide in "coq-contrib".
-        """
-        if self.install_cmd is None:
-            raise RuntimeError(f"Install command not set for {self.name}.")
-        self.build()
-        r = BashUtils.run(self.install_cmd)
-        if r.return_code != 0:
-            raise Exception(
-                f"Installation failed! Return code is {r.return_code}! "
-                f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
-        else:
-            logger.debug(
-                f"Installation finished. Return code is {r.return_code}. "
-                f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
-        return (r.return_code, r.stdout, r.stderr)
+    install = partialmethod(_make, "install", "Installation")
+    """
+    Install the project system-wide in "coq-contrib".
+    """
 
     @staticmethod
     def extract_sentences(
