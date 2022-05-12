@@ -6,6 +6,7 @@ import pathlib
 import random
 from abc import ABC, abstractmethod
 from enum import Enum, auto
+from functools import partialmethod
 from os import PathLike, path
 from typing import List, Optional, Tuple, Union
 
@@ -13,6 +14,7 @@ from seutil import BashUtils
 
 from prism.data.document import CoqDocument
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
+from prism.project.exception import ProjectBuildError
 from prism.project.metadata import ProjectMetadata
 from prism.util.io import infer_format
 from prism.util.logging import default_log_level
@@ -222,6 +224,51 @@ class Project(ABC):
                 for f in pathlib.Path(self.path).glob('**/.git/**/*')
                 if f.is_file())
 
+    def _make(self, target: str, action: str) -> Tuple[int, str, str]:
+        """
+        Make a build target (one of build, clean, or install).
+
+        Parameters
+        ----------
+        target : str
+            One of ``"build"``, ``"clean"``, or ``"install"``.
+        action : str
+            A more descriptive term for the action represented by the
+            build target, e.g., ``"compilation"``.
+
+        Returns
+        -------
+        return_code : int
+            The return code, expected to be 0.
+        stdout : str
+            The standard output of the command.
+        stderr : str
+            The standard error output of the command.
+
+        Raises
+        ------
+        RuntimeError
+            If no commands for this target are specified.
+        ProjectBuildError
+            If commands are specified but fail with nonzero exit code.
+        """
+        # wrap in parentheses to preserve operator precedence when
+        # joining commands with &&
+        commands = [f"({cmd})" for cmd in getattr(self, f"{target}_cmd")]
+        if not commands:
+            raise RuntimeError(
+                f"{target.capitalize()} command not set for {self.name}.")
+        r = BashUtils.run(" && ".join(commands))
+        status = "failed" if r.return_code != 0 else "finished"
+        msg = (
+            f"{action} {status}! Return code is {r.return_code}! "
+            f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
+        if r.return_code != 0:
+            raise ProjectBuildError(msg)
+        else:
+            logger.debug(msg)
+        return (r.return_code, r.stdout, r.stderr)
+
     @abstractmethod
     def _pre_get_random(self, **kwargs):
         """
@@ -236,39 +283,15 @@ class Project(ABC):
         """
         pass
 
-    def build(self) -> Tuple[int, str, str]:
-        """
-        Build the project.
-        """
-        if len(''.join(self.build_cmd)) == 0:
-            raise RuntimeError(f"Build command not set for {self.name}.")
-        r = BashUtils.run(" && ".join(self.build_cmd))
-        if r.return_code != 0:
-            raise Exception(
-                f"Compilation failed! Return code is {r.return_code}! "
-                f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
-        else:
-            logger.debug(
-                f"Compilation finished. Return code is {r.return_code}. "
-                f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
-        return (r.return_code, r.stdout, r.stderr)
+    build = partialmethod(_make, "build", "Compilation")
+    """
+    Build the project.
+    """
 
-    def clean(self) -> Tuple[int, str, str]:
-        """
-        Clean the build status of the project.
-        """
-        if len(''.join(self.clean_cmd)) == 0:
-            raise RuntimeError(f"Clean command not set for {self.name}.")
-        r = BashUtils.run(" && ".join(self.clean_cmd))
-        if r.return_code != 0:
-            raise Exception(
-                f"Cleaning failed! Return code is {r.return_code}! "
-                f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
-        else:
-            logger.debug(
-                f"Cleaning finished. Return code is {r.return_code}. "
-                f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
-        return (r.return_code, r.stdout, r.stderr)
+    clean = partialmethod(_make, "clean", "Cleaning")
+    """
+    Clean the build status of the project.
+    """
 
     def get_file(self, filename: str, *args, **kwargs) -> CoqDocument:
         """
@@ -391,23 +414,10 @@ class Project(ABC):
         first_sentence_idx = random.randint(0, len(sentences) - 2)
         return sentences[first_sentence_idx : first_sentence_idx + 2]
 
-    def install(self) -> Tuple[int, str, str]:
-        """
-        Install the project system-wide in "coq-contrib".
-        """
-        if len(''.join(self.install_cmd)) == 0:
-            raise RuntimeError(f"Install command not set for {self.name}.")
-        self.build()
-        r = BashUtils.run(" && ".join(self.install_cmd))
-        if r.return_code != 0:
-            raise Exception(
-                f"Installation failed! Return code is {r.return_code}! "
-                f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
-        else:
-            logger.debug(
-                f"Installation finished. Return code is {r.return_code}. "
-                f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
-        return (r.return_code, r.stdout, r.stderr)
+    install = partialmethod(_make, "install", "Installation")
+    """
+    Install the project system-wide in "coq-contrib".
+    """
 
     @staticmethod
     def extract_sentences(

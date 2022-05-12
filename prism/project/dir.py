@@ -26,7 +26,7 @@ class ProjectDir(Project):
         self.working_dir = dir_abspath
         super().__init__(dir_abspath, *args, **kwargs)
         if not self._traverse_file_tree():
-            raise DirHasNoCoqFiles(f"{self.working_dir} has no Coq files.")
+            raise DirHasNoCoqFiles(f"{dir_abspath} has no Coq files.")
 
     @property
     def path(self) -> str:  # noqa: D102

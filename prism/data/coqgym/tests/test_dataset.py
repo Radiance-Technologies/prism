@@ -23,7 +23,6 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         Use the base constructor, with some additions.
         """
         cls.test_path = os.path.dirname(__file__)
-
         # HEAD commits as of March 14, 2022
         cls.project_names = {"CompCert",
                              "circuits",
@@ -52,6 +51,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
             except git.GitCommandError:
                 repo = git.Repo(project_path)
             cls.repos[project_name] = repo
+            # TODO: Use real metadata and test building
             cls.metadatas[project_name] = ProjectMetadata(
                 project_name,
                 "",

@@ -18,7 +18,7 @@ class ProjectRepo(Repo, Project):
     Based on GitPython's `Repo` class.
     """
 
-    def __init__(self, dir_abspath, *args, **kwargs):
+    def __init__(self, dir_abspath: str, *args, **kwargs):
         """
         Initialize Project object.
         """

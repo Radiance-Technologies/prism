@@ -12,3 +12,13 @@ class DirHasNoCoqFiles(Exception):
     """
 
     pass
+
+
+class ProjectBuildError(Exception):
+    """
+    Exception indicating that a project has failed to build.
+
+    Also raised when a project fails to clean or install.
+    """
+
+    pass
