@@ -1,0 +1,1142 @@
+{
+    "math-comp": {
+        "proofs": 14263,
+        "sentences": 104712
+    },
+    "coqutil": {
+        "proofs": 797,
+        "sentences": 9516
+    },
+    "PolTac": {
+        "proofs": 309,
+        "sentences": 2247
+    },
+    "functional-algebra": {
+        "proofs": 278,
+        "sentences": 1286
+    },
+    "finmap": {
+        "proofs": 870,
+        "sentences": 5058
+    },
+    "SQIR": {
+        "proofs": 1713,
+        "sentences": 37680
+    },
+    "coq-cunit": {
+        "proofs": 0,
+        "sentences": 7
+    },
+    "higman-cf": {
+        "proofs": 30,
+        "sentences": 279
+    },
+    "otway-rees": {
+        "proofs": 21,
+        "sentences": 613
+    },
+    "containers": {
+        "proofs": 1417,
+        "sentences": 12466
+    },
+    "coq-haskell": {
+        "proofs": 481,
+        "sentences": 5512
+    },
+    "zf": {
+        "proofs": 213,
+        "sentences": 2977
+    },
+    "hahn": {
+        "proofs": 1458,
+        "sentences": 9836
+    },
+    "parsing-parses": {
+        "proofs": 274,
+        "sentences": 3512
+    },
+    "verified-ifc": {
+        "proofs": 884,
+        "sentences": 15495
+    },
+    "mod-red": {
+        "proofs": 271,
+        "sentences": 6204
+    },
+    "infotheo": {
+        "proofs": 3335,
+        "sentences": 45155
+    },
+    "coq_real": {
+        "proofs": 843,
+        "sentences": 24386
+    },
+    "disel": {
+        "proofs": 844,
+        "sentences": 12582
+    },
+    "GeoCoq": {
+        "proofs": 4087,
+        "sentences": 122527
+    },
+    "bits": {
+        "proofs": 436,
+        "sentences": 4895
+    },
+    "bedrock-mirror-shard": {
+        "proofs": 1726,
+        "sentences": 18771
+    },
+    "math-classes": {
+        "proofs": 1741,
+        "sentences": 17370
+    },
+    "coqoban": {
+        "proofs": 3,
+        "sentences": 455
+    },
+    "QuantumLib": {
+        "proofs": 1482,
+        "sentences": 20473
+    },
+    "weak-up-to": {
+        "proofs": 150,
+        "sentences": 1720
+    },
+    "perennial": {
+        "proofs": 5284,
+        "sentences": 137211
+    },
+    "dictionaries": {
+        "proofs": 67,
+        "sentences": 845
+    },
+    "tree-automata": {
+        "proofs": 834,
+        "sentences": 24988
+    },
+    "vellvm-legacy": {
+        "proofs": 2484,
+        "sentences": 40111
+    },
+    "algebra": {
+        "proofs": 559,
+        "sentences": 6609
+    },
+    "CompCertM": {
+        "proofs": 1499,
+        "sentences": 72820
+    },
+    "memory-safe-language": {
+        "proofs": 72,
+        "sentences": 1325
+    },
+    "goedel": {
+        "proofs": 103,
+        "sentences": 8548
+    },
+    "tortoise-hare-algorithm": {
+        "proofs": 4,
+        "sentences": 82
+    },
+    "celsius": {
+        "proofs": 211,
+        "sentences": 4470
+    },
+    "float": {
+        "proofs": 780,
+        "sentences": 10192
+    },
+    "pnp": {
+        "proofs": 356,
+        "sentences": 2857
+    },
+    "zsearch-trees": {
+        "proofs": 48,
+        "sentences": 639
+    },
+    "coq-simple-io": {
+        "proofs": 0,
+        "sentences": 267
+    },
+    "chinese": {
+        "proofs": 137,
+        "sentences": 1769
+    },
+    "fssec-model": {
+        "proofs": 153,
+        "sentences": 3255
+    },
+    "corespec": {
+        "proofs": 1510,
+        "sentences": 21682
+    },
+    "UniMath": {
+        "proofs": 15201,
+        "sentences": 256571
+    },
+    "univalent_parametricity": {
+        "proofs": 399,
+        "sentences": 5121
+    },
+    "constructive-geometry": {
+        "proofs": 116,
+        "sentences": 902
+    },
+    "additions": {
+        "proofs": 103,
+        "sentences": 1425
+    },
+    "helix": {
+        "proofs": 2046,
+        "sentences": 56461
+    },
+    "event-struct": {
+        "proofs": 1039,
+        "sentences": 11142
+    },
+    "sirtt": {
+        "proofs": 179,
+        "sentences": 4645
+    },
+    "general-type-theories": {
+        "proofs": 546,
+        "sentences": 10172
+    },
+    "quicksort-complexity": {
+        "proofs": 591,
+        "sentences": 8858
+    },
+    "Valuations": {
+        "proofs": 184,
+        "sentences": 5079
+    },
+    "SquiggleEq": {
+        "proofs": 1302,
+        "sentences": 16922
+    },
+    "metalib": {
+        "proofs": 796,
+        "sentences": 8026
+    },
+    "llvmtwin-coq": {
+        "proofs": 675,
+        "sentences": 34538
+    },
+    "Coq-Flow-Equivalence": {
+        "proofs": 376,
+        "sentences": 8278
+    },
+    "multinomials": {
+        "proofs": 1008,
+        "sentences": 7573
+    },
+    "ChargeCore": {
+        "proofs": 299,
+        "sentences": 3750
+    },
+    "quadcopter": {
+        "proofs": 1061,
+        "sentences": 34482
+    },
+    "schroeder": {
+        "proofs": 14,
+        "sentences": 276
+    },
+    "search-trees": {
+        "proofs": 50,
+        "sentences": 593
+    },
+    "zchinese": {
+        "proofs": 43,
+        "sentences": 781
+    },
+    "CertiGraph": {
+        "proofs": 3522,
+        "sentences": 106982
+    },
+    "lemma-overloading": {
+        "proofs": 840,
+        "sentences": 6476
+    },
+    "markov": {
+        "proofs": 31,
+        "sentences": 951
+    },
+    "FormalML": {
+        "proofs": 7026,
+        "sentences": 135311
+    },
+    "regex-reexamined-coq": {
+        "proofs": 476,
+        "sentences": 7609
+    },
+    "smc": {
+        "proofs": 685,
+        "sentences": 25108
+    },
+    "rem": {
+        "proofs": 8,
+        "sentences": 113
+    },
+    "three-gap": {
+        "proofs": 81,
+        "sentences": 1091
+    },
+    "regexp": {
+        "proofs": 105,
+        "sentences": 1556
+    },
+    "cheerios": {
+        "proofs": 83,
+        "sentences": 1078
+    },
+    "ruler-compass-geometry": {
+        "proofs": 332,
+        "sentences": 4376
+    },
+    "coq-compile": {
+        "proofs": 29,
+        "sentences": 2330
+    },
+    "exceptions": {
+        "proofs": 3,
+        "sentences": 94
+    },
+    "TypeTheory": {
+        "proofs": 1923,
+        "sentences": 30575
+    },
+    "linearscan": {
+        "proofs": 304,
+        "sentences": 4786
+    },
+    "Coq-Combi": {
+        "proofs": 3520,
+        "sentences": 37470
+    },
+    "coq-list-string": {
+        "proofs": 9,
+        "sentences": 207
+    },
+    "coq-iterable": {
+        "proofs": 0,
+        "sentences": 15
+    },
+    "coq-ext-lib": {
+        "proofs": 297,
+        "sentences": 4842
+    },
+    "lin-alg": {
+        "proofs": 543,
+        "sentences": 10797
+    },
+    "bedrock2": {
+        "proofs": 1233,
+        "sentences": 32668
+    },
+    "atbr": {
+        "proofs": 819,
+        "sentences": 11089
+    },
+    "generic-environments": {
+        "proofs": 269,
+        "sentences": 2818
+    },
+    "Coq-Polyhedra": {
+        "proofs": 1086,
+        "sentences": 11773
+    },
+    "coq-library-undecidability": {
+        "proofs": 10281,
+        "sentences": 153181
+    },
+    "ails": {
+        "proofs": 225,
+        "sentences": 4605
+    },
+    "coq-performance-tests": {
+        "proofs": 170,
+        "sentences": 2536
+    },
+    "qarith": {
+        "proofs": 60,
+        "sentences": 1151
+    },
+    "Ktheory": {
+        "proofs": 40,
+        "sentences": 505
+    },
+    "zorns-lemma": {
+        "proofs": 183,
+        "sentences": 4482
+    },
+    "CompCertR": {
+        "proofs": 7817,
+        "sentences": 161208
+    },
+    "InfSeqExt": {
+        "proofs": 145,
+        "sentences": 1943
+    },
+    "fundamental-arithmetics": {
+        "proofs": 152,
+        "sentences": 1941
+    },
+    "bbv": {
+        "proofs": 653,
+        "sentences": 7343
+    },
+    "verdi-raft": {
+        "proofs": 2272,
+        "sentences": 42557
+    },
+    "proofs": {
+        "proofs": 174,
+        "sentences": 2558
+    },
+    "dblib": {
+        "proofs": 244,
+        "sentences": 1994
+    },
+    "ConCert": {
+        "proofs": 1581,
+        "sentences": 33188
+    },
+    "micro-policies-coq": {
+        "proofs": 569,
+        "sentences": 13727
+    },
+    "cpdt-japanese": {
+        "proofs": 431,
+        "sentences": 3152
+    },
+    "dot-iris": {
+        "proofs": 1590,
+        "sentences": 12473
+    },
+    "ett-to-wtt": {
+        "proofs": 433,
+        "sentences": 13925
+    },
+    "probchain": {
+        "proofs": 246,
+        "sentences": 4801
+    },
+    "coquelicot": {
+        "proofs": 1861,
+        "sentences": 32813
+    },
+    "domains": {
+        "proofs": 1738,
+        "sentences": 58184
+    },
+    "param-pi": {
+        "proofs": 72,
+        "sentences": 3853
+    },
+    "cecoa": {
+        "proofs": 1281,
+        "sentences": 33151
+    },
+    "bignums": {
+        "proofs": 638,
+        "sentences": 9191
+    },
+    "coq-procrastination": {
+        "proofs": 60,
+        "sentences": 506
+    },
+    "propcalc": {
+        "proofs": 66,
+        "sentences": 629
+    },
+    "ieee754": {
+        "proofs": 15,
+        "sentences": 239
+    },
+    "engine-bench": {
+        "proofs": 94,
+        "sentences": 1264
+    },
+    "largecatmodules": {
+        "proofs": 467,
+        "sentences": 9644
+    },
+    "traversable-fincontainer": {
+        "proofs": 71,
+        "sentences": 871
+    },
+    "Kami": {
+        "proofs": 2120,
+        "sentences": 37732
+    },
+    "cspec": {
+        "proofs": 884,
+        "sentences": 11566
+    },
+    "coq-ceres": {
+        "proofs": 122,
+        "sentences": 1263
+    },
+    "euler-formula": {
+        "proofs": 162,
+        "sentences": 6757
+    },
+    "lvc": {
+        "proofs": 3782,
+        "sentences": 60531
+    },
+    "bedrock": {
+        "proofs": 4423,
+        "sentences": 66779
+    },
+    "groups": {
+        "proofs": 14,
+        "sentences": 134
+    },
+    "huffman": {
+        "proofs": 285,
+        "sentences": 3910
+    },
+    "color": {
+        "proofs": 6743,
+        "sentences": 113300
+    },
+    "orb-stab": {
+        "proofs": 40,
+        "sentences": 1590
+    },
+    "bigenough": {
+        "proofs": 5,
+        "sentences": 43
+    },
+    "coq-library-complexity": {
+        "proofs": 2438,
+        "sentences": 43607
+    },
+    "distributed-reference-counting": {
+        "proofs": 954,
+        "sentences": 24025
+    },
+    "coqtail-math": {
+        "proofs": 2515,
+        "sentences": 35411
+    },
+    "htt": {
+        "proofs": 410,
+        "sentences": 4143
+    },
+    "cage": {
+        "proofs": 456,
+        "sentences": 7425
+    },
+    "system": {
+        "proofs": 1,
+        "sentences": 112
+    },
+    "ynot": {
+        "proofs": 885,
+        "sentences": 9996
+    },
+    "higman-s": {
+        "proofs": 49,
+        "sentences": 913
+    },
+    "loopring-protocol2-verification": {
+        "proofs": 155,
+        "sentences": 3718
+    },
+    "ct": {
+        "proofs": 161,
+        "sentences": 1948
+    },
+    "formal-type-theory": {
+        "proofs": 67,
+        "sentences": 10680
+    },
+    "riscv-coq": {
+        "proofs": 209,
+        "sentences": 3367
+    },
+    "pigeons": {
+        "proofs": 6,
+        "sentences": 34
+    },
+    "UnifySL": {
+        "proofs": 1193,
+        "sentences": 19223
+    },
+    "HoTT": {
+        "proofs": 4974,
+        "sentences": 62461
+    },
+    "sudoku": {
+        "proofs": 250,
+        "sentences": 4015
+    },
+    "angles": {
+        "proofs": 93,
+        "sentences": 2013
+    },
+    "coq-bitset": {
+        "proofs": 147,
+        "sentences": 3755
+    },
+    "bdds": {
+        "proofs": 232,
+        "sentences": 15510
+    },
+    "verdi-chord": {
+        "proofs": 990,
+        "sentences": 16420
+    },
+    "coq-error-handlers": {
+        "proofs": 0,
+        "sentences": 10
+    },
+    "StructTact": {
+        "proofs": 287,
+        "sentences": 3563
+    },
+    "circuits": {
+        "proofs": 220,
+        "sentences": 2723
+    },
+    "coq-http2": {
+        "proofs": 47,
+        "sentences": 943
+    },
+    "promising-coq": {
+        "proofs": 835,
+        "sentences": 29947
+    },
+    "VST": {
+        "proofs": 27777,
+        "sentences": 570848
+    },
+    "cours-de-coq": {
+        "proofs": 92,
+        "sentences": 792
+    },
+    "GraphCoQL": {
+        "proofs": 220,
+        "sentences": 2513
+    },
+    "mirror-shard": {
+        "proofs": 636,
+        "sentences": 12465
+    },
+    "coq-function-ninjas": {
+        "proofs": 0,
+        "sentences": 3
+    },
+    "axiomatic-abp": {
+        "proofs": 399,
+        "sentences": 4494
+    },
+    "cls-coq": {
+        "proofs": 611,
+        "sentences": 20968
+    },
+    "domain-theory": {
+        "proofs": 51,
+        "sentences": 812
+    },
+    "Verified-FEC": {
+        "proofs": 994,
+        "sentences": 20957
+    },
+    "dez": {
+        "proofs": 1523,
+        "sentences": 20350
+    },
+    "mirror-core": {
+        "proofs": 1380,
+        "sentences": 36458
+    },
+    "iron": {
+        "proofs": 1519,
+        "sentences": 30137
+    },
+    "hardware": {
+        "proofs": 186,
+        "sentences": 1643
+    },
+    "maths": {
+        "proofs": 38,
+        "sentences": 386
+    },
+    "frap": {
+        "proofs": 1870,
+        "sentences": 23058
+    },
+    "certicoq": {
+        "proofs": 4350,
+        "sentences": 133553
+    },
+    "demos": {
+        "proofs": 69,
+        "sentences": 477
+    },
+    "SeLoC": {
+        "proofs": 381,
+        "sentences": 7840
+    },
+    "ProcKami": {
+        "proofs": 54,
+        "sentences": 2055
+    },
+    "coq-forcing": {
+        "proofs": 72,
+        "sentences": 1190
+    },
+    "pocklington": {
+        "proofs": 265,
+        "sentences": 6546
+    },
+    "Abel": {
+        "proofs": 429,
+        "sentences": 4063
+    },
+    "exploring-robust-property-preservation": {
+        "proofs": 295,
+        "sentences": 6518
+    },
+    "graphs": {
+        "proofs": 174,
+        "sentences": 4460
+    },
+    "paramcoq-iff": {
+        "proofs": 285,
+        "sentences": 6527
+    },
+    "infinitary-rewriting-coq": {
+        "proofs": 262,
+        "sentences": 4207
+    },
+    "maple-mode": {
+        "proofs": 20,
+        "sentences": 154
+    },
+    "coqeal": {
+        "proofs": 1609,
+        "sentences": 17503
+    },
+    "StdLibKami": {
+        "proofs": 72,
+        "sentences": 4505
+    },
+    "railroad-crossing": {
+        "proofs": 100,
+        "sentences": 1108
+    },
+    "hoare-tut": {
+        "proofs": 25,
+        "sentences": 346
+    },
+    "coq-utils": {
+        "proofs": 298,
+        "sentences": 2820
+    },
+    "yalla": {
+        "proofs": 1019,
+        "sentences": 30165
+    },
+    "fcsl-pcm": {
+        "proofs": 2118,
+        "sentences": 15806
+    },
+    "ceramist": {
+        "proofs": 427,
+        "sentences": 8223
+    },
+    "pts": {
+        "proofs": 350,
+        "sentences": 4513
+    },
+    "QuickChick": {
+        "proofs": 1211,
+        "sentences": 13104
+    },
+    "jordan-curve-theorem": {
+        "proofs": 663,
+        "sentences": 42492
+    },
+    "idxassoc": {
+        "proofs": 58,
+        "sentences": 713
+    },
+    "lesniewski-mereology": {
+        "proofs": 140,
+        "sentences": 1396
+    },
+    "graph-theory": {
+        "proofs": 2272,
+        "sentences": 29435
+    },
+    "cerise": {
+        "proofs": 1026,
+        "sentences": 35029
+    },
+    "concat": {
+        "proofs": 514,
+        "sentences": 6417
+    },
+    "lambda": {
+        "proofs": 90,
+        "sentences": 941
+    },
+    "fermat4": {
+        "proofs": 130,
+        "sentences": 841
+    },
+    "functions-in-zfc": {
+        "proofs": 632,
+        "sentences": 2437
+    },
+    "tarski-geometry": {
+        "proofs": 136,
+        "sentences": 2702
+    },
+    "Set-Theory": {
+        "proofs": 2703,
+        "sentences": 66081
+    },
+    "area-method": {
+        "proofs": 779,
+        "sentences": 10603
+    },
+    "coq-record-update": {
+        "proofs": 6,
+        "sentences": 243
+    },
+    "cryptis": {
+        "proofs": 448,
+        "sentences": 5751
+    },
+    "tarjan": {
+        "proofs": 459,
+        "sentences": 5187
+    },
+    "mini-compiler": {
+        "proofs": 4,
+        "sentences": 86
+    },
+    "InteractionTrees": {
+        "proofs": 1822,
+        "sentences": 45795
+    },
+    "Core-Erlang-Formalization": {
+        "proofs": 550,
+        "sentences": 12170
+    },
+    "qarith-stern-brocot": {
+        "proofs": 1131,
+        "sentences": 16216
+    },
+    "toychain": {
+        "proofs": 264,
+        "sentences": 4320
+    },
+    "fiat": {
+        "proofs": 5932,
+        "sentences": 84544
+    },
+    "tlc": {
+        "proofs": 2314,
+        "sentences": 24176
+    },
+    "constructive-ltl": {
+        "proofs": 634,
+        "sentences": 7621
+    },
+    "coq-guarded-computational-type-theory": {
+        "proofs": 205,
+        "sentences": 3824
+    },
+    "katamaran": {
+        "proofs": 854,
+        "sentences": 14929
+    },
+    "iris-coq": {
+        "proofs": 4299,
+        "sentences": 32669
+    },
+    "coqrel": {
+        "proofs": 270,
+        "sentences": 1763
+    },
+    "silveroak": {
+        "proofs": 1519,
+        "sentences": 26477
+    },
+    "automata": {
+        "proofs": 344,
+        "sentences": 5833
+    },
+    "verdi": {
+        "proofs": 618,
+        "sentences": 12534
+    },
+    "banach_tarski": {
+        "proofs": 479,
+        "sentences": 8608
+    },
+    "transfer": {
+        "proofs": 201,
+        "sentences": 1726
+    },
+    "CompCert": {
+        "proofs": 7835,
+        "sentences": 156983
+    },
+    "WasmCert-Coq": {
+        "proofs": 574,
+        "sentences": 13803
+    },
+    "lazy-pcf": {
+        "proofs": 83,
+        "sentences": 1587
+    },
+    "izf": {
+        "proofs": 122,
+        "sentences": 827
+    },
+    "asn1fpcoq": {
+        "proofs": 194,
+        "sentences": 2982
+    },
+    "paco": {
+        "proofs": 1519,
+        "sentences": 23749
+    },
+    "kami": {
+        "proofs": 2092,
+        "sentences": 41182
+    },
+    "IFC": {
+        "proofs": 756,
+        "sentences": 11435
+    },
+    "rezk_completion": {
+        "proofs": 350,
+        "sentences": 4261
+    },
+    "hybrid": {
+        "proofs": 524,
+        "sentences": 7099
+    },
+    "extructures": {
+        "proofs": 357,
+        "sentences": 2986
+    },
+    "crellvm": {
+        "proofs": 722,
+        "sentences": 22052
+    },
+    "SCEV-coq": {
+        "proofs": 23,
+        "sentences": 475
+    },
+    "QWIRE": {
+        "proofs": 1167,
+        "sentences": 18932
+    },
+    "ramsey": {
+        "proofs": 8,
+        "sentences": 55
+    },
+    "Categories": {
+        "proofs": 519,
+        "sentences": 7757
+    },
+    "hanoi": {
+        "proofs": 577,
+        "sentences": 10514
+    },
+    "twoSquare": {
+        "proofs": 202,
+        "sentences": 1769
+    },
+    "topology": {
+        "proofs": 616,
+        "sentences": 16461
+    },
+    "zfc": {
+        "proofs": 241,
+        "sentences": 2450
+    },
+    "ClassicalReal": {
+        "proofs": 1303,
+        "sentences": 48201
+    },
+    "metacoq": {
+        "proofs": 8885,
+        "sentences": 161078
+    },
+    "amm11262": {
+        "proofs": 28,
+        "sentences": 1154
+    },
+    "subst": {
+        "proofs": 417,
+        "sentences": 3650
+    },
+    "checker": {
+        "proofs": 4,
+        "sentences": 55
+    },
+    "imm": {
+        "proofs": 1444,
+        "sentences": 24624
+    },
+    "ssprove": {
+        "proofs": 1298,
+        "sentences": 21179
+    },
+    "cps": {
+        "proofs": 436,
+        "sentences": 9211
+    },
+    "deriving": {
+        "proofs": 67,
+        "sentences": 1567
+    },
+    "coq-http": {
+        "proofs": 27,
+        "sentences": 795
+    },
+    "argosy": {
+        "proofs": 304,
+        "sentences": 3614
+    },
+    "VeriGHC": {
+        "proofs": 118,
+        "sentences": 1522
+    },
+    "cgraphs": {
+        "proofs": 812,
+        "sentences": 16559
+    },
+    "when-good-components-go-bad": {
+        "proofs": 1030,
+        "sentences": 23295
+    },
+    "buchberger": {
+        "proofs": 753,
+        "sentences": 9705
+    },
+    "puiseuxth": {
+        "proofs": 910,
+        "sentences": 20553
+    },
+    "miniml": {
+        "proofs": 12,
+        "sentences": 681
+    },
+    "group-theory": {
+        "proofs": 105,
+        "sentences": 1099
+    },
+    "pipcore": {
+        "proofs": 1637,
+        "sentences": 130325
+    },
+    "free-groups": {
+        "proofs": 33,
+        "sentences": 484
+    },
+    "ipc": {
+        "proofs": 479,
+        "sentences": 9102
+    },
+    "AML-Formalization": {
+        "proofs": 1532,
+        "sentences": 43978
+    },
+    "analysis": {
+        "proofs": 4663,
+        "sentences": 39651
+    },
+    "int-map": {
+        "proofs": 494,
+        "sentences": 7816
+    },
+    "bellantonicook": {
+        "proofs": 498,
+        "sentences": 7515
+    },
+    "coq-robot": {
+        "proofs": 1505,
+        "sentences": 13575
+    },
+    "hedges": {
+        "proofs": 110,
+        "sentences": 2310
+    },
+    "DeepSpecDB": {
+        "proofs": 2719,
+        "sentences": 86898
+    },
+    "HoTT-categories": {
+        "proofs": 380,
+        "sentences": 4559
+    },
+    "MapleS": {
+        "proofs": 7629,
+        "sentences": 153467
+    },
+    "velus": {
+        "proofs": 3338,
+        "sentences": 58852
+    },
+    "coq-list-plus": {
+        "proofs": 0,
+        "sentences": 42
+    },
+    "oeuf": {
+        "proofs": 10471,
+        "sentences": 186512
+    },
+    "ssrbit": {
+        "proofs": 344,
+        "sentences": 2966
+    },
+    "category-theory": {
+        "proofs": 1377,
+        "sentences": 15827
+    },
+    "rsa": {
+        "proofs": 113,
+        "sentences": 1194
+    },
+    "monae": {
+        "proofs": 1661,
+        "sentences": 16336
+    },
+    "rewriter": {
+        "proofs": 1436,
+        "sentences": 13713
+    },
+    "ctltctl": {
+        "proofs": 28,
+        "sentences": 383
+    },
+    "weakestmoToImm": {
+        "proofs": 1282,
+        "sentences": 33541
+    },
+    "dep-map": {
+        "proofs": 90,
+        "sentences": 1843
+    },
+    "shuffle": {
+        "proofs": 40,
+        "sentences": 430
+    },
+    "LOGIC": {
+        "proofs": 1729,
+        "sentences": 25450
+    }
+}
