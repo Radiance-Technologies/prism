@@ -10,6 +10,7 @@ class DirHasNoCoqFiles(Exception):
     Sub-directories should be checked as well before raising this
     exception.
     """
+
     pass
 
 
