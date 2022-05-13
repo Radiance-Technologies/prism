@@ -2,85 +2,46 @@
 Module for downloading projects.
 """
 import os
-import urllib
 from multiprocessing import Pool
-from typing import Callable, List, Tuple, TypeVar, Union
+from typing import List, Union
 
 from git import Repo
 
-ProjectUrl = TypeVar("ProjectUrl")
+from .util import URL, extract_name
 
 
-def download_from_github(url: ProjectUrl, target: os.PathLike) -> Repo:
-    """
-    Download repo and return instance pointing to the cloned directory.
-
-    Parameters
-    ----------
-    url : ProjectUrl
-        Github url for repo.
-    target : os.PathLike
-        Cloned directory
-
-    Returns
-    -------
-    Repo
-        _description_
-    """
-    return Repo.clone_from(url, target)
-
-
-def extract_name(url: ProjectUrl) -> str:
-    """
-    Get project name from url.
-
-    Parameters
-    ----------
-    url : ProjectUrl
-        Project url.
-
-    Returns
-    -------
-    str
-        Project name.
-    """
-    return urllib.parse.urlparse(url.strip()).path
-
-
-def download(
-        iterable_item: Tuple[ProjectUrl,
-                             Callable[[ProjectUrl,
-                                       str],
-                                      None],
-                             str]):
+def clone(project_url: URL, root: os.PathLike) -> None:
     """
     Download project to directory in a root directory.
+
+    Also sets the repo's configuration to shared within its group owner.
 
     Parameters
     ----------
     project_url : ProjectUrl
         Project url.
-    downloader : Callable[[ProjectUrl, str], None]
-        Project downloader
-    root : str
-        Root directory containing project folder under name of project..
+    root : os.PathLike
+        Root directory containing project folder under name of project.
     """
-    url, downloader, root = iterable_item
-    url = url.strip()
-    name = extract_name(url).split("/")[-1]
+    project_url = project_url.strip()
+    name = extract_name(project_url)
     path = os.path.join(root, name)
     if not os.path.exists(path):
-        downloader(url, path)
+        repo = Repo.clone_from(project_url, path)
+    else:
+        repo = Repo(path)
+        # give Git permission to this user to modify config
+        with repo.config_writer("global") as cw:
+            cw.add_value("safe", "directory", path)
+    with repo.config_writer() as cw:
+        cw.set("core", "sharedRepository", "group")
 
 
-def multiprocess_download(
-        project_list: List[ProjectUrl],
-        targets: Union[str,
-                       List[str]],
-        downloader: Callable[[ProjectUrl,
-                              str],
-                             None],
-        n: int):
+def multiprocess_clone(
+        project_list: List[URL],
+        targets: Union[os.PathLike,
+                       List[os.PathLike]],
+        num_processes: int) -> None:
     """
     Download project in parallel.
 
@@ -88,11 +49,10 @@ def multiprocess_download(
     ----------
     project_list : List[ProjectUrl]
         List of projects.
-    targets : Union[str, List[str]]
-        List of target directories.
-    downloader : Callable[[ProjectUrl, str], None]
-        Project downloader.
-    n : int
+    targets : Union[os.PathLike, List[os.PathLike]]
+        Either a common directory into which each project will be cloned
+        or a per-project list of destination directories.
+    num_processes : int
         Number of processes.
     """
     nprojects: int = len(project_list)
@@ -103,23 +63,7 @@ def multiprocess_download(
     elif ntargets == 1:
         targets = [targets for _ in project_list]
 
-    args = (
-        (project,
-         downloader,
-         target) for project,
-        target in zip(project_list,
-                      targets))
+    args = ((project, target) for project, target in zip(project_list, targets))
 
-    with Pool(n) as p:
-        p.map(download, args)
-
-
-if __name__ == '__main__':
-    import sys
-    with open(sys.argv[1], "r") as file:
-        project_list = file.readlines()
-    multiprocess_download(
-        project_list,
-        sys.argv[2],
-        download_from_github,
-        int(sys.argv[3]))
+    with Pool(num_processes) as p:
+        p.map(lambda args: clone(*args), args)
