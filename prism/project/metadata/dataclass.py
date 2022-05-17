@@ -49,11 +49,17 @@ class ProjectMetadata:
     and other artifacts from building the project (e.g., `make clean`).
     Commands are presumed to be executed in a shell, e.g., Bash.
     """
+    ocaml_version: Optional[str] = None
+    """
+    Version of the OCaml compiler with which to build this project.
+    If not given, then this metadata is interpreted as the default for
+    the project regardless of OCaml compiler version unless overridden
+    by a metadata record specifying an `ocaml_version`.
+    If `ocaml_version` is given, then `coq_version` must also be given.
+    """
     coq_version: Optional[str] = None
     """
     Version of the Coq Proof Assistant used to build this project.
-    This field provides support for datasets containing commits across
-    multiple Coq versions.
     If not given, then this metadata is interpreted as the default for
     the project regardless of Coq version unless overridden by a
     metadata record specifying a `coq_version`.
@@ -147,6 +153,9 @@ class ProjectMetadata:
         elif self.project_url is None and self.commit_sha is not None:
             raise ValueError(
                 "A commit cannot be given if the project URL is not given.")
+        elif self.ocaml_version is not None and self.coq_version is None:
+            raise ValueError(
+                "A Coq version must be specified if an OCaml version is given.")
 
     def __lt__(self, other: 'ProjectMetadata') -> bool:
         """
@@ -164,7 +173,19 @@ class ProjectMetadata:
             or (
                 other.project_url == self.project_url
                 and other.commit_sha == self.commit_sha
-                and other.coq_version is not None and self.coq_version is None))
+                and other.coq_version is not None and self.coq_version is None)
+            or (
+                other.project_url == self.project_url
+                and other.commit_sha == self.commit_sha
+                and other.coq_version == self.coq_version and (
+                    other.ocaml_version is not None
+                    and self.ocaml_version is None)))
+
+    def __gt__(self, other: 'ProjectMetadata') -> bool:
+        """
+        Return whether this metadata overrides the other metadata.
+        """
+        return other < self
 
     @classmethod
     def dump(
