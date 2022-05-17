@@ -97,7 +97,6 @@ class Project(ABC):
             metadata = ProjectMetadata(
                 path.basename(dir_abspath),
                 serapi_options='',
-                serapi_version='',
                 build_cmd=[],
                 clean_cmd=[],
                 install_cmd=[])

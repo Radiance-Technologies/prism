@@ -3,7 +3,7 @@
 # Required fields missing
 - project_name: gstew5_games
   project_url: https://github.com/gstew5/games
-  serapi_options: '-R .,Games'
+  # serapi_options: '-R .,Games'
   coq_version: 1.0.0
   # serapi_version: 1.0.0
   opam_dependencies:
