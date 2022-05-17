@@ -32,6 +32,13 @@ Instances of `ProjectMetadata` are metadata objects.
      Prevents inclusion of inter-project dependencies that are included as submodules or subdirectories (such as `CompCert` and `coq-ext-lib` in VST).
      Special consideration must be given to these dependencies as they affect canonical splitting of training, test and validation datasets affecting the performace of the target ML model.
 
+- **`ocaml_version: Optional[str]`**
+
+     Version of the OCaml compiler with which to build this project.
+     This field provides support for datasets containing commits across multiple OCaml versions.
+     If not given, then this metadata is interpreted as the default for the project regardless of OCaml compiler version  overridden by a metadata record specifying an `ocaml_version`.
+     If `ocaml_version` is given, then `coq_version` must also be given.
+
 
 - **`coq_version: Optional[str]`**
 
@@ -40,11 +47,12 @@ Instances of `ProjectMetadata` are metadata objects.
      If not given, then this metadata is interpreted as the default for the project regardless of Coq version unless overridden by a metadata record specifying a `coq_version`.
 
 
-- **`serapi_version:str`**
+- **`serapi_version: Optional[str]`**
 
      Version of the API that serializes Coq internal OCaml datatypes from/to *S-expressions* or JSON.
      A version of SerAPI must be installed to parse documents for repair.
      The version indicated must be compatible with the specified `coq_version`.
+     This field is not null if and only if `coq_version` is not null.
 
 
 - **`serapi_options: str`**
@@ -64,7 +72,7 @@ Instances of `ProjectMetadata` are metadata objects.
 
      Specifies list of OPAM repositories typically managed through the command `opam-repository`.
      An OPAM repository hosts packages that may be required for installation of this project.
-     Repositories can be registered through subcommands `add`, `remove` and `set-url`, and are updated from their URLs using `opam update`.
+     Repositories can be registered through subcommands `add`, `remove`, and `set-url`, and are updated from their URLs using `opam update`.
      This field is expected to be rarely used.
 
 
