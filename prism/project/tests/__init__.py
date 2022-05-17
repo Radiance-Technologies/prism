@@ -1,3 +1,3 @@
 """
-Test suite for `prism.project.metadata`.
+Test suite for `prism.project`.
 """

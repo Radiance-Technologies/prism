@@ -1,6 +1,5 @@
 - project_name: Project Name
   serapi_options:
-  serapi_version:
   build_cmd:
   - 'make -j8'
   install_cmd:
