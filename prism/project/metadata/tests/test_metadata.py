@@ -91,12 +91,14 @@ class TestProjectMetadata(unittest.TestCase):
         project_url = "https://made/up/url/x.git"
         coq_version = "8.10.2"
         commit_sha = "asdfghjkl1234567890poiuytrewqzxcvbnm"
+        ocaml_version = "4.07.1"
         x = ProjectMetadata(
             "x",
             "",
             [],
             [],
             [],
+            ocaml_version,
             coq_version,
             "0.7.1",
             project_url=project_url,
@@ -107,6 +109,7 @@ class TestProjectMetadata(unittest.TestCase):
             [],
             [],
             [],
+            ocaml_version,
             coq_version,
             "0.7.1",
             project_url=project_url,
@@ -128,18 +131,50 @@ class TestProjectMetadata(unittest.TestCase):
             self.assertFalse(x < y)
             self.assertFalse(y < x)
             y.project_url = project_url
-        with self.subTest("different versions"):
+        with self.subTest("different Coq versions"):
             y.coq_version = "8.15"
             self.assertFalse(x < y)
             self.assertFalse(y < x)
             y.coq_version = coq_version
-        with self.subTest("override version with repo/commit"):
+        with self.subTest("different OCaml versions"):
+            y.ocaml_version = "4.08.0"
+            self.assertFalse(x < y)
+            self.assertFalse(y < x)
+            y.ocaml_version = ocaml_version
+        with self.subTest("override OCaml version with repo/commit"):
+            # override OCaml version with repo and commit specified
+            x.ocaml_version = None
+            self.assertLess(x, y)
+            self.assertFalse(y < x)
+            x.ocaml_version = coq_version
+        with self.subTest("override OCaml version with repo"):
+            # override OCaml version with only repo specified
+            x.ocaml_version = None
+            x.commit_sha = None
+            self.assertLess(x, y)
+            self.assertFalse(y < x)
+            x.ocaml_version = coq_version
+            x.commit_sha = commit_sha
+        with self.subTest("override OCaml version"):
+            # override OCaml version with no repo specified
+            x.ocaml_version = None
+            x.commit_sha = None
+            x.project_url = None
+            self.assertLess(x, y)
+            self.assertFalse(y < x)
+            x.ocaml_version = coq_version
+            x.commit_sha = commit_sha
+            x.project_url = project_url
+        # disable versions to ensure any overriding does not use them
+        x.ocaml_version = None
+        y.ocaml_version = None
+        with self.subTest("override Coq version with repo/commit"):
             # override Coq version with repo and commit specified
             x.coq_version = None
             self.assertLess(x, y)
             self.assertFalse(y < x)
             x.coq_version = coq_version
-        with self.subTest("override version with repo"):
+        with self.subTest("override Coq version with repo"):
             # override Coq version with only repo specified
             x.coq_version = None
             x.commit_sha = None
@@ -147,7 +182,7 @@ class TestProjectMetadata(unittest.TestCase):
             self.assertFalse(y < x)
             x.coq_version = coq_version
             x.commit_sha = commit_sha
-        with self.subTest("override version"):
+        with self.subTest("override Coq version"):
             # override Coq version with no repo specified
             x.coq_version = None
             x.commit_sha = None
