@@ -84,6 +84,91 @@ class TestProjectMetadata(unittest.TestCase):
 
         os.remove(self.test_yaml_path)
 
+    def test_partial_order(self):
+        """
+        Verify that metadata are properly ordered.
+        """
+        project_url = "https://made/up/url/x.git"
+        coq_version = "8.10.2"
+        commit_sha = "asdfghjkl1234567890poiuytrewqzxcvbnm"
+        x = ProjectMetadata(
+            "x",
+            "",
+            [],
+            [],
+            [],
+            coq_version,
+            "0.7.1",
+            project_url=project_url,
+            commit_sha=commit_sha)
+        y = ProjectMetadata(
+            "y",
+            "",
+            [],
+            [],
+            [],
+            coq_version,
+            "0.7.1",
+            project_url=project_url,
+            commit_sha=commit_sha)
+        with self.subTest("different projects"):
+            self.assertFalse(x < y)
+            self.assertFalse(y < x)
+        with self.subTest("same metadata"):
+            y.project_name = "x"
+            self.assertFalse(x < y)
+            self.assertFalse(y < x)
+        with self.subTest("different SHAs"):
+            y.commit_sha = "master"
+            self.assertFalse(x < y)
+            self.assertFalse(y < x)
+            y.commit_sha = commit_sha
+        with self.subTest("different repos"):
+            y.project_url = "https://made/up/url/y.git"
+            self.assertFalse(x < y)
+            self.assertFalse(y < x)
+            y.project_url = project_url
+        with self.subTest("different versions"):
+            y.coq_version = "8.15"
+            self.assertFalse(x < y)
+            self.assertFalse(y < x)
+            y.coq_version = coq_version
+        with self.subTest("override version with repo/commit"):
+            # override Coq version with repo and commit specified
+            x.coq_version = None
+            self.assertLess(x, y)
+            self.assertFalse(y < x)
+            x.coq_version = coq_version
+        with self.subTest("override version with repo"):
+            # override Coq version with only repo specified
+            x.coq_version = None
+            x.commit_sha = None
+            self.assertLess(x, y)
+            self.assertFalse(y < x)
+            x.coq_version = coq_version
+            x.commit_sha = commit_sha
+        with self.subTest("override version"):
+            # override Coq version with no repo specified
+            x.coq_version = None
+            x.commit_sha = None
+            x.project_url = None
+            self.assertLess(x, y)
+            self.assertFalse(y < x)
+            x.coq_version = coq_version
+            x.commit_sha = commit_sha
+            x.project_url = project_url
+        # disable versions to ensure any overriding does not use them
+        x.coq_version = None
+        y.coq_version = None
+        with self.subTest("override commit"):
+            x.commit_sha = None
+            self.assertLess(x, y)
+            self.assertFalse(y < x)
+        with self.subTest("override repo"):
+            x.project_url = None
+            self.assertLess(x, y)
+            self.assertFalse(y < x)
+
 
 if __name__ == '__main__':
     unittest.main()

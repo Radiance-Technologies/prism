@@ -155,11 +155,16 @@ class ProjectMetadata:
         This defines a partial order over metadata since some metadata
         will not be comparable.
         """
+        if self.project_name != other.project_name:
+            return False
         return (
-            self.project_name == other.project_name and (
-                other.project_url is not None and self.project_url is None
-                or other.commit_sha is not None and self.commit_sha is None
-                or other.coq_version is not None and self.coq_version is None))
+            other.project_url is not None and self.project_url is None or (
+                other.project_url == self.project_url
+                and other.commit_sha is not None and self.commit_sha is None)
+            or (
+                other.project_url == self.project_url
+                and other.commit_sha == self.commit_sha
+                and other.coq_version is not None and self.coq_version is None))
 
     @classmethod
     def dump(
