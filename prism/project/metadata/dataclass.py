@@ -4,7 +4,7 @@ Contains all metadata related to paticular GitHub repositories.
 
 import os
 # from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Iterable, List, Optional
 
 import seutil as su
@@ -186,6 +186,68 @@ class ProjectMetadata:
         Return whether this metadata overrides the other metadata.
         """
         return other < self
+
+    @property
+    def level(self) -> int:
+        """
+        Get the level of the metadata.
+
+        Returns
+        -------
+        int
+            The level of the metadata as determined by the partial order
+            of the metadata among comparable metadata, where higher
+            levels indicate greater precedence.
+        """
+        bits = [
+            self.coq_version is not None,
+            self.ocaml_version is not None,
+            self.project_url is not None,
+            self.commit_sha is not None,
+        ]
+        return sum(2**i * b for i, b in enumerate(bits))
+
+    def at_level(self, level: int) -> 'ProjectMetadata':
+        """
+        Return a view of this metadata at the given level.
+
+        The level must be less than or equal to the level of this
+        metadata.
+
+        Parameters
+        ----------
+        level : int
+            A level
+
+        Returns
+        -------
+        view : ProjectMetadata
+            A view (shallow copy) of this metadata at the requested
+            level, i.e., such that ``view.level == level`` is True.
+
+        Raises
+        ------
+        RuntimeError
+            If the view cannot be created because the requested level is
+            greater than the level of this metadata.
+        """
+        self_level = self.level
+        if level > self.level or level < 0:
+            raise RuntimeError(
+                f"Cannot create view at level {level} of metadata at level {self_level}"
+            )
+        fields = asdict(self)
+        if level < self_level:
+            if not level & 8:
+                fields['commit_sha'] = None
+            if not level & 4:
+                fields['project_url'] = None
+            if not level & 2:
+                fields['ocaml_version'] = None
+            if not level & 1:
+                fields['coq_version'] = None
+                fields['serapi_version'] = None
+        return ProjectMetadata(**fields)
 
     @classmethod
     def dump(
