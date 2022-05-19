@@ -67,7 +67,8 @@ class Version:
             self.major,
             self.minor,
             self.patch,
-            Bottom() if self.prerelease is None else self.prerelease,
+            # None > Some
+            Top() if self.prerelease is None else self.prerelease,
             Bottom() if self.extra is None else self.extra)
 
     @classmethod
