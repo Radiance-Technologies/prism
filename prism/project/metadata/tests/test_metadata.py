@@ -234,8 +234,9 @@ class TestProjectMetadata(unittest.TestCase):
             with self.assertRaises(ValueError):
                 x.at_level(i)
         defaults = [x.at_level(i) for i in [0, 1, 3, 4, 5, 7, 12, 13, 15]]
-        for x, y in zip(defaults, defaults[1 :]):
-            self.assertLess(x, y)
+        for i, x in enumerate(defaults):
+            for y in defaults[i + 1 :]:
+                self.assertLess(x, y)
 
 
 if __name__ == '__main__':
