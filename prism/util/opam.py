@@ -5,7 +5,7 @@ Supplies utilities for querying OCaml package information.
 import re
 from dataclasses import dataclass
 from functools import total_ordering
-from typing import Dict, Optional, Set, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 import seutil.bash as bash
 
@@ -25,13 +25,16 @@ class VersionParseError(Exception):
 class Version:
     """
     An OCaml package version.
+
+    Version semantics are derived from
+    https://github.com/ocurrent/ocaml-version.
     """
 
     major: int
     minor: int
-    patch: int
-    prerelease: Optional[str]
-    extra: Optional[str]
+    patch: Optional[int] = None
+    prerelease: Optional[str] = None
+    extra: Optional[str] = None
 
     def __lt__(self, other: 'Version') -> bool:  # noqa: D105
         if not isinstance(other, Version):
@@ -47,13 +50,16 @@ class Version:
         return f"{self.major}.{self.minor}.{self.patch}{prerelease}{extra}"
 
     @property
-    def key(self) -> Tuple[int,
-                           int,
-                           int,
-                           Union[Bottom,
-                                 str],
-                           Union[Bottom,
-                                 str]]:
+    def key(
+        self
+    ) -> Tuple[int,
+               int,
+               Union[Bottom,
+                     int],
+               Union[Top,
+                     str],
+               Union[Bottom,
+                     str]]:
         """
         Get a key by which versions may be compared.
 
@@ -66,7 +72,7 @@ class Version:
         return (
             self.major,
             self.minor,
-            self.patch,
+            Bottom() if self.patch is None else self.patch,
             # None > Some
             Top() if self.prerelease is None else self.prerelease,
             Bottom() if self.extra is None else self.extra)
@@ -87,19 +93,34 @@ class Version:
              minor,
              patch,
              sep,
-             extra) = re.match(r"(\d+).(\d+).(\d+)([+~])?(\S+)?",
+             extra) = re.match(r"(\d+).(\d+)(.\d+)?([+~])?(\S+)?",
                                version).groups()
-        except TypeError:
+        except (TypeError, AttributeError):
             raise VersionParseError(f"Failed to parse version from {version}")
         if sep == "~":
-            prerelease, extra = re.match(r"(\S+)+?(\S+)", extra).groups()
-        return Version(major, minor, patch, prerelease, extra)
+            if extra is None:
+                prerelease = ""
+            else:
+                try:
+                    prerelease, extra = extra.split("+", maxsplit=1)
+                except ValueError:
+                    prerelease = extra
+                    extra = None
+        elif sep == "+" and extra is None:
+            extra = ""
+        if patch is not None:
+            patch = int(patch[1 :])
+        return Version(int(major), int(minor), patch, prerelease, extra)
 
 
 @dataclass(frozen=True)
 class VersionConstraint:
     """
     An OCaml package version constraint.
+
+    Currently only simple constraints are supported, namely logical
+    conjunction (i.e., and) of at most two versions, which is expected
+    to cover the majority of encountered constraints.
     """
 
     lower_bound: Optional[Version] = None
@@ -130,6 +151,10 @@ class VersionConstraint:
         """
         Pretty-print the version constraint.
         """
+        if (self.lower_bound == self.upper_bound
+                and self.lower_bound is not None and self.lower_closed
+                and self.upper_closed):
+            return f"= {self.lower_bound}"
         pretty = []
         if self.lower_bound is not None:
             if self.lower_closed:
@@ -225,6 +250,27 @@ class OpamAPI:
     """
 
     @classmethod
+    def get_available_versions(cls, pkg: str) -> List[Version]:
+        """
+        Get a list of available versions of the requested package.
+
+        Parameters
+        ----------
+        pkg : str
+            The name of a package.
+
+        Returns
+        -------
+        List[Version]
+            The list of available versions of `pkg`.
+        """
+        r = bash.run(f"opam show -f all-versions {pkg}")
+        r.check_returncode()
+        versions = re.split(r"\s+", r.stdout)
+        versions.pop()
+        return versions
+
+    @classmethod
     def get_dependencies(
             cls,
             pkg: str,
@@ -263,8 +309,7 @@ class OpamAPI:
         ]
         dependencies.pop()
         return {
-            (
-                dep[0][1 :-1],
-                VersionConstraint.parse(dep[1] if len(dep) > 1 else ""))
+            dep[0][1 :-1]:
+            VersionConstraint.parse(dep[1] if len(dep) > 1 else "")
             for dep in dependencies
         }
