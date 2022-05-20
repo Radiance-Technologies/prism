@@ -11,6 +11,7 @@ from prism.util.opam import (
     OCamlVersion,
     OpamAPI,
     OpamVersion,
+    Version,
     VersionConstraint,
     VersionParseError,
 )
@@ -359,6 +360,7 @@ class TestOpamAPI(unittest.TestCase):
         r.check_returncode()
         expected = re.sub(r"\s+", " ", r.stdout).strip()
         actual = OpamAPI.get_available_versions(pkg)
+        self.assertIsInstance(actual[0], Version)
         self.assertEqual(" ".join(str(v) for v in actual), expected)
 
     def test_get_dependencies(self):
@@ -371,7 +373,7 @@ class TestOpamAPI(unittest.TestCase):
             "ocaml":
                 VersionConstraint(
                     OCamlVersion(4,
-                                 5,
+                                 '05',
                                  0),
                     OCamlVersion(4,
                                  10),

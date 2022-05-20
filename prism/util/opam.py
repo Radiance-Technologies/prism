@@ -102,7 +102,7 @@ class OpamVersion:
     information.
     """
 
-    fields: List[Union[VersionString, int]]
+    fields: List[Union[VersionString, str]]
     """
     Alternating sequence of non-digit/digit sequences, always starting
     with a non-digit sequence even if empty.
@@ -110,6 +110,14 @@ class OpamVersion:
     _version_syntax: ClassVar[re.Pattern] = re.compile(
         r"^[a-zA-Z0-9\-_\+\.~]+$")
     _sequence_syntax: ClassVar[re.Pattern] = re.compile(r"([^0-9]+)?([0-9]+)")
+
+    def __post_init__(self):
+        """
+        Clean up digits by converting int to str.
+        """
+        for i, f in enumerate(self.fields):
+            if isinstance(f, int):
+                self.fields[i] = str(f)
 
     def __lt__(self, other: Version) -> bool:  # noqa: D105
         if not isinstance(other, Version):
@@ -121,7 +129,9 @@ class OpamVersion:
 
     @cached_property
     def key(self) -> Tuple[Union[VersionString, int]]:  # noqa: D102
-        return tuple(self.fields)
+        return tuple(
+            f if isinstance(f,
+                            VersionString) else int(f) for f in self.fields)
 
     @classmethod
     def parse(cls, version: str) -> Version:  # noqa: D102
@@ -136,7 +146,7 @@ class OpamVersion:
             fields.append("")
             nondigit = False
         for field in sequence:
-            field = VersionString(field) if nondigit else int(field)
+            field = VersionString(field) if nondigit else field
             fields.append(field)
             nondigit = not nondigit
         return OpamVersion(fields)
@@ -151,11 +161,22 @@ class OCamlVersion(Version):
     https://github.com/ocurrent/ocaml-version.
     """
 
-    major: int
-    minor: int
-    patch: Optional[int] = None
+    major: str
+    minor: str
+    patch: Optional[str] = None
     prerelease: Optional[str] = None
     extra: Optional[str] = None
+
+    def __post_init__(self):
+        """
+        Clean up major, minor, and patch by converting int to str.
+        """
+        if isinstance(self.major, int):
+            super().__setattr__('major', str(self.major))
+        if isinstance(self.minor, int):
+            super().__setattr__('minor', str(self.minor))
+        if isinstance(self.patch, int):
+            super().__setattr__('patch', str(self.patch))
 
     def __lt__(self, other: Version) -> bool:  # noqa: D105
         if not isinstance(other, Version):
@@ -169,9 +190,10 @@ class OCamlVersion(Version):
         """
         Pretty-print the version.
         """
+        patch = "" if self.patch is None else f".{self.patch}"
         prerelease = "" if self.prerelease is None else f"~{self.prerelease}"
         extra = "" if self.extra is None else f"+{self.extra}"
-        return f"{self.major}.{self.minor}.{self.patch}{prerelease}{extra}"
+        return f"{self.major}.{self.minor}{patch}{prerelease}{extra}"
 
     @cached_property
     def fast_key(
@@ -192,9 +214,9 @@ class OCamlVersion(Version):
         Version.key
         """
         return (
-            self.major,
-            self.minor,
-            Bottom() if self.patch is None else self.patch,
+            int(self.major),
+            int(self.minor),
+            Bottom() if self.patch is None else int(self.patch),
             # None > Some
             Top() if self.prerelease is None else self.prerelease,
             Bottom() if self.extra is None else self.extra)
@@ -211,7 +233,7 @@ class OCamlVersion(Version):
              minor,
              patch,
              sep,
-             extra) = re.match(r"(\d+).(\d+)(.\d+)?([+~])?(\S+)?",
+             extra) = re.match(r"(\d+).(\d+)(\.\d+)?([+~])?(.+)?",
                                version).groups()
         except (TypeError, AttributeError):
             return OpamVersion.parse(version)
@@ -227,8 +249,8 @@ class OCamlVersion(Version):
         elif sep == "+" and extra is None:
             extra = ""
         if patch is not None:
-            patch = int(patch[1 :])
-        return OCamlVersion(int(major), int(minor), patch, prerelease, extra)
+            patch = patch[1 :]
+        return OCamlVersion(major, minor, patch, prerelease, extra)
 
 
 @dataclass(frozen=True)
@@ -386,7 +408,7 @@ class OpamAPI:
         r.check_returncode()
         versions = re.split(r"\s+", r.stdout)
         versions.pop()
-        return versions
+        return [OCamlVersion.parse(v) for v in versions]
 
     @classmethod
     def get_dependencies(
