@@ -5,7 +5,7 @@ Contains all metadata related to paticular GitHub repositories.
 import os
 # from collections.abc import Iterable
 from dataclasses import asdict, dataclass
-from typing import Iterable, List, Optional
+from typing import Iterable, Iterator, List, Optional
 
 import seutil as su
 from radpytools.dataclasses import default_field
@@ -148,7 +148,7 @@ class ProjectMetadata:
         """
         if (self.serapi_version is None) != (self.coq_version is None):
             raise ValueError(
-                "`serapi_version` must specified if and only if "
+                "`serapi_version` must be specified if and only if "
                 "`coq_version` is specified.")
         elif self.project_url is None and self.commit_sha is not None:
             raise ValueError(
@@ -207,6 +207,37 @@ class ProjectMetadata:
         ]
         return sum(2**i * b for i, b in enumerate(bits))
 
+    def levels(self,
+               reverse: bool = False,
+               inclusive: bool = True) -> Iterator['ProjectMetadata']:
+        """
+        Iterate over views of this metadata at each level.
+
+        Parameters
+        ----------
+        reverse : bool, optional
+            Whether to iterate the levels in descending order (True) or
+            in ascending order (False), by default False.
+        inclusive : bool, optional
+            Whether to include this metadata in the iteration (True) or
+            not (False), by default True.
+
+        Yields
+        ------
+        ProjectMetadata
+            A view of this metadata at some level less than or equal to
+            its level.
+        """
+        if reverse:
+            levels = range(self.level - (0 if inclusive else 1), -1, -1)
+        else:
+            levels = range(self.level + (1 if inclusive else 0))
+        for i in levels:
+            try:
+                yield self.at_level(i)
+            except ValueError:
+                continue
+
     def at_level(self, level: int) -> 'ProjectMetadata':
         """
         Return a view of this metadata at the given level.
@@ -261,13 +292,12 @@ class ProjectMetadata:
         Parameters
         ----------
         projects : Iterable[ProjectMetadata]
-            List of `ProjectMetadata` class objects to be serialized
+            List of `ProjectMetadata` class objects to be serialized.
         output_filepath : os.PathLike
-            Filepath of YAML file to be written containing metadata
-            for projects
+            Filepath to which metadata should be dumped.
         fmt : su.io.Fmt, optional
             Designated format of the output file,
-            by default su.io.Fmt.yaml
+            by default `su.io.Fmt.yaml`.
         """
         su.io.dump(output_filepath, projects, fmt=fmt)
 
@@ -281,10 +311,10 @@ class ProjectMetadata:
         Parameters
         ----------
         filepath : os.PathLike
-            Filepath of YAML file containing project metadata
+            Filepath containing project metadata.
         fmt : su.io.Fmt, optional
             Designated format of the input file,
-            by default su.io.Fmt.yaml
+            by default `su.io.Fmt.yaml`.
 
         Returns
         -------

@@ -237,6 +237,7 @@ class TestProjectMetadata(unittest.TestCase):
         for i, x in enumerate(defaults):
             for y in defaults[i + 1 :]:
                 self.assertLess(x, y)
+        self.assertEqual(defaults, list(x.levels()))
 
 
 if __name__ == '__main__':
