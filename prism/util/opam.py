@@ -2,10 +2,12 @@
 Supplies utilities for querying OCaml package information.
 """
 
+import abc
 import re
+from abc import abstractmethod
 from dataclasses import dataclass
-from functools import total_ordering
-from typing import Dict, List, Optional, Set, Tuple, Union
+from functools import cached_property, total_ordering
+from typing import ClassVar, Dict, List, Optional, Set, Tuple, Union
 
 import seutil.bash as bash
 
@@ -20,11 +22,130 @@ class VersionParseError(Exception):
     pass
 
 
-@total_ordering
-@dataclass(frozen=True)
-class Version:
+class VersionString(str):
     """
-    An OCaml package version.
+    Strings with a custom comparison that matches OPAM version ordering.
+    """
+
+    def __lt__(self, other: str) -> bool:
+        """
+        See https://opam.ocaml.org/doc/Manual.html#version-ordering.
+        """
+        if not isinstance(other, str):
+            return super().__lt__(other)
+        for a, b in zip(self, other):
+            if a == b:
+                continue
+            if a == '~':
+                return True
+            elif a.isascii() and a.isalpha():
+                if b == '~':
+                    return False
+                elif b.isascii() and b.isalpha():
+                    return a < b
+                else:
+                    return True
+            elif b == '~' or (b.isascii() and b.isalpha()):
+                return False
+            else:
+                return a < b
+        return len(a) < len(b)
+
+
+@total_ordering
+class Version(abc.ABC):
+    """
+    An abstract base class for OCaml package versions.
+    """
+
+    def __lt__(self, other: 'Version') -> bool:  # noqa: D105
+        if not isinstance(other, Version):
+            return NotImplemented
+        return self.key < other.key
+
+    @cached_property
+    def key(self) -> Tuple[Union[VersionString, int]]:
+        """
+        Get a key by which versions may be compared.
+
+        Returns
+        -------
+        Tuple[Union[VersionString, int]]
+            A key that can be compared lexicographically to determine if
+            one version supercedes another.
+        """
+        ...
+
+    @classmethod
+    @abstractmethod
+    def parse(cls, version: str) -> 'Version':
+        """
+        Parse the version from a string.
+
+        Raises
+        ------
+        VersionParseError
+            If a version cannot be parsed from the given string.
+        """
+        ...
+
+
+@dataclass(frozen=True)
+class OpamVersion:
+    """
+    Version specifiers according to the OCaml package manager.
+
+    Implementation based on ``src/core/opamVersionCompare.ml`` and
+    ``src/core/opamVersion.ml`` available at
+    https://github.com/ocaml/opam.
+    See https://opam.ocaml.org/doc/Manual.html#version-ordering for more
+    information.
+    """
+
+    fields: List[Union[VersionString, int]]
+    """
+    Alternating sequence of non-digit/digit sequences, always starting
+    with a non-digit sequence even if empty.
+    """
+    _version_syntax: ClassVar[re.Pattern] = re.compile(
+        r"^[a-zA-Z0-9\-_\+\.~]+$")
+    _sequence_syntax: ClassVar[re.Pattern] = re.compile(r"([^0-9]+)?([0-9]+)")
+
+    def __lt__(self, other: Version) -> bool:  # noqa: D105
+        if not isinstance(other, Version):
+            return NotImplemented
+        return self.key < other.key
+
+    def __str__(self) -> str:  # noqa: D105
+        return ''.join([str(f) for f in self.fields])
+
+    @cached_property
+    def key(self) -> Tuple[Union[VersionString, int]]:  # noqa: D102
+        return tuple(self.fields)
+
+    @classmethod
+    def parse(cls, version: str) -> Version:  # noqa: D102
+        if cls._version_syntax.match(version) is None:
+            raise VersionParseError(f"Failed to parse version from {version}")
+
+        sequence = [f for f in cls._sequence_syntax.split(version) if f]
+        fields = []
+        # make sure we start with a non-digit
+        nondigit = True
+        if sequence[0].isdigit():
+            fields.append("")
+            nondigit = False
+        for field in sequence:
+            field = VersionString(field) if nondigit else int(field)
+            fields.append(field)
+            nondigit = not nondigit
+        return OpamVersion(fields)
+
+
+@dataclass(frozen=True)
+class OCamlVersion(Version):
+    """
+    An OCaml compiler version.
 
     Version semantics are derived from
     https://github.com/ocurrent/ocaml-version.
@@ -36,10 +157,13 @@ class Version:
     prerelease: Optional[str] = None
     extra: Optional[str] = None
 
-    def __lt__(self, other: 'Version') -> bool:  # noqa: D105
+    def __lt__(self, other: Version) -> bool:  # noqa: D105
         if not isinstance(other, Version):
             return NotImplemented
-        return self.key < other.key
+        elif isinstance(other, OCamlVersion):
+            return self.fast_key < other.fast_key
+        else:
+            return self.key < other.key
 
     def __str__(self) -> str:
         """
@@ -49,8 +173,8 @@ class Version:
         extra = "" if self.extra is None else f"+{self.extra}"
         return f"{self.major}.{self.minor}.{self.patch}{prerelease}{extra}"
 
-    @property
-    def key(
+    @cached_property
+    def fast_key(
         self
     ) -> Tuple[int,
                int,
@@ -61,13 +185,11 @@ class Version:
                Union[Bottom,
                      str]]:
         """
-        Get a key by which versions may be compared.
+        Get a key specialized to `OCamlVersion`s.
 
-        Returns
-        -------
-        Tuple[int, int, int, Union[Bottom, str], Union[Bottom, str]]
-            A key that can be compared lexicographically to determine if
-            one version supercedes another.
+        See Also
+        --------
+        Version.key
         """
         return (
             self.major,
@@ -77,16 +199,12 @@ class Version:
             Top() if self.prerelease is None else self.prerelease,
             Bottom() if self.extra is None else self.extra)
 
-    @classmethod
-    def parse(cls, version: str) -> 'Version':
-        """
-        Parse the version from a string.
+    @cached_property
+    def key(self) -> Tuple[Union[VersionString, int]]:  # noqa: D102
+        return OpamVersion.parse(str(self)).key
 
-        Raises
-        ------
-        VersionParseError
-            If a version cannot be parsed from the given string.
-        """
+    @classmethod
+    def parse(cls, version: str) -> Version:  # noqa: D102
         prerelease = None
         try:
             (major,
@@ -96,7 +214,7 @@ class Version:
              extra) = re.match(r"(\d+).(\d+)(.\d+)?([+~])?(\S+)?",
                                version).groups()
         except (TypeError, AttributeError):
-            raise VersionParseError(f"Failed to parse version from {version}")
+            return OpamVersion.parse(version)
         if sep == "~":
             if extra is None:
                 prerelease = ""
@@ -110,7 +228,7 @@ class Version:
             extra = ""
         if patch is not None:
             patch = int(patch[1 :])
-        return Version(int(major), int(minor), patch, prerelease, extra)
+        return OCamlVersion(int(major), int(minor), patch, prerelease, extra)
 
 
 @dataclass(frozen=True)
@@ -229,9 +347,9 @@ class VersionConstraint:
                 upper_bound = constraint[i]
             i += 1
         if lower_bound is not None:
-            lower_bound = Version.parse(lower_bound)
+            lower_bound = OCamlVersion.parse(lower_bound)
         if upper_bound is not None:
-            upper_bound = Version.parse(upper_bound)
+            upper_bound = OCamlVersion.parse(upper_bound)
         return VersionConstraint(
             lower_bound,
             upper_bound,
