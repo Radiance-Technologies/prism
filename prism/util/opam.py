@@ -166,6 +166,8 @@ class OCamlVersion(Version):
     patch: Optional[str] = None
     prerelease: Optional[str] = None
     extra: Optional[str] = None
+    _version_syntax: ClassVar[re.Pattern] = re.compile(
+        r"^(\d+).(\d+)(\.\d+)?(([+~])(.*))?$")
 
     def __post_init__(self):
         """
@@ -234,8 +236,7 @@ class OCamlVersion(Version):
              patch,
              _,
              sep,
-             extra) = re.match(r"^(\d+).(\d+)(\.\d+)?(([+~])(.*))?$",
-                               version).groups()
+             extra) = cls._version_syntax.match(version).groups()
         except (TypeError, AttributeError):
             return OpamVersion.parse(version)
         if sep == "~":
@@ -268,6 +269,7 @@ class VersionConstraint:
     upper_bound: Optional[Version] = None
     lower_closed: bool = False
     upper_closed: bool = False
+    _brace_re: ClassVar[re.Pattern] = re.compile(r"\{|\}|\||\"")
 
     def __contains__(self, item: Version) -> bool:
         """
@@ -338,7 +340,7 @@ class VersionConstraint:
         upper_bound = None
         lower_closed = False
         upper_closed = False
-        constraint = re.sub(r"\{|\}|\||\"", "", constraint).split(" ")
+        constraint = cls._brace_re.sub("", constraint).split(" ")
         i = 0
         while i < len(constraint):
             token = constraint[i]
