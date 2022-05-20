@@ -159,6 +159,14 @@ class TestVersion(unittest.TestCase):
             OpamVersion(['',
                          8,
                          '~pre+extra']))
+        self.assertEqual(
+            OCamlVersion.parse("8.4pl1"),
+            OpamVersion(['',
+                         8,
+                         '.',
+                         4,
+                         'pl',
+                         1]))
         with self.assertRaises(VersionParseError):
             OCamlVersion.parse("dev^9")
         with self.assertRaises(VersionParseError):

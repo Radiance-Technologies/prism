@@ -63,7 +63,7 @@ class Version(abc.ABC):
             return NotImplemented
         return self.key < other.key
 
-    @cached_property
+    @abstractmethod
     def key(self) -> Tuple[Union[VersionString, int]]:
         """
         Get a key by which versions may be compared.
@@ -232,8 +232,9 @@ class OCamlVersion(Version):
             (major,
              minor,
              patch,
+             _,
              sep,
-             extra) = re.match(r"(\d+).(\d+)(\.\d+)?([+~])?(.+)?",
+             extra) = re.match(r"^(\d+).(\d+)(\.\d+)?(([+~])(.*))?$",
                                version).groups()
         except (TypeError, AttributeError):
             return OpamVersion.parse(version)
