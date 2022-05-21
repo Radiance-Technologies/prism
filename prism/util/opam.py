@@ -4,7 +4,7 @@ Supplies utilities for querying OCaml package information.
 
 import abc
 import re
-from abc import abstractmethod
+from abc import abstractmethod, abstractproperty
 from dataclasses import dataclass
 from functools import cached_property, total_ordering
 from typing import ClassVar, Dict, List, Optional, Set, Tuple, Union
@@ -49,7 +49,11 @@ class VersionString(str):
                 return False
             else:
                 return a < b
-        return len(a) < len(b)
+        if not (len(self) > len(other) and self[len(other)].startswith('~')):
+            return (
+                len(self) < len(other) and not other[len(self)].startswith('~'))
+        else:
+            return True
 
 
 @total_ordering
@@ -58,12 +62,17 @@ class Version(abc.ABC):
     An abstract base class for OCaml package versions.
     """
 
+    def __hash__(self) -> int:  # noqa: D105
+        # cannot make abstract and also have dataclass auto-derive it
+        raise NotImplementedError()
+
     def __lt__(self, other: 'Version') -> bool:  # noqa: D105
         if not isinstance(other, Version):
             return NotImplemented
+        # TODO: pad shorter key
         return self.key < other.key
 
-    @abstractmethod
+    @abstractproperty
     def key(self) -> Tuple[Union[VersionString, int]]:
         """
         Get a key by which versions may be compared.
@@ -91,7 +100,7 @@ class Version(abc.ABC):
 
 
 @dataclass(frozen=True)
-class OpamVersion:
+class OpamVersion(Version):
     """
     Version specifiers according to the OCaml package manager.
 
@@ -110,22 +119,39 @@ class OpamVersion:
     _version_syntax: ClassVar[re.Pattern] = re.compile(
         r"^[a-zA-Z0-9\-_\+\.~]+$")
     _sequence_syntax: ClassVar[re.Pattern] = re.compile(r"([^0-9]+)?([0-9]+)")
+    _digit_re: ClassVar[re.Pattern] = re.compile(r'\d')
 
     def __post_init__(self):
         """
         Clean up digits by converting int to str.
         """
+        # is the current field supposed to be a digit or nondigit?
+        nondigit = True
         for i, f in enumerate(self.fields):
-            if isinstance(f, int):
+            if nondigit:
+                if isinstance(f, int) or self._digit_re.search(f) is not None:
+                    raise TypeError(
+                        f"Malformed version; digit in expected non-digit index {i}"
+                    )
+                elif not isinstance(f, VersionString):
+                    self.fields[i] = VersionString(f)
+            elif isinstance(f, int):
                 self.fields[i] = str(f)
+            elif not f.isdigit():
+                raise TypeError(
+                    f"Malformed version; non-digit in expected digit index {i}")
+            nondigit = not nondigit
+        # precompute padding for comparisons
+        if nondigit:
+            self.fields.append(VersionString())
+        else:
+            self.fields.append('0')
 
-    def __lt__(self, other: Version) -> bool:  # noqa: D105
-        if not isinstance(other, Version):
-            return NotImplemented
-        return self.key < other.key
+    def __hash__(self) -> int:  # noqa: D105
+        return hash(tuple(self.fields))
 
     def __str__(self) -> str:  # noqa: D105
-        return ''.join([str(f) for f in self.fields])
+        return ''.join([str(f) for f in self.fields[:-1]])
 
     @cached_property
     def key(self) -> Tuple[Union[VersionString, int]]:  # noqa: D102
@@ -179,6 +205,14 @@ class OCamlVersion(Version):
             super().__setattr__('minor', str(self.minor))
         if isinstance(self.patch, int):
             super().__setattr__('patch', str(self.patch))
+
+    def __eq__(self, other: Version) -> bool:  # noqa: D105
+        if not isinstance(other, Version):
+            return NotImplemented
+        elif isinstance(other, OCamlVersion):
+            return self.fast_key == other.fast_key
+        else:
+            return self.key == other.key
 
     def __lt__(self, other: Version) -> bool:  # noqa: D105
         if not isinstance(other, Version):

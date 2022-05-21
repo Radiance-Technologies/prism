@@ -59,6 +59,51 @@ class TestVersion(unittest.TestCase):
                          10,
                          2,
                          "b"))
+        self.assertEqual(OpamVersion(['', 8, '.', 10]), OCamlVersion(8, 10))
+        self.assertLess(
+            OpamVersion(['',
+                         8,
+                         '.',
+                         10,
+                         '~pl',
+                         1]),
+            OCamlVersion(8,
+                         10))
+        # assert same order as the example at
+        # https://opam.ocaml.org/doc/Manual.html#version-ordering.
+        versions = [
+            '~~',
+            '~',
+            '~beta2',
+            '~beta10',
+            '0.1',
+            '1.0~beta',
+            '1.0',
+            '1.0-test',
+            '1.0.1',
+            '1.0.10',
+            'dev',
+            'trunk'
+        ]
+        versions = [OCamlVersion.parse(v) for v in versions]
+        for i, v in enumerate(versions):
+            self.assertEqual(v, v)
+            for j in range(i + 1, len(versions)):
+                self.assertLess(v, versions[j])
+
+    def test_init(self):
+        """
+        Test error checking on direct initialization (i.e., not parsed).
+        """
+        self.assertEqual(OpamVersion(['', '3']), OpamVersion.parse('3'))
+        with self.assertRaises(TypeError):
+            OpamVersion([8])
+        with self.assertRaises(TypeError):
+            OpamVersion(['3'])
+        with self.assertRaises(TypeError):
+            OpamVersion(['', '3', 'g5'])
+        with self.assertRaises(TypeError):
+            OpamVersion(['', 8, '.', 10, '~pl1']),
 
     def test_parse(self):
         """
