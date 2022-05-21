@@ -49,9 +49,8 @@ class VersionString(str):
                 return False
             else:
                 return a < b
-        if not (len(self) > len(other) and self[len(other)].startswith('~')):
-            return (
-                len(self) < len(other) and not other[len(self)].startswith('~'))
+        if not (len(self) > len(other) and self[len(other)] == '~'):
+            return (len(self) < len(other) and not other[len(self)] == '~')
         else:
             return True
 
