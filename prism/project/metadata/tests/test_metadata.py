@@ -100,7 +100,6 @@ class TestProjectMetadata(unittest.TestCase):
             [],
             ocaml_version,
             coq_version,
-            "0.7.1",
             project_url=project_url,
             commit_sha=commit_sha)
         y = ProjectMetadata(
@@ -111,7 +110,6 @@ class TestProjectMetadata(unittest.TestCase):
             [],
             ocaml_version,
             coq_version,
-            "0.7.1",
             project_url=project_url,
             commit_sha=commit_sha)
         with self.subTest("different projects"):
@@ -220,7 +218,6 @@ class TestProjectMetadata(unittest.TestCase):
             [],
             ocaml_version,
             coq_version,
-            "0.7.1",
             project_url=project_url,
             commit_sha=commit_sha)
         # test bounds

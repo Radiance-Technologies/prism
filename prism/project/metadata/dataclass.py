@@ -10,6 +10,8 @@ from typing import Iterable, Iterator, List, Optional
 import seutil as su
 from radpytools.dataclasses import default_field
 
+from .version_info import version_info
+
 
 @dataclass
 class ProjectMetadata:
@@ -146,16 +148,25 @@ class ProjectMetadata:
         """
         Perform integrity and constraint checking.
         """
-        if (self.serapi_version is None) != (self.coq_version is None):
-            raise ValueError(
-                "`serapi_version` must be specified if and only if "
-                "`coq_version` is specified.")
+        if self.serapi_version is None and self.coq_version is not None:
+            self.serapi_version = version_info.get_serapi_version(
+                self.coq_version)
         elif self.project_url is None and self.commit_sha is not None:
             raise ValueError(
                 "A commit cannot be given if the project URL is not given.")
         elif self.ocaml_version is not None and self.coq_version is None:
             raise ValueError(
                 "A Coq version must be specified if an OCaml version is given.")
+        if not version_info.are_coq_ocaml_compatible(self.coq_version,
+                                                     self.ocaml_version):
+            raise ValueError(
+                f"Incompatible Coq/OCaml versions specified: coq={self.coq_version}, "
+                f"ocaml={self.ocaml_version}")
+        if not version_info.are_serapi_coq_compatible(self.coq_version,
+                                                      self.serapi_version):
+            raise ValueError(
+                f"Incompatible Coq/SerAPI versions specified: coq={self.coq_version}, "
+                f"ocaml={self.serapi_version}")
 
     def __lt__(self, other: 'ProjectMetadata') -> bool:
         """
