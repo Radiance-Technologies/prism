@@ -475,6 +475,9 @@ class OpamAPI:
         https://opam.ocaml.org/blog/opam-extended-dependencies/.
     """
 
+    _whitespace_regex: ClassVar[re.Pattern] = re.compile(r"\s+")
+    _newline_regex: ClassVar[re.Pattern] = re.compile("\n")
+
     @classmethod
     def get_available_versions(cls, pkg: str) -> List[Version]:
         """
@@ -526,12 +529,12 @@ class OpamAPI:
             pkg = f"{pkg}={version}"
         r = bash.run(f"opam show -f depends: {pkg}")
         r.check_returncode()
+        # exploit fact that each dependency is on its own line in output
         dependencies: Set[Tuple[str, str]]
         dependencies = [
-            re.split(r"\s+",
-                     dep,
-                     maxsplit=1) for dep in re.split("\n",
-                                                     r.stdout)
+            cls._whitespace_regex.split(dep,
+                                        maxsplit=1)
+            for dep in cls._newline_regex.split(r.stdout)
         ]
         dependencies.pop()
         return {
