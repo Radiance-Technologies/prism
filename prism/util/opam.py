@@ -5,9 +5,20 @@ Supplies utilities for querying OCaml package information.
 import abc
 import re
 from abc import abstractmethod, abstractproperty
+from bisect import bisect, bisect_left
 from dataclasses import dataclass
 from functools import cached_property, total_ordering
-from typing import ClassVar, Dict, List, Optional, Set, Tuple, Union
+from typing import (
+    ClassVar,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
 
 import seutil.bash as bash
 
@@ -347,6 +358,45 @@ class VersionConstraint:
                 pretty.append("<")
             pretty.append(str(self.upper_bound))
         return " ".join(pretty)
+
+    def apply(self,
+              versions: Iterable[Version],
+              sort: bool = False) -> List[Version]:
+        """
+        Get versions satisfying the constraint from a collection.
+
+        The collection must be sorted
+
+        Parameters
+        ----------
+        versions : Iterable[Version]
+            A collection of versions. If an iteration over the
+            collection will not yield the versions in a sorted,
+            ascending order, then the `sort` argument should be enabled.
+        sort : bool, optional
+            Whether to sort the given collection (True) or not (False),
+            by default False.
+
+        Returns
+        -------
+        feasible : List[Version]
+            The feasible set of versions in ascending order.
+        """
+        if sort:
+            versions = sorted(versions)
+        if not isinstance(versions, Sequence):
+            versions = list(versions)
+        first_idx, last_idx = 0, len(versions)
+        if self.lower_bound is not None:
+            bisection = bisect_left if self.lower_closed else bisect
+            first_idx = bisection(versions, self.lower_bound)
+            if self.upper_bound is not None:
+                bisection = bisect if self.upper_closed else bisect_left
+                last_idx = bisection(versions, self.upper_bound)
+        elif self.upper_bound is not None:
+            bisection = bisect if self.upper_closed else bisect_left
+            last_idx = bisection(versions, self.upper_bound)
+        return versions[first_idx : last_idx]
 
     @classmethod
     def parse(cls, constraint: str) -> 'VersionConstraint':
