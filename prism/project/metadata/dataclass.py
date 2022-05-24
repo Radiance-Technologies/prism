@@ -5,7 +5,7 @@ Contains all metadata related to paticular GitHub repositories.
 import os
 # from collections.abc import Iterable
 from dataclasses import asdict, dataclass
-from typing import Iterable, Iterator, List, Optional
+from typing import Iterable, Iterator, List, Optional, Set
 
 import seutil as su
 from radpytools.dataclasses import default_field
@@ -67,6 +67,8 @@ class ProjectMetadata:
     metadata record specifying a `coq_version`.
      """
     serapi_version: Optional[str] = None
+    # Ideally, this would be an init=False field, but seutil.io does not
+    # support them
     """
     Version of the API that serializes Coq internal OCaml datatypes
     from/to *S-expressions* or JSON.
@@ -75,7 +77,7 @@ class ProjectMetadata:
     `coq_version`.
     This field is not null if and only if `coq_version` is not null.
     """
-    ignore_path_regex: List[str] = default_field([])
+    ignore_path_regex: Set[str] = default_field([])
     """
     Prevents inclusion of inter-project dependencies that are included
     as submodules or subdirectories (such as `CompCert` and
@@ -84,9 +86,9 @@ class ProjectMetadata:
     affect canonical splitting of training, test and validation datasets
     affecting the performace of the target ML model.
     """
-    coq_dependencies: List[str] = default_field([])
+    coq_dependencies: Set[str] = default_field([])
     """
-    List of dependencies on packages referring to Coq formalizations and
+    Set of dependencies on packages referring to Coq formalizations and
     plugins that are packaged using OPAM and whose installation is
     required to build this project.
     A string ``pkg`` in `coq_dependencies` should be given such that
@@ -98,9 +100,9 @@ class ProjectMetadata:
     Only dependencies that are not handled by the project's build system
     should be listed here.
     """
-    opam_repos: List[str] = default_field([])
+    opam_repos: Set[str] = default_field([])
     """
-    Specifies list of OPAM repositories typically managed through the
+    Specifies set of OPAM repositories typically managed through the
     command `opam-repository`.
     An OPAM repository hosts packages that may be required for
     installation of this project.
@@ -108,9 +110,9 @@ class ProjectMetadata:
     ``remove``, and ``set-url``, and are updated from their URLs using
     ``opam update``.
     """
-    opam_dependencies: List[str] = default_field([])
+    opam_dependencies: Set[str] = default_field([])
     """
-    List of non-Coq OPAM dependencies whose installation is required to
+    Set of non-Coq OPAM dependencies whose installation is required to
     build the project.
     A string ``pkg`` in `opam_dependencies` should be given such that
     ``opam install pkg`` results in installing the named dependency.
