@@ -60,7 +60,7 @@ class TestMetadataStorage(unittest.TestCase):
         storage = MetadataStorage()
         for metadata in self.metadata:
             storage.insert(metadata)
-        self.assertEqual(self.metadata, list(iter(storage)))
+        self.assertEqual(set(self.metadata), set(iter(storage)))
 
 
 if __name__ == '__main__':
