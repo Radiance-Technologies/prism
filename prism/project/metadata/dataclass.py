@@ -67,8 +67,11 @@ class ProjectMetadata:
     metadata record specifying a `coq_version`.
      """
     serapi_version: Optional[str] = None
-    # Ideally, this would be an init=False field, but seutil.io does not
-    # support them
+    # HACK: Ideally, this would be an init=False field since it is
+    # automatically determined, but seutil.io does not currently support
+    # them.
+    # Track https://github.com/pengyunie/seutil/issues/30 for
+    # resolution
     """
     Version of the API that serializes Coq internal OCaml datatypes
     from/to *S-expressions* or JSON.
