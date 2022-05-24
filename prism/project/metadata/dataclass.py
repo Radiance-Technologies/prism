@@ -170,6 +170,24 @@ class ProjectMetadata:
                 f"Incompatible Coq/SerAPI versions specified: coq={self.coq_version}, "
                 f"ocaml={self.serapi_version}")
 
+    def __gt__(self, other: 'ProjectMetadata') -> bool:
+        """
+        Return whether this metadata overrides the other metadata.
+        """
+        return other < self
+
+    def __hash__(self) -> int:
+        """
+        Hash only the fields that identify the metadata.
+        """
+        return hash(
+            (
+                self.project_name,
+                self.project_url,
+                self.commit_sha,
+                self.coq_version,
+                self.ocaml_version))
+
     def __lt__(self, other: 'ProjectMetadata') -> bool:
         """
         Return whether the `other` metadata overrides this metadata.
@@ -193,12 +211,6 @@ class ProjectMetadata:
                 and other.coq_version == self.coq_version and (
                     other.ocaml_version is not None
                     and self.ocaml_version is None)))
-
-    def __gt__(self, other: 'ProjectMetadata') -> bool:
-        """
-        Return whether this metadata overrides the other metadata.
-        """
-        return other < self
 
     @property
     def level(self) -> int:
