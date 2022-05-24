@@ -1,8 +1,11 @@
 """
 Test suite for project metadata storage utilities.
 """
+import os
 import unittest
 from pathlib import Path
+
+import seutil.io as io
 
 from prism.project.metadata.dataclass import ProjectMetadata
 from prism.project.metadata.storage import (
@@ -61,6 +64,28 @@ class TestMetadataStorage(unittest.TestCase):
         for metadata in self.metadata:
             storage.insert(metadata)
         self.assertEqual(set(self.metadata), set(iter(storage)))
+
+    def test_serialization(self):
+        """
+        Verify that the storage can be serialized and deserialized.
+        """
+        storage = MetadataStorage()
+        for metadata in self.metadata:
+            storage.insert(metadata)
+        with self.subTest("inverse"):
+            # deserialization is the inverse of serialization
+            serialized = io.serialize(storage, io.Fmt.json)
+            self.assertEqual(
+                storage,
+                io.deserialize(serialized,
+                               clz=MetadataStorage))
+        with self.subTest("to_file"):
+            storage_file = TEST_DIR / 'storage.yml'
+            # verify metadata can be dumped to and loaded from file
+            MetadataStorage.dump(storage, storage_file)
+            loaded = MetadataStorage.load(storage_file)
+            self.assertEqual(storage, loaded)
+            os.remove(storage_file)
 
 
 if __name__ == '__main__':

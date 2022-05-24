@@ -12,6 +12,7 @@ from typing import (
     List,
     Optional,
     Set,
+    Tuple,
     TypeVar,
     Union,
 )
@@ -207,10 +208,11 @@ class MetadataStorage:
         Bootstrap version tables and IDs.
         """
         if self.contexts:
-            self.next_context_id = max(val for val in self.contexts.values())
+            self.next_context_id = max(
+                val for val in self.contexts.values()) + 1
         if self.command_sequences:
             self.next_command_sequence_id = max(
-                val for val in self.command_sequences.values())
+                val for val in self.command_sequences.values()) + 1
 
     def __iter__(self) -> Iterator[ProjectMetadata]:
         """
@@ -537,6 +539,64 @@ class MetadataStorage:
                     elif field_name == "serapi_options":
                         self.serapi_options[
                             context_id] = metadata.serapi_options
+
+    def serialize(self, fmt: io.Fmt = io.Fmt.yaml) -> Dict[str, Any]:
+        """
+        Serialize the stored metadata.
+
+        Parameters
+        ----------
+        fmt : io.Fmt, optional
+            The serialization format, by default io.Fmt.yaml
+
+        Returns
+        -------
+        Dict[str, Any]
+            The serialized storage.
+        """
+        special_fields = {'contexts',
+                          'command_sequences'}
+        result = {
+            f.name: io.serialize(getattr(self,
+                                         f.name),
+                                 fmt)
+            for f in fields(self)
+            if f.name not in special_fields
+        }
+        for f in special_fields:
+            result[f] = io.serialize(list(getattr(self, f).items()))
+        return result
+
+    @classmethod
+    def deserialize(cls, data: Dict[str, Any]) -> 'MetadataStorage':
+        """
+        Deserialize the stored metadata from a dictionary.
+
+        Parameters
+        ----------
+        data : Dict[str, Any]
+            The serialized storage as yielded from
+            `MetadataStorage.serialize`.
+
+        Returns
+        -------
+        MetadataStorage
+            The deserialized storage.
+        """
+        special_fields = {'contexts',
+                          'command_sequences'}
+        field_values = {}
+        for f in fields(cls):
+            if f.name in data:
+                if f.name in special_fields:
+                    value = f.type.__origin__(
+                        io.deserialize(
+                            data[f.name],
+                            List[Tuple[f.type.__args__]]))
+                else:
+                    value = io.deserialize(data[f.name], f.type)
+                field_values[f.name] = value
+        return cls(**field_values)
 
     @classmethod
     def dump(
