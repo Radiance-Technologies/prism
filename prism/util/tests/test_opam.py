@@ -217,6 +217,16 @@ class TestVersion(unittest.TestCase):
         with self.assertRaises(VersionParseError):
             OpamVersion.parse("#build")
 
+    def test_serialization(self):
+        """
+        Verify that versions can be serialized and deserialized.
+        """
+        version = OCamlVersion.parse("8.4pl1")
+        serialized = version.serialize()
+        self.assertEqual(serialized, "prism.util.opam,OpamVersion,8.4pl1")
+        deserialized = Version.deserialize(serialized)
+        self.assertEqual(version, deserialized)
+
     def test_str(self):
         """
         Verify pretty-printing versions matches expectations.

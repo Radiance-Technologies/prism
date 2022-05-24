@@ -8,6 +8,7 @@ from abc import abstractmethod, abstractproperty
 from bisect import bisect, bisect_left
 from dataclasses import dataclass
 from functools import cached_property, total_ordering
+from importlib import import_module
 from typing import (
     ClassVar,
     Dict,
@@ -95,6 +96,18 @@ class Version(abc.ABC):
         """
         ...
 
+    def serialize(self) -> str:
+        """
+        Serialize the version to a string representation.
+
+        The name of the `Version` subclass is prepended to the version
+        for enhanced deserialization.
+        """
+        return ",".join(
+            [self.__class__.__module__,
+             self.__class__.__name__,
+             str(self)])
+
     @classmethod
     @abstractmethod
     def parse(cls, version: str) -> 'Version':
@@ -107,6 +120,36 @@ class Version(abc.ABC):
             If a version cannot be parsed from the given string.
         """
         ...
+
+    @classmethod
+    def deserialize(cls, version: str) -> 'Version':
+        """
+        Deserialize a string representation of the version.
+        """
+        if isinstance(version, dict):
+            # HACK: workaround for limitations of `seutil.io` that cause
+            # the custom serialization above to get skipped
+            # Track https://github.com/pengyunie/seutil/issues/31 for
+            # resolution
+            from dataclasses import fields
+
+            from seutil import io
+            if 'fields' in version:
+                clz = OpamVersion
+            else:
+                clz = OCamlVersion
+            field_values = {}
+            for f in fields(clz):
+                if f.name in version:
+                    field_values[f.name] = io.deserialize(
+                        version.get(f.name),
+                        f.type)
+            return clz(**field_values)
+        else:
+            module_name, class_name, version = version.split(",")
+            module = import_module(module_name)
+            clz = getattr(module, class_name)
+            return clz.parse(version)
 
 
 @dataclass(frozen=True)
