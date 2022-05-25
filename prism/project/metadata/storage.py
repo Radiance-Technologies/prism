@@ -13,7 +13,6 @@ from typing import (
     Optional,
     Set,
     Tuple,
-    TypeVar,
     Union,
 )
 
@@ -25,9 +24,6 @@ from prism.project.metadata.dataclass import ProjectMetadata
 from prism.util.opam import OCamlVersion, Version
 
 from .version_info import version_info
-
-T = TypeVar('T')
-Table = Dict[T, T]
 
 
 @dataclass(frozen=True)
@@ -102,35 +98,6 @@ class CommandSequence:
 
     def __hash__(self) -> int:  # noqa: D105
         return hash(tuple(self.commands))
-
-
-@dataclass
-class SerAPIOptions:
-    """
-    Specifies SerAPI options for a build environment.
-    """
-
-    context: Context
-    serapi_options: str
-
-    def __eq__(self, other: 'SerAPIOptions') -> bool:
-        """
-        Test for equivalence of SerAPI options.
-
-        Only one option can be applied per context.
-        """
-        if not isinstance(other, SerAPIOptions):
-            return NotImplemented
-        else:
-            return self.context == other.context
-
-    def __hash__(self) -> int:
-        """
-        Get the hash of the SerAPI options.
-
-        Only one option can be applied per context.
-        """
-        return hash(self.context)
 
 
 @dataclass(frozen=True)
@@ -540,6 +507,46 @@ class MetadataStorage:
                         self.serapi_options[
                             context_id] = metadata.serapi_options
 
+    def remove(
+            self,
+            project_name: str,
+            project_url: Optional[str] = None,
+            commit_sha: Optional[str] = None,
+            coq_version: Optional[Union[str,
+                                        Version]] = None,
+            ocaml_version: Optional[Union[str,
+                                          Version]] = None,
+            cascade: bool = True) -> None:
+        """
+        Remove the indicated metadata from storage.
+
+        Parameters
+        ----------
+        project_name : str
+            The name of a project.
+        project_url : Optional[str], optional
+            The URL of the project's (Git) repository, by default None.
+        commit_sha : Optional[str], optional
+            The commit SHA of a revision of the project, by default
+            None.
+        coq_version : Optional[str], optional
+            The version of Coq against which the project should be
+            built, by default None.
+        ocaml_version : Optional[str], optional
+            The version of the OCaml compiler against which the project
+            should be built, by default None.
+        cascade : bool, optional
+            Whether to also remove any more specific metadata that
+            overrides the indicated record (True) or to keep such
+            metadata in place (False).
+
+        Raises
+        ------
+        KeyError
+            If no such metadata exists.
+        """
+        raise NotImplementedError()
+
     def serialize(self, fmt: io.Fmt = io.Fmt.yaml) -> Dict[str, Any]:
         """
         Serialize the stored metadata.
@@ -566,6 +573,44 @@ class MetadataStorage:
         for f in special_fields:
             result[f] = io.serialize(list(getattr(self, f).items()))
         return result
+
+    def update(
+            self,
+            project_name: str,
+            project_url: Optional[str] = None,
+            commit_sha: Optional[str] = None,
+            coq_version: Optional[Union[str,
+                                        Version]] = None,
+            ocaml_version: Optional[Union[str,
+                                          Version]] = None,
+            **kwargs) -> None:
+        """
+        Update the indicated metadata.
+
+        Parameters
+        ----------
+        project_name : str
+            The name of a project.
+        project_url : Optional[str], optional
+            The URL of the project's (Git) repository, by default None.
+        commit_sha : Optional[str], optional
+            The commit SHA of a revision of the project, by default
+            None.
+        coq_version : Optional[str], optional
+            The version of Coq against which the project should be
+            built, by default None.
+        ocaml_version : Optional[str], optional
+            The version of the OCaml compiler against which the project
+            should be built, by default None.
+        kwargs : Dict[str, Any]
+            New values for fields of the indicated metadata.
+
+        Raises
+        ------
+        KeyError
+            If no such metadata exists.
+        """
+        raise NotImplementedError("Updating metadata not yet supported.")
 
     @classmethod
     def deserialize(cls, data: Dict[str, Any]) -> 'MetadataStorage':
