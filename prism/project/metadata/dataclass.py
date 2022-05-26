@@ -80,7 +80,7 @@ class ProjectMetadata:
     `coq_version`.
     This field is not null if and only if `coq_version` is not null.
     """
-    ignore_path_regex: Set[str] = default_field([])
+    ignore_path_regex: Set[str] = default_field(set())
     """
     Prevents inclusion of inter-project dependencies that are included
     as submodules or subdirectories (such as `CompCert` and
@@ -89,7 +89,7 @@ class ProjectMetadata:
     affect canonical splitting of training, test and validation datasets
     affecting the performace of the target ML model.
     """
-    coq_dependencies: Set[str] = default_field([])
+    coq_dependencies: Set[str] = default_field(set())
     """
     Set of dependencies on packages referring to Coq formalizations and
     plugins that are packaged using OPAM and whose installation is
@@ -103,7 +103,7 @@ class ProjectMetadata:
     Only dependencies that are not handled by the project's build system
     should be listed here.
     """
-    opam_repos: Set[str] = default_field([])
+    opam_repos: Set[str] = default_field(set())
     """
     Specifies set of OPAM repositories typically managed through the
     command `opam-repository`.
@@ -113,7 +113,7 @@ class ProjectMetadata:
     ``remove``, and ``set-url``, and are updated from their URLs using
     ``opam update``.
     """
-    opam_dependencies: Set[str] = default_field([])
+    opam_dependencies: Set[str] = default_field(set())
     """
     Set of non-Coq OPAM dependencies whose installation is required to
     build the project.
