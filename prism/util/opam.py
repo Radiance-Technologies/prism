@@ -16,7 +16,6 @@ from typing import (
     List,
     Optional,
     Sequence,
-    Set,
     Tuple,
     Union,
 )
@@ -573,7 +572,7 @@ class OpamAPI:
         r = bash.run(f"opam show -f depends: {pkg}")
         r.check_returncode()
         # exploit fact that each dependency is on its own line in output
-        dependencies: Set[Tuple[str, str]]
+        dependencies: List[List[str]]
         dependencies = [
             cls._whitespace_regex.split(dep,
                                         maxsplit=1)
