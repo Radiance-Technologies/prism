@@ -4,8 +4,8 @@
 - project_name: gstew5_games
   project_url: https://github.com/gstew5/games
   serapi_options: '-R .,Games'
-  coq_version: 1.0.0
-  serapi_version: 1.0.0
+  coq_version: 8.10.2
+  ocaml_version: 4.07.1
   opam_repos:
   - 1.0.0
   - 1.0.1
@@ -28,8 +28,7 @@
 # Optional fields missing
 - project_name: gstew5_games
   serapi_options: '-R .,Games'
-  coq_version: 1.0.0
-  serapi_version: 1.0.0
+  coq_version: 8.10.2
   opam_repos:
   - 1.0.0
   - 1.0.1

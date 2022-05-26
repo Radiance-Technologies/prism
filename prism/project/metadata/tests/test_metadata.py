@@ -100,7 +100,6 @@ class TestProjectMetadata(unittest.TestCase):
             [],
             ocaml_version,
             coq_version,
-            "0.7.1",
             project_url=project_url,
             commit_sha=commit_sha)
         y = ProjectMetadata(
@@ -111,7 +110,6 @@ class TestProjectMetadata(unittest.TestCase):
             [],
             ocaml_version,
             coq_version,
-            "0.7.1",
             project_url=project_url,
             commit_sha=commit_sha)
         with self.subTest("different projects"):
@@ -203,6 +201,40 @@ class TestProjectMetadata(unittest.TestCase):
             x.project_url = None
             self.assertLess(x, y)
             self.assertFalse(y < x)
+
+    def test_at_level(self) -> None:
+        """
+        Verify that levels correspond to precedence.
+        """
+        project_url = "https://made/up/url/x.git"
+        coq_version = "8.10.2"
+        commit_sha = "asdfghjkl1234567890poiuytrewqzxcvbnm"
+        ocaml_version = "4.07.1"
+        x = ProjectMetadata(
+            "x",
+            "",
+            [],
+            [],
+            [],
+            ocaml_version,
+            coq_version,
+            project_url=project_url,
+            commit_sha=commit_sha)
+        # test bounds
+        self.assertEqual(x.level, 15)
+        with self.assertRaises(RuntimeError):
+            x.at_level(-1)
+        with self.assertRaises(RuntimeError):
+            x.at_level(16)
+        # test constraint checking
+        for i in [2, 6, 8, 9, 10, 11, 14]:
+            with self.assertRaises(ValueError):
+                x.at_level(i)
+        defaults = [x.at_level(i) for i in [0, 1, 3, 4, 5, 7, 12, 13, 15]]
+        for i, x in enumerate(defaults):
+            for y in defaults[i + 1 :]:
+                self.assertLess(x, y)
+        self.assertEqual(defaults, list(x.levels()))
 
 
 if __name__ == '__main__':
