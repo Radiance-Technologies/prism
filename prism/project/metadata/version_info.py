@@ -167,4 +167,4 @@ try:
     version_info = io.load(DATA_FILE, io.Fmt.yaml, clz=VersionInfo)
 except FileNotFoundError:
     version_info = VersionInfo()
-    io.dump(DATA_FILE, version_info, io.Fmt.yaml)
+io.dump(DATA_FILE, version_info, io.Fmt.yaml)
