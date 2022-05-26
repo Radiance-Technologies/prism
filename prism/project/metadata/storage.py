@@ -4,15 +4,19 @@ Defines central storage/retrieval mechanisms for project metadata.
 
 import os
 from dataclasses import dataclass, fields
+from functools import partialmethod
 from typing import (
     Any,
+    Callable,
     ClassVar,
     Dict,
+    Hashable,
     Iterator,
     List,
     Optional,
     Set,
     Tuple,
+    TypeVar,
     Union,
 )
 
@@ -24,6 +28,8 @@ from prism.project.metadata.dataclass import ProjectMetadata
 from prism.util.opam import OCamlVersion, Version
 
 from .version_info import version_info
+
+T = TypeVar('T')
 
 
 @dataclass(frozen=True)
@@ -138,17 +144,16 @@ class MetadataStorage:
     clean_cmd: Dict[int, int] = default_field(dict())
     # one-to-many overridable fields
     # match metadata field names exactly
-    opam_repos: Dict[int, Set[str]] = default_field(dict())
-    coq_dependencies: Dict[int, Set[str]] = default_field(dict())
-    opam_dependencies: Dict[int, Set[str]] = default_field(dict())
+    opam_repos: Dict[int, Set[int]] = default_field(dict())
+    coq_dependencies: Dict[int, Set[int]] = default_field(dict())
+    opam_dependencies: Dict[int, Set[int]] = default_field(dict())
     ignore_path_regex: Dict[int, Set[str]] = default_field(dict())
     # meta-metadata
-    ocaml_packages: Set[str] = default_field(set())
-    opam_repositories: Set[str] = default_field(set())
+    ocaml_packages: bidict[str, int] = default_field(bidict())
+    opam_repositories: bidict[str, int] = default_field(bidict())
     command_sequences: bidict[CommandSequence, int] = default_field(bidict())
     # incrementable IDs
-    next_context_id: int = 0
-    next_command_sequence_id: int = 0
+    indices: Dict[str, int] = default_field(dict())
     # default fields
     default_coq_version: str = '8.10.2'
     default_serapi_version: str = '8.10.0+0.7.2'
@@ -169,17 +174,39 @@ class MetadataStorage:
     """
     Metadata fields that cannot be overridden.
     """
+    _bidict_attrs: ClassVar[Dict[str, List[str]]]
+    """
+    Attributes with indirect storage.
+    """
+    _bidict_attrs = {
+        'command_sequences': ['build_cmd',
+                              'install_cmd',
+                              'clean_cmd'],
+        'opam_repositories': ['opam_repos'],
+        'ocaml_packages': ['opam_dependencies',
+                           'coq_dependencies']
+    }
+    _attr_bidicts: ClassVar[Dict[str, str]]
+    """
+    The inverse map of `_bidict_attrs`.
+    """
+    _attr_bidicts = {v: k for k,
+                     vs in _bidict_attrs.items() for v in vs}
 
     def __post_init__(self) -> None:
         """
-        Bootstrap version tables and IDs.
+        Bootstrap IDs.
         """
-        if self.contexts:
-            self.next_context_id = max(
-                val for val in self.contexts.values()) + 1
-        if self.command_sequences:
-            self.next_command_sequence_id = max(
-                val for val in self.command_sequences.values()) + 1
+        for index in ['contexts',
+                      'command_sequences',
+                      'opam_repositories',
+                      'ocaml_packages']:
+            if getattr(self, index):
+                self.indices[index] = max(
+                    val for val in getattr(self,
+                                           index).values()) + 1
+            else:
+                self.indices[index] = 0
 
     def __iter__(self) -> Iterator[ProjectMetadata]:
         """
@@ -195,7 +222,13 @@ class MetadataStorage:
                 context.coq_version,
                 context.ocaml_version) for context in self.contexts)
 
-    def _add_commmand_sequence(self, command_sequence: CommandSequence) -> int:
+    def _add_to_index(
+            self,
+            index: str,
+            key: T,
+            unique: bool = False,
+            key_maker: Callable[[T],
+                                Hashable] = lambda x: x) -> int:
         """
         Add a new command sequence and get the corresponding ID.
 
@@ -203,37 +236,49 @@ class MetadataStorage:
 
         Parameters
         ----------
-        command_sequence : CommandSequence
-            A sequence of commands.
+        index : str
+            Identifies the index that stores data of type `T`.
+        key : T
+            A key, potentially not directly hashable.
+        unique : bool, optional
+            Whether the keys must be unique in the index (i.e., one
+            cannot add a key that already exists), by default False.
+        key_maker : Callable[[T], Hashable]
+            A function that transforms the given `key` into a hashable
+            type, by default identity.
 
         Returns
         -------
         int
-            The ID of the given command sequence.
-        """
-        try:
-            sequence_id = self.command_sequences[command_sequence]
-        except KeyError:
-            sequence_id = self.next_command_sequence_id
-            self.command_sequences[command_sequence] = sequence_id
-            self.next_command_sequence_id += 1
-        return sequence_id
-
-    def _add_context(self, context: Context) -> int:
-        """
-        Add a new context and get the corresponding ID.
+            The ID of the given `key`.
 
         Raises
         ------
         KeyError
-            If metadata is already stored for the implied context.
+            If `unique` is True and the key is already present in the
+            index.
         """
-        if context in self.contexts:
-            raise KeyError(f"Context already exists: {context}")
-        next_id = self.next_context_id
-        self.contexts[context] = next_id
-        self.next_context_id += 1
-        return next_id
+        key = key_maker(key)
+        try:
+            sequence_id = getattr(self, index)[key]
+        except KeyError:
+            sequence_id = self.indices[index]
+            getattr(self, index)[key] = sequence_id
+            self.indices[index] += 1
+        else:
+            if unique:
+                raise KeyError(f"{index} already exists: {key}")
+        return sequence_id
+
+    _add_context = partialmethod(_add_to_index, 'contexts', unique=True)
+    """
+    Add a new context and get the corresponding ID.
+
+    Raises
+    ------
+    KeyError
+        If metadata is already stored for the implied context.
+    """
 
     def _get_default(self, metadata: ProjectMetadata) -> ProjectMetadata:
         """
@@ -325,19 +370,23 @@ class MetadataStorage:
             context_id = self.contexts[context]
         except KeyError:
             return False
-        for attr in ['build_cmd', 'install_cmd', 'clean_cmd']:
-            if attr not in metadata:
-                try:
-                    metadata[attr] = self.command_sequences.inv[getattr(
-                        self,
-                        attr)[context_id]].commands
-                except KeyError:
-                    pass
-        for attr in ['serapi_options',
-                     'opam_repos',
-                     'opam_dependencies',
-                     'coq_dependencies',
-                     'ignore_path_regex']:
+        getters = (lambda x: x.commands, lambda x: x, lambda x: x)
+        for (bdct, attrs), accessor in zip(self._bidict_attrs.items(), getters):
+            for attr in attrs:
+                if attr not in metadata:
+                    try:
+                        val = getattr(self, attr)[context_id]
+                        try:
+                            val = accessor(getattr(self, bdct).inv[val])
+                        except TypeError:
+                            # unhashable collection; map over it
+                            val = type(val)(
+                                accessor(getattr(self,
+                                                 bdct).inv[v]) for v in val)
+                        metadata[attr] = val
+                    except KeyError:
+                        pass
+        for attr in ['serapi_options', 'ignore_path_regex']:
             if attr not in metadata:
                 try:
                     metadata[attr] = getattr(self, attr)[context_id]
@@ -489,16 +538,23 @@ class MetadataStorage:
                 if (field_value is not None
                         and field_value != getattr(default,
                                                    field_name)):
-                    if field_name in ['build_cmd', 'install_cmd', 'clean_cmd']:
-                        sequence = CommandSequence(
-                            getattr(metadata,
-                                    field_name))
-                        sequence_id = self._add_commmand_sequence(sequence)
-                        getattr(self, field_name)[context_id] = sequence_id
-                    elif field_name in ['opam_repos',
-                                        'opam_dependencies',
-                                        'coq_dependencies',
-                                        'ignore_path_regex']:
+                    if field_name in self._attr_bidicts:
+                        index = self._attr_bidicts[field_name]
+                        if index == 'command_sequences':
+                            val = self._add_to_index(
+                                index,
+                                getattr(metadata,
+                                        field_name),
+                                key_maker=CommandSequence)
+                        else:
+                            val = {
+                                self._add_to_index(index,
+                                                   val)
+                                for val in getattr(metadata,
+                                                   field_name)
+                            }
+                        getattr(self, field_name)[context_id] = val
+                    elif field_name in ['ignore_path_regex']:
                         getattr(self,
                                 field_name)[context_id] = set(
                                     getattr(metadata,
@@ -561,8 +617,12 @@ class MetadataStorage:
         Dict[str, Any]
             The serialized storage.
         """
-        special_fields = {'contexts',
-                          'command_sequences'}
+        special_fields = {
+            'contexts',
+            'command_sequences',
+            'ocaml_packages',
+            'opam_repositories'
+        }
         result = {
             f.name: io.serialize(getattr(self,
                                          f.name),
@@ -628,8 +688,12 @@ class MetadataStorage:
         MetadataStorage
             The deserialized storage.
         """
-        special_fields = {'contexts',
-                          'command_sequences'}
+        special_fields = {
+            'contexts',
+            'command_sequences',
+            'ocaml_packages',
+            'opam_repositories'
+        }
         field_values = {}
         for f in fields(cls):
             if f.name in data:
