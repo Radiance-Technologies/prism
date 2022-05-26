@@ -171,7 +171,7 @@ class ProjectMetadata:
                                                       self.serapi_version):
             raise ValueError(
                 f"Incompatible Coq/SerAPI versions specified: coq={self.coq_version}, "
-                f"ocaml={self.serapi_version}")
+                f"SerAPI={self.serapi_version}")
 
     def __gt__(self, other: 'ProjectMetadata') -> bool:
         """
