@@ -19,7 +19,7 @@ from prism.util.opam import (
 
 class TestVersion(unittest.TestCase):
     """
-    Test suite for `OCamlVersion`.
+    Test suite for `Version`.
     """
 
     def test_compare(self):

@@ -512,6 +512,8 @@ class OpamAPI:
     """
     Provides methods for querying the OCaml package manager.
 
+    Note that OPAM must be installed.
+
     .. warning::
         This class does not yet fully support the full expressivity of
         OPAM dependencies as documented at
@@ -550,8 +552,6 @@ class OpamAPI:
                                                    VersionConstraint]:
         """
         Get the dependencies of the indicated package.
-
-        Note that OPAM must be installed.
 
         Parameters
         ----------

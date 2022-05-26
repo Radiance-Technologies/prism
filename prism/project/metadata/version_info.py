@@ -20,10 +20,6 @@ class VersionInfo:
     Encapsulates version/dependency metadata.
     """
 
-    # NOTE: Version is not used in any fields because
-    # `seutil.io.deserialize` cannot deserialize the unknown subclasses.
-    # Custom serialization would be required to bypass this limitation,
-    # e.g., by serializing the class's identity.
     coq_versions: InitVar[Union[VersionConstraint, Set[Version]]] = None
     serapi_versions: InitVar[Union[VersionConstraint, Set[Version]]] = None
     ocaml_versions: InitVar[Union[VersionConstraint, Set[Version]]] = None
