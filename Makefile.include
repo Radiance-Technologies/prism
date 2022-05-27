@@ -1,0 +1,38 @@
+SHELL=/bin/bash
+
+# newline
+define n
+
+
+endef
+
+ifndef GITROOT
+GITROOT= $(shell while :; do  [ -d .git  ] && [ -f .prism ] && { echo `pwd`; break; }; [ `pwd` = "/" ] && { echo ""; break; }; cd ..; done)
+endif
+
+ifndef PEARLS_PYTHON
+PEARLS_PYTHON=$(shell which python3)
+PEARLS_PIP=$(shell which pip3)
+endif
+
+VERSION=$(shell $(PEARLS_PYTHON) --version | sed -nre 's/Python //p')
+ifndef VENV
+VENV=venv-$(VERSION)
+endif
+INVENV=$(shell $(PEARLS_PYTHON) $(GITROOT)/venv_check.py)
+
+.DEFAULT_GOAL=install
+
+ifeq ($(INVENV), CONDA)
+INVENV=True
+CONDA=True
+endif
+
+ifeq ($(INVENV),True)
+venv_check:
+else
+venv_check:
+	$(error You must activate a virtual environment before calling 'make'. $(n)    Call 'source $(GITROOT)/setup_python.sh' to set environment variables first or set VENV to an existing virtual environment directory)
+endif
+
+PACKAGE=$(shell pwd | xargs basename)

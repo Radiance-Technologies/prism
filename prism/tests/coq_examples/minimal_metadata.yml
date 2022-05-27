@@ -1,0 +1,9 @@
+- project_name: Project Name
+  serapi_options:
+  build_cmd:
+  - 'make -j8'
+  install_cmd:
+  - 'make'
+  - 'make install'
+  clean_cmd:
+  - 'make clean'

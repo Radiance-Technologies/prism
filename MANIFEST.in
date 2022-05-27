@@ -1,0 +1,10 @@
+include LICENSE
+include README.md
+include pyproject.toml
+include prism/tests/coq-examples/split_by_sentence_expected.json
+include prism/tests/coq-examples/simple.v
+include prism/tests/coq-examples/nested.v
+include prism/tests/coq-examples/Alphabet.v
+include prism/tests/minimal_metadata.yml
+include prism/project/metadata/tests/projects.yml
+include prism/project/metadata/tests/projects_incomplete.yml
