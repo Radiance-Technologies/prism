@@ -5,9 +5,8 @@ A collection of utilities for iterable containers.
 from dataclasses import InitVar, dataclass, field
 from typing import Generic, Iterable, Iterator, Sequence, TypeVar, Union
 
-from radpytools import unzip
-
 from prism.util.compare import Bottom, Comparable, Top
+from prism.util.radpytools import unzip
 
 T = TypeVar('T')
 C = TypeVar('C', bound=Comparable)

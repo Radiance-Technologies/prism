@@ -21,13 +21,13 @@ from typing import (
 )
 
 from deprecated.sphinx import deprecated
-from radpytools.dataclasses import default_field, immutable_dataclass
 
 from prism.language.gallina.util import ParserUtils
 from prism.language.sexp import IllegalSexpOperationException, SexpNode
 from prism.language.sexp.list import SexpList
 from prism.language.sexp.string import SexpString
 from prism.language.token import TokenConsts
+from prism.util.radpytools.dataclasses import default_field, immutable_dataclass
 
 from .exception import SexpAnalyzingException
 

@@ -22,10 +22,10 @@ from typing import (
 
 import seutil.io as io
 from bidict import bidict
-from radpytools.dataclasses import default_field
 
 from prism.project.metadata.dataclass import ProjectMetadata
 from prism.util.opam import OCamlVersion, Version
+from prism.util.radpytools.dataclasses import default_field
 
 from .version_info import version_info
 

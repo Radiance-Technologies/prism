@@ -7,13 +7,13 @@ import warnings
 from dataclasses import dataclass, field
 from typing import List, Set
 
-from radpytools.dataclasses import default_field
-from radpytools.os import pushd
 from seutil import io
 
 from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
 from prism.util.iterable import CallableIterator, CompareIterator
+from prism.util.radpytools.dataclasses import default_field
+from prism.util.radpytools.os import pushd
 
 from .assertion import Assertion
 from .util import ParserUtils

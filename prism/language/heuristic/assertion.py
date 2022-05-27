@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 from warnings import warn
 
-from radpytools.dataclasses import default_field
+from prism.util.radpytools.dataclasses import default_field
 
 from .util import ParserUtils
 

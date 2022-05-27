@@ -7,9 +7,8 @@ https://github.com/EngineeringSoftware/roosterize/.
 from dataclasses import dataclass
 from typing import Dict
 
-from radpytools.dataclasses import immutable_dataclass
-
 from prism.language.id import LanguageId
+from prism.util.radpytools.dataclasses import immutable_dataclass
 
 
 class TokenConsts:

@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple, Union
 
 import seutil.io as io
-from radpytools import cachedmethod
-from radpytools.dataclasses import default_field
 
 from prism.util.opam import OCamlVersion, OpamAPI, Version, VersionConstraint
+from prism.util.radpytools import cachedmethod
+from prism.util.radpytools.dataclasses import default_field
 
 DATA_FILE = Path(__file__).parent / "version_info.yml"
 
