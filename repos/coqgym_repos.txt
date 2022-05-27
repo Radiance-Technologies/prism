@@ -1,0 +1,264 @@
+Categories - https://github.com/amintimany/Categories
+160 commits
+ChargeCore - https://github.com/jesper-bengtson/ChargeCore
+53 commits
+CompCert - https://github.com/AbsInt/CompCert
+2912 commits
+GeoCoq - https://github.com/GeoCoq/GeoCoq
+134 commits
+InfSeqExt - https://github.com/DistributedComponents/InfSeqExt
+98 commits
+PolTac - https://github.com/thery/PolTac
+56 commits
+QuickChick - https://github.com/QuickChick/QuickChick
+1676 commits
+SCEV-coq - https://github.com/bollu/SCEV-coq
+18 commits
+StructTact - https://github.com/uwplse/StructTact
+162 commits
+UnifySL - https://github.com/QinxiangCao/UnifySL
+399 commits
+VST - https://github.com/PrincetonUniversity/VST
+7149 commits
+additions - https://github.com/coq-contribs/additions
+49 commits
+ails - https://github.com/coq-contribs/ails
+44 commits
+algebra - https://github.com/coq-contribs/algebra
+41 commits
+amm11262 - https://github.com/coq-contribs/amm11262
+33 commits
+angles - https://github.com/coq-contribs/angles
+30 commits
+area-method - https://github.com/coq-contribs/area-method
+33 commits
+automata - https://github.com/coq-contribs/automata
+20 commits
+axiomatic-abp - https://github.com/coq-contribs/axiomatic-abp
+18 commits
+bbv - https://github.com/mit-plv/bbv
+119 commits
+bdds - https://github.com/coq-contribs/bdds
+42
+bellantonicook - https://github.com/davidnowak/bellantonicook
+3 commits
+bigenough - https://github.com/math-comp/bigenough
+15 commits
+buchberger - https://github.com/coq-community/buchberger
+92 commits
+cecoa - https://github.com/davidnowak/cecoa
+10 commits
+checker - https://github.com/coq-contribs/checker
+17 commits
+cheerios - https://github.com/uwplse/cheerios
+230 commits
+chinese - https://github.com/coq-contribs/chinese
+39 commits
+circuits - https://github.com/coq-contribs/circuits
+18 commits
+concat - https://github.com/coq-contribs/concat
+21 commits
+constructive-geometry - https://github.com/coq-contribs/constructive-geometry
+18 commits
+coq-cunit - https://github.com/clarus/coq-cunit
+18 commits
+coq-error-handlers - https://github.com/clarus/coq-error-handlers
+12 commits
+coq-ext-lib - https://github.com/coq-community/coq-ext-lib
+542 commits
+coq-function-ninjas - https://github.com/clarus/coq-function-ninjas
+7 commits
+coq-iterable - https://github.com/clarus/coq-iterable
+8 commits
+coq-library-undecidability - https://github.com/uds-psl/coq-library-undecidability
+884 commits
+coq-list-plus - https://github.com/clarus/coq-list-plus
+24 commits
+coq-list-string - https://github.com/clarus/coq-list-string
+77 commits
+coq-procrastination - https://github.com/Armael/coq-procrastination
+58 commits
+coq-simple-io - https://github.com/Lysxia/coq-simple-io
+208 commits
+coqoban - https://github.com/coq-community/coqoban
+49 commits
+coqrel - https://github.com/CertiKOS/coqrel
+208 commits
+coquelicot - https://gitlab.inria.fr/coquelicot/coquelicot
+676 commits
+corespec - https://github.com/sweirich/corespec
+85 commits
+cours-de-coq - https://github.com/coq-contribs/cours-de-coq
+17 commits
+ctltctl - https://github.com/coq-contribs/ctltctl
+17 commits
+dblib - https://github.com/coq-community/dblib
+114 commits
+demos - https://github.com/coq-contribs/demos
+18 commits
+dep-map - https://github.com/coq-contribs/dep-map
+13 commits
+dictionaries - https://github.com/coq-contribs/dictionaries
+20 commits
+disel - https://github.com/DistributedComponents/disel
+179 commits
+distributed-reference-counting - https://github.com/coq-contribs/distributed-reference-counting
+24 commits
+domain-theory - https://github.com/coq-contribs/domain-theory
+16 commits
+euler-formula - https://github.com/coq-contribs/euler-formula
+27 commits
+exceptions - https://github.com/coq-contribs/exceptions
+24 commits
+fcsl-pcm - https://github.com/imdea-software/fcsl-pcm
+69 commits
+fermat4 - https://github.com/coq-contribs/fermat4
+32 commits
+finmap - https://github.com/math-comp/finmap
+172 commits
+float - https://github.com/coq-contribs/float
+60 commits
+free-groups - https://github.com/coq-contribs/free-groups
+9 commits
+fssec-model - https://github.com/coq-contribs/fssec-model
+29 commits
+functional-algebra - https://github.com/llee454/functional-algebra
+41 commits
+functions-in-zfc - https://github.com/coq-contribs/functions-in-zfc
+16 commits
+fundamental-arithmetics - https://github.com/coq-contribs/fundamental-arithmetics
+20 commits
+generic-environments - https://github.com/coq-community/generic-environments
+20 commits
+goedel - https://github.com/coq-community/goedel
+88 commits
+graphs - https://github.com/coq-contribs/graphs
+43 commits
+group-theory - https://github.com/coq-contribs/group-theory
+18 commits
+groups - https://github.com/coq-contribs/groups
+17 commits
+hardware - https://github.com/coq-contribs/hardware
+25 commits
+hedges - https://github.com/coq-contribs/hedges
+36 commits
+higman-cf - https://github.com/coq-contribs/higman-cf
+22 commits
+higman-s - https://github.com/coq-contribs/higman-s
+19 commits
+hoare-tut - https://github.com/coq-community/hoare-tut
+39 commits
+huffman - https://github.com/coq-community/huffman
+176 commits
+idxassoc - https://github.com/coq-contribs/idxassoc
+20 commits
+ieee754 - https://github.com/coq-contribs/ieee754
+35 commits
+int-map - https://github.com/coq-contribs/int-map
+18 commits
+ipc - https://github.com/coq-contribs/ipc
+29 commits
+izf - https://github.com/coq-contribs/izf
+28 commits
+jordan-curve-theorem - https://github.com/coq-contribs/jordan-curve-theorem
+15 commits
+lambda - https://github.com/coq-contribs/lambda
+16 commits
+lazy-pcf - https://github.com/coq-contribs/lazy-pcf
+33 commits
+lemma-overloading - https://github.com/coq-community/lemma-overloading
+190 commits
+lesniewski-mereology - https://github.com/coq-contribs/lesniewski-mereology
+14 commits
+lin-alg - https://github.com/coq-contribs/lin-alg
+66 commits
+maple-mode - https://github.com/coq-contribs/maple-mode
+127 commits
+markov - https://github.com/coq-contribs/markov
+20 commits
+math-comp - https://github.com/math-comp/math-comp
+1421 commits
+maths - https://github.com/coq-contribs/maths
+31 commits
+metalib - https://github.com/plclub/metalib
+127 commits
+mini-compiler - https://github.com/coq-contribs/mini-compiler
+31 commits
+miniml - https://github.com/coq-contribs/miniml
+17 commits
+mod-red - https://github.com/coq-contribs/mod-red
+21 commits
+orb-stab - https://github.com/coq-contribs/orb-stab
+33 commits
+otway-rees - https://github.com/coq-contribs/otway-rees
+19 commits
+param-pi - https://github.com/coq-contribs/param-pi
+18 commits
+pigeons - https://github.com/llee454/pigeons
+25 commits
+pocklington - https://github.com/coq-community/pocklington
+36 commits
+propcalc - https://github.com/coq-contribs/propcalc
+9 commits
+pts - https://github.com/coq-contribs/pts
+39 commits
+qarith - https://github.com/coq-contribs/qarith
+65 commits
+qarith-stern-brocot - https://github.com/coq-community/qarith-stern-brocot
+97 commits
+quicksort-complexity - https://github.com/coq-contribs/quicksort-complexity
+38 commits
+railroad-crossing - https://github.com/coq-contribs/railroad-crossing
+33 commits
+ramsey - https://github.com/coq-contribs/ramsey
+30 commits
+regexp - https://github.com/coq-contribs/regexp
+11 commits
+rem - https://github.com/coq-contribs/rem
+16 commits
+rsa - https://github.com/coq-contribs/rsa
+16 commits
+ruler-compass-geometry - https://github.com/coq-contribs/ruler-compass-geometry
+23 commits
+schroeder - https://github.com/coq-contribs/schroeder
+18 commits
+search-trees - https://github.com/coq-contribs/search-trees
+42 commits
+shuffle - https://github.com/coq-contribs/shuffle
+16 commits
+smc - https://github.com/coq-contribs/smc
+47 commits
+subst - https://github.com/coq-contribs/subst
+17 commits
+system - https://github.com/coq-concurrency/system
+121 commits
+tarski-geometry - https://github.com/coq-contribs/tarski-geometry
+22 commits
+three-gap - https://github.com/coq-contribs/three-gap
+17 commits
+topology - https://github.com/coq-community/topology
+267 commits
+tortoise-hare-algorithm - https://github.com/coq-contribs/tortoise-hare-algorithm
+26 commits
+traversable-fincontainer - https://github.com/coq-contribs/traversable-fincontainer
+9 commits
+tree-automata - https://github.com/coq-contribs/tree-automata
+47 commits
+twoSquare - https://github.com/thery/twoSquare
+17 commits
+verdi - https://github.com/uwplse/verdi
+1260 commits
+verdi-raft - https://github.com/uwplse/verdi-raft
+1264
+weak-up-to - https://github.com/coq-contribs/weak-up-to
+18 commits
+zchinese - https://github.com/coq-contribs/zchinese
+38 commits
+zf - https://github.com/coq-contribs/zf
+29 commits
+zfc - https://github.com/coq-contribs/zfc
+18 commits
+zorns-lemma - https://github.com/coq-community/zorns-lemma
+54 commits
+zsearch-trees - https://github.com/coq-contribs/zsearch-trees
+25 commits
