@@ -8,7 +8,8 @@ from dataclasses import asdict, dataclass
 from typing import Iterable, Iterator, List, Optional, Set
 
 import seutil as su
-from radpytools.dataclasses import default_field
+
+from prism.util.radpytools.dataclasses import default_field
 
 from .version_info import version_info
 
