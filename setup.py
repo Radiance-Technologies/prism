@@ -1,5 +1,5 @@
 """
-prism: A repair tool for formal verification using Coq.
+coq-pearls: Tools for working with Coq projects and repair datasets.
 """
 
 from setuptools import setup
