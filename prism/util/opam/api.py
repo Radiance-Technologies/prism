@@ -37,8 +37,8 @@ class OpamAPI:
     _newline_regex: ClassVar[re.Pattern] = re.compile("\n")
     _SWITCH_INSTALLED_ERROR: ClassVar[
         str] = "[ERROR] There already is an installed switch named"
-    _opam_env: ClassVar[Dict[str,
-                             str]] = {}
+    opam_env: ClassVar[Dict[str,
+                            str]] = {}
     """
     The output of ``opam env``.
     """
@@ -56,7 +56,7 @@ class OpamAPI:
     @classmethod
     def _environ(cls) -> Dict[str, str]:
         environ = dict(os.environ)
-        environ.update(cls._opam_env)
+        environ.update(cls.opam_env)
         if cls.opam_root is not None:
             environ['OPAMROOT'] = cls.opam_root
         if cls.opam_switch is not None:
@@ -99,7 +99,8 @@ class OpamAPI:
         command = f'opam switch create {switch_name} {compiler}'
         r = cls.run(command, check=False)
         if (r.returncode == 2
-                and r.stderr.strip().startswith(cls._SWITCH_INSTALLED_ERROR)):
+                and any(ln.strip().startswith(cls._SWITCH_INSTALLED_ERROR)
+                        for ln in r.stderr.splitlines())):
             warning = f"opam: the switch {switch_name} already exists"
             warnings.warn(warning)
             logger.log(logging.WARNING, warning)
@@ -222,13 +223,13 @@ class OpamAPI:
             If the `opam env` comand fails, e.g., if the indicated
             switch does not exist.
         """
-        cls._opam_env = {}
+        cls.opam_env = {}
         if switch_name is not None:
             r = cls.run(f"opam env --switch={switch_name}")
             envs = r.stdout.split(';')[0 :-1 : 2]
             for env in envs:
                 var, val = env.strip().split("=", maxsplit=1)
-                cls._opam_env[var] = val
+                cls.opam_env[var] = val
         cls.opam_switch = switch_name
 
     @classmethod

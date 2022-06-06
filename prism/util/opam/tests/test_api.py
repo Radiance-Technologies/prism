@@ -76,6 +76,7 @@ class TestOpamAPI(unittest.TestCase):
         previous_switch = OpamAPI.show_switch()
         with OpamAPI.switch(self.test_switch):
             current_switch = OpamAPI.show_switch()
+            self.assertIn("OPAM_SWITCH_PREFIX", OpamAPI.opam_env)
             self.assertEqual(current_switch, self.test_switch)
             self.assertNotEqual(current_switch, previous_switch)
         self.assertEqual(OpamAPI.show_switch(), previous_switch)
