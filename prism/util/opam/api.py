@@ -56,7 +56,10 @@ class OpamAPI:
     @classmethod
     def _environ(cls) -> Dict[str, str]:
         environ = dict(os.environ)
+        new_path = cls.opam_env.pop('PATH', None)
         environ.update(cls.opam_env)
+        if new_path is not None:
+            environ['PATH'] = os.pathsep.join([new_path, environ['PATH']])
         if cls.opam_root is not None:
             environ['OPAMROOT'] = cls.opam_root
         if cls.opam_switch is not None:
