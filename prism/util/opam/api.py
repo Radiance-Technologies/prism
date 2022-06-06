@@ -2,6 +2,7 @@
 Defines an interface for programmatically querying OPAM.
 """
 import logging
+import os
 import re
 import warnings
 from contextlib import contextmanager
@@ -36,24 +37,31 @@ class OpamAPI:
     _newline_regex: ClassVar[re.Pattern] = re.compile("\n")
     _SWITCH_INSTALLED_ERROR: ClassVar[
         str] = "[ERROR] There already is an installed switch named"
+    _opam_env: ClassVar[Dict[str,
+                             str]] = {}
+    """
+    The output of ``opam env``.
+    """
     opam_root: ClassVar[Optional[PathLike]] = None
     """
     The current root path, by default None.
-    Equivalent to setting ``$OPAMROOT`` to `root`.
+    Equivalent to setting ``$OPAMROOT`` to `opam_root`.
     """
-    switch_name: ClassVar[Optional[str]] = None
+    opam_switch: ClassVar[Optional[str]] = None
+    """
+    The current switch, by default None.
+    Equivalent to setting ``$OPAMSWITCH`` to `opam_switch`.
+    """
 
     @classmethod
-    def _root_option(cls) -> str:
+    def _environ(cls) -> Dict[str, str]:
+        environ = dict(os.environ)
+        environ.update(cls._opam_env)
         if cls.opam_root is not None:
-            return f"--root={cls.opam_root}"
-        return ""
-
-    @classmethod
-    def _switch_option(cls) -> str:
-        if cls.switch_name is not None:
-            return f"--switch={cls.switch_name}"
-        return ""
+            environ['OPAMROOT'] = cls.opam_root
+        if cls.opam_switch is not None:
+            environ['OPAMSWITCH'] = cls.opam_switch
+        return environ
 
     @classmethod
     def create_switch(
@@ -88,8 +96,8 @@ class OpamAPI:
         """
         if isinstance(compiler, str):
             compiler = OCamlVersion.parse(compiler)
-        command = f'opam switch {cls._root_option()} create {switch_name} {compiler}'
-        r = bash.run(command)
+        command = f'opam switch create {switch_name} {compiler}'
+        r = cls.run(command, check=False)
         if (r.returncode == 2
                 and r.stderr.strip().startswith(cls._SWITCH_INSTALLED_ERROR)):
             warning = f"opam: the switch {switch_name} already exists"
@@ -118,9 +126,7 @@ class OpamAPI:
         CalledProcessError
             If the ``opam show`` command fails.
         """
-        r = cls.run(
-            f"opam show {cls._root_option()} {cls._switch_option()} "
-            f"-f all-versions {pkg}")
+        r = cls.run(f"opam show -f all-versions {pkg}")
         versions = re.split(r"\s+", r.stdout)
         versions.pop()
         return [OCamlVersion.parse(v) for v in versions]
@@ -156,9 +162,7 @@ class OpamAPI:
         """
         if version is not None:
             pkg = f"{pkg}={version}"
-        r = cls.run(
-            f"opam show {cls._root_option()} {cls._switch_option()} "
-            f"-f depends: {pkg}")
+        r = cls.run(f"opam show -f depends: {pkg}")
         # exploit fact that each dependency is on its own line in output
         dependencies: List[List[str]]
         dependencies = [
@@ -189,19 +193,43 @@ class OpamAPI:
             If the `opam switch remove` command fails, e.g., if the
             indicated switch does not exist.
         """
-        cls.run(f'opam switch {cls._root_option()} remove {switch_name} -y')
+        cls.run(f'opam switch remove {switch_name} -y')
 
     @classmethod
-    def set_switch(cls, switch_name: str) -> None:
+    def run(cls, command: str, check: bool = True) -> CompletedProcess:
+        """
+        Run a given command and check for errors.
+        """
+        r = bash.run(command, env=cls._environ())
+        if check:
+            cls.check_returncode(command, r)
+        return r
+
+    @classmethod
+    def set_switch(cls, switch_name: Optional[str]) -> None:
         """
         Set the currently active switch to the given one.
 
         Parameters
         ----------
-        switch_name : str
-            The name of an existing switch.
+        switch_name : str | None
+            The name of an existing switch or None if one wants to
+            restore the global switch.
+
+        Raises
+        ------
+        CalledProcessError
+            If the `opam env` comand fails, e.g., if the indicated
+            switch does not exist.
         """
-        cls.switch_name = switch_name
+        cls._opam_env = {}
+        if switch_name is not None:
+            r = cls.run(f"opam env --switch={switch_name}")
+            envs = r.stdout.split(';')[0 :-1 : 2]
+            for env in envs:
+                var, val = env.strip().split("=", maxsplit=1)
+                cls._opam_env[var] = val
+        cls.opam_switch = switch_name
 
     @classmethod
     def show_switch(cls) -> str:
@@ -218,10 +246,8 @@ class OpamAPI:
         CalledProcessError
             If the `opam switch show` command fails.
         """
-        if cls.switch_name is None:
-            r = cls.run('opam switch show')
-            cls.switch_name = r.stdout
-        return cls.switch_name
+        r = cls.run('opam switch show')
+        return r.stdout.strip()
 
     @classmethod
     @contextmanager
@@ -231,7 +257,7 @@ class OpamAPI:
 
         The previously active switch is restored at the context's exit.
         """
-        current_switch = cls.show_switch()
+        current_switch = cls.opam_switch
         try:
             cls.set_switch(switch_name)
             yield
@@ -257,12 +283,3 @@ class OpamAPI:
                 logging.CRITICAL,
                 f"'{command}' returned {r.returncode}: {r.stdout} {r.stderr}")
             raise
-
-    @staticmethod
-    def run(command: str) -> CompletedProcess:
-        """
-        Run a given command and check for errors.
-        """
-        r = bash.run(command)
-        OpamAPI.check_returncode(command, r)
-        return r
