@@ -1,14 +1,14 @@
 """
 Defines an interface for programmatically querying OPAM.
 """
-from contextlib import contextmanager
 import logging
 import re
-from dataclasses import dataclass
 import warnings
-from subprocess import CalledProcessError, CompletedProcess
-from typing import ClassVar, Dict, List, Optional, Union, Generator
+from contextlib import contextmanager
+from dataclasses import dataclass
 from os import PathLike
+from subprocess import CalledProcessError, CompletedProcess
+from typing import ClassVar, Dict, Generator, List, Optional, Union
 
 from seutil import bash
 

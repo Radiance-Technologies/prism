@@ -1,10 +1,10 @@
 """
 Test suite for prism.util.opam.
 """
-from pathlib import Path
 import re
-from subprocess import CalledProcessError
 import unittest
+from pathlib import Path
+from subprocess import CalledProcessError
 from typing import Dict
 
 from seutil import bash
