@@ -12,10 +12,10 @@
   commit_sha: 3d3bd31c7e4d1ea6f4b5a6815bca5c0a039b204f
   coq_dependencies:
   - 'dependency_1'
-  build_cmd:
-  - 'make -j8'
-  install_cmd:
-  - 'make'
-  - 'make install'
-  clean_cmd:
-  - 'make clean'
+  # build_cmd:
+  # - 'make -j8'
+  # install_cmd:
+  # - 'make'
+  # - 'make install'
+  # clean_cmd:
+  # - 'make clean'

@@ -6,6 +6,7 @@
   serapi_options: '-R .,Games'
   coq_version: 8.10.2
   ocaml_version: 4.07.1
+  serapi_version:
   opam_repos:
   - 1.0.0
   - 1.0.1
@@ -25,9 +26,8 @@
   clean_cmd:
   - 'make clean'
 
-# Optional fields missing
+# Some optional fields missing
 - project_name: gstew5_games
-  serapi_options: '-R .,Games'
   coq_version: 8.10.2
   opam_repos:
   - 1.0.0
