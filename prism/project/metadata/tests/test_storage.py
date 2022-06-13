@@ -39,7 +39,7 @@ class TestMetadataStorage(unittest.TestCase):
         """
         Verify that metadata can be inserted.
         """
-        metadata = ProjectMetadata("test", "", [], [], [])
+        metadata = ProjectMetadata("test", [], [], [])
         storage = MetadataStorage()
         storage.insert(metadata)
         expected = MetadataStorage()

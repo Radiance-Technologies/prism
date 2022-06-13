@@ -54,7 +54,6 @@ class TestCoqGymBaseDataset(unittest.TestCase):
             # TODO: Use real metadata and test building
             cls.metadatas[project_name] = ProjectMetadata(
                 project_name,
-                "",
                 ["make"],
                 ["make install"],
                 ["make clean"])

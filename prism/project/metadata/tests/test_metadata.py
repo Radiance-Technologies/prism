@@ -4,7 +4,10 @@ Test suite for `prism.project.metadata`.
 
 import os
 import unittest
+from dataclasses import fields
 from pathlib import Path
+
+from seutil import io
 
 from prism.project.metadata import ProjectMetadata
 
@@ -29,6 +32,13 @@ class TestProjectMetadata(unittest.TestCase):
         """
         Ensure import .yaml file can be deserialized properly.
         """
+        # assert complete yaml is in fact complete
+        yaml_fields = io.load(self.yaml_path_complete)[0]
+        fs = fields(ProjectMetadata)
+        for f in fs:
+            self.assertIn(f.name, yaml_fields)
+        self.assertEqual(len(yaml_fields), len(fs))
+
         metadata_objs = ProjectMetadata.load(self.yaml_path_complete)
 
         # Only two projects in the YAML file contain
@@ -94,7 +104,6 @@ class TestProjectMetadata(unittest.TestCase):
         ocaml_version = "4.07.1"
         x = ProjectMetadata(
             "x",
-            "",
             [],
             [],
             [],
@@ -104,7 +113,6 @@ class TestProjectMetadata(unittest.TestCase):
             commit_sha=commit_sha)
         y = ProjectMetadata(
             "y",
-            "",
             [],
             [],
             [],
@@ -212,7 +220,6 @@ class TestProjectMetadata(unittest.TestCase):
         ocaml_version = "4.07.1"
         x = ProjectMetadata(
             "x",
-            "",
             [],
             [],
             [],
