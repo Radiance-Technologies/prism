@@ -10,6 +10,7 @@ workflow:
     - when: always
 
 cache:
+  key: $CI_JOB_NAME
   paths:
     - .cache/pip
     - venv/
@@ -69,7 +70,7 @@ runTests:
     - export OPAMROOT=${PWD}/.opam
     - |
       if [ ! -d ${OPAMROOT} ]; then
-        opam init --disable-sandboxing github git+https://github.com/ocaml/opam-repository.git
+        opam init --disable-sandboxing --verbose
       fi
     - eval $(opam env)
     - source setup_coq.sh -n
