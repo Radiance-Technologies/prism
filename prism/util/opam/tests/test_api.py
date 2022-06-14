@@ -82,15 +82,18 @@ class TestOpamAPI(unittest.TestCase):
         expected = '# No matches found\n'
         self.assertEqual(expected, returned)
 
-        actual = OpamAPI.install(pkg, version='8.10.0')
+        OpamAPI.install(pkg, version='8.10.0')
 
         r = bash.run(f"opam list -i {pkg}")
         r.check_returncode()
         returned = r.stdout
-        expected = '# Packages matching: installed & name-match(coq-additions)\n# Name        # Installed # Synopsis\ncoq-additions 8.10.0      Addition Chains\n'
+        expected = '# Packages matching: installed & name-match(' \
+                   'coq-additions)\n# Name        # Installed # ' \
+                   'Synopsis\ncoq-additions 8.10.0      Addition' \
+                   ' Chains\n'
         self.assertEqual(expected, returned)
 
-        actual = OpamAPI.remove_pkg(pkg)
+        OpamAPI.remove_pkg(pkg)
 
         r = bash.run(f"opam list -i {pkg}")
         r.check_returncode()
