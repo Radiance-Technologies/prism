@@ -79,27 +79,21 @@ class TestOpamAPI(unittest.TestCase):
         r = bash.run(f"opam list -i {pkg}")
         r.check_returncode()
         returned = r.stderr
-        expected = '# No matches found\n'
-        self.assertEqual(expected, returned)
+        self.assertTrue("No matches found" in returned)
 
         OpamAPI.install(pkg, version='8.10.0')
 
         r = bash.run(f"opam list -i {pkg}")
         r.check_returncode()
         returned = r.stdout
-        expected = '# Packages matching: installed & name-match(' \
-                   'coq-additions)\n# Name        # Installed # ' \
-                   'Synopsis\ncoq-additions 8.10.0      Addition' \
-                   ' Chains\n'
-        self.assertEqual(expected, returned)
+        self.assertTrue("coq-additions 8.10.0      Addition" in returned)
 
         OpamAPI.remove_pkg(pkg)
 
         r = bash.run(f"opam list -i {pkg}")
         r.check_returncode()
         returned = r.stderr
-        expected = '# No matches found\n'
-        self.assertEqual(expected, returned)
+        self.assertTrue("No matches found" in returned)
 
     def test_set_switch(self):
         """
