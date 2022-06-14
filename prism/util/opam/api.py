@@ -182,11 +182,10 @@ class OpamAPI:
         }
 
     @classmethod
-    def install(
-            cls,
-            pkg: str,
-            version: Optional[str] = None) -> Dict[str,
-                                                   VersionConstraint]:
+    def install(cls,
+                pkg: str,
+                version: Optional[str] = None) -> Dict[str,
+                                                       VersionConstraint]:
         """
         Install the indicated package.
 
@@ -222,9 +221,10 @@ class OpamAPI:
 
     @classmethod
     def remove_pkg(
-            cls,
-            pkg: str,) -> Dict[str,
-                               VersionConstraint]:
+        cls,
+        pkg: str,
+    ) -> Dict[str,
+              VersionConstraint]:
         """
         Remove the indicated package.
 
@@ -251,7 +251,6 @@ class OpamAPI:
         if r.stderr == '':
             return r.stdout
         return r.stderr
-
 
     @classmethod
     def remove_switch(cls, switch_name: str) -> None:
