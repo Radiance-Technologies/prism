@@ -182,6 +182,78 @@ class OpamAPI:
         }
 
     @classmethod
+    def install(
+            cls,
+            pkg: str,
+            version: Optional[str] = None) -> Dict[str,
+                                                   VersionConstraint]:
+        """
+        Install the indicated package.
+
+        Parameters
+        ----------
+        pkg : str
+            The name of an OCaml package.
+        version : Optional[str], optional
+            A specific version of the package, by default None.
+            If not given, then the default version will be installed.
+
+        Returns
+        -------
+        str
+            Output of the command
+
+        Exceptions
+        ----------
+        subprocess.CalledProcessError
+            If the installation fails (due to bad version usually)
+            it will raise this exception
+        """
+        if version is not None:
+            pkg = f"{pkg}.{version}"
+        r = bash.run(f"opam install {pkg}")
+        r.check_returncode()
+        # If stderr is empty, and return code is fine
+        # install should be good to go, return stdout
+        # Else, stdout is either empty or irrelevant
+        if r.stderr == '':
+            return r.stdout
+        return r.stderr
+
+    @classmethod
+    def remove_pkg(
+            cls,
+            pkg: str,) -> Dict[str,
+                               VersionConstraint]:
+        """
+        Remove the indicated package.
+
+        Parameters
+        ----------
+        pkg : str
+            The name of an OCaml package.
+
+        Returns
+        -------
+        str
+            Output of the command
+
+        Exceptions
+        ----------
+        subprocess.CalledProcessError
+            If the removal fails it will raise this exception
+        """
+        r = bash.run(f"opam remove {pkg}")
+        r.check_returncode()
+        # If stderr is empty, and return code is fine
+        # install should be good to go, return stdout
+        # Else, stdout is either empty or irrelevant
+        if r.stderr == '':
+            return r.stdout
+        return r.stderr
+
+
+    @classmethod
     def remove_switch(cls, switch_name: str) -> None:
         """
         Remove the indicated switch.
