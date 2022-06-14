@@ -25,11 +25,6 @@ class ProjectMetadata:
     The unique name of the project in the dataset either literal or
     derived from several auxiliary identifiers.
     """
-    serapi_options: str
-    """
-    Flags or options passed to SerAPI command line executables (e.g.,
-    `sercomp`, `sertok`, `sertop`, `sername`, etc.).
-    """
     build_cmd: List[str]
     """
     Specifies a list of commands for this project (e.g., `build.sh` or
@@ -80,6 +75,13 @@ class ProjectMetadata:
     The version indicated must be compatible with the specified
     `coq_version`.
     This field is not null if and only if `coq_version` is not null.
+    """
+    serapi_options: Optional[str] = None
+    """
+    Flags or options passed to SerAPI command line executables (e.g.,
+    `sercomp`, `sertok`, `sertop`, `sername`, etc.).
+    If not given, then the options are presumed to not yet be specified
+    and must be inferred later.
     """
     ignore_path_regex: Set[str] = default_field(set())
     """

@@ -158,7 +158,6 @@ class MetadataStorage:
     default_coq_version: str = '8.10.2'
     default_serapi_version: str = '8.10.0+0.7.2'
     default_ocaml_version: str = '4.07.2'
-    default_serapi_options: str = ""
     default_build_cmd: List[str] = default_field([])
     default_install_cmd: List[str] = default_field([])
     default_clean_cmd: List[str] = default_field([])
@@ -315,7 +314,7 @@ class MetadataStorage:
             break
         if default is None:
             # fake a default
-            default = ProjectMetadata(metadata.project_name, "", [], [], [])
+            default = ProjectMetadata(metadata.project_name, [], [], [])
         return default
 
     def _get(
@@ -446,7 +445,6 @@ class MetadataStorage:
             ocaml_version = str(ocaml_version)
         temp_metadata = ProjectMetadata(
             project_name,
-            "",
             [],
             [],
             [],
@@ -490,15 +488,11 @@ class MetadataStorage:
                 metadata_kwargs['build_cmd'] = self.default_build_cmd
                 metadata_kwargs['install_cmd'] = self.default_install_cmd
                 metadata_kwargs['clean_cmd'] = self.default_clean_cmd
-                metadata_kwargs['serapi_options'] = self.default_serapi_options
         else:
             # supply defaults if not defined
             metadata_kwargs.setdefault('build_cmd', self.default_build_cmd)
             metadata_kwargs.setdefault('install_cmd', self.default_install_cmd)
             metadata_kwargs.setdefault('clean_cmd', self.default_clean_cmd)
-            metadata_kwargs.setdefault(
-                'serapi_options',
-                self.default_serapi_options)
         return ProjectMetadata(**metadata_kwargs)
 
     def insert(self, metadata: ProjectMetadata) -> None:
@@ -533,7 +527,7 @@ class MetadataStorage:
         for field in fields(ProjectMetadata):
             field_name = field.name
             if field_name not in self._final_fields:
-                field_value = getattr(metadata, field.name)
+                field_value = getattr(metadata, field_name)
                 # Is this a new value?
                 if (field_value is not None
                         and field_value != getattr(default,
@@ -543,25 +537,18 @@ class MetadataStorage:
                         if index == 'command_sequences':
                             val = self._add_to_index(
                                 index,
-                                getattr(metadata,
-                                        field_name),
+                                field_value,
                                 key_maker=CommandSequence)
                         else:
                             val = {
                                 self._add_to_index(index,
-                                                   val)
-                                for val in getattr(metadata,
-                                                   field_name)
+                                                   val) for val in field_value
                             }
                         getattr(self, field_name)[context_id] = val
                     elif field_name in ['ignore_path_regex']:
-                        getattr(self,
-                                field_name)[context_id] = set(
-                                    getattr(metadata,
-                                            field_name))
+                        getattr(self, field_name)[context_id] = set(field_value)
                     elif field_name == "serapi_options":
-                        self.serapi_options[
-                            context_id] = metadata.serapi_options
+                        self.serapi_options[context_id] = field_value
 
     def remove(
             self,
