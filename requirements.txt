@@ -1,6 +1,8 @@
 bidict
+dataclasses-json
 GitPython
 numpy
 pytest
 pytest-cov
 seutil >= 0.7.1
+strace-parser
