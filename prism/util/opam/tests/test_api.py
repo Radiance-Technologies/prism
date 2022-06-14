@@ -71,9 +71,9 @@ class TestOpamAPI(unittest.TestCase):
 
     def test_install_remove(self):
         """
-        Test installation of a single package.
+        Test installation and removal of a single package.
 
-        Test by searching in output of `opam list -i`
+        Test success by searching in output of `opam list -i`
         """
         pkg = 'coq-additions'
         r = bash.run(f"opam list -i {pkg}")
