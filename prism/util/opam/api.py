@@ -70,8 +70,7 @@ class OpamAPI:
     def add_repo(
             cls,
             repo_name: str,
-            repo_addr: Optional[str] = None) -> Dict[str,
-                                                     VersionConstraint]:
+            repo_addr: Optional[str] = None) -> None:
         """
         Add a repo to the current switch.
 
@@ -85,11 +84,6 @@ class OpamAPI:
             the repo_name will be searched in already existing
             repos on the switch.
 
-        Returns
-        -------
-        str
-            Output of the command
-
         Exceptions
         ----------
         subprocess.CalledProcessError
@@ -97,13 +91,7 @@ class OpamAPI:
         """
         if repo_addr is not None:
             repo_name = f"{repo_name} {repo_addr}"
-        r = cls.run(f"opam repo add {repo_name}")
-        # If stderr is empty, and return code is fine
-        # install should be good to go, return stdout
-        # Else, stdout is either empty or irrelevant
-        if r.stderr == '':
-            return r.stdout
-        return r.stderr
+        cls.run(f"opam repo add {repo_name}")
 
     @classmethod
     def create_switch(
@@ -221,7 +209,7 @@ class OpamAPI:
         }
 
     @classmethod
-    def remove_repo(cls, repo_name: str) -> Dict[str, VersionConstraint]:
+    def remove_repo(cls, repo_name: str) -> None:
         """
         Remove a repo from the current switch.
 
@@ -230,21 +218,12 @@ class OpamAPI:
         repo_name : str
             The name of an opam repository.
 
-        Returns
-        -------
-        str
-            Output of the command
-
         Exceptions
         ----------
         subprocess.CalledProcessError
             If the installation fails it will raise this exception
         """
-        r = cls.run(f"opam repo remove {repo_name}")
-        # If stderr is empty, and return code is fine
-        # install should be good to go, return stdout
-        # Else, stdout is either empty or irrelevant
-        return r.stdout
+        cls.run(f"opam repo remove {repo_name}")
 
     @classmethod
     def remove_switch(cls, switch_name: str) -> None:
