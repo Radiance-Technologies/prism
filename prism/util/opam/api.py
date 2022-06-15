@@ -67,6 +67,46 @@ class OpamAPI:
         return environ
 
     @classmethod
+    def add_repo(cls,
+                 repo_name: str,
+                 repo_addr: Optional[str] = None) -> Dict[str,
+                                                          VersionConstraint]:
+        """
+        Add a repo to the current switch.
+
+        Parameters
+        ----------
+        repo_name : str
+            The name of an opam repository.
+
+        repo_addr : str
+            The address of the repository. If omitted,
+            the repo_name will be searched in already existing
+            repos on the switch.
+
+        Returns
+        -------
+        str
+            Output of the command
+
+        Exceptions
+        ----------
+        subprocess.CalledProcessError
+            If the installation fails it will raise this exception
+        """
+        if repo_addr is not None:
+            repo_name = f"{repo_name} {repo_addr}"
+        r = bash.run(f"opam repo add {repo_name}")
+        r.check_returncode()
+        # If stderr is empty, and return code is fine
+        # install should be good to go, return stdout
+        # Else, stdout is either empty or irrelevant
+        if r.stderr == '':
+            return r.stdout
+        return r.stderr
+
+
+    @classmethod
     def create_switch(
             cls,
             switch_name: str,
@@ -180,6 +220,37 @@ class OpamAPI:
             VersionConstraint.parse(dep[1] if len(dep) > 1 else "")
             for dep in dependencies
         }
+
+    @classmethod
+    def remove_repo(cls,
+                    repo_name: str) -> Dict[str,
+                                            VersionConstraint]:
+        """
+        Remove a repo from the current switch.
+
+        Parameters
+        ----------
+        repo_name : str
+            The name of an opam repository.
+
+        Returns
+        -------
+        str
+            Output of the command
+
+        Exceptions
+        ----------
+        subprocess.CalledProcessError
+            If the installation fails it will raise this exception
+        """
+        r = bash.run(f"opam repo remove {repo_name}")
+        r.check_returncode()
+        # If stderr is empty, and return code is fine
+        # install should be good to go, return stdout
+        # Else, stdout is either empty or irrelevant
+        if r.stderr == '':
+            return r.stdout
+        return r.stderr
 
     @classmethod
     def remove_switch(cls, switch_name: str) -> None:
