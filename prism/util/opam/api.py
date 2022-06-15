@@ -97,8 +97,7 @@ class OpamAPI:
         """
         if repo_addr is not None:
             repo_name = f"{repo_name} {repo_addr}"
-        r = bash.run(f"opam repo add {repo_name}")
-        r.check_returncode()
+        r = cls.run(f"opam repo add {repo_name}")
         # If stderr is empty, and return code is fine
         # install should be good to go, return stdout
         # Else, stdout is either empty or irrelevant
@@ -241,14 +240,11 @@ class OpamAPI:
         subprocess.CalledProcessError
             If the installation fails it will raise this exception
         """
-        r = bash.run(f"opam repo remove {repo_name}")
-        r.check_returncode()
+        r = cls.run(f"opam repo remove {repo_name}")
         # If stderr is empty, and return code is fine
         # install should be good to go, return stdout
         # Else, stdout is either empty or irrelevant
-        if r.stderr == '':
-            return r.stdout
-        return r.stderr
+        return r.stdout
 
     @classmethod
     def remove_switch(cls, switch_name: str) -> None:
