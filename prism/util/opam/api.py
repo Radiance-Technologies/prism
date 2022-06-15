@@ -182,9 +182,7 @@ class OpamAPI:
         }
 
     @classmethod
-    def install(cls,
-                pkg: str,
-                version: Optional[str] = None) -> str:
+    def install(cls, pkg: str, version: Optional[str] = None) -> str:
         """
         Install the indicated package.
 
