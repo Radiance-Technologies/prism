@@ -210,8 +210,7 @@ class OpamAPI:
         """
         if version is not None:
             pkg = f"{pkg}.{version}"
-        r = bash.run(f"opam install {pkg}")
-        r.check_returncode()
+        r = cls.run(f"opam install {pkg}")
         # If stderr is empty, and return code is fine
         # install should be good to go, return stdout
         # Else, stdout is either empty or irrelevant
@@ -243,8 +242,7 @@ class OpamAPI:
         subprocess.CalledProcessError
             If the removal fails it will raise this exception
         """
-        r = bash.run(f"opam remove {pkg}")
-        r.check_returncode()
+        r = cls.run(f"opam remove {pkg}")
         # If stderr is empty, and return code is fine
         # install should be good to go, return stdout
         # Else, stdout is either empty or irrelevant
