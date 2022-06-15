@@ -67,10 +67,11 @@ class OpamAPI:
         return environ
 
     @classmethod
-    def add_repo(cls,
-                 repo_name: str,
-                 repo_addr: Optional[str] = None) -> Dict[str,
-                                                          VersionConstraint]:
+    def add_repo(
+            cls,
+            repo_name: str,
+            repo_addr: Optional[str] = None) -> Dict[str,
+                                                     VersionConstraint]:
         """
         Add a repo to the current switch.
 
@@ -104,7 +105,6 @@ class OpamAPI:
         if r.stderr == '':
             return r.stdout
         return r.stderr
-
 
     @classmethod
     def create_switch(
@@ -222,9 +222,7 @@ class OpamAPI:
         }
 
     @classmethod
-    def remove_repo(cls,
-                    repo_name: str) -> Dict[str,
-                                            VersionConstraint]:
+    def remove_repo(cls, repo_name: str) -> Dict[str, VersionConstraint]:
         """
         Remove a repo from the current switch.
 
