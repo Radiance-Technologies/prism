@@ -184,8 +184,7 @@ class OpamAPI:
     @classmethod
     def install(cls,
                 pkg: str,
-                version: Optional[str] = None) -> Dict[str,
-                                                       VersionConstraint]:
+                version: Optional[str] = None) -> str:
         """
         Install the indicated package.
 
@@ -222,8 +221,7 @@ class OpamAPI:
     def remove_pkg(
         cls,
         pkg: str,
-    ) -> Dict[str,
-              VersionConstraint]:
+    ) -> str:
         """
         Remove the indicated package.
 
