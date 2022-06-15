@@ -75,18 +75,18 @@ class TestOpamAPI(unittest.TestCase):
 
         Test success by searching in output of `opam list -i`
         """
-        pkg = 'coq-additions'
+        pkg = 'coq-shell'
         r = bash.run(f"opam list -i {pkg}")
         r.check_returncode()
         returned = r.stderr
         self.assertTrue("No matches found" in returned)
 
-        OpamAPI.install(pkg, version='8.10.0')
+        OpamAPI.install(pkg, version='1')
 
         r = bash.run(f"opam list -i {pkg}")
         r.check_returncode()
         returned = r.stdout
-        self.assertTrue("coq-additions 8.10.0      Addition" in returned)
+        self.assertTrue("coq-shell 1           Simplified" in returned)
 
         OpamAPI.remove_pkg(pkg)
 
