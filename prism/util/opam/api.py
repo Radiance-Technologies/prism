@@ -67,10 +67,7 @@ class OpamAPI:
         return environ
 
     @classmethod
-    def add_repo(
-            cls,
-            repo_name: str,
-            repo_addr: Optional[str] = None) -> None:
+    def add_repo(cls, repo_name: str, repo_addr: Optional[str] = None) -> None:
         """
         Add a repo to the current switch.
 
