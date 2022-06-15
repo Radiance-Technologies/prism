@@ -78,26 +78,26 @@ class TestOpamAPI(unittest.TestCase):
         repo_name = 'coq-released'
         repo_addr = 'https://coq.inria.fr/opam/released'
 
-        r = bash.run(f"opam repo list")
+        r = bash.run("opam repo list")
         r.check_returncode()
         returned = r.stdout
-        self.assertFalse("coq-released " \
+        self.assertFalse("coq-released "
                          "https://coq.inria.fr/opam/released" in returned)
 
         OpamAPI.add_repo(repo_name, repo_addr)
 
-        r = bash.run(f"opam repo list")
+        r = bash.run("opam repo list")
         r.check_returncode()
         returned = r.stdout
-        self.assertTrue("coq-released " \
+        self.assertTrue("coq-released "
                         "https://coq.inria.fr/opam/released" in returned)
 
         OpamAPI.remove_repo(repo_name)
 
-        r = bash.run(f"opam repo list")
+        r = bash.run("opam repo list")
         r.check_returncode()
         returned = r.stdout
-        self.assertFalse("coq-released " \
+        self.assertFalse("coq-released "
                          "https://coq.inria.fr/opam/released" in returned)
 
     def test_set_switch(self):
