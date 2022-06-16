@@ -1,11 +1,13 @@
 import os
-import networkx as nx
 from multiprocessing import Pool
 from pathlib import Path
+
+import networkx as nx
+from tqdm import tqdm
+
 from prism.project.graph.graph import ProjectGraph
 from prism.project.graph.node.root import Project
 from prism.project.metadata.storage import Context, Revision
-from tqdm import tqdm
 
 
 def fill_graph(item):
@@ -20,11 +22,16 @@ def fill_graph(item):
         raise exc
     return graph
 
+
 graph = ProjectGraph()
 dirs = list(os.listdir("/workspace/datasets/pearls/repos"))
 repos = Path("/workspace/datasets/pearls/repos")
 nodes = []
-for root in tqdm(dirs, desc="Projects", total=len(dirs), leave=False, position=0):
+for root in tqdm(dirs,
+                 desc="Projects",
+                 total=len(dirs),
+                 leave=False,
+                 position=0):
     context = Context(Revision(root, '111'), '', '')
     root = repos / Path(root)
     root = Project(context, root)
@@ -41,11 +48,13 @@ graph.add_libraries()
 items = [(node, graph) for node in nodes]
 
 with Pool(40) as p:
-    graphs = list(tqdm(
-        p.imap(fill_graph, items),
-        total=len(dirs),
-        desc="projects",
-    ))
+    graphs = list(
+        tqdm(
+            p.imap(fill_graph,
+                   items),
+            total=len(dirs),
+            desc="projects",
+        ))
     graph = nx.compose_all(graphs)
     directory = f"/home/atouchet/projects/PEARLS/dependencies"
     crosses = {}

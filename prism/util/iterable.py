@@ -3,7 +3,16 @@ A collection of utilities for iterable containers.
 """
 
 from dataclasses import InitVar, dataclass, field, fields
-from typing import Any, Dict, Generic, Iterable, Iterator, Sequence, TypeVar, Union
+from typing import (
+    Any,
+    Dict,
+    Generic,
+    Iterable,
+    Iterator,
+    Sequence,
+    TypeVar,
+    Union,
+)
 
 from prism.util.compare import Bottom, Comparable, Top
 from prism.util.radpytools import unzip

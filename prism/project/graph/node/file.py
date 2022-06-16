@@ -1,14 +1,16 @@
 """
-Module for defining nodes for project files
+Module for defining nodes for project files.
 """
-import networkx as nx
-from typing import Union
-from pathlib import Path
 from dataclasses import dataclass
-from .root import Project
-from .type import NodeType, ProjectFileType, DataDict, NodeId
+from pathlib import Path
+from typing import Union
+
+import networkx as nx
+
 from prism.util.iterable import shallow_asdict
 
+from .root import Project
+from .type import DataDict, NodeId, NodeType, ProjectFileType
 
 
 @dataclass
@@ -40,12 +42,13 @@ class ProjectFile(Project):
             "relative": self.project_file_path.relative_to(self.project_path),
             "stem": self.project_file_path.stem,
             "suffix": self.project_file_path.suffix or None,
-            "typename": self.typename, 
+            "typename": self.typename,
         }
 
     def init_parent(self) -> Union[Project, 'ProjectFile']:
         """
-        Return ProjectNode instance corresponding to parent path for this node.
+        Return ProjectNode instance corresponding to parent path for
+        this node.
         """
         parent = self.data['parent']
         if parent == self.project_path:
@@ -64,10 +67,10 @@ class ProjectFile(Project):
         """
         super_node = cls.get_super_node(graph, node)
         super_instance = Project.init_from_node(graph, super_node)
-        project_file_path = super_instance.project_path / graph.nodes[node]['relative']
+        project_file_path = super_instance.project_path / graph.nodes[node][
+            'relative']
         project_file_type = graph.nodes[node]['filetype']
         return cls.from_super(
             super_instance,
             project_file_path,
-            project_file_type
-        )
+            project_file_type)

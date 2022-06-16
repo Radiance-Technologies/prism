@@ -2,21 +2,16 @@
 Module for base node in project graph.
 """
 from abc import abstractmethod
-import networkx as nx
 from dataclasses import astuple, dataclass, fields
+from typing import Any, Dict, List, Optional, Tuple, Type
 
-from typing import Type, Tuple, Dict, Optional, Any, List
+import networkx as nx
+
+from prism.project.metadata.storage import Context
 from prism.util.compare import Criteria
 from prism.util.iterable import shallow_asdict
-from prism.project.metadata.storage import Context
-from .type import (
-    EdgeIdSet,
-    NodeId,
-    DataDict,
-    NodeIdSet,
-    EdgeType,
-    NodeType,
-)
+
+from .type import DataDict, EdgeIdSet, EdgeType, NodeId, NodeIdSet, NodeType
 
 
 @dataclass
@@ -37,8 +32,6 @@ class ProjectNode:
             Return True if type in node data matches ``self.type``.
             """
             return data["type"] == self.type
-
-
 
     def __post_init__(self):
         self.__hash = None
@@ -106,7 +99,7 @@ class ProjectNode:
     @property
     def node_type(self) -> NodeType:
         """
-        Return NodeType for instance
+        Return NodeType for instance.
         """
         return self._node_type
 
@@ -176,8 +169,8 @@ class ProjectNode:
         graph: nx.Graph,
         add_parent: bool = True,
         connect_parent: bool = True,
-        edgetypes: Optional[List[EdgeType]] = None
-    ) -> Tuple[NodeIdSet, EdgeIdSet]:
+        edgetypes: Optional[List[EdgeType]] = None) -> Tuple[NodeIdSet,
+                                                             EdgeIdSet]:
         """
         Add the project node to a graph.
 
@@ -222,7 +215,7 @@ class ProjectNode:
         add_parent : bool, optional
             If True and the parent instance doesn't exist in the graph,
             add it, by default True.
-    
+
         Returns
         -------
         NodeIdSet
@@ -232,7 +225,9 @@ class ProjectNode:
         graph.add_node(self.node, **self.data)
         added_nodes.add(self.node)
         if add_parent and self.parent and not graph.has_node(self.parent.node):
-            added_nodes = added_nodes.union(self.parent.add_nodes_to_graph(graph, add_parent=add_parent))
+            added_nodes = added_nodes.union(
+                self.parent.add_nodes_to_graph(graph,
+                                               add_parent=add_parent))
         return added_nodes
 
     def add_edges_to_graph(
@@ -265,20 +260,27 @@ class ProjectNode:
         added_edges = set()
         added_nodes = set()
         if connect_parent and self.parent:
-            added_edges.union(self.edge_from_instance(graph, self.parent, EdgeType.ParentToChild))
-            added_edges.union(self.edge_to_instance(graph, self.parent, EdgeType.ChildToParent))
+            added_edges.union(
+                self.edge_from_instance(
+                    graph,
+                    self.parent,
+                    EdgeType.ParentToChild))
+            added_edges.union(
+                self.edge_to_instance(
+                    graph,
+                    self.parent,
+                    EdgeType.ChildToParent))
         if edgetypes is not None:
             added_nodes, added_edges_ = self.connect(graph, edgetypes)
             added_edges = added_edges.union(added_edges_)
         return added_nodes, added_edges
 
     def edge_from_instance(
-        self,
-        graph: nx.Graph,
-        instance: 'ProjectNode',
-        edgetype: EdgeType,
-        **edge_data
-    ) -> EdgeIdSet:
+            self,
+            graph: nx.Graph,
+            instance: 'ProjectNode',
+            edgetype: EdgeType,
+            **edge_data) -> EdgeIdSet:
         """
         Add outward edge from given instance to this node.
 
@@ -338,11 +340,10 @@ class ProjectNode:
         return {identifier}
 
     @abstractmethod
-    def connect(
-        self,
-        graph: nx.Graph,
-        edgetypes: List[EdgeType]
-    ) -> Tuple[NodeIdSet, EdgeIdSet]:
+    def connect(self,
+                graph: nx.Graph,
+                edgetypes: List[EdgeType]) -> Tuple[NodeIdSet,
+                                                    EdgeIdSet]:
         """
         Add connections to and from this node to other nodes in graph.
 
@@ -375,7 +376,8 @@ class ProjectNode:
     @abstractmethod
     def init_parent(self) -> 'ProjectNode':
         """
-        Initialize the parent project node using this instance's attributes.
+        Initialize the parent project node using this instance's
+        attributes.
 
         Returns
         -------
@@ -387,11 +389,7 @@ class ProjectNode:
         pass
 
     @classmethod
-    def hash_data(
-        cls,
-        context: Context,
-        data: DataDict
-    ) -> int:
+    def hash_data(cls, context: Context, data: DataDict) -> int:
         """
         Generate hash from data.
 
@@ -416,10 +414,9 @@ class ProjectNode:
 
     @classmethod
     def nodes_from_graph(
-        cls,
-        graph: nx.Graph,
-        criteria: Optional[Criteria] = None
-    ) -> NodeIdSet:
+            cls,
+            graph: nx.Graph,
+            criteria: Optional[Criteria] = None) -> NodeIdSet:
         """
         Return all nodes that return true for all conditions.
 
@@ -431,17 +428,18 @@ class ProjectNode:
         ----------
         graph : nx.Graph
             The graph whose nodes will be searched.
-        """ 
+        """
 
-        type_criteria  = cls.TypeCriteria(cls)
+        type_criteria = cls.TypeCriteria(cls)
         if criteria:
             criteria = type_criteria & criteria
         else:
             criteria = type_criteria
 
         return set(
-            node for node, data in graph.nodes(data=True) if criteria(node, data)
-        )
+            node for node,
+            data in graph.nodes(data=True) if criteria(node,
+                                                       data))
 
     @classmethod
     def init_from_node(
@@ -483,12 +481,7 @@ class ProjectNode:
         return trail
 
     @classmethod
-    def from_instance(
-        cls,
-        instance: 'ProjectNode',
-        *args,
-        **kwargs
-        ):
+    def from_instance(cls, instance: 'ProjectNode', *args, **kwargs):
         """
         Initialize project node using given instance attributes.
 
@@ -522,12 +515,7 @@ class ProjectNode:
         return cls(**cls_dict)
 
     @classmethod
-    def from_parent(
-        cls,
-        parent_instance: 'ProjectNode',
-        *args,
-        **kwargs
-    ):
+    def from_parent(cls, parent_instance: 'ProjectNode', *args, **kwargs):
         """
         Initialize project node using given instance attributes.
 
@@ -553,12 +541,7 @@ class ProjectNode:
         return instance
 
     @classmethod
-    def from_super(
-        cls,
-        super_instance: 'ProjectNode',
-        *args,
-        **kwargs
-    ):
+    def from_super(cls, super_instance: 'ProjectNode', *args, **kwargs):
         """
         Return ``ProjectNode`` that is first (mro) super class of this.
 
@@ -581,11 +564,7 @@ class ProjectNode:
         return instance
 
     @classmethod
-    def get_parent_node(
-        cls,
-        graph: nx.Graph,
-        node: str
-    ) -> str:
+    def get_parent_node(cls, graph: nx.Graph, node: str) -> str:
         """
         Extract the node id of the parent of the given node.
 
@@ -609,11 +588,7 @@ class ProjectNode:
                 return source
 
     @classmethod
-    def get_super_node(
-        cls,
-        graph: nx.Graph,
-        node: str
-    ) -> str:
+    def get_super_node(cls, graph: nx.Graph, node: str) -> str:
         """
         Extract the node id of the super of given node.
 

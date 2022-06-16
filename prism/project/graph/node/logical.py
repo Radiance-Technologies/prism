@@ -1,12 +1,13 @@
 """
 Module for utilies for logical components of a dependency.
 """
-import networkx as nx
 from abc import ABC, abstractmethod
-from typing import Generator, List, Sequence, Tuple
-from pathlib import Path
-from itertools import accumulate
 from enum import Enum
+from itertools import accumulate
+from pathlib import Path
+from typing import Generator, List, Sequence, Tuple
+
+import networkx as nx
 
 
 def logical_iter(logical: str):
@@ -58,7 +59,7 @@ class _LogicalShortNames(Sequence):
         n = len(self)
         if idx < 0 or idx >= n:
             raise IndexError(idx)
-        return self._logicalcls(*self._parts[n-idx-1:], parsed=True)
+        return self._logicalcls(*self._parts[n - idx - 1 :], parsed=True)
 
     def __repr__(self):
         return "<{}.shortnames>".format(self._logicalcls.__name__)
@@ -69,16 +70,18 @@ class LogicalName(str):
     def __new__(cls, *args, parsed: bool = False, level=None):
         """
         Construct a PurePath from one or several strings and or existing
-        PurePath objects.  The strings and path objects are combined so as
-        to yield a canonicalized path, which is incorporated into the
-        new PurePath object.
+        PurePath objects.
+
+        The strings and path objects are combined so as to yield a
+        canonicalized path, which is incorporated into the new PurePath
+        object.
         """
         if not parsed:
             args = cls._parse_args(args)
         name = '.'.join(args)
         return str.__new__(cls, name)
 
-    def __init__(self, *arg, parsed = None, level: int = None):
+    def __init__(self, *arg, parsed=None, level: int = None):
         if not isinstance(arg, str):
             arg = '.'.join(arg)
         parts = tuple(arg.split('.'))
@@ -101,7 +104,7 @@ class LogicalName(str):
 
     @property
     def parent(self) -> 'LogicalName':
-        parts = self._parts[0:-1]
+        parts = self._parts[0 :-1]
         parent = self.join(*parts, parsed=True) if self.level else None
         return parent
 
@@ -118,7 +121,8 @@ class LogicalName(str):
     @property
     def shortnames(self) -> _LogicalShortNames:
         """
-        Return valid, shorter logical names that alias this logical name.
+        Return valid, shorter logical names that alias this logical
+        name.
 
         Returns
         -------
@@ -172,7 +176,7 @@ class LogicalName(str):
         parts = self.parts
         to_parts = other.parts
         n = len(to_parts)
-        return parts[:n] != to_parts
+        return parts[: n] != to_parts
 
     def relative_to(self, other: 'LogicalName') -> 'LogicalName':
         """
@@ -195,9 +199,7 @@ class LogicalName(str):
             This instance is not relative to other.
         """
         if not self.is_relative_to(other):
-            raise ValueError(
-                f"{self} is not in the subpath of {other}"
-            )
+            raise ValueError(f"{self} is not in the subpath of {other}")
         return self._from_parsed_parts(self.parts[len(other.parts):])
 
     @classmethod
@@ -222,13 +224,13 @@ class LogicalName(str):
         Raises
         ------
         TypeError
-            One of the arguments was not a str, LogicalName, 
+            One of the arguments was not a str, LogicalName,
             or a tuple (or list) of those types.
         """
         # This is useful when you don't want to create an instance, just
         # canonicalize some constructor arguments.
         if isinstance(args, str):
-            args = (args, )
+            args = (args,)
         stack = list(args)
         parts = ()
         while len(stack) > 0:
@@ -240,17 +242,17 @@ class LogicalName(str):
             elif isinstance(part, tuple):
                 stack = part + stack
             elif isinstance(part, str):
-                parts += (part, )
+                parts += (part,)
             else:
                 raise TypeError(
                     "argument should be a str object or an LogicalName"
-                    "object returning str, not %r" % type(part)
-                )
+                    "object returning str, not %r" % type(part))
         return parts
 
     @classmethod
     def _from_parsed_parts(cls, parts: Sequence[str]) -> 'LogicalName':
-        """Initialize from the output of ``_parse_args``.
+        """
+        Initialize from the output of ``_parse_args``.
 
         Parameters
         ----------

@@ -1,15 +1,25 @@
 """
-Module to define node type enumeration
+Module to define node type enumeration.
 """
 
-import networkx as nx
-from pathlib import Path
-from enum import Enum, auto
 from dataclasses import dataclass
-from typing import Generator, TypeVar, Tuple, Union, Dict, Optional, Any, Set, List
+from enum import Enum, auto
+from pathlib import Path
+from typing import (
+    Any,
+    Dict,
+    Generator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+)
+
+import networkx as nx
+
 from prism.util.compare import Criteria
-
-
 
 DataDict = Dict[str, Any]
 NodeId = TypeVar('NodeId')
@@ -30,15 +40,21 @@ class NodeTypeCriteria(Criteria):
     """
     Criteria that  a node is of a particular type.
     """
+
     def __init__(self, node_type: 'NodeType', *args, **kwargs):
         Criteria.__init__(self, *args, **kwargs)
         self.node_type = node_type
-        self.accepted_values = [self.node_type, self.node_type.name, self.node_type.value]
+        self.accepted_values = [
+            self.node_type,
+            self.node_type.name,
+            self.node_type.value
+        ]
 
     def evaluate(self, node: NodeId, data: DataDict) -> bool:
-        """Evaluate criteria on the arguments"""
+        """
+        Evaluate criteria on the arguments.
+        """
         return data.get('node_type', None) in self.accepted_values
-
 
 
 class NodeType(Enum):
@@ -58,7 +74,7 @@ class NodeType(Enum):
         graph: nx.Graph,
         node: NodeId,
         data: DataDict,
-    ) ->  Set[NodeId]:
+    ) -> Set[NodeId]:
         """
         Add edge to graph and return added edge id.
 
@@ -79,11 +95,7 @@ class NodeType(Enum):
         graph.add_node(node, node_type=self, **data)
         return {node}
 
-    def add_nodes(
-        self,
-        graph: nx.Graph,
-        nodes: List[Node]
-    ) -> Set[NodeId]:
+    def add_nodes(self, graph: nx.Graph, nodes: List[Node]) -> Set[NodeId]:
         """
         Add all nodes with instance node_type.
 
@@ -102,7 +114,6 @@ class NodeType(Enum):
         ids = set()
         return ids.union(self.add_node(graph, *node) for node in nodes)
 
-
     def find_nodes(self, graph: nx.Graph) -> NodeIdSet:
         """
         Find all nodes that have same node type as the instance.
@@ -120,7 +131,9 @@ class NodeType(Enum):
         """
         criteria = self.criteria()
         return {
-            node for node, data in graph.nodes(data=True) if criteria(node, data)
+            node for node,
+            data in graph.nodes(data=True) if criteria(node,
+                                                       data)
         }
 
     @classmethod
@@ -140,20 +153,26 @@ class EdgeTypeCriteria(Criteria):
     """
     Criteria that  a node is of a particular type.
     """
+
     def __init__(self, edge_type: 'EdgeType'):
         Criteria.__init__(self)
         self.edge_type = edge_type
 
     def evaluate(self, edge: EdgeId, data: DataDict) -> bool:
-        """Evaluate criteria on the arguments"""
-        return data.get('edge_type', None) in [self.edge_type,
-                                               self.edge_type.name,
-                                               self.edge_type.value]
+        """
+        Evaluate criteria on the arguments.
+        """
+        return data.get('edge_type',
+                        None) in [
+                            self.edge_type,
+                            self.edge_type.name,
+                            self.edge_type.value
+                        ]
 
 
 class EdgeType(Enum):
     """
-    An enumeration of different EdgeTypes
+    An enumeration of different EdgeTypes.
     """
     ChildToParent = auto()
     ParentToChild = auto()
@@ -200,7 +219,7 @@ class EdgeType(Enum):
         graph: nx.Graph,
         source: NodeId,
         destination: NodeId,
-    ) ->  EdgeIdSet:
+    ) -> EdgeIdSet:
         """
         Add edge to graph and return added edge id.
 
@@ -220,13 +239,11 @@ class EdgeType(Enum):
         """
         key = self.edge_key(source, destination)
         graph.add_edge(source, destination, key=key, edge_type=self)
-        return {(source, destination, key)}
+        return {(source,
+                 destination,
+                 key)}
 
-    def add_edges(
-        self,
-        graph: nx.Graph,
-        edges: List[EdgePair]
-    ) -> EdgeIdSet:
+    def add_edges(self, graph: nx.Graph, edges: List[EdgePair]) -> EdgeIdSet:
         """
         Add an edge for each pair of nodes.
 
@@ -272,12 +289,39 @@ class EdgeType(Enum):
         """
         if node is None:
             edges = graph.edges(data='edge_type', keys=True, default=None)
-            edges = {(s, d, k) for s, d, k, type_ in edges if type_ is self}
+            edges = {(s,
+                      d,
+                      k) for s,
+                     d,
+                     k,
+                     type_ in edges if type_ is self}
         else:
-            in_edges = graph.in_edges(node, data='edge_type', keys=True, default=None)
-            in_edges = {(s, d, k) for s, d, k, type_ in in_edges if type_ is self}
-            out_edges = graph.out_edges(node, data='edge_type', keys=True, default=None)
-            out_edges = {(s, d, k) for s, d, k, type_ in out_edges if type_ is self}
+            in_edges = graph.in_edges(
+                node,
+                data='edge_type',
+                keys=True,
+                default=None)
+            in_edges = {
+                (s,
+                 d,
+                 k) for s,
+                d,
+                k,
+                type_ in in_edges if type_ is self
+            }
+            out_edges = graph.out_edges(
+                node,
+                data='edge_type',
+                keys=True,
+                default=None)
+            out_edges = {
+                (s,
+                 d,
+                 k) for s,
+                d,
+                k,
+                type_ in out_edges if type_ is self
+            }
             edges = in_edges.union(out_edges)
         return edges
 
@@ -315,8 +359,7 @@ class EdgeType(Enum):
                 value = edge[0]
             else:
                 raise ValueError(
-                    f"find_edges returned edge without node ({node})"
-                )
+                    f"find_edges returned edge without node ({node})")
 
         return {connected(edge) for edge in edges if criteria(edge)}
 
@@ -324,7 +367,9 @@ class EdgeType(Enum):
         self,
         sources: List[NodeId],
         destination: NodeId,
-    ) -> Generator[KeyedEdgePair, None, None]:
+    ) -> Generator[KeyedEdgePair,
+                   None,
+                   None]:
         """
         Generate edge tuples for each source using same destination.
         """
@@ -335,7 +380,9 @@ class EdgeType(Enum):
         self,
         source: NodeId,
         destinations: List[NodeId],
-    ) -> Generator[KeyedEdgePair, None, None]:
+    ) -> Generator[KeyedEdgePair,
+                   None,
+                   None]:
         """
         Generate edge tuples for each destination using same source.
         """
@@ -364,10 +411,10 @@ class EdgeType(Enum):
 
     @classmethod
     def get_edge_type(
-        cls,
-        graph: nx.Graph,
-        *edge: Union[EdgeId, DataDict]
-    ) -> 'EdgeType':
+            cls,
+            graph: nx.Graph,
+            *edge: Union[EdgeId,
+                         DataDict]) -> 'EdgeType':
         """
         Extract the edge type stored in edge data.
 
@@ -394,7 +441,9 @@ class EdgeType(Enum):
             edge_type = cls.get_edge_type(graph, graph[source][destination])
         elif len(edge) == 3:
             source, destination, key = edge
-            edge_type = cls.get_edge_type(graph, graph[source][destination][key])
+            edge_type = cls.get_edge_type(
+                graph,
+                graph[source][destination][key])
         elif len(edge) == 1:
             edge = edge[0]
             if isinstance(edge, dict):
@@ -406,8 +455,7 @@ class EdgeType(Enum):
                 f"Edge should be one of the following:"
                 "Tuple[dict], "
                 "Tuple[Hashable, Hashable], "
-                "Tuple[Hashable, Hashable, str]"
-            )
+                "Tuple[Hashable, Hashable, str]")
         return edge_type
 
 
@@ -415,28 +463,37 @@ class ProjectFileTypeNodeCriteria(Criteria):
     """
     Criteria that  a node is of a particular type.
     """
+
     def __init__(self, file_type: 'ProjectFileType'):
         Criteria.__init__(self)
         self.file_type = file_type
 
     def evaluate(self, node: NodeId, data: DataDict) -> bool:
-        """Evaluate criteria on the arguments"""
-        return data.get('file_type', None) in [self.file_type,
-                                               self.file_type.name,
-                                               self.file_type.value]
+        """
+        Evaluate criteria on the arguments.
+        """
+        return data.get('file_type',
+                        None) in [
+                            self.file_type,
+                            self.file_type.name,
+                            self.file_type.value
+                        ]
+
 
 class ProjectFileTypePathCriteria(Criteria):
     """
-    Criteria that a file is a particular type
+    Criteria that a file is a particular type.
     """
+
     def __init__(self, file_type: 'ProjectFileType'):
         Criteria.__init__(self)
         self.file_type = file_type
 
     def evaluate(self, path: Path) -> bool:
-        """Evaluate criteria on the arguments"""
+        """
+        Evaluate criteria on the arguments.
+        """
         return self.file_type.matches_pattern(path)
-
 
 
 class ProjectFileType(Enum):
@@ -457,24 +514,11 @@ class ProjectFileType(Enum):
 
     coqdirectory = (
         "coqdirectory",
-        lambda file: (len(Path(file).glob("**/*.v")) > 0)
-    )
-    coqfile = (
-        "coqfile",
-        lambda file: (Path(file).suffix == ".v")
-    )
-    coqproject = (
-        "coqproject",
-        lambda file: (Path(file).stem == "_CoqProject")
-    )
-    makefile = (
-        "makefile",
-        lambda file: (Path(file).stem == "Makefile")
-    )
-    configure = (
-        "configure",
-        lambda file: (Path(file).stem == "configure")
-    )
+        lambda file: (len(Path(file).glob("**/*.v")) > 0))
+    coqfile = ("coqfile", lambda file: (Path(file).suffix == ".v"))
+    coqproject = ("coqproject", lambda file: (Path(file).stem == "_CoqProject"))
+    makefile = ("makefile", lambda file: (Path(file).stem == "Makefile"))
+    configure = ("configure", lambda file: (Path(file).stem == "configure"))
 
     def criteria(self, *args) -> bool:
         """
@@ -501,7 +545,9 @@ class ProjectFileType(Enum):
             All nodes that match the instance's node type.
         """
         return {
-            node for node, data in graph.nodes(data=True) if self.criteria(node, data)
+            node for node,
+            data in graph.nodes(data=True) if self.criteria(node,
+                                                            data)
         }
 
     @classmethod

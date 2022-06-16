@@ -3,8 +3,8 @@ Defines utilities for comparisons.
 """
 from abc import ABC, abstractmethod
 from functools import total_ordering
-from typing import Any, Protocol, runtime_checkable, Callable, List
 from types import MethodType
+from typing import Any, Callable, List, Protocol, runtime_checkable
 
 
 @total_ordering
@@ -62,7 +62,7 @@ class Criteria(ABC, Callable):
     A helper for constructing criteria functions.
     """
 
-    def __init__(self, evaluate = None):
+    def __init__(self, evaluate=None):
         self.buffer = {}
         if evaluate is not None:
             self.evaluate = MethodType(evaluate, self.__class__, self.__class__)
@@ -98,7 +98,9 @@ class Criteria(ABC, Callable):
         self.buffer = {}
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        """Delete the temporary buffer and replace it original value."""
+        """
+        Delete the temporary buffer and replace it original value.
+        """
         self.buffer = self._old_buffer
         delattr(self, "_old_buffer")
 
@@ -144,7 +146,12 @@ class Criteria(ABC, Callable):
         pass
 
     @classmethod
-    def chain(cls, reduction: Callable[[List[bool]], bool], *group_of_criteria, join_buffers: bool = True) -> 'Criteria':
+    def chain(
+            cls,
+            reduction: Callable[[List[bool]],
+                                bool],
+            *group_of_criteria,
+            join_buffers: bool = True) -> 'Criteria':
         """
         Chain multiple crtieria into a single criteria.
 
@@ -161,8 +168,12 @@ class Criteria(ABC, Callable):
         Criteria
             A set of criteria coupled by a reduction operation.
         """
-        group_of_criteria = [c if isinstance(c, cls) else cls(c) for c in group_of_criteria]
+        group_of_criteria = [
+            c if isinstance(c,
+                            cls) else cls(c) for c in group_of_criteria
+        ]
         if join_buffers:
+
             def evaluate(self, *args, **kwargs):
                 output = []
                 for criteria in group_of_criteria:
@@ -171,12 +182,15 @@ class Criteria(ABC, Callable):
                         output.append(criteria(*args, **kwargs))
                 return reduction(output)
         else:
+
             def evaluate(self, *args, **kwargs):
                 output = []
                 for criteria in group_of_criteria:
                     output.append(criteria(*args, **kwargs))
                 return reduction(output)
-        buffer = {k: v for c in group_of_criteria for k, v in c.buffer.items()}
+
+        buffer = {k: v for c in group_of_criteria for k,
+                  v in c.buffer.items()}
         criteria = Criteria(evaluate=evaluate)
         criteria.buffer = buffer
-        return criteria 
+        return criteria

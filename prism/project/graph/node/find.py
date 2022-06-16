@@ -1,24 +1,31 @@
 """
-Module for a node finding utility
+Module for a node finding utility.
 """
-import networkx as nx
 from pathlib import Path
 from typing import List, Tuple
 
-from .logical import LogicalName
-from .type import EdgeId, NodeId, EdgeType, NodeIdSet
-from .base import ProjectNode
-from .file import ProjectFile
-from .library import LibraryAlias, ProjectCoqLibrary, ProjectCoqLibraryRequirement
-from .iqr import ProjectExtractedIQR
-from .dependency import ProjectCoqDependency
+import networkx as nx
+
 from prism.util.compare import Criteria
+
+from .base import ProjectNode
+from .dependency import ProjectCoqDependency
+from .file import ProjectFile
+from .iqr import ProjectExtractedIQR
+from .library import (
+    LibraryAlias,
+    ProjectCoqLibrary,
+    ProjectCoqLibraryRequirement,
+)
+from .logical import LogicalName
+from .type import EdgeId, EdgeType, NodeId, NodeIdSet
 
 
 class NodeIsSourceCriteria(Criteria):
     """
     Criteria that given node is the source node in the edge.
     """
+
     def __init__(self, query_node: NodeId, *args, **kwargs):
         super(NodeIsSourceCriteria, self).__init__(*args, **kwargs)
         self.buffer["query_node"] = query_node
@@ -31,6 +38,7 @@ class NodeIsDestinationCriteria(Criteria):
     """
     Criteria that given node is the destination node in the edge.
     """
+
     def __init__(self, query_node: NodeId, *args, **kwargs):
         super(NodeIsSourceCriteria, self).__init__(*args, **kwargs)
         self.buffer["query_node"] = query_node
@@ -65,7 +73,6 @@ class NodeFinder:
         """
         return ProjectCoqLibraryRequirement.nodes_from_graph(graph)
 
-
     @classmethod
     def all_aliases(cls, graph) -> NodeIdSet:
         """
@@ -82,8 +89,8 @@ class NodeFinder:
         """
         Return all children of the given node.
 
-        A parent will have a inward edges from each child to itself
-        with edge_type == EdgeType.ChildtoParent.
+        A parent will have a inward edges from each child to itself with
+        edge_type == EdgeType.ChildtoParent.
         """
         edges = graph.in_edges(node, data='edge_type', default=None)
         nodes = set()
@@ -91,7 +98,7 @@ class NodeFinder:
             if edge_type == EdgeType.ParentToChild:
                 nodes.add(destination)
         return nodes
-    
+
     @classmethod
     def find_alias_from_library(
         cls,
@@ -104,15 +111,16 @@ class NodeFinder:
         Criteria
         EdgeType.LibraryAliasToLibrary.find_target_nodes(graph, library_node)
         edges = EdgeType.LibraryAliasToLibrary.find_edges(graph, library_node)
-        nodes =  [node for node, l, _ in edges if l == node]
+        nodes = [node for node, l, _ in edges if l == node]
         return [LibraryAlias.init_from_node(graph, node) for node in nodes]
 
     @classmethod
     def find_effected_libraries_by_iqr(
-        cls,
-        graph: nx.Graph,
-        iqr_node: NodeId
-    ) -> Tuple[ProjectFile, ProjectCoqLibrary, LogicalName]:
+            cls,
+            graph: nx.Graph,
+            iqr_node: NodeId) -> Tuple[ProjectFile,
+                                       ProjectCoqLibrary,
+                                       LogicalName]:
         """
         Find the libraries that require adding aliases due to iqr.
 
@@ -121,7 +129,7 @@ class NodeFinder:
 
         All subdirectories and files of ``./lib/comp`` recursively
         can be loaded using a logical name that starts with ``Comp``.
-        This method will return the corresponding ProjectFile and 
+        This method will return the corresponding ProjectFile and
         ProjectCoqLibrary instances, as well as the logical name
         that will be used to define a LibraryAlias node.
         """
@@ -132,8 +140,8 @@ class NodeFinder:
         relative_path = graph.nodes[path_node]['relative']
         files_nodes = ProjectFile.nodes_from_graph(
             graph,
-            lambda n, d: d['relative'].is_relative_to(relative_path)
-        )
+            lambda n,
+            d: d['relative'].is_relative_to(relative_path))
 
         # Convert the LogicalName given in the IQR argument
         # in to a path. This is done to replace relative
@@ -142,7 +150,9 @@ class NodeFinder:
         modified_root = Path(*str(iqr.iqr_name).split('.'))
         effected = set()
         for file_node in files_nodes:
-            library = cls.projectcoqlibrary_from_projectfile(graph, file_node.node)
+            library = cls.projectcoqlibrary_from_projectfile(
+                graph,
+                file_node.node)
             current_path = graph.nodes[file_node]['relative']
             # Construct a new logical name by replaceing the root
             # in current path with modified root. The root
@@ -152,14 +162,13 @@ class NodeFinder:
                 new_path = modified_root / modified_path
                 new_name = LogicalName.from_physical_path(new_path)
                 effected.add((file_node, library, new_name))
-        return effected    
+        return effected
 
     @classmethod
     def find_iqr_library(
-        cls,
-        graph: nx.Graph,
-        iqr_node: NodeId
-    ) -> ProjectCoqLibrary:
+            cls,
+            graph: nx.Graph,
+            iqr_node: NodeId) -> ProjectCoqLibrary:
         """
         Find the library corresponding to logical name in iqr.
 
@@ -178,11 +187,7 @@ class NodeFinder:
         return ProjectCoqLibrary.init_from_node(graph, library_node)
 
     @classmethod
-    def find_iqr_path(
-        cls,
-        graph: nx.Graph,
-        iqr_node: NodeId
-    ) -> ProjectFile:
+    def find_iqr_path(cls, graph: nx.Graph, iqr_node: NodeId) -> ProjectFile:
         """
         Find the ProjectFile correpsonding to path in iqr node.
 
@@ -193,23 +198,20 @@ class NodeFinder:
         ``./lib/comp`` that is logically bound to ``Comp``. This method
         will find the ProjectFile coresponding to ``./lib/comp``.
         """
-        iqr = ProjectExtractedIQR.init_from_node(graph, iqr_node)    
+        iqr = ProjectExtractedIQR.init_from_node(graph, iqr_node)
         coqproject_ = iqr.super
         relative_path = coqproject_.project_file_path.parent / iqr.iqr_path
         relative_path = relative_path.relative_to(iqr.project_path)
-        files_nodes = ProjectFile.nodes_from_graph(
-            graph,
-        )
+        files_nodes = ProjectFile.nodes_from_graph(graph,)
         for file_node in files_nodes:
             if graph.nodes[file_node]['relative'] == relative_path:
                 return file_node
 
     @classmethod
     def find_library_from_alias(
-        cls,
-        graph: nx.Graph,
-        node: NodeId
-    ) -> ProjectCoqLibrary:
+            cls,
+            graph: nx.Graph,
+            node: NodeId) -> ProjectCoqLibrary:
         """
         Find the library from one of it's aliases.
         """
@@ -221,10 +223,9 @@ class NodeFinder:
 
     @classmethod
     def find_library_from_file(
-        cls,
-        graph: nx.Graph,
-        node: NodeId
-    ) -> ProjectCoqLibrary:
+            cls,
+            graph: nx.Graph,
+            node: NodeId) -> ProjectCoqLibrary:
         """
         Get ProjectCoqLibrary node connected to a ProjectFile node.
         """
@@ -236,45 +237,41 @@ class NodeFinder:
                     library = child
                 else:
                     raise ValueError(
-                        "Multiple libraries found connected to project file"
-                    )
+                        "Multiple libraries found connected to project file")
         return ProjectCoqLibrary.init_from_node(graph, library)
 
     @classmethod
-    def library_aliases(
-        cls,
-        graph: nx.Graph,
-        node: NodeId
-    ) -> List[LibraryAlias]:
+    def library_aliases(cls,
+                        graph: nx.Graph,
+                        node: NodeId) -> List[LibraryAlias]:
         """
         Find all alias nodes of a library.
         """
         edges = EdgeType.LibraryAliasToLibrary.find_edges(graph)
-        return {alias for alias, library, _ in edges if node == library}
+        return {alias for alias,
+                library,
+                _ in edges if node == library}
 
     @classmethod
     def library_requirements(
-        cls,
-        graph: nx.Graph,
-        node: NodeId
-    ) -> List[ProjectCoqLibraryRequirement]:
+            cls,
+            graph: nx.Graph,
+            node: NodeId) -> List[ProjectCoqLibraryRequirement]:
         """
-        Find all requirement nodes of a library
+        Find all requirement nodes of a library.
         """
         edges = EdgeType.ParentToChild.find_edges(graph, node)
-        return {child_req for parent, child_req, _ in edges if parent == node}
+        return {child_req for parent,
+                child_req,
+                _ in edges if parent == node}
 
     @classmethod
-    def parent(
-        cls,
-        graph: nx.Graph,
-        node: NodeId
-    ) -> ProjectNode:
+    def parent(cls, graph: nx.Graph, node: NodeId) -> ProjectNode:
         """
         Return node id of the parent of the given node.
 
-        A parent will have a outward edge from itself to the child
-        with edge_type == EdgeType.ParentToChild
+        A parent will have a outward edge from itself to the child with
+        edge_type == EdgeType.ParentToChild
         """
         edges = graph.out_edges(node, data='edge_type', default=None)
         nodes = set()
@@ -284,13 +281,11 @@ class NodeFinder:
         return nodes
 
     @classmethod
-    def requirement_resolution(
-        cls,
-        graph: nx.Graph,
-        node: NodeId
-    ) -> NodeIdSet:
+    def requirement_resolution(cls, graph: nx.Graph, node: NodeId) -> NodeIdSet:
         """
         Find the dependency node for a given requirement node.
         """
         edges = EdgeType.DependencyToRequirement.find_edges(graph)
-        return {dep for dep, req, _ in edges if req == node}
+        return {dep for dep,
+                req,
+                _ in edges if req == node}

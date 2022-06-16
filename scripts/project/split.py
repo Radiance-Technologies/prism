@@ -1,10 +1,10 @@
-import json
 import argparse
+import json
 from random import random, seed
-from tqdm import tqdm
-from prettytable import PrettyTable
-import numpy as np
 
+import numpy as np
+from prettytable import PrettyTable
+from tqdm import tqdm
 
 seed(2)
 np.random.seed(2)
@@ -19,7 +19,6 @@ parser.add_argument(
     default="crosses.json",
     help="json file produced by check-crosses")
 args = parser.parse_args()
-
 
 with open(args.count, "r") as f:
     counts = json.load(f)
@@ -75,8 +74,9 @@ for group in groups:
         'sentences': sentence_sum(projects),
     }
 
-
-sorted_n = dict(sorted(combined.items(), key=lambda item: len(item[1]['projects'])))
+sorted_n = dict(
+    sorted(combined.items(),
+           key=lambda item: len(item[1]['projects'])))
 sorted_p = dict(sorted(combined.items(), key=lambda item: item[1]['proofs']))
 sorted_s = dict(sorted(combined.items(), key=lambda item: item[1]['sentences']))
 
@@ -102,17 +102,43 @@ for group in combined:
     total_sentences += sentences
 
 pt = PrettyTable()
-pt.field_names = ['Group Hash', 'Project Count', 'Project %', 'Proof Count', 'Proof %', 'Sentence Count', 'Sentence %']
+pt.field_names = [
+    'Group Hash',
+    'Project Count',
+    'Project %',
+    'Proof Count',
+    'Proof %',
+    'Sentence Count',
+    'Sentence %'
+]
 for group in sorted_p:
     projects = len(combined[group]['projects'])
     proofs = combined[group]['proofs']
     sentences = combined[group]['sentences']
-    project_percent = "%0.2f" % ( projects / total_projects * 100)
+    project_percent = "%0.2f" % (projects / total_projects * 100)
     proof_percent = "%0.2f" % (proofs / total_proofs * 100)
     sentence_percent = "%0.2f" % (sentences / total_sentences * 100)
-    pt.add_row([group, projects, project_percent, proofs, proof_percent, sentences, sentence_percent])
+    pt.add_row(
+        [
+            group,
+            projects,
+            project_percent,
+            proofs,
+            proof_percent,
+            sentences,
+            sentence_percent
+        ])
 
-pt.add_row(["TOTAL", total_projects, total_projects / nprojects, total_proofs, 1, total_sentences, 1])
+pt.add_row(
+    [
+        "TOTAL",
+        total_projects,
+        total_projects / nprojects,
+        total_proofs,
+        1,
+        total_sentences,
+        1
+    ])
 
 print(pt)
 
@@ -125,8 +151,7 @@ def print_project(p):
                 f"{target_project}:\n"
                 f"\tHash: {group}\n"
                 f"\tProofs: {p}\n"
-                f"\tSentences: {s}\n"
-            )
+                f"\tSentences: {s}\n")
             print(msg)
             break
 
@@ -142,9 +167,9 @@ for group in combined:
         max_group = group
 max_percent = max_value / total_proofs
 
-
-training_set = {max_group: combined.pop(max_group)}
-
+training_set = {
+    max_group: combined.pop(max_group)
+}
 
 threshold = 0.0001
 validation_set = None
@@ -170,16 +195,19 @@ while True:
 
 test_set = combined
 
-val = [project for group in validation_set.values() for project in group['projects']]
+val = [
+    project for group in validation_set.values()
+    for project in group['projects']
+]
 test = [project for group in test_set.values() for project in group['projects']]
-train = [project for group in training_set.values() for project in group['projects']]
+train = [
+    project for group in training_set.values() for project in group['projects']
+]
 
 with open('split.json', 'w') as f:
-    json.dump(
-        {
-            'train': train,
-            'validation': val,
-            'test': test,
-        },
-        f
-    )
+    json.dump({
+        'train': train,
+        'validation': val,
+        'test': test,
+    },
+              f)

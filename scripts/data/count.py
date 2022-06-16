@@ -4,12 +4,12 @@ Count sentences and proofs contained in projects.
 import json
 import os
 from multiprocessing import Pool
-from typing import Dict, Tuple
 from pathlib import Path
-
-from prism.project.base import SEM
-from prism.project import ProjectDir
 from re import sub
+from typing import Dict, Tuple
+
+from prism.project import ProjectDir
+from prism.project.base import SEM
 
 
 def camel_case(s):
@@ -58,7 +58,8 @@ def proofs(path: os.PathLike) -> Tuple[str, int]:
     count: int = 0
     project_dirs = []
     for file in file_list:
-        if Path(file).stem in ignore or any(Path(file).is_relative_to(p) for p in project_dirs):
+        if Path(file).stem in ignore or any(Path(file).is_relative_to(p)
+                                            for p in project_dirs):
             project_dirs.append(Path(file))
             continue
         document = project.get_file(file)
@@ -83,7 +84,8 @@ def sentences(path: os.PathLike) -> Tuple[str, int]:
     count: int = 0
     project_dirs = []
     for file in file_list:
-        if Path(file).stem in ignore or any(Path(file).is_relative_to(p) for p in project_dirs):
+        if Path(file).stem in ignore or any(Path(file).is_relative_to(p)
+                                            for p in project_dirs):
             project_dirs.append(Path(file))
             continue
     for file in file_list:

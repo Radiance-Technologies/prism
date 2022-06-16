@@ -2,15 +2,17 @@
 Module defining node for extract IQR flags.
 """
 import re
-import networkx as nx
-from enum import Enum
-from typing import List, Literal, Optional, Tuple, Union, TypeVar
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
-from .type import DataDict, EdgeType, NodeId, EdgeIdSet, NodeIdSet, NodeType
-from .library import LibraryAlias, ProjectCoqLibrary
+from typing import List, Literal, Optional, Tuple, TypeVar, Union
+
+import networkx as nx
+
 from .file import ProjectFile
+from .library import LibraryAlias, ProjectCoqLibrary
 from .logical import LogicalName
+from .type import DataDict, EdgeIdSet, EdgeType, NodeId, NodeIdSet, NodeType
 
 IQR_FLAG = Literal["I", "Q", "R"]
 """
@@ -43,7 +45,8 @@ An instance that could be either arguments passed to -R, -Q, or -I.
 I_FLAG_REGEX = re.compile(r"-I (?P<src>\S+)")
 Q_FLAG_REGEX = re.compile(r"-Q (?P<src>\S+)(\s*|\s+)(?P<tgt>\S+)")
 R_FLAG_REGEX = re.compile(r"-R (?P<src>\S+)(\s*|\s+)(?P<tgt>\S+)")
-R_FLAG_REGEX = re.compile(r"-R\s+(?P<src>\S+)(^(?!.*sqlbuddy.*).*$|,|\s+)(?P<tgt>\S+)")
+R_FLAG_REGEX = re.compile(
+    r"-R\s+(?P<src>\S+)(^(?!.*sqlbuddy.*).*$|,|\s+)(?P<tgt>\S+)")
 IQR_REGEX = {
     'I': I_FLAG_REGEX,
     'Q': Q_FLAG_REGEX,
@@ -100,7 +103,11 @@ class IQRFlag(Enum):
 def extract_from_file(file: str):
     with open(file, "r") as f:
         data = f.read()
-    return {flag: flag.parse_string(data) for flag in IQRFlag if flag is not IQRFlag.NONE}
+    return {
+        flag: flag.parse_string(data)
+        for flag in IQRFlag
+        if flag is not IQRFlag.NONE
+    }
 
 
 @dataclass
@@ -108,9 +115,8 @@ class ProjectExtractedIQR(ProjectFile):
     """
     A node representing the extract IQR flags from a file.
 
-    This node is specifically the children of _CoqProject files
-    or MakeFiles which will have build commands that are the 
-    IQR flags.
+    This node is specifically the children of _CoqProject files or
+    MakeFiles which will have build commands that are the IQR flags.
     """
     iqr_path: Path
     iqr_name: LogicalName
@@ -125,8 +131,8 @@ class ProjectExtractedIQR(ProjectFile):
     def _add_aliases_to_graph(
         self,
         graph: nx.Graph,
-        edgetypes: Optional[List[EdgeType]]=None
-    ) -> Tuple[NodeIdSet, EdgeIdSet]:
+        edgetypes: Optional[List[EdgeType]] = None) -> Tuple[NodeIdSet,
+                                                             EdgeIdSet]:
         """
         Add all derived logical names as LibraryAlias nodes.
 
@@ -163,7 +169,8 @@ class ProjectExtractedIQR(ProjectFile):
         self,
         graph: nx.Graph,
         alias_nodes: NodeIdSet,
-    ) -> Tuple[NodeIdSet, EdgeIdSet]:
+    ) -> Tuple[NodeIdSet,
+               EdgeIdSet]:
         """
         Add edges between this node and the added alias nodes.
 
@@ -189,10 +196,10 @@ class ProjectExtractedIQR(ProjectFile):
         return set(), added_edges
 
     def _connect_to_bound_paths(
-        self,
-        graph: nx.Graph,
-        path_nodes: NodeIdSet
-    ) -> Tuple[NodeIdSet, EdgeIdSet]:
+            self,
+            graph: nx.Graph,
+            path_nodes: NodeIdSet) -> Tuple[NodeIdSet,
+                                            EdgeIdSet]:
         """
         Add edges between this node and referenced ProjecFiles.
 
@@ -206,7 +213,7 @@ class ProjectExtractedIQR(ProjectFile):
             The graph that will be modified to have the alias,
             the library, and their associated edges.
         path_nodes : List[NodeIdSet]
-            Paths found matching the path argument of the 
+            Paths found matching the path argument of the
             extracted IQR.
 
         Returns
@@ -222,11 +229,10 @@ class ProjectExtractedIQR(ProjectFile):
             added_edges.add(edge_id)
         return set(), added_edges
 
-    def connect(
-        self,
-        graph: nx.Graph,
-        edgetypes: List[EdgeType]
-    ) -> Tuple[NodeIdSet, EdgeIdSet]:
+    def connect(self,
+                graph: nx.Graph,
+                edgetypes: List[EdgeType]) -> Tuple[NodeIdSet,
+                                                    EdgeIdSet]:
         """
         Connect the IQR node to other nodes in the graph.
 
@@ -267,7 +273,7 @@ class ProjectExtractedIQR(ProjectFile):
             if alias_edges is not None:
                 added_edges = added_edges.union(alias_edges)
 
-            _, iqr_to_alias =  self._connect_to_aliases(graph, added_aliases)
+            _, iqr_to_alias = self._connect_to_aliases(graph, added_aliases)
             if iqr_to_alias is not None:
                 added_edges = added_edges.union(iqr_to_alias)
         return added_nodes, added_edges
@@ -347,7 +353,8 @@ class ProjectExtractedIQR(ProjectFile):
         # These will be connected to libraries that are effected.
         nodes = ProjectCoqLibrary.nodes_from_graph(
             graph,
-            lambda n, d: d['relative'].is_relative_to(start_path),
+            lambda n,
+            d: d['relative'].is_relative_to(start_path),
         )
 
         # Convert the LogicalName given in the IQR argument
@@ -363,23 +370,19 @@ class ProjectExtractedIQR(ProjectFile):
             new_name = LogicalName.from_physical_path(rel_path)
             return new_name
 
-        effected.union(
-            set((node, compute_new_name(node)) for node in nodes)
-        )
+        effected.union(set((node, compute_new_name(node)) for node in nodes))
         return effected
-        
 
     def find_path_in_graph(self, graph: nx.Graph) -> NodeIdSet:
         """
-        Find the paths that match the path component of the IQR
+        Find the paths that match the path component of the IQR.
 
-        The set of returned paths are all ProjectFile nodes
-        that match the path component of the IQR flag.
+        The set of returned paths are all ProjectFile nodes that match
+        the path component of the IQR flag.
         """
         iqr_path = self.iqr_path
         file_relative = self.parent.data['parent'] / self.iqr_path
         file_relative = file_relative.relative_to(self.project_path)
-
 
         # look for any path that has the iqr path as a tail.
         def lazy_match(node, data):
@@ -390,9 +393,8 @@ class ProjectExtractedIQR(ProjectFile):
             rel = data['relative']
             return (
                 str(rel) == str(self.iqr_path)
-                or str(rel) == str(file_relative)
-                or lazy_match(node, data)
-            )
+                or str(rel) == str(file_relative) or lazy_match(node,
+                                                                data))
 
         return ProjectFile.nodes_from_graph(
             graph,
@@ -400,7 +402,10 @@ class ProjectExtractedIQR(ProjectFile):
         )
 
     @classmethod
-    def init_from_node(cls, graph: nx.Graph, node: NodeId) -> 'ProjectExtractedIQR':
+    def init_from_node(
+            cls,
+            graph: nx.Graph,
+            node: NodeId) -> 'ProjectExtractedIQR':
         """
         Intialize the ProjectNode instance from a node in the graph.
         """

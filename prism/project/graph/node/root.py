@@ -1,12 +1,14 @@
 """
-Module for defining Project Node
+Module for defining Project Node.
 """
-import networkx as nx
-from typing import List
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
+from typing import List
+
+import networkx as nx
+
 from .base import ProjectNode
-from .type import EdgeType, NodeType, DataDict
+from .type import DataDict, EdgeType, NodeType
 
 
 @dataclass
@@ -22,11 +24,7 @@ class Project(ProjectNode):
     def __hash__(self) -> int:
         return self.hash
 
-    def connect(
-        self,
-        graph: nx.Graph,
-        edgetypes: List[EdgeType]
-    ):
+    def connect(self, graph: nx.Graph, edgetypes: List[EdgeType]):
         """
         Return empty sets since no connections are added to graph.
         """

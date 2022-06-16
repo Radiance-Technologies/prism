@@ -2,29 +2,32 @@
 Modules for defining nodes in project graphs.
 """
 from .base import ProjectNode
-from .root import Project
+from .dependency import ProjectCoqDependency
 from .file import ProjectFile
-from .library import ProjectCoqLibrary, LibraryAlias, ProjectCoqLibraryRequirement
-from .dependency import ProjectCoqDependency
 from .iqr import ProjectExtractedIQR
-from .dependency import ProjectCoqDependency
+from .library import (
+    LibraryAlias,
+    ProjectCoqLibrary,
+    ProjectCoqLibraryRequirement,
+)
+from .logical import LogicalName
+from .root import Project
 from .type import (
     DataDict,
-    NodeId,
+    Edge,
+    EdgeId,
+    EdgeIdSet,
     EdgeKey,
     EdgePair,
-    KeyedEdgePair,
-    EdgeId,
-    NodeIdSet,
-    EdgeIdSet,
-    Node,
-    Edge,
-    ProjectFileType,
     EdgeType,
+    EdgeTypeCriteria,
+    KeyedEdgePair,
+    Node,
+    NodeId,
+    NodeIdSet,
     NodeType,
     NodeTypeCriteria,
-    EdgeTypeCriteria,
+    ProjectFileType,
     ProjectFileTypeNodeCriteria,
     ProjectFileTypePathCriteria,
 )
-from .logical import LogicalName

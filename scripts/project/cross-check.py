@@ -3,33 +3,54 @@
 
 # In[1]:
 
-from genericpath import exists
 import json
-from multiprocessing.sharedctypes import Value
-import networkx as nx
-from prism.project.build.library.component.logical import LogicalName, LogicalGraphType
-from prism.project.build.library.component.physical import PhysicalPath
-from enum import Enum, auto, Flag
-from networkx import MultiGraph, DiGraph
-from itertools import accumulate, chain, compress, zip_longest
-from functools import reduce
-from pathlib import Path
-from typing import OrderedDict, Tuple, Sequence
-import re
-from tqdm import tqdm
-from dataclasses import dataclass, asdict, fields
-from radpytools.dataclasses import default_field, immutable_dataclass
-from radpytools.builtins import cachedmethod
-from typing import Optional, Set, Dict, Iterable, Literal, Any, Hashable, Callable, List, Union
-import typing
-from functools import partial
-from prism.project.build.library.component.flags import IQRFlag, extract_from_file
-from prism.project.util import name_variants
-from typing import TypeVar, Type, Generic
-import types
-from abc import ABC, abstractmethod, abstractclassmethod
 import os
-from dataclasses import astuple, field, dataclass
+import re
+import types
+import typing
+from abc import ABC, abstractclassmethod, abstractmethod
+from dataclasses import asdict, astuple, dataclass, field, fields
+from enum import Enum, Flag, auto
+from functools import partial, reduce
+from itertools import accumulate, chain, compress, zip_longest
+from multiprocessing.sharedctypes import Value
+from pathlib import Path
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generic,
+    Hashable,
+    Iterable,
+    List,
+    Literal,
+    Optional,
+    OrderedDict,
+    Sequence,
+    Set,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
+
+import networkx as nx
+from genericpath import exists
+from networkx import DiGraph, MultiGraph
+from radpytools.builtins import cachedmethod
+from radpytools.dataclasses import default_field, immutable_dataclass
+from tqdm import tqdm
+
+from prism.project.build.library.component.flags import (
+    IQRFlag,
+    extract_from_file,
+)
+from prism.project.build.library.component.logical import (
+    LogicalGraphType,
+    LogicalName,
+)
+from prism.project.build.library.component.physical import PhysicalPath
+from prism.project.util import name_variants
 
 
 def matches_variant(value, variant):
@@ -42,12 +63,10 @@ def matches_variant(value, variant):
     return matches
 
 
-
 coq_standard = open("coq_standard.txt", "r").readlines()
 coq_standard = [lib.strip() for lib in coq_standard]
 coq_ext = open("coq_ext.txt", "r").readlines()
 coq_ext = [lib.strip() for lib in coq_ext]
-
 
 skip = [
     "Omega",
@@ -207,7 +226,8 @@ class LibraryContext:
 @dataclass
 class StandardContext(LibraryContext):
     level: int = -1
-    project_names: List[str] = field(default_factory=lambda: ['Coq'] + list(name_variants('Coq')))
+    project_names: List[str] = field(
+        default_factory=lambda: ['Coq'] + list(name_variants('Coq')))
     iqrs: Set[LogicalName] = field(default_factory=set)
     resolved: Set[LogicalName] = field(default_factory=lambda: coq_standard)
     lazy: Set[LogicalName] = field(default_factory=set)
@@ -239,17 +259,17 @@ class MethodType(Enum):
 
         def auto_cast(*args):
             return tuple(
-                arg if isinstance(arg, LogicalName) else LogicalName(arg) for arg in args
-            )
+                arg if isinstance(arg,
+                                  LogicalName) else LogicalName(arg)
+                for arg in args)
 
         if self.name == 'equality':
-            def match(
-                query: LogicalName,
-                reference: LogicalName
-            ):
+
+            def match(query: LogicalName, reference: LogicalName):
                 query, reference = auto_cast(query, reference)
                 return query == reference
         elif self.name == 'relative':
+
             def match(
                 query: LogicalName,
                 reference: LogicalName,
@@ -258,29 +278,24 @@ class MethodType(Enum):
                 return query.is_relative_to(reference)
         elif self.name == 'root':
 
-            def match(
-                query: LogicalName,
-                reference: LogicalName
-            ):
+            def match(query: LogicalName, reference: LogicalName):
                 query, reference = auto_cast(query, reference)
                 n = len(reference.parts)
                 if len(query.parts) > n:
                     return False
                 else:
-                    return query.parts[:n] == reference.parts
+                    return query.parts[: n] == reference.parts
 
         elif self.name == 'variant':
 
-            def match(
-                query: LogicalName,
-                variant: str
-            ):
+            def match(query: LogicalName, variant: str):
                 query, = auto_cast(query)
                 if len(query.parts) > 1:
                     matches = query.parts[0] == variant
                 else:
                     matches = str(query).startswith(str(variant))
                 return matches
+
         return match
 
 
@@ -291,7 +306,11 @@ class MatchType(Enum):
     lazy = auto()
     failed = auto()
 
-    def find_match(self, query: LogicalName, context: LibraryContext, all: bool = False):
+    def find_match(
+            self,
+            query: LogicalName,
+            context: LibraryContext,
+            all: bool = False):
 
         matches = set()
         if self.name == 'project_name':
@@ -328,9 +347,7 @@ class LibraryType(Enum):
     unknown = auto()
 
 
-MatchTypeOrder = tuple(
-    match_type for match_type in MatchType
-)
+MatchTypeOrder = tuple(match_type for match_type in MatchType)
 NameOrder = (
     LibraryType.local,
     LibraryType.standard,
@@ -345,16 +362,14 @@ ResolvedOrder = (
     LibraryType.local,
     LibraryType.standard,
 )
-LazyOrder = (
-    LibraryType.local,
-)
+LazyOrder = (LibraryType.local,)
 ResolutionOrderMap = {
     MatchType.project_name: NameOrder,
     MatchType.iqr: IQROrder,
     MatchType.resolved: ResolvedOrder,
     MatchType.lazy: LazyOrder,
-    MatchType.failed: (LibraryType.unknown,),
-
+    MatchType.failed: (LibraryType.unknown,
+                       ),
 }
 
 STANDARD_CONTEXT = StandardContext()
@@ -388,7 +403,10 @@ class Resolver:
 
         return lowest_idx, matches
 
-    def resolve_requirement(self, ctx_local: LibraryContext, requirement: LogicalName):
+    def resolve_requirement(
+            self,
+            ctx_local: LibraryContext,
+            requirement: LogicalName):
         matches = []
         match_found = False
         for midx, match_type in enumerate(MatchTypeOrder):
@@ -400,16 +418,24 @@ class Resolver:
                 if match_found:
                     continue
                 if lib_type is LibraryType.local:
-                    matches__ = list(match_type.find_match(requirement, ctx_local))
+                    matches__ = list(
+                        match_type.find_match(requirement,
+                                              ctx_local))
                 elif lib_type is LibraryType.standard:
-                    matches__ = list(match_type.find_match(requirement, self.ctx_standard))
+                    matches__ = list(
+                        match_type.find_match(requirement,
+                                              self.ctx_standard))
                 elif lib_type is LibraryType.external_library:
                     for external_lib in self.ctx_external_libs:
-                        lib_matches = list(match_type.find_match(requirement, external_lib))
+                        lib_matches = list(
+                            match_type.find_match(requirement,
+                                                  external_lib))
                         matches__.extend(list(lib_matches))
                 elif lib_type is LibraryType.external_project:
                     for project_lib in self.ctx_external_projects:
-                        lib_matches = list(match_type.find_match(requirement, project_lib))
+                        lib_matches = list(
+                            match_type.find_match(requirement,
+                                                  project_lib))
                         matches__.extend(list(lib_matches))
                 elif lib_type is LibraryType.unknown:
                     continue
@@ -428,7 +454,11 @@ class Resolver:
                 match_type = MatchTypeOrder[midx]
                 lidx, match = self._lowest(lowest)
                 lib_type = ResolutionOrderMap[match_type][lidx]
-                match = [m if isinstance(m, tuple) else (None, m) for m in match]
+                match = [
+                    m if isinstance(m,
+                                    tuple) else (None,
+                                                 m) for m in match
+                ]
             else:
                 match_type = MatchType.failed
                 lib_type = LibraryType.unknown
@@ -443,7 +473,7 @@ class Resolver:
 
 def cross_check(item):
     """
-    Check for all requirements that crosses project boundaries
+    Check for all requirements that crosses project boundaries.
     """
     local_name, jsons_data = item
     local_data = jsons_data.pop(local_name)
@@ -454,9 +484,12 @@ def cross_check(item):
     cross = []
     libraries = {}
     for requirement in requirements:
-        (matches,
-         match_type,
-         lib_type,) = resolve.resolve_requirement(local_context, requirement)
+        (
+            matches,
+            match_type,
+            lib_type,
+        ) = resolve.resolve_requirement(local_context,
+                                        requirement)
         if lib_type is not LibraryType.external_project:
             continue
         for library, project in matches:
@@ -464,7 +497,11 @@ def cross_check(item):
                 if project not in cross:
                     cross.append(project)
                 if library not in libraries:
-                    libraries[library] = {'match_types': [], 'lib_types': [], 'count': 0}
+                    libraries[library] = {
+                        'match_types': [],
+                        'lib_types': [],
+                        'count': 0
+                    }
                 libraries[library]['match_types'].append(match_type)
                 libraries[library]['lib_types'].append(lib_type)
                 libraries[library]['count'] += 1
@@ -514,13 +551,15 @@ def load_json(item):
     names = [name] + list(names)
     iqrs = result['libraries']['iqrs']
     resolved = result['libraries']['resolved']
-    lazy = result['libraries'].get('last', result['libraries'].get('guesses', set()))
+    lazy = result['libraries'].get(
+        'last',
+        result['libraries'].get('guesses',
+                                set()))
     context = LibraryContext(len(coq_ext) + level, names, iqrs, resolved, lazy)
     return name, {'requirements': result['requirements'], 'context': context}
 
 
 from multiprocessing import Pool
-
 
 dirs = list(os.listdir("/workspace/datasets/pearls/repos"))
 root = Path("/workspace/datasets/pearls/repos")
@@ -579,10 +618,9 @@ variants = [name_variants(project) for project in projects]
 reduced_counted = {}
 for name in counted:
     first = name.split('.')[0]
-    if not (
-        any(first in project for project in variants)
-        or any(first.lower() in project for project in variants)
-    ):
+    if not (any(first in project
+                for project in variants) or any(first.lower() in project
+                                                for project in variants)):
         reduced_counted[name] = counted[name]
 
 with open("reduced_counted.json", "w") as f:

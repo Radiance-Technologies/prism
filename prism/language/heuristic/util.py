@@ -4,7 +4,7 @@ Provides internal utilities for heuristic parsing of Coq source files.
 
 import re
 from functools import partialmethod
-from typing import Iterable, List, Optional, Tuple, Set
+from typing import Iterable, List, Optional, Set, Tuple
 
 from prism.util.re import regex_from_options
 
@@ -405,17 +405,19 @@ class ParserUtils:
 
     See https://coq.inria.fr/refman/language/core/basic.html#attributes.
     """
-    requirement_starters = regex_from_options(
-        {
-            "From",
-            "Require"
-        },
-        True,
-        False)
+    requirement_starters = regex_from_options({"From",
+                                               "Require"},
+                                              True,
+                                              False)
     """
     Commands to require loading compiled files and libraries.
     """
-    logical_path_definers = regex_from_options(['Require Import', 'Require Export', 'Require'], False, False)
+    logical_path_definers = regex_from_options(
+        ['Require Import',
+         'Require Export',
+         'Require'],
+        False,
+        False)
     """
     Used to define logical paths of loaded files and libraries.
     """
@@ -501,9 +503,8 @@ class ParserUtils:
         reqs = [r for r in reqs if r]
         # Check if there is a From command
         if cls.defines_requirement(reqs[0]):
-            dirpath = ''.join(
-                re.split(cls.requirement_starters, reqs.pop(0))
-            ).strip()
+            dirpath = ''.join(re.split(cls.requirement_starters,
+                                       reqs.pop(0))).strip()
         # Split remainder requirements, accounting for multiple
         # requirements in a single string.
         reqs = [r_ for r in reqs for r_ in r.split() if r_]
@@ -513,9 +514,7 @@ class ParserUtils:
             reqs = ['.'.join((dirpath, r)) for r in reqs if r]
         # Remove period that end the sentence and remove
         # leading and trailing whitespaces.
-        return {
-            r.rstrip('.').lstrip(' ').rstrip(' ') for r in reqs if r
-        }
+        return {r.rstrip('.').lstrip(' ').rstrip(' ') for r in reqs if r}
 
     is_fail = partialmethod(_is_command_type, re.compile("^Fail"))
     """

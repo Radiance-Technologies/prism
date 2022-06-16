@@ -3,11 +3,11 @@ Common project-related utilities.
 """
 
 import os
-import urllib.parse
 import re
+import urllib.parse
 from pathlib import Path
-from typing import Union, Set
 from re import sub
+from typing import Set, Union
 
 URL = str
 
@@ -31,20 +31,12 @@ def camel_case_names(name: str) -> Set[str]:
         Camel case variations of the name.
     """
     names = set()
-    names.add(
-        sub(r"(-)+", " ", name).title().replace(" ", "")
-    )
-    names.add(
-        sub(r"(_)+", " ", name).title().replace(" ", "")
-    )
-    names.add(
-        sub(r"(-|_)+", " ", name).title().replace(" ", "")
-    )
+    names.add(sub(r"(-)+", " ", name).title().replace(" ", ""))
+    names.add(sub(r"(_)+", " ", name).title().replace(" ", ""))
+    names.add(sub(r"(-|_)+", " ", name).title().replace(" ", ""))
     parts = name.split("coq")
     parts = [part.title() for part in parts]
-    names.add(
-        'Coq'.join(parts)
-    )
+    names.add('Coq'.join(parts))
     return names
 
 

@@ -1,13 +1,19 @@
 """
 Module for representing coq dependencies.
 """
-import networkx as nx
-from typing import List, Tuple
 from dataclasses import dataclass
-from .library import LibraryAlias, ProjectCoqLibrary, ProjectCoqLibraryRequirement
-from .root import Project
+from typing import List, Tuple
+
+import networkx as nx
+
+from .library import (
+    LibraryAlias,
+    ProjectCoqLibrary,
+    ProjectCoqLibraryRequirement,
+)
 from .logical import LogicalName
-from .type import EdgeIdSet, NodeIdSet, NodeType, DataDict, NodeId, EdgeType
+from .root import Project
+from .type import DataDict, EdgeIdSet, EdgeType, NodeId, NodeIdSet, NodeType
 
 
 @dataclass
@@ -16,7 +22,7 @@ class ProjectCoqDependency(Project):
     A node that will connect requirements to ProjectCoqLibrary nodes.
 
     This node will have a inward edge from the root node as it is a
-    child of the root node. It will have outward edges to the 
+    child of the root node. It will have outward edges to the
     requirement nodes that establish the dependency and to
     ProjectCoqLibrary nodes in the graph that satisfy the requirement.
 
@@ -32,10 +38,10 @@ class ProjectCoqDependency(Project):
         return self.hash
 
     def _connect_to_requirements(
-        self,
-        graph: nx.Graph,
-        requirements: NodeIdSet
-    ) -> Tuple[NodeIdSet, EdgeIdSet]:
+            self,
+            graph: nx.Graph,
+            requirements: NodeIdSet) -> Tuple[NodeIdSet,
+                                              EdgeIdSet]:
         """
         Connect this dependency to matching requirements.
 
@@ -54,17 +60,19 @@ class ProjectCoqDependency(Project):
             The sets of added nodes and edges, respectively.
         """
         added_edges = set()
-        edges = EdgeType.DependencyToRequirement.out_edge_iter(self.node, requirements)
+        edges = EdgeType.DependencyToRequirement.out_edge_iter(
+            self.node,
+            requirements)
         for edge_id, edge_data in edges:
             graph.add_edge(*edge_id, **edge_data)
             added_edges.add(edge_id)
         return set(), added_edges
 
     def _connect_to_libraries(
-        self,
-        graph: nx.Graph,
-        libraries: NodeIdSet
-    ) -> Tuple[NodeIdSet, EdgeIdSet]:
+            self,
+            graph: nx.Graph,
+            libraries: NodeIdSet) -> Tuple[NodeIdSet,
+                                           EdgeIdSet]:
         """
         Add edges from this node to matching libraries.
 
@@ -90,10 +98,10 @@ class ProjectCoqDependency(Project):
         return set(), added_edges
 
     def _connect_from_libraries(
-        self,
-        graph: nx.Graph,
-        libraries: NodeIdSet
-    ) -> Tuple[NodeIdSet, EdgeIdSet]:
+            self,
+            graph: nx.Graph,
+            libraries: NodeIdSet) -> Tuple[NodeIdSet,
+                                           EdgeIdSet]:
         """
         Add edges from matching libraries to this node.
 
@@ -123,7 +131,8 @@ class ProjectCoqDependency(Project):
         self,
         graph: nx.Graph,
         edgetypes: List[EdgeType],
-    ) -> Tuple[NodeIdSet, EdgeIdSet]:
+    ) -> Tuple[NodeIdSet,
+               EdgeIdSet]:
         """
         Connect the IQR node to other nodes in the graph.
 
@@ -173,20 +182,22 @@ class ProjectCoqDependency(Project):
         """
         Find requirements that match this dependency name.
 
-        Search the graph for requirements that have the same
-        logical name as this dependency.
+        Search the graph for requirements that have the same logical
+        name as this dependency.
         """
         return ProjectCoqLibraryRequirement.nodes_from_graph(
             graph,
-            lambda n, d: self.logical_name == d.get('requirement', None),
+            lambda n,
+            d: self.logical_name == d.get('requirement',
+                                          None),
         )
 
     def find_matching_library(self, graph: nx.Graph) -> NodeIdSet:
         """
         Find libraries that match this dependency name.
 
-        Search the graph for libraries that have the same
-        logical name as this dependency.
+        Search the graph for libraries that have the same logical name
+        as this dependency.
         """
 
         def match(_, d):
@@ -217,7 +228,7 @@ class ProjectCoqDependency(Project):
         """
         return {
             'logical_name': self.logical_name,
-            "typename": self.typename, 
+            "typename": self.typename,
         }
 
     def init_parent(self) -> Project:
@@ -233,14 +244,14 @@ class ProjectCoqDependency(Project):
         return self.super
 
     @classmethod
-    def init_from_node(cls, graph: nx.Graph, node: NodeId) -> 'ProjectCoqDependency':
+    def init_from_node(
+            cls,
+            graph: nx.Graph,
+            node: NodeId) -> 'ProjectCoqDependency':
         """
         Intialize the ProjectNode instance from a node in the graph.
         """
         super_node = cls.get_super_node(graph, node)
         super_instance = Project.init_from_node(graph, super_node)
         logical_name = graph.nodes[node]['logical_name']
-        return cls.from_super(
-            super_instance,
-            logical_name
-        )
+        return cls.from_super(super_instance, logical_name)
