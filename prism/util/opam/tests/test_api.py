@@ -69,6 +69,66 @@ class TestOpamAPI(unittest.TestCase):
         }
         self.assertEqual(actual, expected)
 
+    def test_install_remove(self):
+        """
+        Test installation and removal of a single package.
+
+        Test success by searching in output of `opam list -i`
+        """
+        pkg = 'coq-shell'
+        r = bash.run(f"opam list -i {pkg}")
+        r.check_returncode()
+        returned = r.stderr
+        self.assertTrue("No matches found" in returned)
+
+        OpamAPI.install(pkg, version='1')
+
+        r = bash.run(f"opam list -i {pkg}")
+        r.check_returncode()
+        returned = r.stdout
+        self.assertTrue("coq-shell 1           Simplified" in returned)
+
+        OpamAPI.remove_pkg(pkg)
+
+        r = bash.run(f"opam list -i {pkg}")
+        r.check_returncode()
+        returned = r.stderr
+        self.assertTrue("No matches found" in returned)
+
+    def test_repo_add_remove(self):
+        """
+        Test the addition and removal of an opam repository.
+
+        Test success by searching in output of `opam repo list`
+        """
+        repo_name = 'coq-released'
+        repo_addr = 'https://coq.inria.fr/opam/released'
+
+        r = bash.run("opam repo list")
+        r.check_returncode()
+        returned = r.stdout
+        self.assertFalse(
+            "coq-released "
+            "https://coq.inria.fr/opam/released" in returned)
+
+        OpamAPI.add_repo(repo_name, repo_addr)
+
+        r = bash.run("opam repo list")
+        r.check_returncode()
+        returned = r.stdout
+        self.assertTrue(
+            "coq-released "
+            "https://coq.inria.fr/opam/released" in returned)
+
+        OpamAPI.remove_repo(repo_name)
+
+        r = bash.run("opam repo list")
+        r.check_returncode()
+        returned = r.stdout
+        self.assertFalse(
+            "coq-released "
+            "https://coq.inria.fr/opam/released" in returned)
+
     def test_set_switch(self):
         """
         Verify that a switch may be temporarily set.

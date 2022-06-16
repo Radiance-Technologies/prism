@@ -67,6 +67,30 @@ class OpamAPI:
         return environ
 
     @classmethod
+    def add_repo(cls, repo_name: str, repo_addr: Optional[str] = None) -> None:
+        """
+        Add a repo to the current switch.
+
+        Parameters
+        ----------
+        repo_name : str
+            The name of an opam repository.
+
+        repo_addr : str
+            The address of the repository. If omitted,
+            the repo_name will be searched in already existing
+            repos on the switch.
+
+        Exceptions
+        ----------
+        subprocess.CalledProcessError
+            If the addition fails it will raise this exception
+        """
+        if repo_addr is not None:
+            repo_name = f"{repo_name} {repo_addr}"
+        cls.run(f"opam repo add {repo_name}")
+
+    @classmethod
     def create_switch(
             cls,
             switch_name: str,
@@ -180,6 +204,66 @@ class OpamAPI:
             VersionConstraint.parse(dep[1] if len(dep) > 1 else "")
             for dep in dependencies
         }
+
+    @classmethod
+    def install(cls, pkg: str, version: Optional[str] = None) -> None:
+        """
+        Install the indicated package.
+
+        Parameters
+        ----------
+        pkg : str
+            The name of an OCaml package.
+        version : Optional[str], optional
+            A specific version of the package, by default None.
+            If not given, then the default version will be installed.
+
+        Exceptions
+        ----------
+        CalledProcessError
+            If the installation fails (due to bad version usually)
+            it will raise this exception
+        """
+        if version is not None:
+            pkg = f"{pkg}.{version}"
+        cls.run(f"opam install {pkg}")
+
+    @classmethod
+    def remove_pkg(
+        cls,
+        pkg: str,
+    ) -> None:
+        """
+        Remove the indicated package.
+
+        Parameters
+        ----------
+        pkg : str
+            The name of an OCaml package.
+
+        Exceptions
+        ----------
+        CalledProcessError
+            If the removal fails it will raise this exception
+        """
+        cls.run(f"opam remove {pkg}")
+
+    @classmethod
+    def remove_repo(cls, repo_name: str) -> None:
+        """
+        Remove a repo from the current switch.
+
+        Parameters
+        ----------
+        repo_name : str
+            The name of an opam repository.
+
+        Exceptions
+        ----------
+        CalledProcessError
+            If the removal fails it will raise this exception
+        """
+        cls.run(f"opam repo remove {repo_name}")
 
     @classmethod
     def remove_switch(cls, switch_name: str) -> None:
