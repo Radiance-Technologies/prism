@@ -182,6 +182,53 @@ class OpamAPI:
         }
 
     @classmethod
+    def install(cls, pkg: str, version: Optional[str] = None) -> None:
+        """
+        Install the indicated package.
+
+        Parameters
+        ----------
+        pkg : str
+            The name of an OCaml package.
+        version : Optional[str], optional
+            A specific version of the package, by default None.
+            If not given, then the default version will be installed.
+
+        Returns
+        -------
+        None
+
+        Exceptions
+        ----------
+        subprocess.CalledProcessError
+            If the installation fails (due to bad version usually)
+            it will raise this exception
+        """
+        if version is not None:
+            pkg = f"{pkg}.{version}"
+        cls.run(f"opam install {pkg}")
+
+    @classmethod
+    def remove_pkg(
+        cls,
+        pkg: str,
+    ) -> None:
+        """
+        Remove the indicated package.
+
+        Parameters
+        ----------
+        pkg : str
+            The name of an OCaml package.
+
+        Exceptions
+        ----------
+        CalledProcessError
+            If the removal fails it will raise this exception
+        """
+        cls.run(f"opam remove {pkg}")
+
+    @classmethod
     def remove_switch(cls, switch_name: str) -> None:
         """
         Remove the indicated switch.
