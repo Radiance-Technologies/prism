@@ -2,8 +2,8 @@
 A collection of utilities for iterable containers.
 """
 
-from dataclasses import InitVar, dataclass, field
-from typing import Generic, Iterable, Iterator, Sequence, TypeVar, Union
+from dataclasses import InitVar, dataclass, field, fields
+from typing import Any, Dict, Generic, Iterable, Iterator, Sequence, TypeVar, Union
 
 from prism.util.compare import Bottom, Comparable, Top
 from prism.util.radpytools import unzip
@@ -140,3 +140,17 @@ class CompareIterator(Generic[C]):
                 "All iterators must be oriented in the same direction.")
         nexts.append(-1 if reverse else Top())
         return max(nexts) if reverse else min(nexts)
+
+
+def unpack(dc) -> tuple:
+    """
+    Return tuple of dataclass field names and values.
+    """
+    return tuple(getattr(dc, field.name) for field in fields(dc))
+
+
+def shallow_asdict(obj) -> Dict[str, Any]:
+    """
+    Non-recursively convert dataclass into dictionary.
+    """
+    return dict((field.name, getattr(obj, field.name)) for field in fields(obj))

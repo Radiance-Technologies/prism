@@ -119,6 +119,10 @@ class HeuristicParser:
         """
         Custom tactics defined in the document via `Ltac` commands.
         """
+        requirements: Set[str] = default_field(set())
+        """
+        Required modules and files in parsed file.
+        """
         _depth: int = field(init=False)
         """
         The depth after the final recorded sentence.
@@ -292,6 +296,20 @@ class HeuristicParser:
             self._increment_depth(1)
             self._add_proof_index(index)
 
+        def _add_requirements(self, sentence: str) -> None:
+            """
+            Record requirements given by sentence.
+
+            Parameters
+            ----------
+            sentence : str
+                An unaltered sentence from the document presumed to
+                occur after any previously recorded sentence in the
+                statistics.
+            """
+            new_reqs = ParserUtils.extract_requirements(sentence)
+            self.requirements = self.requirements.union(new_reqs)
+
         def _define_tactic(self, sentence_sans_attributes: str) -> None:
             """
             Record the definition of a custom tactic.
@@ -362,6 +380,8 @@ class HeuristicParser:
                 elif ParserUtils.is_tactic(sentence_sans_attributes,
                                            self.custom_tactics):
                     self._add_tactic()
+                elif ParserUtils.defines_requirement(sentence_sans_attributes):
+                    self._add_requirements(sentence_sans_attributes)
                 else:
                     if ParserUtils.is_query(sentence_sans_attributes):
                         index = self.num_sentences

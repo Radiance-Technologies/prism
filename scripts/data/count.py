@@ -5,22 +5,64 @@ import json
 import os
 from multiprocessing import Pool
 from typing import Dict, Tuple
+from pathlib import Path
 
 from prism.project.base import SEM
-from prism.project.repo import ProjectRepo
+from prism.project import ProjectDir
+from re import sub
+
+
+def camel_case(s):
+    s = sub(r"(-)+", " ", s).title().replace(" ", "")
+    return s
+
+
+def _variants(name):
+    variants = set()
+    variants.add(name)
+    lower = name.lower()
+    if lower != name:
+        variants.add(lower)
+    variants.add(name.replace('-', ''))
+    variants.add(name.replace('-', '_'))
+    variants.add(camel_case(name))
+    if '-coq' in name:
+        variants = variants.union(_variants(name.replace('-coq', '')))
+    if 'coq-' in name:
+        variants = variants.union(_variants(name.replace('coq-', '')))
+    if '-coq-' in name:
+        variants = variants.union(_variants(name.replace('-coq-', '')))
+    return variants
+
+
+def ignore_roots(path):
+    path = Path(path)
+    proj_dirs = set(next(os.walk(path.parent))[1])
+    projects = proj_dirs
+    projects.remove(path.stem)
+    for p in iter(proj_dirs):
+        projects = projects.union(_variants(p))
+    return projects
 
 
 def proofs(path: os.PathLike) -> Tuple[str, int]:
     """
     Count number proofs.
     """
-    project = ProjectRepo(path, sentence_extraction_method=SEM.HEURISTIC)
+    path = Path(path)
+    ignore = ignore_roots(path)
+
+    project = ProjectDir(path, sentence_extraction_method=SEM.HEURISTIC)
     parser = project.sentence_extraction_method.parser()
     file_list = project.get_file_list()
     count: int = 0
+    project_dirs = []
     for file in file_list:
+        if Path(file).stem in ignore or any(Path(file).is_relative_to(p) for p in project_dirs):
+            project_dirs.append(Path(file))
+            continue
         document = project.get_file(file)
-        sentences = ProjectRepo.extract_sentences(
+        sentences = ProjectDir.extract_sentences(
             document,
             glom_proofs=False,
             sentence_extraction_method=project.sentence_extraction_method)
@@ -33,12 +75,20 @@ def sentences(path: os.PathLike) -> Tuple[str, int]:
     """
     Count number of sentences.
     """
-    project = ProjectRepo(path, sentence_extraction_method=SEM.HEURISTIC)
+    path = Path(path)
+    ignore = ignore_roots(path)
+
+    project = ProjectDir(path, sentence_extraction_method=SEM.HEURISTIC)
     file_list = project.get_file_list()
     count: int = 0
+    project_dirs = []
+    for file in file_list:
+        if Path(file).stem in ignore or any(Path(file).is_relative_to(p) for p in project_dirs):
+            project_dirs.append(Path(file))
+            continue
     for file in file_list:
         document = project.get_file(file)
-        sentences = ProjectRepo.extract_sentences(
+        sentences = ProjectDir.extract_sentences(
             document,
             glom_proofs=False,
             sentence_extraction_method=project.sentence_extraction_method)
