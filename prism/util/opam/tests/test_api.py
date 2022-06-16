@@ -95,6 +95,40 @@ class TestOpamAPI(unittest.TestCase):
         returned = r.stderr
         self.assertTrue("No matches found" in returned)
 
+    def test_repo_add_remove(self):
+        """
+        Test the addition and removal of an opam repository.
+
+        Test success by searching in output of `opam repo list`
+        """
+        repo_name = 'coq-released'
+        repo_addr = 'https://coq.inria.fr/opam/released'
+
+        r = bash.run("opam repo list")
+        r.check_returncode()
+        returned = r.stdout
+        self.assertFalse(
+            "coq-released "
+            "https://coq.inria.fr/opam/released" in returned)
+
+        OpamAPI.add_repo(repo_name, repo_addr)
+
+        r = bash.run("opam repo list")
+        r.check_returncode()
+        returned = r.stdout
+        self.assertTrue(
+            "coq-released "
+            "https://coq.inria.fr/opam/released" in returned)
+
+        OpamAPI.remove_repo(repo_name)
+
+        r = bash.run("opam repo list")
+        r.check_returncode()
+        returned = r.stdout
+        self.assertFalse(
+            "coq-released "
+            "https://coq.inria.fr/opam/released" in returned)
+
     def test_set_switch(self):
         """
         Verify that a switch may be temporarily set.

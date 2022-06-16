@@ -67,6 +67,30 @@ class OpamAPI:
         return environ
 
     @classmethod
+    def add_repo(cls, repo_name: str, repo_addr: Optional[str] = None) -> None:
+        """
+        Add a repo to the current switch.
+
+        Parameters
+        ----------
+        repo_name : str
+            The name of an opam repository.
+
+        repo_addr : str
+            The address of the repository. If omitted,
+            the repo_name will be searched in already existing
+            repos on the switch.
+
+        Exceptions
+        ----------
+        subprocess.CalledProcessError
+            If the addition fails it will raise this exception
+        """
+        if repo_addr is not None:
+            repo_name = f"{repo_name} {repo_addr}"
+        cls.run(f"opam repo add {repo_name}")
+
+    @classmethod
     def create_switch(
             cls,
             switch_name: str,
@@ -194,13 +218,9 @@ class OpamAPI:
             A specific version of the package, by default None.
             If not given, then the default version will be installed.
 
-        Returns
-        -------
-        None
-
         Exceptions
         ----------
-        subprocess.CalledProcessError
+        CalledProcessError
             If the installation fails (due to bad version usually)
             it will raise this exception
         """
@@ -227,6 +247,23 @@ class OpamAPI:
             If the removal fails it will raise this exception
         """
         cls.run(f"opam remove {pkg}")
+
+    @classmethod
+    def remove_repo(cls, repo_name: str) -> None:
+        """
+        Remove a repo from the current switch.
+
+        Parameters
+        ----------
+        repo_name : str
+            The name of an opam repository.
+
+        Exceptions
+        ----------
+        CalledProcessError
+            If the removal fails it will raise this exception
+        """
+        cls.run(f"opam repo remove {repo_name}")
 
     @classmethod
     def remove_switch(cls, switch_name: str) -> None:
