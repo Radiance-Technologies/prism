@@ -87,7 +87,7 @@ class OpamAPI:
         Exceptions
         ----------
         subprocess.CalledProcessError
-            If the installation fails it will raise this exception
+            If the addition fails it will raise this exception
         """
         if repo_addr is not None:
             repo_name = f"{repo_name} {repo_addr}"
@@ -221,7 +221,7 @@ class OpamAPI:
         Exceptions
         ----------
         subprocess.CalledProcessError
-            If the installation fails it will raise this exception
+            If the removal fails it will raise this exception
         """
         cls.run(f"opam repo remove {repo_name}")
 
