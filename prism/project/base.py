@@ -89,7 +89,8 @@ class Project(ABC):
             dir_abspath: str,
             metadata: Optional[Union[PathLike,
                                      ProjectMetadata]] = None,
-            sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI):
+            sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI,
+            num_cores: Optional[int] = None):
         """
         Initialize Project object.
         """
@@ -112,6 +113,7 @@ class Project(ABC):
         self.size_bytes = self._get_size_bytes()
         self.sentence_extraction_method = sentence_extraction_method
         self.metadata = metadata
+        self.num_cores = num_cores
 
     @property
     def build_cmd(self) -> List[str]:
@@ -123,7 +125,11 @@ class Project(ABC):
         List[str]
             List of build commands located in project metadata.
         """
-        return self.metadata.build_cmd
+        cmd_list = self.metadata.build_cmd
+        for i in range(len(cmd_list)):
+            if 'make' in cmd_list[i]:
+                cmd_list[i] = cmd_list[i] + " -j{0}".format(self.num_cores)
+        return cmd_list
 
     @property
     def clean_cmd(self) -> List[str]:
