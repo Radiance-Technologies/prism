@@ -10,13 +10,16 @@ import unittest
 import git
 
 from prism.data.document import CoqDocument
-from prism.project import (
-    Project,
-    ProjectDir,
-    ProjectRepo,
-    SentenceExtractionMethod,
-)
-from prism.project.base import SEM
+# from prism.project import (
+#     Project,
+#     ProjectDir,
+#     ProjectRepo,
+#     SentenceExtractionMethod,
+# )
+from prism.project.base import SEM, Project, SentenceExtractionMethod
+from prism.project.dir import ProjectDir
+from prism.project.metadata.storage import MetadataStorage
+from prism.project.repo import ProjectRepo
 from prism.tests import _COQ_EXAMPLES_PATH, _MINIMAL_METADATA
 
 
@@ -174,6 +177,32 @@ class TestProject(unittest.TestCase):
             self.assertTrue(sentence.endswith('.'))
         # Clean up
         os.chdir(old_dir)
+        del test_repo
+        shutil.rmtree(os.path.join(repo_path))
+
+    def test_build_and_get_iqr(self):
+        """
+        Test `Project` method builds and extracts IQR flags.
+        """
+        test_path = os.path.dirname(__file__)
+        repo_path = os.path.join(test_path, "circuits")
+        if not os.path.exists(repo_path):
+            test_repo = git.Repo.clone_from(
+                "https://github.com/coq-contribs/circuits",
+                repo_path)
+        else:
+            test_repo = git.Repo(repo_path)
+        # Checkout HEAD of master as of March 14, 2022
+        master_hash = "f2cec6067f2c58e280c5b460e113d738b387be15"
+        test_repo.git.checkout(master_hash)
+        metadata_file = "pearls/dataset/agg_coq_repos.yml"
+        storage = MetadataStorage.load(metadata_file)
+        metadata = storage.get("circuits")
+        project = ProjectRepo(repo_path, metadata, SEM.HEURISTIC)
+        output = project.build_and_get_iqr()
+        self.assertEqual(output, project.serapi_options)
+        self.assertEqual(output, "-R .,Circuits")
+        # Clean up
         del test_repo
         shutil.rmtree(os.path.join(repo_path))
 
