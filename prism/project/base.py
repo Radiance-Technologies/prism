@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from enum import Enum, auto
 from functools import partialmethod
 from os import PathLike, path
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Set, Tuple, Union
 
 from seutil import BashUtils
 
@@ -16,6 +16,7 @@ from prism.data.document import CoqDocument
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
 from prism.project.exception import ProjectBuildError
 from prism.project.metadata import ProjectMetadata
+from prism.project.strace import CoqContext, strace_build
 from prism.util.io import infer_format
 from prism.util.logging import default_log_level
 
@@ -268,6 +269,46 @@ class Project(ABC):
             logger.debug(msg)
         return (r.return_code, r.stdout, r.stderr)
 
+    def _process_iqr_from_coq_contexts(
+            self,
+            coq_contexts: List[CoqContext]) -> str:
+        """
+        Resolve IQR paths to project root and combine them.
+
+        Parameters
+        ----------
+        coq_contexts : List[CoqContext]
+            Collected `CoqContext` objects from build process
+
+        Returns
+        -------
+        str
+            Fully-formed IQR string with all paths resolved to project
+            root
+        """
+        total_flags: Set[str] = set()
+        for ctx in coq_contexts:
+            pwd = pathlib.Path(ctx.env['PWD'])
+            if ctx.iqr.I:
+                for cur_i in ctx.iqr.I:
+                    new_i = (pwd / pathlib.Path(cur_i)).relative_to(self.path)
+                    i_str = f"-I {new_i}"
+                    total_flags.add(i_str)
+            if ctx.iqr.Q:
+                for cur_q in ctx.iqr.Q:
+                    new_q = (pwd / pathlib.Path(cur_q[1])).relative_to(
+                        self.path)
+                    q_str = f"-Q {cur_q[0]},{new_q}"
+                    total_flags.add(q_str)
+            if ctx.iqr.R:
+                for cur_r in ctx.iqr.R:
+                    new_r = (pwd / pathlib.Path(cur_r[1])).relative_to(
+                        self.path)
+                    r_str = f"-R {cur_r[0]},{new_r}"
+                    total_flags.add(r_str)
+            iqr_str = " ".join(total_flags)
+            return iqr_str
+
     @abstractmethod
     def _pre_get_random(self, **kwargs):
         """
@@ -286,6 +327,26 @@ class Project(ABC):
     """
     Build the project.
     """
+
+    def build_and_get_iqr(self) -> str:
+        """
+        Build project and get IQR options, simultaneously.
+
+        Invoking this function will replace any serapi_options already
+        present in the metadata.
+
+        Returns
+        -------
+        str
+            The IQR flags string that should be stored in serapi_options
+        """
+        strace_result: List[Tuple[str, CoqContext]] = []
+        for cmd in self.build_cmd:
+            strace_result += strace_build([cmd], workdir=self.path)
+        contexts = [i[1] for i in strace_result]
+        self.metadata.serapi_options = self._process_iqr_from_coq_contexts(
+            contexts)
+        return self.serapi_options
 
     clean = partialmethod(_make, "clean", "Cleaning")
     """
