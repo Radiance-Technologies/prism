@@ -91,7 +91,7 @@ class Project(ABC):
             metadata: Optional[Union[PathLike,
                                      ProjectMetadata]] = None,
             sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI,
-            num_cores: int = 1):
+            num_cores: Optional[int] = None):
         """
         Initialize Project object.
         """
@@ -128,7 +128,7 @@ class Project(ABC):
         """
         cmd_list = self.metadata.build_cmd
         for i in range(len(cmd_list)):
-            if 'make' in cmd_list[i]:
+            if 'make' in cmd_list[i] and self.num_cores is not None:
                 cmd_list[i] = cmd_list[i] + " -j{0}".format(self.num_cores)
         return cmd_list
 
