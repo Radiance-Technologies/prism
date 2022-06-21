@@ -91,7 +91,7 @@ class Project(ABC):
             metadata: Optional[Union[PathLike,
                                      ProjectMetadata]] = None,
             sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI,
-            num_cores: Optional[int] = None):
+            num_cores: int = 1):
         """
         Initialize Project object.
         """
