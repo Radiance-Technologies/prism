@@ -195,8 +195,12 @@ class TestProject(unittest.TestCase):
         # Checkout HEAD of master as of March 14, 2022
         master_hash = "f2cec6067f2c58e280c5b460e113d738b387be15"
         test_repo.git.checkout(master_hash)
-        metadata_file = "pearls/dataset/agg_coq_repos.yml"
-        storage = MetadataStorage.load(metadata_file)
+        try:
+            # If this is being run from prism
+            storage = MetadataStorage.load("pearls/dataset/agg_coq_repos.yml")
+        except FileNotFoundError:
+            # If this is being run from coq-pearls
+            storage = MetadataStorage.load("dataset/agg_coq_repos.yml")
         metadata = storage.get("circuits")
         project = ProjectRepo(repo_path, metadata, SEM.HEURISTIC)
         output = project.build_and_get_iqr()
