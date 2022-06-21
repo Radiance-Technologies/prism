@@ -17,7 +17,9 @@ import lark
 from dataclasses_json import dataclass_json
 from strace_parser.parser import get_parser
 
-CONTEXT_EXT = '._pycoq_context'
+_CONTEXT_EXT = '._pycoq_context'
+_EXECUTABLE = 'coqc'
+_REGEX = r'.*\.v$'
 
 
 @dataclass
@@ -37,9 +39,9 @@ class IQR():
     Dataclass for storing IQR arguments.
     """
 
-    I = List[str]  # noqa: E741
-    Q = List[List[str]]  # List of pairs of str
-    R = List[List[str]]  # List of pairs of str
+    I: List[str]  # noqa: E741
+    Q: List[List[str]]  # List of pairs of str
+    R: List[List[str]]  # List of pairs of str
 
 
 @dataclass_json
@@ -54,6 +56,12 @@ class CoqContext:
     target: str
     args: List[str] = field(default_factory=list)
     env: Dict[str, str] = field(default_factory=dict)
+
+    def __post_init__(self):
+        """
+        Grab the internal IQR args.
+        """
+        self.iqr = self.IQR()
 
     def IQR(self) -> IQR:
         """
@@ -96,7 +104,7 @@ class CoqContext:
         return IQR(I=args.I, Q=args.Q, R=args.R)
 
 
-def dict_of_list(el: Sequence[str], split: str = '=') -> Dict[str, str]:
+def _dict_of_list(el: Sequence[str], split: str = '=') -> Dict[str, str]:
     """
     Transform a list of strings to dict.
 
@@ -124,7 +132,7 @@ def dict_of_list(el: Sequence[str], split: str = '=') -> Dict[str, str]:
     return d
 
 
-def context_fname(target_fname: str) -> str:
+def _context_fname(target_fname: str) -> str:
     """
     Return context filename with proper extension.
 
@@ -138,31 +146,34 @@ def context_fname(target_fname: str) -> str:
     str
         Target filename with extension
     """
-    return target_fname + CONTEXT_EXT
+    return target_fname + _CONTEXT_EXT
 
 
-def dump_context(fname: str, coq_context: CoqContext) -> str:
+def _dump_context(fname: str, coq_context: CoqContext) -> str:
     """
     Return fname of dumped coq_context.
     """
     with open(fname, 'w') as fout:
         logging.info(f'dump_context: recording context to {fname}')
         fout.write(coq_context.to_json())
-        return (fname)
+        return (fname, coq_context)
 
 
-def record_context(line: str, parser: lark.Lark, regex: str, source=''):
+def _record_context(line: str,
+                    parser: lark.Lark,
+                    regex: str,
+                    source='') -> List[str]:
     """
     Write a CoqContext record for each executable arg matching regex.
 
     creates and writes to a file a pycoq_context record for each
     argument matching regex in a call of executable
     """
-    record = parse_strace_line(parser, line)
+    record = _parse_strace_line(parser, line)
     p_context = ProcContext(
         executable=record[0],
         args=record[1],
-        env=dict_of_list(record[2]))
+        env=_dict_of_list(record[2]))
     res = []
     for target in p_context.args:
         if re.compile(regex).fullmatch(target):
@@ -174,14 +185,14 @@ def record_context(line: str, parser: lark.Lark, regex: str, source=''):
                 args=p_context.args,
                 env=p_context.env)
             target_fname = os.path.join(pwd, target)
-            res.append(dump_context(context_fname(target_fname), coq_context))
+            res.append(_dump_context(_context_fname(target_fname), coq_context))
             logging.info(
                 f"from {source} recorded context to"
-                f" {context_fname(target_fname)}")
+                f" {_context_fname(target_fname)}")
     return res
 
 
-def hex_rep(b: str) -> str:
+def _hex_rep(b: str) -> str:
     """
     Return a hex representation of the given string.
 
@@ -206,7 +217,7 @@ def hex_rep(b: str) -> str:
         raise ValueError('in hex_rep on ' + str(b))
 
 
-def dehex_str(s: str) -> str:
+def _dehex_str(s: str) -> str:
     """
     Decode hex represnetation of string into the original string.
 
@@ -231,7 +242,7 @@ def dehex_str(s: str) -> str:
         return s
 
 
-def dehex(
+def _dehex(
     d: Union[str,
              List[str],
              Dict[Any,
@@ -254,15 +265,15 @@ def dehex(
         Output dehexified string (or collection thereof)
     """
     if isinstance(d, str):
-        return dehex_str(d)
+        return _dehex_str(d)
     elif isinstance(d, list):
-        return [dehex(e) for e in d]
+        return [_dehex(e) for e in d]
     elif isinstance(d, dict):
-        return {k: dehex(v) for k,
+        return {k: _dehex(v) for k,
                 v in d.items()}
 
 
-def parse_strace_line(parser: lark.Lark, line: str) -> str:
+def _parse_strace_line(parser: lark.Lark, line: str) -> str:
     """
     Parse a line of the strace output.
     """
@@ -275,7 +286,7 @@ def parse_strace_line(parser: lark.Lark, line: str) -> str:
         elif isinstance(a, lark.tree.Tree) and a.data == 'args':
             return [_conv(c) for c in a.children]
         elif isinstance(a, lark.lexer.Token):
-            return str(dehex(a))
+            return str(_dehex(a))
         else:
             raise ValueError(f"'can't parse lark object {a}")
 
@@ -292,7 +303,7 @@ def parse_strace_line(parser: lark.Lark, line: str) -> str:
     raise ValueError(f"can't parse lark object {p}")
 
 
-def parse_strace_logdir(logdir: str, executable: str, regex: str) -> List[str]:
+def _parse_strace_logdir(logdir: str, executable: str, regex: str) -> List[str]:
     """
     Parse the strace log directory.
 
@@ -309,18 +320,18 @@ def parse_strace_logdir(logdir: str, executable: str, regex: str) -> List[str]:
     for logfname_pid in os.listdir(logdir):
         with open(os.path.join(logdir, logfname_pid), 'r') as log_file:
             for line in iter(log_file.readline, ''):
-                if line.find(hex_rep(executable)) != -1:
+                if line.find(_hex_rep(executable)) != -1:
                     logging.info(f"from {logdir} from {log_file} parsing..")
-                    res += record_context(line, parser, regex, log_file)
+                    res += _record_context(line, parser, regex, log_file)
     return res
 
 
 def strace_build(
-        executable: str,
-        regex: str,
-        workdir: Optional[str],
         command: List[str],
-        strace_logdir=None) -> List[str]:
+        executable: str = _EXECUTABLE,
+        regex: str = _REGEX,
+        workdir: Optional[str] = None,
+        strace_logdir: Optional[str] = None) -> List[str]:
     """
     Trace calls of executable using regex.
 
@@ -335,29 +346,40 @@ def strace_build(
             f"pycoq: tracing {executable} accesing {regex} while "
             f"executing {command} from {workdir} with "
             f"curdir {os.getcwd()}")
-        with subprocess.Popen(['strace',
-                               '-e',
-                               'trace=execve',
-                               '-v',
-                               '-ff',
-                               '-s',
-                               '100000000',
-                               '-xx',
-                               '-ttt',
-                               '-o',
-                               logfname] + command,
+        # The cmd_str is joined and then re-split to account for any
+        # args that might appear directly in the "command"
+        cmd_str = " ".join(command)
+        popen_args = [
+            'strace',
+            '-e',
+            'trace=execve',
+            '-v',
+            '-ff',
+            '-s',
+            '100000000',
+            '-xx',
+            '-ttt',
+            '-o',
+            logfname
+        ] + cmd_str.split()
+        with subprocess.Popen(popen_args,
                               cwd=workdir,
                               text=True,
                               stdout=subprocess.PIPE,
                               stderr=subprocess.PIPE) as proc:
             for line in iter(proc.stdout.readline, ''):
                 logging.debug(f"strace stdout: {line}")
+            # Get stderr just in case
+            err_line = [line for line in iter(proc.stderr.readline, '')]
+            err_line = "\n".join(err_line)
             logging.info(
                 f"strace stderr: {proc.stderr.read()}"
                 "waiting strace to finish...")
             proc.wait()
+        if proc.returncode != 0:
+            raise RuntimeError(f"strace failed with message: {err_line}")
         logging.info('strace finished')
-        return parse_strace_logdir(logdir, executable, regex)
+        return _parse_strace_logdir(logdir, executable, regex)
 
     if strace_logdir is None:
         with tempfile.TemporaryDirectory() as _logdir:
