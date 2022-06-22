@@ -19,6 +19,7 @@ from prism.project.metadata import ProjectMetadata
 from prism.project.strace import CoqContext, strace_build
 from prism.util.io import infer_format
 from prism.util.logging import default_log_level
+from prism.util.opam.api import OpamAPI
 
 logger: logging.Logger = logging.getLogger(__name__)
 logger.setLevel(default_log_level())
@@ -351,9 +352,8 @@ class Project(ABC):
             if "make" in cmd.lower() or "dune" in cmd.lower():
                 strace_result += strace_build([cmd], workdir=self.path)
             else:
-                r = bash.run(cmd, cwd=self.path)
-                logging.debug(
-                    f"Finished running command {cmd} with return code {r}")
+                r = bash.run(cmd, cwd=self.path, env=OpamAPI._environ())
+                logging.debug(f"Command {cmd} finished with return code {r}.")
         contexts = [i[1] for i in strace_result]
         self.metadata.serapi_options = self._process_iqr_from_coq_contexts(
             contexts)

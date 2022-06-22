@@ -59,6 +59,7 @@ class OpamAPI:
         new_path = cls.opam_env.pop('PATH', None)
         environ.update(cls.opam_env)
         if new_path is not None:
+            cls.opam_env.update({'PATH': new_path})
             environ['PATH'] = os.pathsep.join([new_path, environ['PATH']])
         if cls.opam_root is not None:
             environ['OPAMROOT'] = cls.opam_root
