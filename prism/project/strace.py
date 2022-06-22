@@ -17,6 +17,8 @@ import lark
 from dataclasses_json import dataclass_json
 from strace_parser.parser import get_parser
 
+from prism.util.opam.api import OpamAPI
+
 _CONTEXT_EXT = '._pycoq_context'
 _EXECUTABLE = 'coqc'
 _REGEX = r'.*\.v$'
@@ -366,7 +368,8 @@ def strace_build(
                               cwd=workdir,
                               text=True,
                               stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE) as proc:
+                              stderr=subprocess.PIPE,
+                              env=OpamAPI._environ()) as proc:
             for line in iter(proc.stdout.readline, ''):
                 logging.debug(f"strace stdout: {line}")
             # Get stderr just in case

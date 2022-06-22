@@ -314,10 +314,10 @@ class OpamAPI:
         cls.opam_env = {}
         if switch_name is not None:
             r = cls.run(f"opam env --switch={switch_name}")
-            envs = r.stdout.split(';')[0 :-1 : 2]
+            envs: List[str] = r.stdout.split(';')[0 :-1 : 2]
             for env in envs:
                 var, val = env.strip().split("=", maxsplit=1)
-                cls.opam_env[var] = val
+                cls.opam_env[var] = val.strip("'")
         cls.opam_switch = switch_name
 
     @classmethod
