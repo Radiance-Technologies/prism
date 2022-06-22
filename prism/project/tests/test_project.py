@@ -2,10 +2,13 @@
 Test module for prism.data.project module.
 """
 import json
+import logging
 import os
 import shutil
 import subprocess
+import sys
 import unittest
+from itertools import chain
 
 import git
 
@@ -21,6 +24,7 @@ from prism.project.dir import ProjectDir
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
 from prism.tests import _COQ_EXAMPLES_PATH, _MINIMAL_METADATA
+from prism.util.opam.api import OpamAPI
 
 
 class TestProject(unittest.TestCase):
@@ -185,28 +189,42 @@ class TestProject(unittest.TestCase):
         Test `Project` method builds and extracts IQR flags.
         """
         test_path = os.path.dirname(__file__)
-        repo_path = os.path.join(test_path, "circuits")
+        repo_path = os.path.join(test_path, "CompCert")
         if not os.path.exists(repo_path):
             test_repo = git.Repo.clone_from(
-                "https://github.com/coq-contribs/circuits",
+                "https://github.com/AbsInt/CompCert",
                 repo_path)
         else:
             test_repo = git.Repo(repo_path)
-        # Checkout HEAD of master as of March 14, 2022
-        master_hash = "f2cec6067f2c58e280c5b460e113d738b387be15"
-        test_repo.git.checkout(master_hash)
         try:
             # If this is being run from prism
             storage = MetadataStorage.load("pearls/dataset/agg_coq_repos.yml")
         except FileNotFoundError:
             # If this is being run from coq-pearls
             storage = MetadataStorage.load("dataset/agg_coq_repos.yml")
-        metadata = storage.get("circuits")
+        metadata = storage.get("CompCert")
+        test_repo.git.checkout("7b3bc19117e48d601e392f2db2c135c7df1d8376")
         project = ProjectRepo(repo_path, metadata, SEM.HEURISTIC)
+        # Complete pre-req setup
+        OpamAPI.create_switch("CompCert", "4.07.1")
+        OpamAPI.set_switch("CompCert")
+        coq_version = "8.10.2"
+        OpamAPI.run(f"opam pin --yes coq {coq_version}")
+        for repo in metadata.opam_repos:
+            OpamAPI.add_repo(*repo.split())
+        for dep in chain(metadata.opam_dependencies, metadata.coq_dependencies):
+            output = dep.split(".", maxsplit=1)
+            if len(output) == 1:
+                pkg = output[0]
+                ver = None
+            else:
+                pkg, ver = output
+            OpamAPI.install(pkg, ver)
         output = project.build_and_get_iqr()
         self.assertEqual(output, project.serapi_options)
         self.assertEqual(output, "-R .,Circuits")
         # Clean up
+        OpamAPI.remove_switch("ConCert")
         del test_repo
         shutil.rmtree(os.path.join(repo_path))
 
@@ -322,4 +340,5 @@ class TestProjectDir(TestProjectRepo):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
     unittest.main()

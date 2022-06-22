@@ -10,7 +10,7 @@ from functools import partialmethod
 from os import PathLike, path
 from typing import List, Optional, Set, Tuple, Union
 
-from seutil import BashUtils
+from seutil import BashUtils, bash
 
 from prism.data.document import CoqDocument
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
@@ -302,15 +302,15 @@ class Project(ABC):
                     total_flags.add(i_str)
             if ctx.iqr.Q:
                 for cur_q in ctx.iqr.Q:
-                    new_q = (pwd / pathlib.Path(cur_q[1])).relative_to(
+                    new_q = (pwd / pathlib.Path(cur_q[0])).relative_to(
                         self.path)
-                    q_str = f"-Q {cur_q[0]},{new_q}"
+                    q_str = f"-Q {new_q},{cur_q[1]}"
                     total_flags.add(q_str)
             if ctx.iqr.R:
                 for cur_r in ctx.iqr.R:
-                    new_r = (pwd / pathlib.Path(cur_r[1])).relative_to(
+                    new_r = (pwd / pathlib.Path(cur_r[0])).relative_to(
                         self.path)
-                    r_str = f"-R {cur_r[0]},{new_r}"
+                    r_str = f"-R {new_r},{cur_r[1]}"
                     total_flags.add(r_str)
             iqr_str = " ".join(total_flags)
             return iqr_str
@@ -348,7 +348,12 @@ class Project(ABC):
         """
         strace_result: List[Tuple[str, CoqContext]] = []
         for cmd in self.build_cmd:
-            strace_result += strace_build([cmd], workdir=self.path)
+            if "make" in cmd.lower() or "dune" in cmd.lower():
+                strace_result += strace_build([cmd], workdir=self.path)
+            else:
+                r = bash.run(cmd, cwd=self.path)
+                logging.debug(
+                    f"Finished running command {cmd} with return code {r}")
         contexts = [i[1] for i in strace_result]
         self.metadata.serapi_options = self._process_iqr_from_coq_contexts(
             contexts)

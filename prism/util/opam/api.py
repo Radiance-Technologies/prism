@@ -226,7 +226,7 @@ class OpamAPI:
         """
         if version is not None:
             pkg = f"{pkg}.{version}"
-        cls.run(f"opam install {pkg}")
+        cls.run(f"opam install --yes {pkg}")
 
     @classmethod
     def remove_pkg(
