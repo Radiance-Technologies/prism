@@ -59,6 +59,7 @@ class OpamAPI:
         new_path = cls.opam_env.pop('PATH', None)
         environ.update(cls.opam_env)
         if new_path is not None:
+            cls.opam_env.update({'PATH': new_path})
             environ['PATH'] = os.pathsep.join([new_path, environ['PATH']])
         if cls.opam_root is not None:
             environ['OPAMROOT'] = cls.opam_root
@@ -226,7 +227,7 @@ class OpamAPI:
         """
         if version is not None:
             pkg = f"{pkg}.{version}"
-        cls.run(f"opam install {pkg}")
+        cls.run(f"opam install --yes {pkg}")
 
     @classmethod
     def remove_pkg(
@@ -313,10 +314,10 @@ class OpamAPI:
         cls.opam_env = {}
         if switch_name is not None:
             r = cls.run(f"opam env --switch={switch_name}")
-            envs = r.stdout.split(';')[0 :-1 : 2]
+            envs: List[str] = r.stdout.split(';')[0 :-1 : 2]
             for env in envs:
                 var, val = env.strip().split("=", maxsplit=1)
-                cls.opam_env[var] = val
+                cls.opam_env[var] = val.strip("'")
         cls.opam_switch = switch_name
 
     @classmethod
