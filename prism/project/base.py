@@ -347,14 +347,13 @@ class Project(ABC):
         str
             The IQR flags string that should be stored in serapi_options
         """
-        strace_result: List[Tuple[str, CoqContext]] = []
+        contexts: List[CoqContext] = []
         for cmd in self.build_cmd:
             if "make" in cmd.lower() or "dune" in cmd.lower():
-                strace_result += strace_build([cmd], workdir=self.path)
+                contexts += strace_build([cmd], workdir=self.path)
             else:
                 r = bash.run(cmd, cwd=self.path, env=OpamAPI._environ())
                 logging.debug(f"Command {cmd} finished with return code {r}.")
-        contexts = [i[1] for i in strace_result]
         self.metadata.serapi_options = self._process_iqr_from_coq_contexts(
             contexts)
         return self.serapi_options

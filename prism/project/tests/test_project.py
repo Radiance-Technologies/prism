@@ -4,6 +4,7 @@ Test module for prism.data.project module.
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -204,7 +205,7 @@ class TestProject(unittest.TestCase):
             storage = MetadataStorage.load("dataset/agg_coq_repos.yml")
         metadata = storage.get("CompCert")
         test_repo.git.checkout("7b3bc19117e48d601e392f2db2c135c7df1d8376")
-        project = ProjectRepo(repo_path, metadata, SEM.HEURISTIC)
+        project = ProjectRepo(repo_path, metadata, SEM.HEURISTIC, num_cores=1)
         # Complete pre-req setup
         OpamAPI.create_switch("CompCert", "4.07.1")
         OpamAPI.set_switch("CompCert")
@@ -222,9 +223,25 @@ class TestProject(unittest.TestCase):
             OpamAPI.install(pkg, ver)
         output = project.build_and_get_iqr()
         self.assertEqual(output, project.serapi_options)
-        self.assertEqual(output, "-R .,Circuits")
+        actual_result = set()
+        for match in re.finditer(r"(-R|-Q|-I) [^\s]+", output):
+            actual_result.add(match.group())
+        expected_result = {
+            "-R flocq,Flocq",
+            "-R x86_64,compcert.x86_64",
+            "-R x86,compcert.x86",
+            "-R backend,compcert.backend",
+            "-R exportclight,compcert.exportclight",
+            "-R common,compcert.common",
+            "-R MenhirLib,MenhirLib",
+            "-R cfrontend,compcert.cfrontend",
+            "-R lib,compcert.lib",
+            "-R cparser,compcert.cparser",
+            "-R driver,compcert.driver"
+        }
+        self.assertEqual(actual_result, expected_result)
         # Clean up
-        OpamAPI.remove_switch("ConCert")
+        # OpamAPI.remove_switch("CompCert")
         del test_repo
         shutil.rmtree(os.path.join(repo_path))
 

@@ -134,37 +134,10 @@ def _dict_of_list(el: Sequence[str], split: str = '=') -> Dict[str, str]:
     return d
 
 
-def _context_fname(target_fname: str) -> str:
-    """
-    Return context filename with proper extension.
-
-    Parameters
-    ----------
-    target_fname : str
-        Target filename without the extension
-
-    Returns
-    -------
-    str
-        Target filename with extension
-    """
-    return target_fname + _CONTEXT_EXT
-
-
-def _dump_context(fname: str, coq_context: CoqContext) -> str:
-    """
-    Return fname of dumped coq_context.
-    """
-    with open(fname, 'w') as fout:
-        logging.info(f'dump_context: recording context to {fname}')
-        fout.write(coq_context.to_json())
-        return (fname, coq_context)
-
-
 def _record_context(line: str,
                     parser: lark.Lark,
                     regex: str,
-                    source='') -> List[str]:
+                    source='') -> List[CoqContext]:
     """
     Write a CoqContext record for each executable arg matching regex.
 
@@ -186,11 +159,7 @@ def _record_context(line: str,
                 target=target,
                 args=p_context.args,
                 env=p_context.env)
-            target_fname = os.path.join(pwd, target)
-            res.append(_dump_context(_context_fname(target_fname), coq_context))
-            logging.info(
-                f"from {source} recorded context to"
-                f" {_context_fname(target_fname)}")
+            res.append(coq_context)
     return res
 
 
@@ -305,7 +274,9 @@ def _parse_strace_line(parser: lark.Lark, line: str) -> str:
     raise ValueError(f"can't parse lark object {p}")
 
 
-def _parse_strace_logdir(logdir: str, executable: str, regex: str) -> List[str]:
+def _parse_strace_logdir(logdir: str,
+                         executable: str,
+                         regex: str) -> List[CoqContext]:
     """
     Parse the strace log directory.
 
