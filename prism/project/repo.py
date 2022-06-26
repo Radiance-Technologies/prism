@@ -4,6 +4,7 @@ Module providing CoqGym project repository class representations.
 import os
 import random
 from dataclasses import dataclass
+from enum import Enum
 from typing import List, Optional, Union, Dict
 
 from git import Commit, Repo
@@ -12,14 +13,15 @@ from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
 from prism.project.base import Project
 
-@dataclass
 class CommitNode:
     """
     Class used to store a Commit with parent and child information.
     """
-    _git_commit: Commit
-    _parent: Commit
-    _child: Commit
+    def __init__(self, git_commit: Commit, parent: Commit, child: Commit):
+        self._git_commit = git_commit
+        self._parent = parent
+        self._child = child
+        self._distance_to_parent = -1
 
     @property
     def parent(self):
@@ -28,6 +30,25 @@ class CommitNode:
     @property
     def child(self):
         return self._child
+
+    @property
+    def distance_to_parent(self):
+        if self._distance_to_parent == -1:
+            raise Exception("Distance to parent has not been initialized")
+        return self._distance_to_parent
+
+    def child_align(self, level):
+        self._distance_to_parent = level
+        self.child.child_align(level+1)
+
+    def parent_align(self, level):
+        self._distance_to_parent = level
+        self._parent.parent_align(level+1)
+
+    def set_new_center(self):
+        self.child.child_align(1)
+        self.parent.parent_align(1)
+
 
 
 def commit_dict_factory(repo: Union[Repo, str, os.PathLike]) -> Dict[str, CommitNode]:
@@ -69,6 +90,88 @@ def commit_dict_factory(repo: Union[Repo, str, os.PathLike]) -> Dict[str, Commit
     commit_dict[commits[-1].hexsha] = commit_node_last
 
     return commit_dict
+
+
+class CommitMarchStrategy(Enum):
+    # Progress through newer and newer commits
+    # until all have been finished
+    NEW_MARCH_FIRST = 1
+    # Progress through older and older commits
+    # until all have been finished
+    OLD_MARCH_FIRST = 2
+    # Alternate newer and older steps progressively
+    # from the center
+    CURLICUE = 3
+    # Progress through newer and newer commits
+    # until failure
+    NEW_MARCH_ZERO_TOLERANCE = 4
+    # Progress through older and older commits
+    # until failure
+    OLD_MARCH_ZERO_TOLERANCE = 5
+
+
+class CommitIterator:
+    """
+    Class for handling iteration over a range of
+    commits.
+    """
+    def __init__(
+        self, 
+        repo: Repo, 
+        commit_sha: str,
+        march_strategy: Optional[CommitMarchStrategy] = CommitMarchStrategy(1))
+        self._repo = repo
+        self._commit_dict = commit_dict_factory(self._repo)
+        self._commit_sha = commit_sha
+        
+        self._march_strategy = march_strategy
+        nmf = CommitMarchStrategy.NEW_MARCH_FIRST
+        omf = CommitMarchStrategy.OLD_MARCH_FIRST
+        crl = CommitMarchStrategy.CURLICUE
+        nzt = CommitMarchStrategy.NEW_MARCH_ZERO_TOLERANCE
+        ozt = CommitMarchStrategy.OLD_MARCH_ZERO_TOLERANCE
+        self._next_func_dict = {nmf: self.new_march_first,
+                                omf: self.old_march_first,
+                                crl: self.curlicue,
+                                nzt: self.new_march_first_zero_tolerance,
+                                ozt: self.old_march_first_zero_tolerance}
+        self._next_func = self._next_func_dict[self._march_strategy]
+        
+        if self._commit_sha not in self._commit_dict.keys():
+            raise KeyError("Commit sha supplied to CommitIterator not in repo")
+        self._newest_marker = self._commit_dict[self._commit_sha].child
+        self._oldest_marker = self._commit_dict[self._commit_sha].parent
+
+    def set_commit(self, sha):
+        """
+        Reset 
+        """
+        if sha not in self._commit_dict.keys():
+            raise KeyError("Commit sha supplied to CommitIterator not in repo")
+        self._commit_sha = sha
+        self._newest_marker = self._commit_dict[self._commit_sha].child
+        self._oldest_marker = self._commit_dict[self._commit_sha].parent
+
+    def new_march_first(self):
+        pass
+
+    def old_march_first(self):
+        pass
+
+    def curlicue(self):
+        pass
+
+    def new_march_first_zero_tolerance(self):
+        pass
+
+    def old_march_first_zero_tolerance(self):
+        pass
+        
+    def __next__(self):
+        return self._next_func()
+
+
+        
 
 
 class ProjectRepo(Repo, Project):
