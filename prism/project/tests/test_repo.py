@@ -12,15 +12,15 @@ PRISM_DIR = os.path.dirname(PROJECT_DIR)
 REPO_DIR = os.path.dirname(PRISM_DIR)
 
 
-class TestProject(unittest.TestCase):
+class TestCommitIter(unittest.TestCase):
     """
-    Class for testing coqgym_base module.
+    Class for testing CommitIter class.
     """
 
     @classmethod
     def setUpClass(cls):
         """
-        Set up class for testing coqgym_base module.
+        Set up class for testing CommitIter class.
         """
 
     def test_commit_dict(self):
