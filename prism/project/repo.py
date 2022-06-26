@@ -5,13 +5,14 @@ import os
 import random
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Union, Dict
+from typing import Dict, List, Optional, Union
 
 from git import Commit, Repo
 
 from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
 from prism.project.base import Project
+
 
 class CommitNode:
     """
@@ -26,7 +27,7 @@ class CommitNode:
     @property
     def parent(self):
         return self._parent
-    
+
     @property
     def child(self):
         return self._child
@@ -51,10 +52,14 @@ class CommitNode:
 
 
 
-def commit_dict_factory(repo: Union[Repo, str, os.PathLike]) -> Dict[str, CommitNode]:
+def commit_dict_factory(
+        repo: Union[Repo,
+                    str,
+                    os.PathLike]) -> Dict[str,
+                                          CommitNode]:
     """
-    Function for creating a dictionary of CommitNodes
-    from a GitPython repo, or a repo on disk
+    Function for creating a dictionary of CommitNodes from a GitPython
+    repo, or a repo on disk.
 
     Parameters
     ----------
@@ -70,19 +75,19 @@ def commit_dict_factory(repo: Union[Repo, str, os.PathLike]) -> Dict[str, Commit
         repo = Repo(repo)
 
     commits = list(repo.commit().iter_parents())
-    
+
     if len(commits) <= 0:
         return {}
-    
+
     commit_dict = {}
 
     commit_node_first = CommitNode(commits[0], commits[1], None)
     commit_dict[commits[0].hexsha] = commit_node_first
 
-    for i in range(1, len(commits)-1):
-        child = commits[i-1]
+    for i in range(1, len(commits) - 1):
+        child = commits[i - 1]
         tmp_commit = commits[i]
-        parent = commits[i+1]
+        parent = commits[i + 1]
         commit_node = CommitNode(tmp_commit, parent, child)
         commit_dict[tmp_commit.hexsha] = commit_node
 
