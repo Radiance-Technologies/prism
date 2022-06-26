@@ -117,18 +117,17 @@ class CommitMarchStrategy(Enum):
 
 class CommitIterator:
     """
-    Class for handling iteration over a range of
-    commits.
+    Class for handling iteration over a range of commits.
     """
     def __init__(
-        self, 
-        repo: Repo, 
+        self,
+        repo: Repo,
         commit_sha: str,
         march_strategy: Optional[CommitMarchStrategy] = CommitMarchStrategy(1))
         self._repo = repo
         self._commit_dict = commit_dict_factory(self._repo)
         self._commit_sha = commit_sha
-        
+
         self._march_strategy = march_strategy
         nmf = CommitMarchStrategy.NEW_MARCH_FIRST
         omf = CommitMarchStrategy.OLD_MARCH_FIRST
@@ -141,7 +140,7 @@ class CommitIterator:
                                 nzt: self.new_march_first_zero_tolerance,
                                 ozt: self.old_march_first_zero_tolerance}
         self._next_func = self._next_func_dict[self._march_strategy]
-        
+
         if self._commit_sha not in self._commit_dict.keys():
             raise KeyError("Commit sha supplied to CommitIterator not in repo")
         self._newest_marker = self._commit_dict[self._commit_sha].child
@@ -149,7 +148,7 @@ class CommitIterator:
 
     def set_commit(self, sha):
         """
-        Reset 
+        Reset.
         """
         if sha not in self._commit_dict.keys():
             raise KeyError("Commit sha supplied to CommitIterator not in repo")
@@ -171,12 +170,12 @@ class CommitIterator:
 
     def old_march_first_zero_tolerance(self):
         pass
-        
+
     def __next__(self):
         return self._next_func()
 
 
-        
+
 
 
 class ProjectRepo(Repo, Project):
