@@ -45,7 +45,7 @@ class TestProject(unittest.TestCase):
         first_node = commit_dict[first_hash]
         self.assertTrue(first_node.parent is None)
         self.assertTrue(first_node.child is not None)
-        
+
         second_hash = "29a790c002f8e797a01fb87b64fc2db85d147e25"
         self.assertTrue(first_node.child.hexsha == second_hash)
         second_node = commit_dict[second_hash]
@@ -53,9 +53,6 @@ class TestProject(unittest.TestCase):
         third_hash = "d689b50282393a74d43ea811ba232e5f2206aa0e"
         self.assertTrue(second_node.parent.hexsha == first_hash)
         self.assertTrue(second_node.child.hexsha == third_hash)
-
-
-
 
 
 if __name__ == "__main__":
