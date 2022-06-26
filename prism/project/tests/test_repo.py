@@ -1,23 +1,10 @@
 """
-Test module for prism.data.project module.
+Test module for prism.project.repo module.
 """
-import json
 import os
-import shutil
-import subprocess
 import unittest
 
-import git
-
-from prism.data.document import CoqDocument
-from prism.project import (
-    Project,
-    ProjectDir,
-    ProjectRepo,
-    SentenceExtractionMethod,
-)
-from prism.project.repo import CommitNode, commit_dict_factory
-from prism.tests import _COQ_EXAMPLES_PATH, _MINIMAL_METADATA
+from prism.project.repo import commit_dict_factory
 
 TEST_DIR = os.path.dirname(__file__)
 PROJECT_DIR = os.path.dirname(TEST_DIR)
