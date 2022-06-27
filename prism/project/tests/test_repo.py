@@ -56,7 +56,7 @@ class TestCommitIter(unittest.TestCase):
         hashes = [THIRD_HASH, SECOND_HASH, FIRST_HASH, FOURTH_HASH, FIFTH_HASH]
         for commit in CommitIterator(repo,
                                      THIRD_HASH,
-                                     CommitTraversalStrategy.OLD_MARCH_FIRST):
+                                     CommitTraversalStrategy.OLD_FIRST):
             if counter == 5:
                 break
             print(counter, commit.hexsha, flush=True)

@@ -16,12 +16,13 @@ class CommitTraversalStrategy(Enum):
     """
     Enum used for describing iteration algorithm.
     """
+
     # Progress through newer and newer commits
     # until all have been finished
-    NEW_MARCH_FIRST = 1
+    NEW_FIRST = 1
     # Progress through older and older commits
     # until all have been finished
-    OLD_MARCH_FIRST = 2
+    OLD_FIRST = 2
     # Alternate newer and older steps progressively
     # from the center, assuming the center is a newer
     # step
@@ -42,7 +43,7 @@ class CommitIterator:
         repo: Repo,
         commit_sha: str,
         march_strategy: Optional[
-            CommitTraversalStrategy] = CommitTraversalStrategy.NEW_MARCH_FIRST):
+            CommitTraversalStrategy] = CommitTraversalStrategy.NEW_FIRST):
         """
         Initialize CommitIterator.
 
@@ -68,13 +69,13 @@ class CommitIterator:
             raise KeyError("Commit sha supplied to CommitIterator not in repo")
 
         self._march_strategy = march_strategy
-        nmf = CommitTraversalStrategy.NEW_MARCH_FIRST
-        omf = CommitTraversalStrategy.OLD_MARCH_FIRST
+        nmf = CommitTraversalStrategy.NEW_FIRST
+        omf = CommitTraversalStrategy.OLD_FIRST
         crn = CommitTraversalStrategy.CURLICUE_NEW
         cro = CommitTraversalStrategy.CURLICUE_OLD
         self._next_func_dict = {
-            nmf: self.new_march_first,
-            omf: self.old_march_first,
+            nmf: self.NEW_FIRST,
+            omf: self.OLD_FIRST,
             crn: self.curlicue,
             cro: self.curlicue
         }
@@ -111,7 +112,7 @@ class CommitIterator:
         self._commit_idx = self._commit_sha_list.index(self._commit_sha)
         self.init_commit_indices()
 
-    def new_march_first(self):
+    def NEW_FIRST(self):
         """
         Return newer commits until none remain, then older.
 
@@ -129,7 +130,7 @@ class CommitIterator:
         else:
             raise StopIteration
 
-    def old_march_first(self):
+    def OLD_FIRST(self):
         """
         Return older commits until none remain, then newer.
 
@@ -178,21 +179,21 @@ class CommitIterator:
 
     def __next__(self):
         """
-        Iterator continuation method.
+        Return next value in container.
         """
         return self._next_func()
 
     def __iter__(self):
         """
-        Iterator initiation method.
+        Initialize iterator.
         """
         self.init_commit_indices()
         if self._march_strategy == CommitTraversalStrategy.CURLICUE_NEW \
-           or self._march_strategy == CommitTraversalStrategy.NEW_MARCH_FIRST:
+           or self._march_strategy == CommitTraversalStrategy.NEW_FIRST:
             self._last_ret = "old"
             self._newest_commit = self._commit_idx
-        elif (self._march_strategy == CommitTraversalStrategy.CURLICUE_OLD or
-              self._march_strategy == CommitTraversalStrategy.OLD_MARCH_FIRST):
+        elif (self._march_strategy == CommitTraversalStrategy.CURLICUE_OLD
+              or self._march_strategy == CommitTraversalStrategy.OLD_FIRST):
             self._last_ret = "new"
             self._oldest_commit = self._commit_idx
         return self
