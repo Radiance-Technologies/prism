@@ -6,7 +6,7 @@ import unittest
 
 from git import Repo
 
-from prism.project.repo import CommitIterator, CommitMarchStrategy
+from prism.project.repo import CommitIterator, CommitTraversalStrategy
 
 TEST_DIR = os.path.dirname(__file__)
 PROJECT_DIR = os.path.dirname(TEST_DIR)
@@ -56,7 +56,7 @@ class TestCommitIter(unittest.TestCase):
         hashes = [THIRD_HASH, SECOND_HASH, FIRST_HASH, FOURTH_HASH, FIFTH_HASH]
         for commit in CommitIterator(repo,
                                      THIRD_HASH,
-                                     CommitMarchStrategy.OLD_MARCH_FIRST):
+                                     CommitTraversalStrategy.OLD_MARCH_FIRST):
             if counter == 5:
                 break
             print(counter, commit.hexsha, flush=True)
@@ -72,7 +72,7 @@ class TestCommitIter(unittest.TestCase):
         hashes = [THIRD_HASH, SECOND_HASH, FOURTH_HASH, FIRST_HASH, FIFTH_HASH]
         for commit in CommitIterator(repo,
                                      THIRD_HASH,
-                                     CommitMarchStrategy.CURLICUE_NEW):
+                                     CommitTraversalStrategy.CURLICUE_NEW):
             if counter == 5:
                 break
             print(counter, commit.hexsha, flush=True)
@@ -88,7 +88,7 @@ class TestCommitIter(unittest.TestCase):
         hashes = [THIRD_HASH, FOURTH_HASH, SECOND_HASH, FIFTH_HASH, FIRST_HASH]
         for commit in CommitIterator(repo,
                                      THIRD_HASH,
-                                     CommitMarchStrategy.CURLICUE_OLD):
+                                     CommitTraversalStrategy.CURLICUE_OLD):
             if counter == 5:
                 break
             print(counter, commit.hexsha, flush=True)

@@ -12,7 +12,7 @@ from prism.language.gallina.parser import CoqParser
 from prism.project.base import Project
 
 
-class CommitMarchStrategy(Enum):
+class CommitTraversalStrategy(Enum):
     # Progress through newer and newer commits
     # until all have been finished
     NEW_MARCH_FIRST = 1
@@ -20,10 +20,12 @@ class CommitMarchStrategy(Enum):
     # until all have been finished
     OLD_MARCH_FIRST = 2
     # Alternate newer and older steps progressively
-    # from the center
+    # from the center, assuming the center is a newer
+    # step
     CURLICUE_NEW = 3
     # Alternate newer and older steps progressively
-    # from the center
+    # from the center, assuming the center is an older
+    # step
     CURLICUE_OLD = 4
 
 
@@ -36,9 +38,22 @@ class CommitIterator:
         self,
         repo: Repo,
         commit_sha: str,
-        march_strategy: Optional[CommitMarchStrategy] = CommitMarchStrategy(1)):
+        march_strategy: Optional[CommitTraversalStrategy] = CommitTraversalStrategy(1)):
         """
         Initialize CommitIterator.
+
+        Parameters
+        ----------
+        repo : git.Repo
+            Repo, the commits of which we wish to iterate through.
+
+        commit_sha : str
+            Initial commit which we wish to treat as the starting point
+            for the iteration
+
+        march_strategy : CommitTraversalStrategy
+            The particular method of iterating over the repo which
+            we wish to use.
         """
         self._repo = repo
         self._commits = list(repo.commit().iter_parents())
@@ -49,10 +64,10 @@ class CommitIterator:
             raise KeyError("Commit sha supplied to CommitIterator not in repo")
 
         self._march_strategy = march_strategy
-        nmf = CommitMarchStrategy.NEW_MARCH_FIRST
-        omf = CommitMarchStrategy.OLD_MARCH_FIRST
-        crn = CommitMarchStrategy.CURLICUE_NEW
-        cro = CommitMarchStrategy.CURLICUE_OLD
+        nmf = CommitTraversalStrategy.NEW_MARCH_FIRST
+        omf = CommitTraversalStrategy.OLD_MARCH_FIRST
+        crn = CommitTraversalStrategy.CURLICUE_NEW
+        cro = CommitTraversalStrategy.CURLICUE_OLD
         self._next_func_dict = {
             nmf: self.new_march_first,
             omf: self.old_march_first,
@@ -64,9 +79,13 @@ class CommitIterator:
         self._last_ret = ""
         self._newest_commit = None
         self._oldest_commit = None
-        self.init_new_old_commit_idx()
+        self.init_commit_indices()
 
-    def init_new_old_commit_idx(self):
+    def init_commit_indices(self):
+        """
+        Initialize the newest and oldest commit indices,
+        according to where the starting commit is.
+        """
         if self._commit_idx > 0:
             self._newest_commit = self._commit_idx - 1
         else:
@@ -76,7 +95,7 @@ class CommitIterator:
         else:
             self._oldest_commit = None
 
-    def set_commit(self, sha):
+    def set_center_commit(self, sha):
         """
         Reset center commit.
         """
@@ -84,9 +103,13 @@ class CommitIterator:
             raise KeyError("Commit sha supplied to CommitIterator not in repo")
         self._commit_sha = sha
         self._commit_idx = self._commit_sha_list.index(self._commit_sha)
-        self.init_new_old_commit_idx()
+        self.init_commit_indices()
 
     def new_march_first(self):
+        """
+        The commit traversal strategy which follows all progressively
+        newer commits before it returns older commits
+        """
         if self._newest_commit > 0:
             tmp_idx = self._newest_commit
             self._newest_commit = self._newest_commit - 1
@@ -99,6 +122,10 @@ class CommitIterator:
             raise StopIteration
 
     def old_march_first(self):
+        """
+        The commit traversal strategy which follows all progressively
+        older commits before it returns newer commits
+        """
         if self._oldest_commit < len(self._commits):
             tmp_idx = self._oldest_commit
             self._oldest_commit = self._oldest_commit + 1
@@ -111,6 +138,15 @@ class CommitIterator:
             raise StopIteration
 
     def curlicue(self):
+        """
+        The commit traversal strategy which alternates between
+        newer and older commits, progressively widening the
+        distance from the central commit.
+        """
+        if self._newest_commit == 0:
+            self._last_ret = "new"
+        if self._oldest_commit == len(self._commits):
+            self._last_ret = "old"
         if self._last_ret == "old" and self._newest_commit > 0:
             self._last_ret = "new"
             tmp_idx = self._newest_commit
@@ -129,16 +165,22 @@ class CommitIterator:
                 raise StopIteration
 
     def __next__(self):
+        """
+        Iterator continuation method
+        """
         return self._next_func()
 
     def __iter__(self):
-        self.init_new_old_commit_idx()
-        if self._march_strategy == CommitMarchStrategy.CURLICUE_NEW \
-           or self._march_strategy == CommitMarchStrategy.NEW_MARCH_FIRST:
+        """
+        Iterator initiation method
+        """
+        self.init_commit_indices()
+        if self._march_strategy == CommitTraversalStrategy.CURLICUE_NEW \
+           or self._march_strategy == CommitTraversalStrategy.NEW_MARCH_FIRST:
             self._last_ret = "old"
             self._newest_commit = self._commit_idx
-        elif (self._march_strategy == CommitMarchStrategy.CURLICUE_OLD
-              or self._march_strategy == CommitMarchStrategy.OLD_MARCH_FIRST):
+        elif (self._march_strategy == CommitTraversalStrategy.CURLICUE_OLD
+              or self._march_strategy == CommitTraversalStrategy.OLD_MARCH_FIRST):
             self._last_ret = "new"
             self._oldest_commit = self._commit_idx
         return self
