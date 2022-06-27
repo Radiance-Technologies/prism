@@ -14,74 +14,6 @@ from prism.language.gallina.parser import CoqParser
 from prism.project.base import Project
 
 
-class CommitNode:
-    """
-    Class used to store a Commit with parent and child information.
-    """
-
-    def __init__(self, git_commit: Commit, parent: Commit, child: Commit):
-        self._git_commit = git_commit
-        self._parent = parent
-        self._child = child
-
-    @property
-    def parent(self):
-        return self._parent
-
-    @property
-    def child(self):
-        return self._child
-
-    @property
-    def commit(self):
-        return self._git_commit
-
-
-def commit_dict_factory(
-        repo: Union[Repo,
-                    str,
-                    os.PathLike]) -> Dict[str,
-                                          CommitNode]:
-    """
-    Function for creating a dictionary of CommitNodes from a GitPython
-    repo, or a repo on disk.
-
-    Parameters
-    ----------
-    repo: Union[Repo, str, os.PathLike]
-    Either a GitPython Repo, or a path to a local instance
-    of a git repo
-
-    Returns
-    -------
-    Dict[str, CommitNode]
-    """
-    if isinstance(repo, str) or isinstance(repo, os.PathLike):
-        repo = Repo(repo)
-
-    commits = list(repo.commit().iter_parents())
-
-    if len(commits) <= 0:
-        return {}
-
-    commit_dict = {}
-
-    commit_node_first = CommitNode(commits[0], commits[1], None)
-    commit_dict[commits[0].hexsha] = commit_node_first
-
-    for i in range(1, len(commits) - 1):
-        child = commits[i - 1]
-        tmp_commit = commits[i]
-        parent = commits[i + 1]
-        commit_node = CommitNode(tmp_commit, parent, child)
-        commit_dict[tmp_commit.hexsha] = commit_node
-
-    commit_node_last = CommitNode(commits[-1], None, commits[-2])
-    commit_dict[commits[-1].hexsha] = commit_node_last
-
-    return commit_dict
-
-
 class CommitMarchStrategy(Enum):
     # Progress through newer and newer commits
     # until all have been finished
@@ -111,8 +43,12 @@ class CommitIterator:
         Initialize CommitIterator.
         """
         self._repo = repo
-        self._commit_dict = commit_dict_factory(self._repo)
+        self._commits = list(repo.commit().iter_parents())
         self._commit_sha = commit_sha
+        self._commit_sha_list = [x.hexsha for x in self._commits]
+        self._commit_idx = self._commit_sha_list.index(self._commit_sha)
+        if self._commit_sha not in self._commit_sha_list:
+            raise KeyError("Commit sha supplied to CommitIterator not in repo")
 
         self._march_strategy = march_strategy
         nmf = CommitMarchStrategy.NEW_MARCH_FIRST
@@ -125,53 +61,67 @@ class CommitIterator:
                                 cro: self.curlicue}
         self._next_func = self._next_func_dict[self._march_strategy]
 
-        if self._commit_sha not in self._commit_dict.keys():
-            raise KeyError("Commit sha supplied to CommitIterator not in repo")
-        self._last_ret = "old"
-        self._first = True
-        self._newest_commit = self._commit_dict[self._commit_sha].commit
-        self._oldest_commit = self._commit_dict[self._commit_sha].commit
+
+        self._last_ret = ""
+        self._newest_commit = None
+        self._oldest_commit = None
+        self.init_new_old_commit_idx()
+
+    def init_new_old_commit_idx(self):
+        if self._commit_idx > 0:
+            self._newest_commit = self._commit_idx-1
+        else:
+            self._newest_commit = None
+        if self._commit_idx < len(self._commits)-1:
+            self._oldest_commit = self._commit_idx+1
+        else:
+            self._oldest_commit = None
 
     def set_commit(self, sha):
         """
         Reset center commit.
         """
-        if sha not in self._commit_dict.keys():
+        if sha not in self._commit_sha_list:
             raise KeyError("Commit sha supplied to CommitIterator not in repo")
         self._commit_sha = sha
-        self._first = True
-        self._newest_commit = self._commit_dict[self._commit_sha].commit
-        self._oldest_commit = self._commit_dict[self._commit_sha].commit
+        self._commit_idx = self._commit_sha_list.index(self._commit_sha)
+        self.init_new_old_commit_idx()
 
     def new_march_first(self):
-        if self._newest_commit.child is not None:
-            self._newest_commit = self._newest_commit.child
-            return self._newest_commit.commit
-        elif self._oldest_commit.parent is not None:
-            self._oldest_commit = self._oldest_commit.parent
-            return self._oldest_commit.commit
+        if self._newest_commit > 0:
+            tmp_idx = self._newest_commit
+            self._newest_commit = self._newest_commit - 1
+            return self._commits[tmp_idx]
+        elif self._oldest_commit < len(self._commits):
+            tmp_idx = self._oldest_commit
+            self._oldest_commit = self._oldest_commit + 1
+            return self._commits[tmp_idx]
         else:
             raise StopIteration
 
     def old_march_first(self):
-        if self._oldest_commit.parent is not None:
-            self._oldest_commit = self._oldest_commit.parent
-            return self._oldest_commit
-        elif self._newest_commit.child is not None:
-            self._newest_commit = self._newest_commit.child
-            return self._newest_commit
+        if self._oldest_commit < len(self._commits):
+            tmp_idx = self._oldest_commit
+            self._oldest_commit = self._oldest_commit + 1
+            return self._commits[tmp_idx]
+        elif self._newest_commit > 0:
+            tmp_idx = self._newest_commit
+            self._newest_commit = self._newest_commit - 1
+            return self._commits[tmp_idx]
         else:
             raise StopIteration
 
     def curlicue(self):
-        if self._last_ret == "old" and self._newest_commit.child is not None:
+        if self._last_ret == "old" and self._newest_commit > 0:
             self._last_ret = "new"
-            self._newest_commit = self._newest_commit.child
-            return self._newest_commit
-        elif self._last_ret == "new" and self._oldest_commit.parent is not None:
+            tmp_idx = self._newest_commit
+            self._newest_commit = self._newest_commit - 1
+            return self._commits[tmp_idx]
+        elif self._last_ret == "new" and self._oldest_commit < len(self._commits)-1:
             self._last_ret = "old"
-            self._oldest_commit = self._oldest_commit.parent
-            return self._oldest_commit
+            tmp_idx = self._oldest_commit
+            self._oldest_commit = self._oldest_commit + 1
+            return self._commits[tmp_idx]
         else:
             if self._last_ret != "new" and self._last_ret != "old":
                 raise Exception("Malformed")
@@ -179,19 +129,18 @@ class CommitIterator:
                 raise StopIteration
 
     def __next__(self):
-        if self._first:
-            self._first = False
-            return self._newest_commit.commit
         return self._next_func()
 
     def __iter__(self):
-        if self._march_strategy == CommitMarchStrategy.CURLICUE_NEW:
+        self.init_new_old_commit_idx()
+        if self._march_strategy == CommitMarchStrategy.CURLICUE_NEW \
+           or self._march_strategy == CommitMarchStrategy.NEW_MARCH_FIRST:
             self._last_ret = "old"
-        elif self._march_strategy == CommitMarchStrategy.CURLICUE_OLD:
+            self._newest_commit = self._commit_idx
+        elif self._march_strategy == CommitMarchStrategy.CURLICUE_OLD \
+             or self._march_strategy == CommitMarchStrategy.OLD_MARCH_FIRST:
             self._last_ret = "new"
-        self._first = True
-        self._newest_commit = self._commit_dict[self._commit_sha]
-        self._oldest_commit = self._commit_dict[self._commit_sha]
+            self._oldest_commit = self._commit_idx
         return self
 
 

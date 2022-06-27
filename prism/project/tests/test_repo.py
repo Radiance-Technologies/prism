@@ -4,9 +4,10 @@ Test module for prism.project.repo module.
 import os
 import unittest
 
-from git import Commit, Repo
+from git import Repo
 
-from prism.project.repo import CommitIterator, commit_dict_factory
+from prism.project.repo import (CommitIterator, 
+                                CommitMarchStrategy)
 
 TEST_DIR = os.path.dirname(__file__)
 PROJECT_DIR = os.path.dirname(TEST_DIR)
@@ -33,22 +34,6 @@ class TestCommitIter(unittest.TestCase):
         Set up class for testing CommitIter class.
         """
 
-    def test_commit_dict(self):
-        """
-        Test factory function for commit_dict.
-        """
-
-        commit_dict = commit_dict_factory(REPO_DIR)
-        first_node = commit_dict[FIRST_HASH]
-        self.assertTrue(first_node.parent is None)
-        self.assertTrue(first_node.child is not None)
-
-        self.assertTrue(first_node.child.hexsha == SECOND_HASH)
-        second_node = commit_dict[SECOND_HASH]
-
-        self.assertTrue(second_node.parent.hexsha == FIRST_HASH)
-        self.assertTrue(second_node.child.hexsha == THIRD_HASH)
-
     def test_iterator_newest_first(self):
         """
         Test iterator basic functionality.
@@ -57,7 +42,52 @@ class TestCommitIter(unittest.TestCase):
         counter = 0
         hashes = [THIRD_HASH, FOURTH_HASH, FIFTH_HASH]
         for commit in CommitIterator(repo, THIRD_HASH):
-            if counter == 4:
+            if counter == 3:
+                break
+            print(counter, commit.hexsha, flush=True)
+            self.assertTrue(commit.hexsha == hashes[counter])
+            counter += 1
+
+    def test_iterator_oldest_first(self):
+        """
+        Test iterator oldest first functionality.
+        """
+        repo = Repo(REPO_DIR)
+        counter = 0
+        hashes = [THIRD_HASH, SECOND_HASH, FIRST_HASH, FOURTH_HASH, FIFTH_HASH]
+        for commit in CommitIterator(repo, THIRD_HASH, 
+        CommitMarchStrategy.OLD_MARCH_FIRST):
+            if counter == 5:
+                break
+            print(counter, commit.hexsha, flush=True)
+            self.assertTrue(commit.hexsha == hashes[counter])
+            counter += 1
+
+    def test_iterator_curlicue_new(self):
+        """
+        Test iterator curlicue new functionality.
+        """
+        repo = Repo(REPO_DIR)
+        counter = 0
+        hashes = [THIRD_HASH, SECOND_HASH, FOURTH_HASH, FIRST_HASH, FIFTH_HASH]
+        for commit in CommitIterator(repo, THIRD_HASH, 
+        CommitMarchStrategy.CURLICUE_NEW):
+            if counter == 5:
+                break
+            print(counter, commit.hexsha, flush=True)
+            self.assertTrue(commit.hexsha == hashes[counter])
+            counter += 1
+
+    def test_iterator_curlicue_old(self):
+        """
+        Test iterator curlicue old functionality.
+        """
+        repo = Repo(REPO_DIR)
+        counter = 0
+        hashes = [THIRD_HASH, FOURTH_HASH, SECOND_HASH, FIFTH_HASH, FIRST_HASH]
+        for commit in CommitIterator(repo, THIRD_HASH, 
+        CommitMarchStrategy.CURLICUE_OLD):
+            if counter == 5:
                 break
             print(counter, commit.hexsha, flush=True)
             self.assertTrue(commit.hexsha == hashes[counter])
