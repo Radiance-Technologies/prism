@@ -156,7 +156,7 @@ class CommitIterator:
             return self._oldest_commit
         else:
             raise StopIteration
-            
+
 
     def old_march_first(self):
         if self._oldest_commit.parent is not None:
