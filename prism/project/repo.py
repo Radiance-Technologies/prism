@@ -107,12 +107,6 @@ class CommitMarchStrategy(Enum):
     # Alternate newer and older steps progressively
     # from the center
     CURLICUE = 3
-    # Progress through newer and newer commits
-    # until failure
-    NEW_MARCH_ZERO_TOLERANCE = 4
-    # Progress through older and older commits
-    # until failure
-    OLD_MARCH_ZERO_TOLERANCE = 5
 
 
 class CommitIterator:
@@ -132,44 +126,62 @@ class CommitIterator:
         nmf = CommitMarchStrategy.NEW_MARCH_FIRST
         omf = CommitMarchStrategy.OLD_MARCH_FIRST
         crl = CommitMarchStrategy.CURLICUE
-        nzt = CommitMarchStrategy.NEW_MARCH_ZERO_TOLERANCE
-        ozt = CommitMarchStrategy.OLD_MARCH_ZERO_TOLERANCE
         self._next_func_dict = {nmf: self.new_march_first,
                                 omf: self.old_march_first,
-                                crl: self.curlicue,
-                                nzt: self.new_march_first_zero_tolerance,
-                                ozt: self.old_march_first_zero_tolerance}
+                                crl: self.curlicue}
         self._next_func = self._next_func_dict[self._march_strategy]
 
         if self._commit_sha not in self._commit_dict.keys():
             raise KeyError("Commit sha supplied to CommitIterator not in repo")
-        self._newest_marker = self._commit_dict[self._commit_sha].child
-        self._oldest_marker = self._commit_dict[self._commit_sha].parent
+        self._last_ret = "old"
+        self._newest_commit = self._commit_dict[self._commit_sha]
+        self._oldest_commit = self._commit_dict[self._commit_sha]
 
     def set_commit(self, sha):
         """
-        Reset.
+        Reset center commit.
         """
         if sha not in self._commit_dict.keys():
             raise KeyError("Commit sha supplied to CommitIterator not in repo")
         self._commit_sha = sha
-        self._newest_marker = self._commit_dict[self._commit_sha].child
-        self._oldest_marker = self._commit_dict[self._commit_sha].parent
+        self._newest_commit = self._commit_dict[self._commit_sha].child
+        self._oldest_commit = self._commit_dict[self._commit_sha].parent
 
     def new_march_first(self):
-        pass
+        if self._newest_commit.child is not None:
+            self._newest_commit = self._newest_commit.child
+            return self._newest_commit
+        elif self._oldest_commit.parent is not None:
+            self._oldest_commit = self._oldest_commit.parent
+            return self._oldest_commit
+        else:
+            raise StopIteration
+            
 
     def old_march_first(self):
-        pass
+        if self._oldest_commit.parent is not None:
+            self._oldest_commit = self._oldest_commit.parent
+            return self._oldest_commit
+        elif self._newest_commit.child is not None:
+            self._newest_commit = self._newest_commit.child
+            return self._newest_commit
+        else:
+            raise StopIteration
 
     def curlicue(self):
-        pass
-
-    def new_march_first_zero_tolerance(self):
-        pass
-
-    def old_march_first_zero_tolerance(self):
-        pass
+        if self._last_ret == "old" and self._newest_commit.child is not None:
+            self._last_ret = "new"
+            self._newest_commit = self._newest_commit.child
+            return self._newest_commit
+        elif self._last_ret == "new" and self._oldest_commit.parent is not None:
+            self._last_ret = "old"
+            self._oldest_commit = self._oldest_commit.parent
+            return self._oldest_commit
+        else:
+            if self._last_ret != "new" and self._last_ret != "old":
+                raise Exception("Malformed")
+            else:
+                raise StopIteration
 
     def __next__(self):
         return self._next_func()
