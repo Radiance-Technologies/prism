@@ -91,7 +91,7 @@ class CommitMarchStrategy(Enum):
     OLD_MARCH_FIRST = 2
     # Alternate newer and older steps progressively
     # from the center
-    CURLICUE_NEW = 3    
+    CURLICUE_NEW = 3
     # Alternate newer and older steps progressively
     # from the center
     CURLICUE_OLD = 4
@@ -119,10 +119,12 @@ class CommitIterator:
         omf = CommitMarchStrategy.OLD_MARCH_FIRST
         crn = CommitMarchStrategy.CURLICUE_NEW
         cro = CommitMarchStrategy.CURLICUE_OLD
-        self._next_func_dict = {nmf: self.new_march_first,
-                                omf: self.old_march_first,
-                                crn: self.curlicue,
-                                cro: self.curlicue}
+        self._next_func_dict = {
+            nmf: self.new_march_first,
+            omf: self.old_march_first,
+            crn: self.curlicue,
+            cro: self.curlicue
+        }
         self._next_func = self._next_func_dict[self._march_strategy]
 
         if self._commit_sha not in self._commit_dict.keys():
