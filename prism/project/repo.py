@@ -22,7 +22,6 @@ class CommitNode:
         self._git_commit = git_commit
         self._parent = parent
         self._child = child
-        self._distance_to_parent = -1
 
     @property
     def parent(self):
@@ -33,23 +32,8 @@ class CommitNode:
         return self._child
 
     @property
-    def distance_to_parent(self):
-        if self._distance_to_parent == -1:
-            raise Exception("Distance to parent has not been initialized")
-        return self._distance_to_parent
-
-    def child_align(self, level):
-        self._distance_to_parent = level
-        self.child.child_align(level+1)
-
-    def parent_align(self, level):
-        self._distance_to_parent = level
-        self._parent.parent_align(level+1)
-
-    def set_new_center(self):
-        self.child.child_align(1)
-        self.parent.parent_align(1)
-
+    def commit(self):
+        return self._git_commit
 
 
 def commit_dict_factory(
@@ -117,7 +101,11 @@ class CommitIterator:
         self,
         repo: Repo,
         commit_sha: str,
-        march_strategy: Optional[CommitMarchStrategy] = CommitMarchStrategy(1))
+        march_strategy: Optional[CommitMarchStrategy] = CommitMarchStrategy(1)):
+        """
+        Initialize CommitIterator
+
+        """
         self._repo = repo
         self._commit_dict = commit_dict_factory(self._repo)
         self._commit_sha = commit_sha
@@ -144,8 +132,8 @@ class CommitIterator:
         if sha not in self._commit_dict.keys():
             raise KeyError("Commit sha supplied to CommitIterator not in repo")
         self._commit_sha = sha
-        self._newest_commit = self._commit_dict[self._commit_sha].child
-        self._oldest_commit = self._commit_dict[self._commit_sha].parent
+        self._newest_commit = self._commit_dict[self._commit_sha]
+        self._oldest_commit = self._commit_dict[self._commit_sha]
 
     def new_march_first(self):
         if self._newest_commit.child is not None:
@@ -185,6 +173,12 @@ class CommitIterator:
 
     def __next__(self):
         return self._next_func()
+
+    def __iter__(self):
+        self._last_ret = "old"
+        self._newest_commit = self._commit_dict[self._commit_sha]
+        self._oldest_commit = self._commit_dict[self._commit_sha]
+        return self
 
 
 
