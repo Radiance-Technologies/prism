@@ -32,6 +32,7 @@ class TestCommitIter(unittest.TestCase):
         """
         Set up class for testing CommitIter class.
         """
+        print(os.listdir(REPO_DIR), flush=True)
 
     def test_iterator_newest_first(self):
         """
