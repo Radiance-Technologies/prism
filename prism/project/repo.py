@@ -32,11 +32,11 @@ class CommitIterator:
     Class for handling iteration over a range of commits.
     """
 
-    def __init__(self,
-                 repo: Repo,
-                 commit_sha: str,
-                 march_strategy: Optional[CommitMarchStrategy] =
-                 CommitMarchStrategy(1)):
+    def __init__(
+        self,
+        repo: Repo,
+        commit_sha: str,
+        march_strategy: Optional[CommitMarchStrategy] = CommitMarchStrategy(1)):
         """
         Initialize CommitIterator.
         """
@@ -116,8 +116,8 @@ class CommitIterator:
             tmp_idx = self._newest_commit
             self._newest_commit = self._newest_commit - 1
             return self._commits[tmp_idx]
-        elif(self._last_ret == "new"
-             and self._oldest_commit < len(self._commits) - 1):
+        elif (self._last_ret == "new"
+              and self._oldest_commit < len(self._commits) - 1):
             self._last_ret = "old"
             tmp_idx = self._oldest_commit
             self._oldest_commit = self._oldest_commit + 1
@@ -137,8 +137,8 @@ class CommitIterator:
            or self._march_strategy == CommitMarchStrategy.NEW_MARCH_FIRST:
             self._last_ret = "old"
             self._newest_commit = self._commit_idx
-        elif(self._march_strategy == CommitMarchStrategy.CURLICUE_OLD
-             or self._march_strategy == CommitMarchStrategy.OLD_MARCH_FIRST):
+        elif (self._march_strategy == CommitMarchStrategy.CURLICUE_OLD
+              or self._march_strategy == CommitMarchStrategy.OLD_MARCH_FIRST):
             self._last_ret = "new"
             self._oldest_commit = self._commit_idx
         return self

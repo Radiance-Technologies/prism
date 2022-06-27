@@ -6,8 +6,7 @@ import unittest
 
 from git import Repo
 
-from prism.project.repo import (CommitIterator,
-                                CommitMarchStrategy)
+from prism.project.repo import CommitIterator, CommitMarchStrategy
 
 TEST_DIR = os.path.dirname(__file__)
 PROJECT_DIR = os.path.dirname(TEST_DIR)
@@ -55,7 +54,8 @@ class TestCommitIter(unittest.TestCase):
         repo = Repo(REPO_DIR)
         counter = 0
         hashes = [THIRD_HASH, SECOND_HASH, FIRST_HASH, FOURTH_HASH, FIFTH_HASH]
-        for commit in CommitIterator(repo, THIRD_HASH,
+        for commit in CommitIterator(repo,
+                                     THIRD_HASH,
                                      CommitMarchStrategy.OLD_MARCH_FIRST):
             if counter == 5:
                 break
@@ -70,7 +70,8 @@ class TestCommitIter(unittest.TestCase):
         repo = Repo(REPO_DIR)
         counter = 0
         hashes = [THIRD_HASH, SECOND_HASH, FOURTH_HASH, FIRST_HASH, FIFTH_HASH]
-        for commit in CommitIterator(repo, THIRD_HASH,
+        for commit in CommitIterator(repo,
+                                     THIRD_HASH,
                                      CommitMarchStrategy.CURLICUE_NEW):
             if counter == 5:
                 break
@@ -85,7 +86,8 @@ class TestCommitIter(unittest.TestCase):
         repo = Repo(REPO_DIR)
         counter = 0
         hashes = [THIRD_HASH, FOURTH_HASH, SECOND_HASH, FIFTH_HASH, FIRST_HASH]
-        for commit in CommitIterator(repo, THIRD_HASH,
+        for commit in CommitIterator(repo,
+                                     THIRD_HASH,
                                      CommitMarchStrategy.CURLICUE_OLD):
             if counter == 5:
                 break
