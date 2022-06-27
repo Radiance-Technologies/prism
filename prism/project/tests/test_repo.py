@@ -62,6 +62,7 @@ class TestCommitIter(unittest.TestCase):
         for commit in CommitIterator(repo, THIRD_HASH):
             if counter == 4:
                 break
+            print(counter, commit.hexsha, flush=True)
             self.assertTrue(commit.hexsha == hashes[counter])
             counter += 1
 

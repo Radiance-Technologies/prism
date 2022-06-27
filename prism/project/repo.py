@@ -90,7 +90,10 @@ class CommitMarchStrategy(Enum):
     OLD_MARCH_FIRST = 2
     # Alternate newer and older steps progressively
     # from the center
-    CURLICUE = 3
+    CURLICUE_NEW = 3    
+    # Alternate newer and older steps progressively
+    # from the center
+    CURLICUE_OLD = 4
 
 
 class CommitIterator:
@@ -113,17 +116,20 @@ class CommitIterator:
         self._march_strategy = march_strategy
         nmf = CommitMarchStrategy.NEW_MARCH_FIRST
         omf = CommitMarchStrategy.OLD_MARCH_FIRST
-        crl = CommitMarchStrategy.CURLICUE
+        crn = CommitMarchStrategy.CURLICUE_NEW
+        cro = CommitMarchStrategy.CURLICUE_OLD
         self._next_func_dict = {nmf: self.new_march_first,
                                 omf: self.old_march_first,
-                                crl: self.curlicue}
+                                crn: self.curlicue,
+                                cro: self.curlicue}
         self._next_func = self._next_func_dict[self._march_strategy]
 
         if self._commit_sha not in self._commit_dict.keys():
             raise KeyError("Commit sha supplied to CommitIterator not in repo")
         self._last_ret = "old"
-        self._newest_commit = self._commit_dict[self._commit_sha]
-        self._oldest_commit = self._commit_dict[self._commit_sha]
+        self._first = True
+        self._newest_commit = self._commit_dict[self._commit_sha].commit
+        self._oldest_commit = self._commit_dict[self._commit_sha].commit
 
     def set_commit(self, sha):
         """
@@ -132,16 +138,17 @@ class CommitIterator:
         if sha not in self._commit_dict.keys():
             raise KeyError("Commit sha supplied to CommitIterator not in repo")
         self._commit_sha = sha
-        self._newest_commit = self._commit_dict[self._commit_sha]
-        self._oldest_commit = self._commit_dict[self._commit_sha]
+        self._first = True
+        self._newest_commit = self._commit_dict[self._commit_sha].commit
+        self._oldest_commit = self._commit_dict[self._commit_sha].commit
 
     def new_march_first(self):
         if self._newest_commit.child is not None:
             self._newest_commit = self._newest_commit.child
-            return self._newest_commit
+            return self._newest_commit.commit
         elif self._oldest_commit.parent is not None:
             self._oldest_commit = self._oldest_commit.parent
-            return self._oldest_commit
+            return self._oldest_commit.commit
         else:
             raise StopIteration
 
@@ -172,10 +179,17 @@ class CommitIterator:
                 raise StopIteration
 
     def __next__(self):
+        if self._first:
+            self._first = False
+            return self._newest_commit.commit
         return self._next_func()
 
     def __iter__(self):
-        self._last_ret = "old"
+        if self._march_strategy == CommitMarchStrategy.CURLICUE_NEW:
+            self._last_ret = "old"
+        elif self._march_strategy == CommitMarchStrategy.CURLICUE_OLD:
+            self._last_ret = "new"
+        self._first = True
         self._newest_commit = self._commit_dict[self._commit_sha]
         self._oldest_commit = self._commit_dict[self._commit_sha]
         return self
