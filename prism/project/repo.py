@@ -18,6 +18,7 @@ class CommitNode:
     """
     Class used to store a Commit with parent and child information.
     """
+
     def __init__(self, git_commit: Commit, parent: Commit, child: Commit):
         self._git_commit = git_commit
         self._parent = parent
@@ -100,14 +101,14 @@ class CommitIterator:
     """
     Class for handling iteration over a range of commits.
     """
+
     def __init__(
         self,
         repo: Repo,
         commit_sha: str,
         march_strategy: Optional[CommitMarchStrategy] = CommitMarchStrategy(1)):
         """
-        Initialize CommitIterator
-
+        Initialize CommitIterator.
         """
         self._repo = repo
         self._commit_dict = commit_dict_factory(self._repo)
@@ -152,7 +153,6 @@ class CommitIterator:
         else:
             raise StopIteration
 
-
     def old_march_first(self):
         if self._oldest_commit.parent is not None:
             self._oldest_commit = self._oldest_commit.parent
@@ -193,9 +193,6 @@ class CommitIterator:
         self._newest_commit = self._commit_dict[self._commit_sha]
         self._oldest_commit = self._commit_dict[self._commit_sha]
         return self
-
-
-
 
 
 class ProjectRepo(Repo, Project):
