@@ -41,8 +41,8 @@ class CommitIterator:
         self,
         repo: Repo,
         commit_sha: str,
-        march_strategy: Optional[CommitTraversalStrategy] =
-            CommitTraversalStrategy.NEW_MARCH_FIRST):
+        march_strategy: Optional[
+            CommitTraversalStrategy] = CommitTraversalStrategy.NEW_MARCH_FIRST):
         """
         Initialize CommitIterator.
 
@@ -191,9 +191,8 @@ class CommitIterator:
            or self._march_strategy == CommitTraversalStrategy.NEW_MARCH_FIRST:
             self._last_ret = "old"
             self._newest_commit = self._commit_idx
-        elif (self._march_strategy == CommitTraversalStrategy.CURLICUE_OLD
-              or self._march_strategy
-              == CommitTraversalStrategy.OLD_MARCH_FIRST):
+        elif (self._march_strategy == CommitTraversalStrategy.CURLICUE_OLD or
+              self._march_strategy == CommitTraversalStrategy.OLD_MARCH_FIRST):
             self._last_ret = "new"
             self._oldest_commit = self._commit_idx
         return self
