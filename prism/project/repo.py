@@ -53,10 +53,12 @@ class CommitIterator:
         omf = CommitMarchStrategy.OLD_MARCH_FIRST
         crn = CommitMarchStrategy.CURLICUE_NEW
         cro = CommitMarchStrategy.CURLICUE_OLD
-        self._next_func_dict = {nmf: self.new_march_first,
-                                omf: self.old_march_first,
-                                crn: self.curlicue,
-                                cro: self.curlicue}
+        self._next_func_dict = {
+            nmf: self.new_march_first,
+            omf: self.old_march_first,
+            crn: self.curlicue,
+            cro: self.curlicue
+        }
         self._next_func = self._next_func_dict[self._march_strategy]
 
         self._last_ret = ""
