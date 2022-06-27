@@ -38,7 +38,8 @@ class CommitIterator:
         self,
         repo: Repo,
         commit_sha: str,
-        march_strategy: Optional[CommitTraversalStrategy] = CommitTraversalStrategy(1)):
+        march_strategy: Optional[
+            CommitTraversalStrategy] = CommitTraversalStrategy(1)):
         """
         Initialize CommitIterator.
 
@@ -83,8 +84,8 @@ class CommitIterator:
 
     def init_commit_indices(self):
         """
-        Initialize the newest and oldest commit indices,
-        according to where the starting commit is.
+        Initialize the newest and oldest commit indices, according to
+        where the starting commit is.
         """
         if self._commit_idx > 0:
             self._newest_commit = self._commit_idx - 1
@@ -108,7 +109,7 @@ class CommitIterator:
     def new_march_first(self):
         """
         The commit traversal strategy which follows all progressively
-        newer commits before it returns older commits
+        newer commits before it returns older commits.
         """
         if self._newest_commit > 0:
             tmp_idx = self._newest_commit
@@ -124,7 +125,7 @@ class CommitIterator:
     def old_march_first(self):
         """
         The commit traversal strategy which follows all progressively
-        older commits before it returns newer commits
+        older commits before it returns newer commits.
         """
         if self._oldest_commit < len(self._commits):
             tmp_idx = self._oldest_commit
@@ -139,9 +140,9 @@ class CommitIterator:
 
     def curlicue(self):
         """
-        The commit traversal strategy which alternates between
-        newer and older commits, progressively widening the
-        distance from the central commit.
+        The commit traversal strategy which alternates between newer and
+        older commits, progressively widening the distance from the
+        central commit.
         """
         if self._newest_commit == 0:
             self._last_ret = "new"
@@ -166,21 +167,21 @@ class CommitIterator:
 
     def __next__(self):
         """
-        Iterator continuation method
+        Iterator continuation method.
         """
         return self._next_func()
 
     def __iter__(self):
         """
-        Iterator initiation method
+        Iterator initiation method.
         """
         self.init_commit_indices()
         if self._march_strategy == CommitTraversalStrategy.CURLICUE_NEW \
            or self._march_strategy == CommitTraversalStrategy.NEW_MARCH_FIRST:
             self._last_ret = "old"
             self._newest_commit = self._commit_idx
-        elif (self._march_strategy == CommitTraversalStrategy.CURLICUE_OLD
-              or self._march_strategy == CommitTraversalStrategy.OLD_MARCH_FIRST):
+        elif (self._march_strategy == CommitTraversalStrategy.CURLICUE_OLD or
+              self._march_strategy == CommitTraversalStrategy.OLD_MARCH_FIRST):
             self._last_ret = "new"
             self._oldest_commit = self._commit_idx
         return self
