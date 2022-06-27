@@ -1,11 +1,9 @@
 """
 Module providing CoqGym project repository class representations.
 """
-import os
 import random
-from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Optional, Union
+from typing import List, Optional
 
 from git import Commit, Repo
 
@@ -23,7 +21,7 @@ class CommitMarchStrategy(Enum):
     OLD_MARCH_FIRST = 2
     # Alternate newer and older steps progressively
     # from the center
-    CURLICUE_NEW = 3    
+    CURLICUE_NEW = 3
     # Alternate newer and older steps progressively
     # from the center
     CURLICUE_OLD = 4
@@ -34,11 +32,11 @@ class CommitIterator:
     Class for handling iteration over a range of commits.
     """
 
-    def __init__(
-        self,
-        repo: Repo,
-        commit_sha: str,
-        march_strategy: Optional[CommitMarchStrategy] = CommitMarchStrategy(1)):
+    def __init__(self,
+                 repo: Repo,
+                 commit_sha: str,
+                 march_strategy: Optional[CommitMarchStrategy] =
+                 CommitMarchStrategy(1)):
         """
         Initialize CommitIterator.
         """
@@ -61,7 +59,6 @@ class CommitIterator:
                                 cro: self.curlicue}
         self._next_func = self._next_func_dict[self._march_strategy]
 
-
         self._last_ret = ""
         self._newest_commit = None
         self._oldest_commit = None
@@ -69,11 +66,11 @@ class CommitIterator:
 
     def init_new_old_commit_idx(self):
         if self._commit_idx > 0:
-            self._newest_commit = self._commit_idx-1
+            self._newest_commit = self._commit_idx - 1
         else:
             self._newest_commit = None
-        if self._commit_idx < len(self._commits)-1:
-            self._oldest_commit = self._commit_idx+1
+        if self._commit_idx < len(self._commits) - 1:
+            self._oldest_commit = self._commit_idx + 1
         else:
             self._oldest_commit = None
 
@@ -117,7 +114,8 @@ class CommitIterator:
             tmp_idx = self._newest_commit
             self._newest_commit = self._newest_commit - 1
             return self._commits[tmp_idx]
-        elif self._last_ret == "new" and self._oldest_commit < len(self._commits)-1:
+        elif(self._last_ret == "new"
+             and self._oldest_commit < len(self._commits) - 1):
             self._last_ret = "old"
             tmp_idx = self._oldest_commit
             self._oldest_commit = self._oldest_commit + 1
@@ -137,8 +135,8 @@ class CommitIterator:
            or self._march_strategy == CommitMarchStrategy.NEW_MARCH_FIRST:
             self._last_ret = "old"
             self._newest_commit = self._commit_idx
-        elif self._march_strategy == CommitMarchStrategy.CURLICUE_OLD \
-             or self._march_strategy == CommitMarchStrategy.OLD_MARCH_FIRST:
+        elif(self._march_strategy == CommitMarchStrategy.CURLICUE_OLD
+             or self._march_strategy == CommitMarchStrategy.OLD_MARCH_FIRST):
             self._last_ret = "new"
             self._oldest_commit = self._commit_idx
         return self
