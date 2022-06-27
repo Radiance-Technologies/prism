@@ -13,6 +13,9 @@ from prism.project.base import Project
 
 
 class CommitTraversalStrategy(Enum):
+    """
+    Enum used for describing iteration algorithm.
+    """
     # Progress through newer and newer commits
     # until all have been finished
     NEW_MARCH_FIRST = 1
@@ -38,8 +41,8 @@ class CommitIterator:
         self,
         repo: Repo,
         commit_sha: str,
-        march_strategy: Optional[
-            CommitTraversalStrategy] = CommitTraversalStrategy(1)):
+        march_strategy: Optional[CommitTraversalStrategy] =
+            CommitTraversalStrategy.NEW_MARCH_FIRST):
         """
         Initialize CommitIterator.
 
@@ -84,6 +87,8 @@ class CommitIterator:
 
     def init_commit_indices(self):
         """
+        Initialize commit indices.
+
         Initialize the newest and oldest commit indices, according to
         where the starting commit is.
         """
@@ -108,6 +113,8 @@ class CommitIterator:
 
     def new_march_first(self):
         """
+        Return newer commits until none remain, then older.
+
         The commit traversal strategy which follows all progressively
         newer commits before it returns older commits.
         """
@@ -124,6 +131,8 @@ class CommitIterator:
 
     def old_march_first(self):
         """
+        Return older commits until none remain, then newer.
+
         The commit traversal strategy which follows all progressively
         older commits before it returns newer commits.
         """
@@ -140,6 +149,8 @@ class CommitIterator:
 
     def curlicue(self):
         """
+        Return commits in a progressively widened area about the center.
+
         The commit traversal strategy which alternates between newer and
         older commits, progressively widening the distance from the
         central commit.
@@ -180,8 +191,9 @@ class CommitIterator:
            or self._march_strategy == CommitTraversalStrategy.NEW_MARCH_FIRST:
             self._last_ret = "old"
             self._newest_commit = self._commit_idx
-        elif (self._march_strategy == CommitTraversalStrategy.CURLICUE_OLD or
-              self._march_strategy == CommitTraversalStrategy.OLD_MARCH_FIRST):
+        elif (self._march_strategy == CommitTraversalStrategy.CURLICUE_OLD
+              or self._march_strategy
+              == CommitTraversalStrategy.OLD_MARCH_FIRST):
             self._last_ret = "new"
             self._oldest_commit = self._commit_idx
         return self
