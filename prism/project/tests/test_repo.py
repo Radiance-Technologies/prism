@@ -6,24 +6,21 @@ import unittest
 
 from git import Commit, Repo
 
-from prism.project.repo import commit_dict_factory, CommitIterator
+from prism.project.repo import CommitIterator, commit_dict_factory
 
 TEST_DIR = os.path.dirname(__file__)
 PROJECT_DIR = os.path.dirname(TEST_DIR)
 PRISM_DIR = os.path.dirname(PROJECT_DIR)
 REPO_DIR = os.path.dirname(PRISM_DIR)
 
-FIRST_HASH  = "1aa5cfb2240df880f6c1d457f66c4b0a01e0a1aa"
+FIRST_HASH = "1aa5cfb2240df880f6c1d457f66c4b0a01e0a1aa"
 SECOND_HASH = "29a790c002f8e797a01fb87b64fc2db85d147e25"
-THIRD_HASH  = "d689b50282393a74d43ea811ba232e5f2206aa0e"
+THIRD_HASH = "d689b50282393a74d43ea811ba232e5f2206aa0e"
 FOURTH_HASH = "248a03133252d6a3063dc61e2ee73af228cc58aa"
-FIFTH_HASH  = "7219a28b131dd91aafc9daf67ef2c295ecbff910"
+FIFTH_HASH = "7219a28b131dd91aafc9daf67ef2c295ecbff910"
 
-HASHES = [FIRST_HASH, 
-          SECOND_HASH, 
-          THIRD_HASH, 
-          FOURTH_HASH, 
-          FIFTH_HASH]
+HASHES = [FIRST_HASH, SECOND_HASH, THIRD_HASH, FOURTH_HASH, FIFTH_HASH]
+
 
 class TestCommitIter(unittest.TestCase):
     """
@@ -64,8 +61,6 @@ class TestCommitIter(unittest.TestCase):
                 break
             self.assertTrue(commit.hexsha == hashes[counter])
             counter += 1
-
-
 
 
 if __name__ == "__main__":
