@@ -16,6 +16,7 @@ from prism.data.document import CoqDocument
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
 from prism.project.exception import ProjectBuildError
 from prism.project.metadata import ProjectMetadata
+from prism.project.metadata.storage import MetadataStorage
 from prism.util.io import infer_format
 from prism.util.logging import default_log_level
 
@@ -64,6 +65,9 @@ class Project(ABC):
     ----------
     dir_abspath : str
         The absolute path to the project's root directory.
+    metadata_storage : MetadataStorage
+        MetadataStorage for referencing all possible metadata
+        configurations for the project.
     metadata : os.PathLike or `ProjectMetadata`
         ProjectMetadata object containing metadata
         for project or the path to a .yml file where it can be extracted
@@ -87,6 +91,7 @@ class Project(ABC):
     def __init__(
             self,
             dir_abspath: str,
+            metadata_storage : MetadataStorage,
             metadata: Optional[Union[PathLike,
                                      ProjectMetadata]] = None,
             sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI,
@@ -110,6 +115,7 @@ class Project(ABC):
                     f"Manually pass a single ProjectMetadata instance instead.")
             metadata = data[0]
         self.dir_abspath = dir_abspath
+        self.metadata_storage = metadata_storage
         self.size_bytes = self._get_size_bytes()
         self.sentence_extraction_method = sentence_extraction_method
         self.metadata = metadata

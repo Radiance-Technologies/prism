@@ -19,6 +19,7 @@ from git import InvalidGitRepositoryError
 
 from prism.data.document import CoqDocument
 from prism.project import DirHasNoCoqFiles, Project, ProjectDir, ProjectRepo
+from prism.project.metadata.storage import MetadataStorage
 
 ProjectDict = Dict[str, Union[ProjectRepo, ProjectDir]]
 MetadataDict = TypeVar("MetadataDict")
@@ -121,6 +122,7 @@ class CoqGymBaseDataset:
             projects: Optional[ProjectDict] = None,
             base_dir: Optional[str] = None,
             dir_list: Optional[Iterable[str]] = None,
+            metadata_storage: Optional[MetadataStorage] = None,
             **project_class_kwargs):
         """
         Initialize the CoqGymDataset object.
@@ -144,6 +146,9 @@ class CoqGymBaseDataset:
             If provided, build a `Project` from each of these
             directories. If any of these directories are not
             repositories, an exception is raised, by default None
+        metadata_storage : Optional[MetadataStorage], optional
+            Required if either base_dir or dir_list are provided.
+            Used to associate with Project objects created.
 
         Raises
         ------
@@ -176,12 +181,17 @@ class CoqGymBaseDataset:
                 raise ValueError(
                     "If `base_dir` is given, `project_class` must be "
                     "given as well.")
+            if metadata_storage is None:
+                raise ValueError(
+                    "If `base_dir` is given, `metadata_storage` must "
+                    "be given as well.")
             for proj_dir in os.listdir(base_dir):
                 if os.path.isdir(os.path.join(base_dir, proj_dir)):
                     try:
                         project = project_class(
                             os.path.join(base_dir,
                                          proj_dir),
+                            metadata_storage,
                             **project_class_kwargs)
                         self.projects[project.name] = project
                     except (InvalidGitRepositoryError, DirHasNoCoqFiles):
@@ -194,9 +204,13 @@ class CoqGymBaseDataset:
                 raise ValueError(
                     "If `dir_list` is given, `project_class` must be "
                     "given as well.")
+            if metadata_storage is None:
+                raise ValueError(
+                    "If `dir_list` is given, `metadata_storage` must "
+                    "be given as well.")
             for directory in dir_list:
                 try:
-                    project = project_class(directory, **project_class_kwargs)
+                    project = project_class(directory, metadata_storage, **project_class_kwargs)
                     self.projects[project.name] = project
                 except InvalidGitRepositoryError as e:
                     raise ValueError(
