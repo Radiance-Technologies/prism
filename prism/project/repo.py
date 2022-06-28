@@ -17,20 +17,28 @@ class CommitTraversalStrategy(Enum):
     Enum used for describing iteration algorithm.
     """
 
-    # Progress through newer and newer commits
-    # until all have been finished
     NEW_FIRST = 1
-    # Progress through older and older commits
-    # until all have been finished
+    """
+    Progress through newer and newer commits
+    until all have been finished.
+    """
     OLD_FIRST = 2
-    # Alternate newer and older steps progressively
-    # from the center, assuming the center is a newer
-    # step
+    """
+    Progress through older and older commits
+    until all have been finished.
+    """
     CURLICUE_NEW = 3
-    # Alternate newer and older steps progressively
-    # from the center, assuming the center is an older
-    # step
+    """
+    Alternate newer and older steps progressively
+    from the center, assuming the center is a newer
+    step.
+    """
     CURLICUE_OLD = 4
+    """
+    Alternate newer and older steps progressively
+    from the center, assuming the center is an older
+    step.
+    """
 
 
 class CommitIterator:
