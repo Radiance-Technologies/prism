@@ -2,6 +2,7 @@
 Test module for prism.project.repo module.
 """
 import os
+import shutil
 import unittest
 
 import git
@@ -161,6 +162,14 @@ class TestCommitIter(unittest.TestCase):
             self.assertTrue(commit.hexsha == hashes[counter])
             counter += 1
 
+    @classmethod
+    def tearDownClass(cls):
+        """
+        Remove the cloned repos.
+        """
+        for project_name, repo in cls.repos.items():
+            del repo
+            shutil.rmtree(os.path.join(cls.repo_paths[project_name]))
 
 if __name__ == "__main__":
     unittest.main()
