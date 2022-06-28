@@ -210,7 +210,10 @@ class CoqGymBaseDataset:
                     "be given as well.")
             for directory in dir_list:
                 try:
-                    project = project_class(directory, metadata_storage, **project_class_kwargs)
+                    project = project_class(
+                        directory,
+                        metadata_storage,
+                        **project_class_kwargs)
                     self.projects[project.name] = project
                 except InvalidGitRepositoryError as e:
                     raise ValueError(
