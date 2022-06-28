@@ -177,26 +177,29 @@ class CoqGymBaseDataset:
         if projects_not_none:
             self.projects = projects
         elif base_dir_not_none:
-            self.init_projects_base_dir(project_class,
-                                        base_dir,
-                                        metadata_storage,
-                                        project_class_kwargs)
+            self.init_projects_base_dir(
+                project_class,
+                base_dir,
+                metadata_storage,
+                project_class_kwargs)
         else:
-            self.init_projects_dir_list(project_class,
-                                        dir_list,
-                                        metadata_storage,
-                                        project_class_kwargs)
+            self.init_projects_dir_list(
+                project_class,
+                dir_list,
+                metadata_storage,
+                project_class_kwargs)
         # Store project weights for sampling later.
         self.weights = {pn: p.size_bytes for pn,
                         p in self.projects.items()}
         self.sentence_extraction_method = next(
             iter(self.projects.values())).sentence_extraction_method
 
-    def init_projects_base_dir(self,
-                               project_class,
-                               base_dir,
-                               metadata_storage,
-                               project_class_kwargs):
+    def init_projects_base_dir(
+            self,
+            project_class,
+            base_dir,
+            metadata_storage,
+            project_class_kwargs):
         """
         Initialize Project dictionary using a base directory.
         """
@@ -212,7 +215,8 @@ class CoqGymBaseDataset:
             if os.path.isdir(os.path.join(base_dir, proj_dir)):
                 try:
                     project = project_class(
-                        os.path.join(base_dir, proj_dir),
+                        os.path.join(base_dir,
+                                     proj_dir),
                         metadata_storage,
                         **project_class_kwargs)
                     self.projects[project.name] = project
@@ -222,11 +226,12 @@ class CoqGymBaseDataset:
                     # the directory has no Coq files, just ignore it
                     pass
 
-    def init_projects_dir_list(self,
-                               project_class,
-                               dir_list,
-                               metadata_storage,
-                               project_class_kwargs):
+    def init_projects_dir_list(
+            self,
+            project_class,
+            dir_list,
+            metadata_storage,
+            project_class_kwargs):
         """
         Initialize Project dictionary using a directory list.
         """
@@ -240,7 +245,10 @@ class CoqGymBaseDataset:
                 "be given as well.")
         for directory in dir_list:
             try:
-                project = project_class(directory, metadata_storage, **project_class_kwargs)
+                project = project_class(
+                    directory,
+                    metadata_storage,
+                    **project_class_kwargs)
                 self.projects[project.name] = project
             except InvalidGitRepositoryError as e:
                 raise ValueError(
