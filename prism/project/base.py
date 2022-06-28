@@ -91,7 +91,7 @@ class Project(ABC):
     def __init__(
             self,
             dir_abspath: str,
-            metadata_storage : MetadataStorage,
+            metadata_storage: MetadataStorage,
             metadata: Optional[Union[PathLike,
                                      ProjectMetadata]] = None,
             sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI,
