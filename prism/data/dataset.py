@@ -177,53 +177,78 @@ class CoqGymBaseDataset:
         if projects_not_none:
             self.projects = projects
         elif base_dir_not_none:
-            if project_class is None:
-                raise ValueError(
-                    "If `base_dir` is given, `project_class` must be "
-                    "given as well.")
-            if metadata_storage is None:
-                raise ValueError(
-                    "If `base_dir` is given, `metadata_storage` must "
-                    "be given as well.")
-            for proj_dir in os.listdir(base_dir):
-                if os.path.isdir(os.path.join(base_dir, proj_dir)):
-                    try:
-                        project = project_class(
-                            os.path.join(base_dir,
-                                         proj_dir),
-                            metadata_storage,
-                            **project_class_kwargs)
-                        self.projects[project.name] = project
-                    except (InvalidGitRepositoryError, DirHasNoCoqFiles):
-                        # If we're using ProjectRepo and a directory is
-                        # not a repo, or if we're using ProjectDir and
-                        # the directory has no Coq files, just ignore it
-                        pass
+            self.init_projects_base_dir(project_class,
+                                        base_dir,
+                                        metadata_storage,
+                                        project_class_kwargs)
         else:
-            if project_class is None:
-                raise ValueError(
-                    "If `dir_list` is given, `project_class` must be "
-                    "given as well.")
-            if metadata_storage is None:
-                raise ValueError(
-                    "If `dir_list` is given, `metadata_storage` must "
-                    "be given as well.")
-            for directory in dir_list:
-                try:
-                    project = project_class(directory, metadata_storage, **project_class_kwargs)
-                    self.projects[project.name] = project
-                except InvalidGitRepositoryError as e:
-                    raise ValueError(
-                        f"{directory} in `dir_list` is not a valid repository."
-                    ) from e
-                except DirHasNoCoqFiles as e:
-                    raise ValueError(
-                        f"{directory} in `dir_list` has no Coq files.") from e
+            self.init_projects_dir_list(project_class,
+                                        dir_list,
+                                        metadata_storage,
+                                        project_class_kwargs)
         # Store project weights for sampling later.
         self.weights = {pn: p.size_bytes for pn,
                         p in self.projects.items()}
         self.sentence_extraction_method = next(
             iter(self.projects.values())).sentence_extraction_method
+
+    def init_projects_base_dir(self,
+                               project_class,
+                               base_dir,
+                               metadata_storage,
+                               project_class_kwargs):
+        """
+        Initialize Project dictionary using a base directory.
+        """
+        if project_class is None:
+            raise ValueError(
+                "If `base_dir` is given, `project_class` must be "
+                "given as well.")
+        if metadata_storage is None:
+            raise ValueError(
+                "If `base_dir` is given, `metadata_storage` must "
+                "be given as well.")
+        for proj_dir in os.listdir(base_dir):
+            if os.path.isdir(os.path.join(base_dir, proj_dir)):
+                try:
+                    project = project_class(
+                        os.path.join(base_dir, proj_dir),
+                        metadata_storage,
+                        **project_class_kwargs)
+                    self.projects[project.name] = project
+                except (InvalidGitRepositoryError, DirHasNoCoqFiles):
+                    # If we're using ProjectRepo and a directory is
+                    # not a repo, or if we're using ProjectDir and
+                    # the directory has no Coq files, just ignore it
+                    pass
+
+    def init_projects_dir_list(self,
+                               project_class,
+                               dir_list,
+                               metadata_storage,
+                               project_class_kwargs):
+        """
+        Initialize Project dictionary using a directory list.
+        """
+        if project_class is None:
+            raise ValueError(
+                "If `dir_list` is given, `project_class` must be "
+                "given as well.")
+        if metadata_storage is None:
+            raise ValueError(
+                "If `dir_list` is given, `metadata_storage` must "
+                "be given as well.")
+        for directory in dir_list:
+            try:
+                project = project_class(directory, metadata_storage, **project_class_kwargs)
+                self.projects[project.name] = project
+            except InvalidGitRepositoryError as e:
+                raise ValueError(
+                    f"{directory} in `dir_list` is not a valid repository."
+                ) from e
+            except DirHasNoCoqFiles as e:
+                raise ValueError(
+                    f"{directory} in `dir_list` has no Coq files.") from e
 
     def _get_random_project(self) -> str:
         """
