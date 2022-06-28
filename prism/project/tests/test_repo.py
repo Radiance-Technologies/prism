@@ -28,6 +28,7 @@ GEOCOQ_COMMIT_3 = "212eee5df43a1b3c4fdfab8be5e0f3f9afb41c6d"
 GEOCOQ_COMMIT_4 = "4948ebee64e375ea42c91798dc18d2f5b16ef669"
 GEOCOQ_COMMIT_5 = "46ca71de544769ec2a50d4f5ac73f2bd27b0033c"
 
+
 class TestCommitIter(unittest.TestCase):
     """
     Class for testing CommitIter class.
