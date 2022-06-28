@@ -90,11 +90,13 @@ class TestCommitIter(unittest.TestCase):
         """
         repo = self.projects['GeoCoq']
         counter = 0
-        hashes = [GEOCOQ_COMMIT_134,
-                  GEOCOQ_COMMIT_135,
-                  GEOCOQ_COMMIT_136,
-                  GEOCOQ_COMMIT_137,
-                  GEOCOQ_COMMIT_138]
+        hashes = [
+            GEOCOQ_COMMIT_134,
+            GEOCOQ_COMMIT_135,
+            GEOCOQ_COMMIT_136,
+            GEOCOQ_COMMIT_137,
+            GEOCOQ_COMMIT_138
+        ]
         for commit in CommitIterator(repo, GEOCOQ_COMMIT_134):
             if counter == 3:
                 break
@@ -108,11 +110,13 @@ class TestCommitIter(unittest.TestCase):
         """
         repo = self.projects['GeoCoq']
         counter = 0
-        hashes = [GEOCOQ_COMMIT_3,
-                  GEOCOQ_COMMIT_2,
-                  GEOCOQ_COMMIT_1,
-                  GEOCOQ_COMMIT_4,
-                  GEOCOQ_COMMIT_5]
+        hashes = [
+            GEOCOQ_COMMIT_3,
+            GEOCOQ_COMMIT_2,
+            GEOCOQ_COMMIT_1,
+            GEOCOQ_COMMIT_4,
+            GEOCOQ_COMMIT_5
+        ]
         for commit in CommitIterator(repo,
                                      GEOCOQ_COMMIT_3,
                                      CommitTraversalStrategy.OLD_FIRST):
@@ -128,11 +132,13 @@ class TestCommitIter(unittest.TestCase):
         """
         repo = self.projects['GeoCoq']
         counter = 0
-        hashes = [GEOCOQ_COMMIT_3,
-                  GEOCOQ_COMMIT_2,
-                  GEOCOQ_COMMIT_4,
-                  GEOCOQ_COMMIT_1,
-                  GEOCOQ_COMMIT_5]
+        hashes = [
+            GEOCOQ_COMMIT_3,
+            GEOCOQ_COMMIT_2,
+            GEOCOQ_COMMIT_4,
+            GEOCOQ_COMMIT_1,
+            GEOCOQ_COMMIT_5
+        ]
         for commit in CommitIterator(repo,
                                      GEOCOQ_COMMIT_3,
                                      CommitTraversalStrategy.CURLICUE_NEW):
@@ -148,11 +154,13 @@ class TestCommitIter(unittest.TestCase):
         """
         repo = self.projects['GeoCoq']
         counter = 0
-        hashes = [GEOCOQ_COMMIT_3,
-                  GEOCOQ_COMMIT_4,
-                  GEOCOQ_COMMIT_2,
-                  GEOCOQ_COMMIT_5,
-                  GEOCOQ_COMMIT_1]
+        hashes = [
+            GEOCOQ_COMMIT_3,
+            GEOCOQ_COMMIT_4,
+            GEOCOQ_COMMIT_2,
+            GEOCOQ_COMMIT_5,
+            GEOCOQ_COMMIT_1
+        ]
         for commit in CommitIterator(repo,
                                      GEOCOQ_COMMIT_3,
                                      CommitTraversalStrategy.CURLICUE_OLD):
@@ -170,6 +178,7 @@ class TestCommitIter(unittest.TestCase):
         for project_name, repo in cls.repos.items():
             del repo
             shutil.rmtree(os.path.join(cls.repo_paths[project_name]))
+
 
 if __name__ == "__main__":
     unittest.main()
