@@ -74,8 +74,8 @@ class CommitIterator:
         crn = CommitTraversalStrategy.CURLICUE_NEW
         cro = CommitTraversalStrategy.CURLICUE_OLD
         self._next_func_dict = {
-            nmf: self.NEW_FIRST,
-            omf: self.OLD_FIRST,
+            nmf: self.new_first,
+            omf: self.old_first,
             crn: self.curlicue,
             cro: self.curlicue
         }
@@ -112,7 +112,7 @@ class CommitIterator:
         self._commit_idx = self._commit_sha_list.index(self._commit_sha)
         self.init_commit_indices()
 
-    def NEW_FIRST(self):
+    def new_first(self):
         """
         Return newer commits until none remain, then older.
 
@@ -130,7 +130,7 @@ class CommitIterator:
         else:
             raise StopIteration
 
-    def OLD_FIRST(self):
+    def old_first(self):
         """
         Return older commits until none remain, then newer.
 
