@@ -148,7 +148,8 @@ class CoqGymBaseDataset:
             repositories, an exception is raised, by default None
         metadata_storage : Optional[MetadataStorage], optional
             Required if either base_dir or dir_list are provided.
-            Used to associate with Project objects created.
+            Serves as the default `MetadataStorage` to any
+            internally created `Project`.
 
         Raises
         ------

@@ -10,6 +10,7 @@ import git
 from prism.data.dataset import CoqGymBaseDataset
 from prism.project import ProjectDir, ProjectRepo, SentenceExtractionMethod
 from prism.project.metadata import ProjectMetadata
+from prism.project.metadata.storage import MetadataStorage
 
 
 class TestCoqGymBaseDataset(unittest.TestCase):
@@ -138,6 +139,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         dataset = CoqGymBaseDataset(
             project_class=ProjectDir,
             base_dir=self.test_path,
+            metadata_storage=MetadataStorage(),
             sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
         for project_name in self.project_names:
             with self.subTest(project_name):
@@ -153,6 +155,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         dataset = CoqGymBaseDataset(
             project_class=ProjectDir,
             dir_list=self.repo_paths.values(),
+            metadata_storage=MetadataStorage(),
             sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
         for project_name in self.project_names:
             with self.subTest(project_name):
@@ -168,6 +171,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         dataset = CoqGymBaseDataset(
             project_class=ProjectRepo,
             base_dir=self.test_path,
+            metadata_storage=MetadataStorage(),
             sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
         for project_name in self.project_names:
             with self.subTest(project_name):
@@ -184,6 +188,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         dataset = CoqGymBaseDataset(
             project_class=ProjectRepo,
             dir_list=self.repo_paths.values(),
+            metadata_storage=MetadataStorage(),
             sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
         for project_name in self.project_names:
             with self.subTest(project_name):
