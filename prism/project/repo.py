@@ -69,7 +69,9 @@ class CommitIterator:
             we wish to use.
         """
         self._repo = repo
-        self._commits = list(repo.commit().iter_parents())
+        print("Inside CommitIterator: ", repo.commit())
+        self._commits = [repo.commit()]+list(repo.commit().iter_parents())
+        print("Inside CommitIterator: ", self._commits[:5])
         self._commit_sha = commit_sha
         self._commit_sha_list = [x.hexsha for x in self._commits]
         self._commit_idx = self._commit_sha_list.index(self._commit_sha)
@@ -148,7 +150,7 @@ class CommitIterator:
         The commit traversal strategy which follows all progressively
         newer commits before it returns older commits.
         """
-        if self._newest_commit > 0:
+        if self._newest_commit >= 0:
             tmp_idx = self._newest_commit
             self._newest_commit = self._newest_commit - 1
             return self._commits[tmp_idx]
@@ -170,7 +172,7 @@ class CommitIterator:
             tmp_idx = self._oldest_commit
             self._oldest_commit = self._oldest_commit + 1
             return self._commits[tmp_idx]
-        elif self._newest_commit > 0:
+        elif self._newest_commit >= 0:
             tmp_idx = self._newest_commit
             self._newest_commit = self._newest_commit - 1
             return self._commits[tmp_idx]
@@ -189,13 +191,13 @@ class CommitIterator:
             self._last_ret = "new"
         if self._oldest_commit == len(self._commits):
             self._last_ret = "old"
-        if self._last_ret == "old" and self._newest_commit > 0:
+        if self._last_ret == "old" and self._newest_commit >= 0:
             self._last_ret = "new"
             tmp_idx = self._newest_commit
             self._newest_commit = self._newest_commit - 1
             return self._commits[tmp_idx]
         elif (self._last_ret == "new"
-              and self._oldest_commit < len(self._commits) - 1):
+              and self._oldest_commit < len(self._commits)):
             self._last_ret = "old"
             tmp_idx = self._oldest_commit
             self._oldest_commit = self._oldest_commit + 1

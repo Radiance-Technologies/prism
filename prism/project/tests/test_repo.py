@@ -1,6 +1,7 @@
 """
 Test module for prism.project.repo module.
 """
+import itertools
 import os
 import shutil
 import unittest
@@ -89,12 +90,10 @@ class TestCommitIter(unittest.TestCase):
             GEOCOQ_COMMIT_137,
             GEOCOQ_COMMIT_138
         ]
-        for commit in CommitIterator(repo, GEOCOQ_COMMIT_134):
-            if counter == 3:
-                break
-            print(counter, commit.hexsha, flush=True)
-            self.assertTrue(commit.hexsha == hashes[counter])
-            counter += 1
+        commit_iter = CommitIterator(repo, GEOCOQ_COMMIT_134)
+        hashes_test = list(itertools.islice(commit_iter, 5))
+        hashes_test = [x.hexsha for x in hashes_test]
+        self.assertEqual(hashes, hashes_test)
 
     def test_iterator_oldest_first(self):
         """
@@ -109,14 +108,12 @@ class TestCommitIter(unittest.TestCase):
             GEOCOQ_COMMIT_4,
             GEOCOQ_COMMIT_5
         ]
-        for commit in CommitIterator(repo,
-                                     GEOCOQ_COMMIT_3,
-                                     CommitTraversalStrategy.OLD_FIRST):
-            if counter == 5:
-                break
-            print(counter, commit.hexsha, flush=True)
-            self.assertTrue(commit.hexsha == hashes[counter])
-            counter += 1
+        
+        commit_iter = CommitIterator(repo, GEOCOQ_COMMIT_3,
+                                     CommitTraversalStrategy.OLD_FIRST)
+        hashes_test = list(itertools.islice(commit_iter, 5))
+        hashes_test = [x.hexsha for x in hashes_test]
+        self.assertEqual(hashes, hashes_test)
 
     def test_iterator_curlicue_new(self):
         """
@@ -131,14 +128,11 @@ class TestCommitIter(unittest.TestCase):
             GEOCOQ_COMMIT_1,
             GEOCOQ_COMMIT_5
         ]
-        for commit in CommitIterator(repo,
-                                     GEOCOQ_COMMIT_3,
-                                     CommitTraversalStrategy.CURLICUE_NEW):
-            if counter == 5:
-                break
-            print(counter, commit.hexsha, flush=True)
-            self.assertTrue(commit.hexsha == hashes[counter])
-            counter += 1
+        commit_iter = CommitIterator(repo, GEOCOQ_COMMIT_3,
+                                     CommitTraversalStrategy.CURLICUE_NEW)
+        hashes_test = list(itertools.islice(commit_iter, 5))
+        hashes_test = [x.hexsha for x in hashes_test]
+        self.assertEqual(hashes, hashes_test)
 
     def test_iterator_curlicue_old(self):
         """
@@ -153,14 +147,11 @@ class TestCommitIter(unittest.TestCase):
             GEOCOQ_COMMIT_5,
             GEOCOQ_COMMIT_1
         ]
-        for commit in CommitIterator(repo,
-                                     GEOCOQ_COMMIT_3,
-                                     CommitTraversalStrategy.CURLICUE_OLD):
-            if counter == 5:
-                break
-            print(counter, commit.hexsha, flush=True)
-            self.assertTrue(commit.hexsha == hashes[counter])
-            counter += 1
+        commit_iter = CommitIterator(repo, GEOCOQ_COMMIT_3,
+                                     CommitTraversalStrategy.CURLICUE_OLD)
+        hashes_test = list(itertools.islice(commit_iter, 5))
+        hashes_test = [x.hexsha for x in hashes_test]
+        self.assertEqual(hashes, hashes_test)
 
     @classmethod
     def tearDownClass(cls):
