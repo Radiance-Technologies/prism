@@ -108,9 +108,11 @@ class TestCommitIter(unittest.TestCase):
             GEOCOQ_COMMIT_4,
             GEOCOQ_COMMIT_5
         ]
-        
-        commit_iter = CommitIterator(repo, GEOCOQ_COMMIT_3,
-                                     CommitTraversalStrategy.OLD_FIRST)
+
+        commit_iter = CommitIterator(
+            repo,
+            GEOCOQ_COMMIT_3,
+            CommitTraversalStrategy.OLD_FIRST)
         hashes_test = list(itertools.islice(commit_iter, 5))
         hashes_test = [x.hexsha for x in hashes_test]
         self.assertEqual(hashes, hashes_test)
@@ -128,8 +130,10 @@ class TestCommitIter(unittest.TestCase):
             GEOCOQ_COMMIT_1,
             GEOCOQ_COMMIT_5
         ]
-        commit_iter = CommitIterator(repo, GEOCOQ_COMMIT_3,
-                                     CommitTraversalStrategy.CURLICUE_NEW)
+        commit_iter = CommitIterator(
+            repo,
+            GEOCOQ_COMMIT_3,
+            CommitTraversalStrategy.CURLICUE_NEW)
         hashes_test = list(itertools.islice(commit_iter, 5))
         hashes_test = [x.hexsha for x in hashes_test]
         self.assertEqual(hashes, hashes_test)
@@ -147,8 +151,10 @@ class TestCommitIter(unittest.TestCase):
             GEOCOQ_COMMIT_5,
             GEOCOQ_COMMIT_1
         ]
-        commit_iter = CommitIterator(repo, GEOCOQ_COMMIT_3,
-                                     CommitTraversalStrategy.CURLICUE_OLD)
+        commit_iter = CommitIterator(
+            repo,
+            GEOCOQ_COMMIT_3,
+            CommitTraversalStrategy.CURLICUE_OLD)
         hashes_test = list(itertools.islice(commit_iter, 5))
         hashes_test = [x.hexsha for x in hashes_test]
         self.assertEqual(hashes, hashes_test)

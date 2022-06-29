@@ -70,8 +70,8 @@ class CommitIterator:
         """
         self._repo = repo
         print("Inside CommitIterator: ", repo.commit())
-        self._commits = [repo.commit()]+list(repo.commit().iter_parents())
-        print("Inside CommitIterator: ", self._commits[:5])
+        self._commits = [repo.commit()] + list(repo.commit().iter_parents())
+        print("Inside CommitIterator: ", self._commits[: 5])
         self._commit_sha = commit_sha
         self._commit_sha_list = [x.hexsha for x in self._commits]
         self._commit_idx = self._commit_sha_list.index(self._commit_sha)
