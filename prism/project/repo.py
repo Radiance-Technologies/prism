@@ -94,6 +94,27 @@ class CommitIterator:
         self._oldest_commit = None
         self.init_commit_indices()
 
+    def __iter__(self):
+        """
+        Initialize iterator.
+        """
+        self.init_commit_indices()
+        if self._march_strategy == CommitTraversalStrategy.CURLICUE_NEW \
+           or self._march_strategy == CommitTraversalStrategy.NEW_FIRST:
+            self._last_ret = "old"
+            self._newest_commit = self._commit_idx
+        elif (self._march_strategy == CommitTraversalStrategy.CURLICUE_OLD
+              or self._march_strategy == CommitTraversalStrategy.OLD_FIRST):
+            self._last_ret = "new"
+            self._oldest_commit = self._commit_idx
+        return self
+
+    def __next__(self):
+        """
+        Return next value in container.
+        """
+        return self._next_func()
+
     def init_commit_indices(self):
         """
         Initialize commit indices.
@@ -184,27 +205,6 @@ class CommitIterator:
                 raise Exception("Malformed")
             else:
                 raise StopIteration
-
-    def __next__(self):
-        """
-        Return next value in container.
-        """
-        return self._next_func()
-
-    def __iter__(self):
-        """
-        Initialize iterator.
-        """
-        self.init_commit_indices()
-        if self._march_strategy == CommitTraversalStrategy.CURLICUE_NEW \
-           or self._march_strategy == CommitTraversalStrategy.NEW_FIRST:
-            self._last_ret = "old"
-            self._newest_commit = self._commit_idx
-        elif (self._march_strategy == CommitTraversalStrategy.CURLICUE_OLD
-              or self._march_strategy == CommitTraversalStrategy.OLD_FIRST):
-            self._last_ret = "new"
-            self._oldest_commit = self._commit_idx
-        return self
 
 
 class ProjectRepo(Repo, Project):
