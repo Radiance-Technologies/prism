@@ -82,7 +82,6 @@ class TestCommitIter(unittest.TestCase):
         Test iterator basic functionality.
         """
         repo = self.projects['GeoCoq']
-        counter = 0
         hashes = [
             GEOCOQ_COMMIT_134,
             GEOCOQ_COMMIT_135,
@@ -100,7 +99,6 @@ class TestCommitIter(unittest.TestCase):
         Test iterator oldest first functionality.
         """
         repo = self.projects['GeoCoq']
-        counter = 0
         hashes = [
             GEOCOQ_COMMIT_3,
             GEOCOQ_COMMIT_2,
@@ -108,7 +106,6 @@ class TestCommitIter(unittest.TestCase):
             GEOCOQ_COMMIT_4,
             GEOCOQ_COMMIT_5
         ]
-
         commit_iter = CommitIterator(
             repo,
             GEOCOQ_COMMIT_3,
@@ -122,7 +119,6 @@ class TestCommitIter(unittest.TestCase):
         Test iterator curlicue new functionality.
         """
         repo = self.projects['GeoCoq']
-        counter = 0
         hashes = [
             GEOCOQ_COMMIT_3,
             GEOCOQ_COMMIT_2,
@@ -143,7 +139,6 @@ class TestCommitIter(unittest.TestCase):
         Test iterator curlicue old functionality.
         """
         repo = self.projects['GeoCoq']
-        counter = 0
         hashes = [
             GEOCOQ_COMMIT_3,
             GEOCOQ_COMMIT_4,
