@@ -5,7 +5,7 @@ if [ "${BASH_SOURCE[0]}" == "$0" ] ; then
 fi
 
 if [ "$1" == "" ] ; then
-  export VERSION=3.8.10
+  export VERSION=3.9.10
   echo "Defaulting to Python version $VERSION"
 else
   export VERSION=$1

@@ -1,16 +1,15 @@
 """
 Module for utilies for logical components of a dependency.
 """
-from abc import ABC, abstractmethod
-from enum import Enum
 from itertools import accumulate
 from pathlib import Path
 from typing import Generator, List, Sequence, Tuple
 
-import networkx as nx
-
 
 def logical_iter(logical: str):
+    """
+    Iterate over accumulation of logical segments.
+    """
     logical_parts = logical.split('.')
     for logical_ in accumulate(logical_parts, lambda *parts: '.'.join(parts)):
         yield logical_
@@ -22,6 +21,7 @@ class _LogicalParents(Sequence):
 
     Useful if the logical path is long and not all parents are needed
     """
+
     __slots__ = ('_logicalcls', '_parts')
 
     def __init__(self, logical_name):
@@ -30,14 +30,23 @@ class _LogicalParents(Sequence):
         self._parts = logical_name._parts
 
     def __len__(self):
+        """
+        Return number of parents.
+        """
         return len(self._parts) - 1
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int):
+        """
+        Return the `idx`th parent.
+        """
         if idx < 0 or idx >= len(self):
             raise IndexError(idx)
         return self._logicalcls(*self._parts[:-idx - 1], parsed=True)
 
     def __repr__(self):
+        """
+        Return string representation of logical parents.
+        """
         return "<{}.parents>".format(self._logicalcls.__name__)
 
 
@@ -45,6 +54,7 @@ class _LogicalShortNames(Sequence):
     """
     Object that provides sequence-like access to logical ancestors.
     """
+
     __slots__ = ('_logicalcls', '_parts')
 
     def __init__(self, logical_name):
@@ -53,24 +63,35 @@ class _LogicalShortNames(Sequence):
         self._parts = logical_name._parts
 
     def __len__(self):
+        """
+        Return number of shortnames.
+        """
         return len(self._parts)
 
     def __getitem__(self, idx):
+        """
+        Return the `idx`th shortname.
+        """
         n = len(self)
         if idx < 0 or idx >= n:
             raise IndexError(idx)
         return self._logicalcls(*self._parts[n - idx - 1 :], parsed=True)
 
     def __repr__(self):
+        """
+        Return string representation of logical shortnames.
+        """
         return "<{}.shortnames>".format(self._logicalcls.__name__)
 
 
 class LogicalName(str):
+    """
+    A string that is used as a identifier for module/compiled library.
+    """
 
     def __new__(cls, *args, parsed: bool = False, level=None):
         """
-        Construct a PurePath from one or several strings and or existing
-        PurePath objects.
+        Construct logical name from parts.
 
         The strings and path objects are combined so as to yield a
         canonicalized path, which is incorporated into the new PurePath
@@ -82,38 +103,58 @@ class LogicalName(str):
         return str.__new__(cls, name)
 
     def __init__(self, *arg, parsed=None, level: int = None):
+        """
+        Initialize logical name.
+        """
         if not isinstance(arg, str):
             arg = '.'.join(arg)
         parts = tuple(arg.split('.'))
-        n = len(parts)
         self._parts = parts
         self._path_like = Path(*parts)
         self._level = level
 
     @property
     def level(self) -> int:
+        """
+        Level of a logical name nested in logical name.
+        """
         return self._level
 
     @property
     def parts(self) -> Tuple[str]:
+        """
+        Return logical name split by '.'.
+        """
         return self._parts
 
     @property
     def path_like(self) -> Path:
-        return self._path
+        """
+        Return logical name reformatted as a path.
+        """
+        return self._path_like
 
     @property
     def parent(self) -> 'LogicalName':
+        """
+        Return logical name containing this instance minux the tail.
+        """
         parts = self._parts[0 :-1]
         parent = self.join(*parts, parsed=True) if self.level else None
         return parent
 
     @property
     def parents(self):
+        """
+        Return iterator over parents.
+        """
         return _LogicalParents(self)
 
     @property
     def root_to_stem_generator(self) -> Generator['LogicalName', None, None]:
+        """
+        Return iterator over parents and self.
+        """
         for parent in self.parents:
             yield LogicalName(parent)
         yield self
@@ -121,8 +162,7 @@ class LogicalName(str):
     @property
     def shortnames(self) -> _LogicalShortNames:
         """
-        Return valid, shorter logical names that alias this logical
-        name.
+        Return valid, shorter logical names that alias self.
 
         Returns
         -------
@@ -173,10 +213,7 @@ class LogicalName(str):
             True if this instance matches the tail end of the other
             logical name.
         """
-        parts = self.parts
-        to_parts = other.parts
-        n = len(to_parts)
-        return parts[: n] != to_parts
+        return self.path_like.is_relative_to(other.path_like)
 
     def relative_to(self, other: 'LogicalName') -> 'LogicalName':
         """
