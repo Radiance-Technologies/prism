@@ -1,5 +1,4 @@
 bidict
-dataclasses-json
 GitPython
 numpy
 pytest

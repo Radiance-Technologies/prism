@@ -330,10 +330,19 @@ class Project(ABC):
         """
         pass
 
-    build = partialmethod(_make, "build", "Compilation")
-    """
-    Build the project.
-    """
+    def build(self) -> Tuple[int, str, str]:
+        """
+        Build the project.
+        """
+        if self.serapi_options is None:
+            self.build_and_get_iqr()
+            return 0, "", ""
+            # <TODO>: Need to figure out some mechanism to save
+            # the new metadata (serapi_options) back to the main storage
+            # Problem is, the project has no awareness of the storage
+            # so it needs to be a callback or something. Not sure.
+        else:
+            return self._make("build", "Compilation")
 
     def build_and_get_iqr(self) -> str:
         """
@@ -347,15 +356,20 @@ class Project(ABC):
         str
             The IQR flags string that should be stored in serapi_options
         """
+        # Set self.num_cores to 1 for the duration of this function
+        old_num_cores = self.num_cores
+        self.num_cores = 1
         contexts: List[CoqContext] = []
         for cmd in self.build_cmd:
             if "make" in cmd.lower() or "dune" in cmd.lower():
-                contexts += strace_build([cmd], workdir=self.path)
+                contexts += strace_build(cmd, workdir=self.path)
             else:
                 r = bash.run(cmd, cwd=self.path, env=OpamAPI._environ())
-                logging.debug(f"Command {cmd} finished with return code {r}.")
+                logging.debug(
+                    f"Command {cmd} finished with return code {r.returncode}.")
         self.metadata.serapi_options = self._process_iqr_from_coq_contexts(
             contexts)
+        self.num_cores = old_num_cores
         return self.serapi_options
 
     clean = partialmethod(_make, "clean", "Cleaning")

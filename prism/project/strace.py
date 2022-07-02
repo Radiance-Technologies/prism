@@ -11,15 +11,13 @@ import re
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import lark
-from dataclasses_json import dataclass_json
 from strace_parser.parser import get_parser
 
 from prism.util.opam.api import OpamAPI
 
-_CONTEXT_EXT = '._pycoq_context'
 _EXECUTABLE = 'coqc'
 _REGEX = r'.*\.v$'
 
@@ -42,11 +40,10 @@ class IQR():
     """
 
     I: List[str]  # noqa: E741
-    Q: List[List[str]]  # List of pairs of str
-    R: List[List[str]]  # List of pairs of str
+    Q: List[Tuple[str, str]]  # List of pairs of str
+    R: List[Tuple[str, str]]  # List of pairs of str
 
 
-@dataclass_json
 @dataclass
 class CoqContext:
     """
@@ -58,6 +55,7 @@ class CoqContext:
     target: str
     args: List[str] = field(default_factory=list)
     env: Dict[str, str] = field(default_factory=dict)
+    iqr: IQR = field(init=False)
 
     def __post_init__(self):
         """
@@ -103,7 +101,10 @@ class CoqContext:
             'to coqdir to coq load path')
         args, _ = parser.parse_known_args(self.args)
 
-        return IQR(I=args.I, Q=args.Q, R=args.R)
+        return IQR(
+            I=args.I,
+            Q=[tuple(i) for i in args.Q],
+            R=[tuple(i) for i in args.R])
 
 
 def _dict_of_list(el: Sequence[str], split: str = '=') -> Dict[str, str]:
@@ -300,58 +301,61 @@ def _parse_strace_logdir(logdir: str,
 
 
 def strace_build(
-        command: List[str],
+        command: str,
         executable: str = _EXECUTABLE,
         regex: str = _REGEX,
         workdir: Optional[str] = None,
-        strace_logdir: Optional[str] = None) -> List[str]:
+        strace_logdir: Optional[str] = None) -> List[CoqContext]:
     """
     Trace calls of executable using regex.
 
-    trace calls of executable during access to files that match regex in
-    workdir while executing the command and returns the list of
-    pycoq_context file names
+    Trace calls of executable during access to files that match regex in
+    workdir while executing the command and returns the list CoqContext
+    objects.
+
+    Parameters
+    ----------
+    command : str
+        The command to run using strace
+    executable : str
+        The executable to watch for while `command` is running
+    regex : str
+        The pattern to search for while `command` is running
+    workdir : Optional[str]
+        The cwd to execute the `command` in, by default None
+    strace_logdir : Optional[str]
+        The directory to store the temporary strace logs in
+
+    Returns
+    -------
+    List[CoqContext]
+        These `CoqContext` objects contain the information gleaned from
+        strace. If there are any iqr args present, they will be within
+        these objects.
     """
 
-    def _strace_build(executable, regex, workdir, command, logdir):
+    def _strace_build(
+            executable: str,
+            regex: str,
+            workdir: str,
+            command: str,
+            logdir: str):
         logfname = os.path.join(logdir, 'strace.log')
         logging.info(
             f"pycoq: tracing {executable} accesing {regex} while "
             f"executing {command} from {workdir} with "
             f"curdir {os.getcwd()}")
-        # The cmd_str is joined and then re-split to account for any
-        # args that might appear directly in the "command"
-        cmd_str = " ".join(command)
-        popen_args = [
-            'strace',
-            '-e',
-            'trace=execve',
-            '-v',
-            '-ff',
-            '-s',
-            '100000000',
-            '-xx',
-            '-ttt',
-            '-o',
-            logfname
-        ] + cmd_str.split()
-        with subprocess.Popen(popen_args,
-                              cwd=workdir,
-                              text=True,
-                              stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE,
-                              env=OpamAPI._environ()) as proc:
-            for line in iter(proc.stdout.readline, ''):
+        strace_cmd = (
+            'strace -e trace=execve -v -ff -s 100000000 -xx -ttt -o'
+            f' {logfname} {command}')
+        r = subprocess.run(
+            strace_cmd.split(),
+            cwd=workdir,
+            env=OpamAPI._environ())
+        # r = OpamAPI.run(strace_cmd)
+        if r.stdout is not None:
+            for line in iter(str(r.stdout).splitlines, ''):
                 logging.debug(f"strace stdout: {line}")
-            # Get stderr just in case
-            err_line = [line for line in iter(proc.stderr.readline, '')]
-            err_line = "\n".join(err_line)
-            logging.info(
-                f"strace stderr: {proc.stderr.read()}"
-                "waiting strace to finish...")
-            proc.wait()
-        if proc.returncode != 0:
-            raise RuntimeError(f"strace failed with message: {err_line}")
         logging.info('strace finished')
         return _parse_strace_logdir(logdir, executable, regex)
 
