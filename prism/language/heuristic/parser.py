@@ -266,18 +266,17 @@ class HeuristicParser:
                 self._increment_depth(depth_change)
             self._add_proof_index(index)
 
-        def _add_requirements(self, sentence: str) -> None:
+        def _add_requirements(self, sentence_sans_attributes: str) -> None:
             """
             Record requirements given by sentence.
 
             Parameters
             ----------
-            sentence : str
-                An unaltered sentence from the document presumed to
-                occur after any previously recorded sentence in the
-                statistics.
+            sentence_sans_attributes : str
+                A sentence that defines required logical path(s).
             """
-            new_reqs = ParserUtils.extract_requirements(sentence)
+            new_reqs = ParserUtils.extract_requirements(
+                sentence_sans_attributes)
             self.requirements = self.requirements.union(new_reqs)
             self._increment_depth(0)
 

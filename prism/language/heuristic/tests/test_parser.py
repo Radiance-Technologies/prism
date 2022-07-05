@@ -159,8 +159,6 @@ class TestHeuristicParser(unittest.TestCase):
             custom_tactics=set())
         sentences = HeuristicParser._get_sentences(self.test_contents["nested"])
         actual_stats = HeuristicParser._compute_sentence_statistics(sentences)
-        actual_stats.requirements = frozenset(actual_stats.requirements)
-        expected_stats.requirements = frozenset(expected_stats.requirements)
         self.assertEqual(actual_stats, expected_stats)
 
     def test_Alphabet_statistics(self):
