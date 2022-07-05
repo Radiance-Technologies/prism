@@ -1,3 +1,6 @@
+"""
+Module that loads and defines dictionary of Coq Library names.
+"""
 import json
 import os
 from typing import Optional, Set
