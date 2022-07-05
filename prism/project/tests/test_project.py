@@ -17,7 +17,12 @@ from prism.project import (
     SentenceExtractionMethod,
 )
 from prism.project.base import SEM
-from prism.tests import _COQ_EXAMPLES_PATH, _MINIMAL_METADATA
+from prism.project.metadata.storage import MetadataStorage
+from prism.tests import (
+    _COQ_EXAMPLES_PATH, 
+    _MINIMAL_METADATA, 
+    _MINIMAL_METASTORAGE
+)
 
 
 class TestProject(unittest.TestCase):
@@ -189,6 +194,7 @@ class TestProjectRepo(unittest.TestCase):
         Resolve the module path and clone CompCert repo.
         """
         cls.meta_path = _MINIMAL_METADATA
+        cls.metastorage_path = _MINIMAL_METASTORAGE
         cls.test_path = os.path.dirname(__file__)
         cls.repo_path = os.path.join(cls.test_path, "CompCert")
         try:
@@ -200,9 +206,10 @@ class TestProjectRepo(unittest.TestCase):
         # Checkout HEAD of master as of March 14, 2022
         cls.master_hash = "9d3521b4db46773239a2c5f9f6970de826075508"
         cls.test_repo.git.checkout(cls.master_hash)
+        cls.meta_storage = MetadataStorage.load(cls.metastorage_path)
         cls.project = ProjectRepo(
             cls.repo_path,
-            cls.meta_path,
+            cls.meta_storage,
             sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
 
     def test_get_file(self):
@@ -278,7 +285,7 @@ class TestProjectDir(TestProjectRepo):
         super().setUpClass()
         cls.project = ProjectDir(
             cls.repo_path,
-            cls.meta_path,
+            cls.meta_storage,
             sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
 
     def test_get_random_commit(self):
