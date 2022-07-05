@@ -155,6 +155,7 @@ def print_project(p):
             print(msg)
             break
 
+
 max_group = None
 max_value = None
 for group in combined:
