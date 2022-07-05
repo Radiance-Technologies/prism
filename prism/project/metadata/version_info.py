@@ -45,7 +45,8 @@ class VersionInfo:
                 attr: Set[str]) -> Tuple[List[str],
                                          List[Version]]:
             if versions is None or isinstance(versions, VersionConstraint):
-                available_versions = OpamAPI.get_available_versions(pkg)
+                available_versions = OpamAPI.active_switch.get_available_versions(
+                    pkg)
                 if versions is None:
                     versions = available_versions
                 else:
@@ -72,7 +73,7 @@ class VersionInfo:
 
         serapi_coq_compat = self.serapi_coq_compatibility
         for serapi_version in new_serapi_versions:
-            dependencies = OpamAPI.get_dependencies(
+            dependencies = OpamAPI.active_switch.get_dependencies(
                 "coq-serapi",
                 serapi_version)
             coq_constraint = dependencies['coq']
@@ -86,7 +87,9 @@ class VersionInfo:
         for coq_version in new_coq_versions:
             if coq_version not in coq_ocaml_compat:
                 coq_ocaml_compat[coq_version] = set()
-            dependencies = OpamAPI.get_dependencies("coq", coq_version)
+            dependencies = OpamAPI.active_switch.get_dependencies(
+                "coq",
+                coq_version)
             ocaml_constraint = dependencies['ocaml']
             for ocaml_version in ocaml_constraint.apply(sorted_ocaml_versions):
                 ocaml_version = str(ocaml_version)
