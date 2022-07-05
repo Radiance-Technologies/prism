@@ -66,7 +66,7 @@ class OpamSwitch:
     @cached_property
     def coq_version(self) -> str:
         """
-        The relevant coq_version for this particular Opam switch.
+        Obtain relevant coq_version for this particular Opam switch.
         """
         r = self.run("opam show coq --raw").stdout.split("\n")
         if len(r) > 2:
@@ -84,7 +84,7 @@ class OpamSwitch:
     @cached_property
     def ocaml_version(self) -> str:
         """
-        The relevant ocaml_version for this particular Opam switch.
+        Obtain relevant ocaml_version for this particular Opam switch.
         """
         r = self.run("opam show ocaml --raw").stdout.split("\n")
         if len(r) > 2:
