@@ -229,7 +229,6 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         Remove the cloned repos.
         """
         for project_name, repo in cls.repos.items():
-            #pass
             del repo
             shutil.rmtree(os.path.join(cls.repo_paths[project_name]))
 
