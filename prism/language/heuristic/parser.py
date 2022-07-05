@@ -266,6 +266,21 @@ class HeuristicParser:
                 self._increment_depth(depth_change)
             self._add_proof_index(index)
 
+        def _add_requirements(self, sentence: str) -> None:
+            """
+            Record requirements given by sentence.
+
+            Parameters
+            ----------
+            sentence : str
+                An unaltered sentence from the document presumed to
+                occur after any previously recorded sentence in the
+                statistics.
+            """
+            new_reqs = ParserUtils.extract_requirements(sentence)
+            self.requirements = self.requirements.union(new_reqs)
+            self._increment_depth(0)
+
         def _add_tactic(self) -> None:
             """
             Record the occurrence of a tactic in proof mode.
@@ -295,20 +310,6 @@ class HeuristicParser:
                 self.program_indices.append(index)
             self._increment_depth(1)
             self._add_proof_index(index)
-
-        def _add_requirements(self, sentence: str) -> None:
-            """
-            Record requirements given by sentence.
-
-            Parameters
-            ----------
-            sentence : str
-                An unaltered sentence from the document presumed to
-                occur after any previously recorded sentence in the
-                statistics.
-            """
-            new_reqs = ParserUtils.extract_requirements(sentence)
-            self.requirements = self.requirements.union(new_reqs)
 
         def _define_tactic(self, sentence_sans_attributes: str) -> None:
             """
