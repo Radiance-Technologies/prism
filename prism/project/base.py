@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from enum import Enum, auto
 from functools import partialmethod
 from os import PathLike, path
-from typing import List, Optional, Set, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 from seutil import BashUtils, bash
 
@@ -276,46 +276,6 @@ class Project(ABC):
             logger.debug(msg)
         return (r.return_code, r.stdout, r.stderr)
 
-    def _process_iqr_from_coq_contexts(
-            self,
-            coq_contexts: List[CoqContext]) -> str:
-        """
-        Resolve IQR paths to project root and combine them.
-
-        Parameters
-        ----------
-        coq_contexts : List[CoqContext]
-            Collected `CoqContext` objects from build process
-
-        Returns
-        -------
-        str
-            Fully-formed IQR string with all paths resolved to project
-            root
-        """
-        total_flags: Set[str] = set()
-        for ctx in coq_contexts:
-            pwd = pathlib.Path(ctx.env['PWD'])
-            if ctx.iqr.I:
-                for cur_i in ctx.iqr.I:
-                    new_i = (pwd / pathlib.Path(cur_i)).relative_to(self.path)
-                    i_str = f"-I {new_i}"
-                    total_flags.add(i_str)
-            if ctx.iqr.Q:
-                for cur_q in ctx.iqr.Q:
-                    new_q = (pwd / pathlib.Path(cur_q[0])).relative_to(
-                        self.path)
-                    q_str = f"-Q {new_q},{cur_q[1]}"
-                    total_flags.add(q_str)
-            if ctx.iqr.R:
-                for cur_r in ctx.iqr.R:
-                    new_r = (pwd / pathlib.Path(cur_r[0])).relative_to(
-                        self.path)
-                    r_str = f"-R {new_r},{cur_r[1]}"
-                    total_flags.add(r_str)
-            iqr_str = " ".join(total_flags)
-        return iqr_str
-
     @abstractmethod
     def _pre_get_random(self, **kwargs):
         """
@@ -367,8 +327,9 @@ class Project(ABC):
                 r = bash.run(cmd, cwd=self.path, env=OpamAPI._environ())
                 logging.debug(
                     f"Command {cmd} finished with return code {r.returncode}.")
-        self.metadata.serapi_options = self._process_iqr_from_coq_contexts(
-            contexts)
+        self.metadata.serapi_options = str(
+            sum(contexts),
+            start=CoqContext.empty_context())
         # self.num_cores = old_num_cores
         return self.serapi_options
 

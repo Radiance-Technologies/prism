@@ -7,11 +7,12 @@ import argparse
 import ast
 import logging
 import os
+import pathlib
 import re
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 import lark
 from strace_parser.parser import get_parser
@@ -43,29 +44,15 @@ class IQR():
     Q: List[Tuple[str, str]]  # List of pairs of str
     R: List[Tuple[str, str]]  # List of pairs of str
 
-
-@dataclass
-class CoqContext:
-    """
-    Coq context class.
-    """
-
-    pwd: str
-    executable: str
-    target: str
-    args: List[str] = field(default_factory=list)
-    env: Dict[str, str] = field(default_factory=dict)
-    iqr: IQR = field(init=False)
-
-    def __post_init__(self):
+    @classmethod
+    def extract_iqr(cls, args: List[str]) -> 'IQR':
         """
-        Grab the internal IQR args.
-        """
-        self.iqr = self.IQR()
+        Extract IQR args from command args; return as IQR dataclass.
 
-    def IQR(self) -> IQR:
-        """
-        Process IQR command args and return in IQR dataclass form.
+        Parameters
+        ----------
+        args : List[str]
+            A list of string arguments associated with a command
 
         Returns
         -------
@@ -99,12 +86,117 @@ class CoqContext:
             default=[],
             help='recursively append filesystem dir mapped '
             'to coqdir to coq load path')
-        args, _ = parser.parse_known_args(self.args)
+        args, _ = parser.parse_known_args(args)
 
-        return IQR(
+        return cls(
             I=args.I,
             Q=[tuple(i) for i in args.Q],
             R=[tuple(i) for i in args.R])
+
+
+@dataclass
+class CoqContext:
+    """
+    Coq context class.
+    """
+
+    pwd: str
+    executable: str
+    target: str
+    args: List[str] = field(default_factory=list)
+    env: Dict[str, str] = field(default_factory=dict)
+    iqr: IQR = field(init=False)
+    iqr_set: Set[str] = field(default_factory=set)
+    iqr_root: Optional[str] = None
+
+    def __add__(self, other: 'CoqContext') -> 'CoqContext':
+        """
+        Combine this instance of `CoqContext` with another.
+
+        Resulting iqr_set is union of self.iqr_set and other.iqr_set.
+        For other fields, prefer this instance's fields, but use the
+        other's if this one's are empty.
+
+        Parameters
+        ----------
+        other : CoqContext
+            The other `CoqContext` instance to combine with this one.
+
+        Returns
+        -------
+        CoqContext
+            The combined `CoqContext` instance
+
+        Raises
+        ------
+        ValueError
+            If `other` is not a CoqContext instance
+        """
+        if not isinstance(other, CoqContext):
+            raise ValueError(f"CoqContext cannot be added with {type(other)}")
+        out = CoqContext(
+            pwd=self.pwd if self.pwd else other.pwd,
+            executable=self.executable if self.executable else other.executable,
+            target=self.target if self.target else other.target,
+            env=self.env if self.env else other.env,
+            iqr_root=self.iqr_root
+            if self.iqr_root is not None else other.iqr_root)
+        out.iqr_set = self.iqr_set.union(other.iqr_set)
+        return out
+
+    def __post_init__(self):
+        """
+        Grab the internal IQR args.
+        """
+        self.iqr = IQR.extract_iqr(self.args)
+        # Update iqr_set
+        self._iqr_to_iqr_set()
+
+    def __str__(self) -> str:
+        """
+        Return a string representation of the `self.iqr_str`.
+
+        Returns
+        -------
+        str
+            String representation of the iqr set.
+        """
+        return " ".join(sorted(self.iqr_set))
+
+    @classmethod
+    def empty_context(cls) -> 'CoqContext':
+        """
+        Return an empty `CoqContext`.
+        """
+        return cls("", "", "", [])
+
+    def _iqr_to_iqr_set(self):
+        """
+        Resolve IQR paths to project root and combine them.
+        """
+        if self.iqr_root is None:
+            resolve_paths = False
+        else:
+            resolve_paths = True
+        pwd = pathlib.Path(self.env['PWD'])
+        if self.iqr.I:
+            for cur_i in self.iqr.I:
+                new_i = (pwd / pathlib.Path(cur_i)).relative_to(
+                    self.iqr_root) if resolve_paths else cur_i
+                i_str = f"-I {new_i}"
+                self.iqr_set.add(i_str)
+        if self.iqr.Q:
+            for cur_q in self.iqr.Q:
+                new_q = (pwd / pathlib.Path(cur_q[0])).relative_to(
+                    self.iqr_root) if resolve_paths else cur_q[0]
+                q_str = f"-Q {new_q},{cur_q[1]}"
+                self.iqr_set.add(q_str)
+        if self.iqr.R:
+            for cur_r in self.iqr.R:
+                new_r = (pwd / pathlib.Path(cur_r[0])).relative_to(
+                    self.iqr_root) if resolve_paths else cur_r[0]
+                r_str = f"-R {new_r},{cur_r[1]}"
+                self.iqr_set.add(r_str)
 
 
 def _dict_of_list(el: Sequence[str], split: str = '=') -> Dict[str, str]:
