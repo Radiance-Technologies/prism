@@ -4,6 +4,7 @@ Module that loads and defines dictionary of Coq Library names.
 import json
 import os
 from typing import Optional, Set
+from pathlib import Path
 
 
 def load_json(filepath: os.PathLike, prefix: Optional[str] = None) -> Set[str]:
@@ -40,12 +41,12 @@ def load_json(filepath: os.PathLike, prefix: Optional[str] = None) -> Set[str]:
     return names
 
 
-COQ_STANDARD_LIBRARY = load_json('coq.json', prefix='Coq')
+COQ_STANDARD_LIBRARY = load_json(Path(__file__).parent / 'coq.json', prefix='Coq')
 """
 This json file was produced using the following documentation:
 https://coq.inria.fr/library/
 """
-NON_PROJECT_LIBRARIES = load_json('external.json')
+NON_PROJECT_LIBRARIES = load_json(Path(__file__).parent / 'external.json')
 """
 The library names in this json file are an incomplete list of
 project coq dependencies that are not projects considered
