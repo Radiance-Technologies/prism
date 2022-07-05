@@ -19,7 +19,7 @@ class TestHeuristicParser(unittest.TestCase):
         """
         Set up a common document for each test.
         """
-        coq_example_files = ["simple", "nested", "Alphabet"]
+        coq_example_files = ["simple", "nested", "Alphabet", "attribute_syntax"]
         self.test_files = {
             coq_file: Path(_COQ_EXAMPLES_PATH) / f"{coq_file}.v"
             for coq_file in coq_example_files
@@ -344,6 +344,44 @@ class TestHeuristicParser(unittest.TestCase):
             custom_tactics=set())
         sentences = HeuristicParser._get_sentences(
             self.test_contents["Alphabet"])
+        actual_stats = HeuristicParser._compute_sentence_statistics(sentences)
+        self.assertEqual(actual_stats, expected_stats)
+
+    def test_attribute_syntax_statistics(self):
+        """
+        Verify that non-legacy attributes are correctly detected.
+        """
+        expected_stats = HeuristicParser.SentenceStatistics(
+            depths=[0,
+                    0,
+                    1,
+                    1,
+                    1,
+                    1,
+                    2,
+                    2,
+                    3,
+                    3],
+            theorem_indices={2,
+                             6,
+                             8},
+            starter_indices={},
+            tactic_indices={},
+            ender_indices=[],
+            program_indices=[8],
+            obligation_indices=[],
+            proof_indices={2,
+                           6,
+                           8},
+            query_indices=[3,
+                           7],
+            fail_indices={5},
+            nesting_allowed=repeat(False,
+                                   10),
+            requirements={'Coq.Program'},
+            custom_tactics={"foo"})
+        sentences = HeuristicParser._get_sentences(
+            self.test_contents["attribute_syntax"])
         actual_stats = HeuristicParser._compute_sentence_statistics(sentences)
         self.assertEqual(actual_stats, expected_stats)
 
