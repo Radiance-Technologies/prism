@@ -205,7 +205,7 @@ class TestProject(unittest.TestCase):
             storage = MetadataStorage.load("dataset/agg_coq_repos.yml")
         metadata = storage.get("CompCert")
         test_repo.git.checkout("7b3bc19117e48d601e392f2db2c135c7df1d8376")
-        project = ProjectRepo(repo_path, metadata, SEM.HEURISTIC, num_cores=1)
+        project = ProjectRepo(repo_path, metadata, SEM.HEURISTIC, num_cores=8)
         # Complete pre-req setup
         OpamAPI.create_switch("CompCert", "4.07.1")
         OpamAPI.set_switch("CompCert")

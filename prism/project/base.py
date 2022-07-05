@@ -314,7 +314,7 @@ class Project(ABC):
                     r_str = f"-R {new_r},{cur_r[1]}"
                     total_flags.add(r_str)
             iqr_str = " ".join(total_flags)
-            return iqr_str
+        return iqr_str
 
     @abstractmethod
     def _pre_get_random(self, **kwargs):
@@ -357,8 +357,8 @@ class Project(ABC):
             The IQR flags string that should be stored in serapi_options
         """
         # Set self.num_cores to 1 for the duration of this function
-        old_num_cores = self.num_cores
-        self.num_cores = 1
+        # old_num_cores = self.num_cores
+        # self.num_cores = 1
         contexts: List[CoqContext] = []
         for cmd in self.build_cmd:
             if "make" in cmd.lower() or "dune" in cmd.lower():
@@ -369,7 +369,7 @@ class Project(ABC):
                     f"Command {cmd} finished with return code {r.returncode}.")
         self.metadata.serapi_options = self._process_iqr_from_coq_contexts(
             contexts)
-        self.num_cores = old_num_cores
+        # self.num_cores = old_num_cores
         return self.serapi_options
 
     clean = partialmethod(_make, "clean", "Cleaning")
