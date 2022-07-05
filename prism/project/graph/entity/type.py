@@ -18,7 +18,7 @@ from typing import (
 
 import networkx as nx
 
-from prism.util.compare import Criteria
+from prism.util.criteria import Criteria
 
 DataDict = Dict[str, Any]
 NodeId = TypeVar('NodeId')
