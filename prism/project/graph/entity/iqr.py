@@ -121,6 +121,46 @@ class IQRFlag(Enum):
         """
         return extract_iqr_flag_values(string, self.value)
 
+    def find_effected(self, path: Path) -> List[Path]:
+        """
+        Find the coq files effected by an IQR argument.
+
+        Parameters
+        ----------
+        path : Path
+            The path argument passed to any
+            IQR flag.
+
+        Returns
+        -------
+        List[Path]
+            List of paths that who will have a logical name
+            that is effected by the IQR argument.
+        """
+        effected = [path]
+
+        # Effected are paths that are coqfiles
+        # or directories that contain coq files.
+        def is_effected(p):
+            return (
+                p.is_dir()
+                and len(list(p.glob('**/*.v'))) > 0
+            ) or p.suffix == ".v"
+
+        if self is IQRFlag.Q:
+            # Only look within the top level directory
+            if path.suffix == ".v":
+                paths = []
+            else:
+                paths = list(path.glob("*"))
+        elif self is IQRFlag.R:
+            paths = list(p.glob('**/*'))
+        for p in paths:
+            if is_effected(p):
+                effected.append(p)
+        return effected
+
+
 
 def extract_from_file(file: str) -> Dict[IQRFlag, List[IQR_ARGUMENT]]:
     """
@@ -145,6 +185,10 @@ def extract_from_file(file: str) -> Dict[IQRFlag, List[IQR_ARGUMENT]]:
         for flag in IQRFlag
         if flag is not IQRFlag.NONE
     }
+
+
+def find_effected_files(flag: IQRFlag, path: IQR_PHYSICAL_PATH, source: Path):
+    if flag is IQRFlag.Q:
 
 
 @dataclass

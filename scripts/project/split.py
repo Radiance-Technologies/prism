@@ -155,10 +155,6 @@ def print_project(p):
             print(msg)
             break
 
-
-for target_project in ["VST", "CompCert"]:
-    print_project(target_project)
-
 max_group = None
 max_value = None
 for group in combined:

@@ -31,7 +31,8 @@ def fill_graph(item):
             target = target.entity.project_name
             if source not in crosses:
                 crosses[source] = []
-            crosses[source].append(target)
+            if target not in crosses[source]:
+                crosses[source].append(target)
     except Exception as exc:
         raise exc
     return graph, crosses
