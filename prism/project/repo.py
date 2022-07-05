@@ -28,11 +28,12 @@ class ProjectRepo(Repo, Project):
         self.commit_sha = self.commit().hexsha
         self.repo_name = eslf.remote().url.split('.git')[0].split('/')[-1]
         o_s = self.opam_switch
-        self.metadata = self.metadata_storage.get(self.repo_name,
-                                                  self.remote_url,
-                                                  self.commit_sha,
-                                                  self.o_s.coq_version,
-                                                  self.o_s.ocaml_version)
+        self.metadata = self.metadata_storage.get(
+            self.repo_name,
+            self.remote_url,
+            self.commit_sha,
+            self.o_s.coq_version,
+            self.o_s.ocaml_version)
         self.current_commit_name = None  # i.e., HEAD
 
     @property

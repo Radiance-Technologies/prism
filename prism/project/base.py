@@ -92,7 +92,7 @@ class Project(ABC):
             self,
             dir_abspath: str,
             metadata_storage: MetadataStorage,
-            opam_switch : Optional[OpamSwitch] = None,
+            opam_switch: Optional[OpamSwitch] = None,
             sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI,
             num_cores: Optional[int] = None):
         """
@@ -106,9 +106,10 @@ class Project(ABC):
             self.opam_switch = opam_switch
         else:
             self.opam_switch = OpamSwitch()
-        self.metadata = self.metadata_storage.get(os.basename(dir_abspath), 
-                                                  self.opam_switch.coq_version,
-                                                  self.opam_switch.ocaml_version)
+        self.metadata = self.metadata_storage.get(
+            os.basename(dir_abspath),
+            self.opam_switch.coq_version,
+            self.opam_switch.ocaml_version)
         self.num_cores = num_cores
 
     @property
