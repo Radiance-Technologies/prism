@@ -36,8 +36,6 @@ class OpamSwitch:
     _whitespace_regex: ClassVar[re.Pattern] = re.compile(r"\s+")
     _newline_regex: ClassVar[re.Pattern] = re.compile("\n")
     name: Optional[str] = None
-    coq_version: Optional[Version] = None
-    ocaml_version: Optional[OCamlVersion] = None
     """
     The name of the switch, by default None.
 
@@ -64,6 +62,43 @@ class OpamSwitch:
         Return the name of the switch.
         """
         return self.name
+
+    @cached_property
+    def coq_version(self) -> str:
+        """
+        The relevant coq_version for this particular Opam switch.
+        """
+        r = self.run("opam show coq --raw").stdout.split("\n")
+        if len(r) > 2:
+            if 'coq' not in r[1]:
+                raise ValueError("Opam returned version for incorrect package")
+            regex = r"version: \"(.*)\""
+            matchObj = re.match(regex, r[2])
+            if matchObj:
+                return matchObj.groups()[0]
+            else:
+                raise ValueError("Coq version malformed")
+        else:
+            raise ValueError("Coq version not found")
+
+    @cached_property
+    def ocaml_version(self) -> str:
+        """
+        The relevant ocaml_version for this particular Opam switch.
+        """
+        r = self.run("opam show ocaml --raw").stdout.split("\n")
+        if len(r) > 2:
+            if 'ocaml' not in r[1]:
+                raise ValueError("Opam returned version for incorrect package")
+            regex = r"version: \"(.*)\""
+            matchObj = re.match(regex, r[2])
+            if matchObj:
+                return matchObj.groups()[0]
+            else:
+                raise ValueError("Ocaml version malformed")
+        else:
+            raise ValueError("Ocaml version not found")
+
 
     @cached_property
     def _environ(self) -> Dict[str, str]:

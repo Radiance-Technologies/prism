@@ -19,6 +19,20 @@ class TestOpamSwitch(unittest.TestCase):
     test_switch_name = "test_switch"
     ocaml_version = "4.07.1"
 
+    def test_get_coq_version(self):
+        """
+        Test retrieval of cached property versions.
+        """
+        version = self.test_switch.coq_version
+        self.assertEqual(version, "8.15.1")
+
+    def test_get_ocaml_version(self):
+        """
+        Test retrieval of cached property ocaml version.
+        """
+        version = self.test_switch.ocaml_version
+        self.assertEqual(version, "4.07.1")
+
     def test_get_available_versions(self):
         """
         Test retrieval of available versions for a single package.
