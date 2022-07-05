@@ -2,12 +2,12 @@
 Module providing CoqGym project class representations.
 """
 import logging
+import os
 import pathlib
 import random
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from functools import partialmethod
-from os import PathLike, path
 from typing import List, Optional, Tuple, Union
 
 from seutil import BashUtils
@@ -15,9 +15,7 @@ from seutil import BashUtils
 from prism.data.document import CoqDocument
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
 from prism.project.exception import ProjectBuildError
-from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
-from prism.util.io import infer_format
 from prism.util.logging import default_log_level
 from prism.util.opam import OpamSwitch
 
@@ -107,7 +105,7 @@ class Project(ABC):
         else:
             self.opam_switch = OpamSwitch()
         self.metadata = self.metadata_storage.get(
-            os.basename(dir_abspath),
+            os.path.basename(dir_abspath),
             self.opam_switch.coq_version,
             self.opam_switch.ocaml_version)
         self.num_cores = num_cores
