@@ -99,7 +99,6 @@ class OpamSwitch:
         else:
             raise ValueError("Ocaml version not found")
 
-
     @cached_property
     def _environ(self) -> Dict[str, str]:
         """
