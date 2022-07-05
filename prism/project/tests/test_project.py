@@ -21,7 +21,7 @@ from prism.project.metadata.storage import MetadataStorage
 from prism.tests import (
     _COQ_EXAMPLES_PATH,
     _MINIMAL_METADATA,
-    _MINIMAL_METASTORAGE
+    _MINIMAL_METASTORAGE,
 )
 
 
