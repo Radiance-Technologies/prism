@@ -59,9 +59,9 @@ class TestCoqGymBaseDataset(unittest.TestCase):
                 ["make"],
                 ["make install"],
                 ["make clean"])
-        for name, project_metadata in cls.metadatas.items():
+        for project_metadata in cls.metadatas.values():
             cls.metadata_storage.insert(project_metadata)
-        for project_name, project_metadata in cls.metadatas.items():
+        for project_name in cls.metadatas.keys():
             cls.projects[project_name] = ProjectRepo(
                 cls.repo_paths[project_name],
                 cls.metadata_storage,
