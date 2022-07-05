@@ -13,6 +13,7 @@ class Criteria(ABC, Callable):
 
     def __init__(self, evaluate=None):
         self.buffer = {}
+        self._old_buffer = None
         if evaluate is not None:
             self.evaluate = MethodType(evaluate, self.__class__, self.__class__)
 
@@ -43,7 +44,7 @@ class Criteria(ABC, Callable):
         """
         Create new buffer on entering context.
         """
-        setattr(self, "_old_buffer", self.buffer)  # noq: B010
+        self._old_buffer = self.buffer
         self.buffer = {}
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
@@ -51,7 +52,7 @@ class Criteria(ABC, Callable):
         Delete the temporary buffer and replace it original value.
         """
         self.buffer = self._old_buffer
-        delattr(self, "_old_buffer")
+        self._old_buffer = None
 
     def __or__(self, other) -> 'Criteria':
         """
