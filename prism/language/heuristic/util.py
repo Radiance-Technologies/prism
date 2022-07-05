@@ -492,7 +492,7 @@ class ParserUtils:
         See coq documentation for loading compiled files for
         more details:
         https://coq.inria.fr/distrib/current/refman/proof-engine/vernacular-commands.html?highlight=from#compiled-files
-        """
+        """  # noqa: B950
         dirpath: str = ''
         # Split sentence into either a string containing requirements.
         # If there is a From command, it will be in the first value of
