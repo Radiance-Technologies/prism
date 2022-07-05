@@ -19,8 +19,8 @@ from prism.project import (
 from prism.project.base import SEM
 from prism.project.metadata.storage import MetadataStorage
 from prism.tests import (
-    _COQ_EXAMPLES_PATH, 
-    _MINIMAL_METADATA, 
+    _COQ_EXAMPLES_PATH,
+    _MINIMAL_METADATA,
     _MINIMAL_METASTORAGE
 )
 
