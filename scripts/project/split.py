@@ -1,10 +1,12 @@
+"""
+Script to generate training/test/validation split.
+"""
 import argparse
 import json
-from random import random, seed
+from random import seed
 
 import numpy as np
 from prettytable import PrettyTable
-from tqdm import tqdm
 
 seed(2)
 np.random.seed(2)
@@ -58,10 +60,16 @@ print("Number of Projects: ", nprojects)
 
 
 def proof_sum(projects):
+    """
+    Sum proof count in each group.
+    """
     return sum(counts[p]['proofs'] for p in projects)
 
 
 def sentence_sum(projects):
+    """
+    Sum sentence count in each group.
+    """
     return sum(counts[p]['sentences'] for p in projects)
 
 
@@ -142,20 +150,6 @@ pt.add_row(
 
 print(pt)
 
-
-def print_project(p):
-    for group in combined:
-        if target_project in combined[group]['projects']:
-            p, s = combined[group]['proofs'], combined[group]['sentences']
-            msg = (
-                f"{target_project}:\n"
-                f"\tHash: {group}\n"
-                f"\tProofs: {p}\n"
-                f"\tSentences: {s}\n")
-            print(msg)
-            break
-
-
 max_group = None
 max_value = None
 for group in combined:
@@ -201,10 +195,10 @@ train = [
     project for group in training_set.values() for project in group['projects']
 ]
 
+data = {
+    'train': train,
+    'validation': val,
+    'test': test
+}
 with open('split.json', 'w') as f:
-    json.dump({
-        'train': train,
-        'validation': val,
-        'test': test,
-    },
-              f)
+    json.dump(data, f)
