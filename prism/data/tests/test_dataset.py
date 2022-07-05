@@ -42,6 +42,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         cls.repos = {}
         cls.projects = {}
         cls.metadatas = {}
+        cls.metadata_storage = MetadataStorage()
         for project_name, project in cls.target_projects.items():
             project_path = os.path.join(cls.test_path, project_name)
             cls.repo_paths[project_name] = project_path
@@ -58,9 +59,12 @@ class TestCoqGymBaseDataset(unittest.TestCase):
                 ["make"],
                 ["make install"],
                 ["make clean"])
+        for name, project_metadata in cls.metadatas.items():
+            cls.metadata_storage.insert(project_metadata)
+        for project_name, project_metadata in cls.metadatas.items():
             cls.projects[project_name] = ProjectRepo(
-                project_path,
-                cls.metadatas[project_name],
+                cls.repo_paths[project_name],
+                cls.metadata_storage,
                 sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
         cls.dataset = CoqGymBaseDataset(
             project_class=ProjectRepo,
@@ -225,6 +229,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         Remove the cloned repos.
         """
         for project_name, repo in cls.repos.items():
+            #pass
             del repo
             shutil.rmtree(os.path.join(cls.repo_paths[project_name]))
 
