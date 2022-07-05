@@ -8,3 +8,5 @@ include prism/tests/coq-examples/Alphabet.v
 include prism/tests/minimal_metadata.yml
 include prism/project/metadata/tests/projects.yml
 include prism/project/metadata/tests/projects_incomplete.yml
+include prism/util/build_tools/libraries/coq.json
+include prism/util/build_tools/libraries/external.json
