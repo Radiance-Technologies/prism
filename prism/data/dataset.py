@@ -178,13 +178,13 @@ class CoqGymBaseDataset:
         if projects_not_none:
             self.projects = projects
         elif base_dir_not_none:
-            self.init_projects_base_dir(
+            self._init_projects_base_dir(
                 project_class,
                 base_dir,
                 metadata_storage,
                 project_class_kwargs)
         else:
-            self.init_projects_dir_list(
+            self._init_projects_dir_list(
                 project_class,
                 dir_list,
                 metadata_storage,
@@ -195,7 +195,7 @@ class CoqGymBaseDataset:
         self.sentence_extraction_method = next(
             iter(self.projects.values())).sentence_extraction_method
 
-    def init_projects_base_dir(
+    def _init_projects_base_dir(
             self,
             project_class,
             base_dir,
@@ -227,7 +227,7 @@ class CoqGymBaseDataset:
                     # the directory has no Coq files, just ignore it
                     pass
 
-    def init_projects_dir_list(
+    def _init_projects_dir_list(
             self,
             project_class,
             dir_list,

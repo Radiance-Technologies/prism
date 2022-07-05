@@ -19,6 +19,7 @@ from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 from prism.util.io import infer_format
 from prism.util.logging import default_log_level
+from prism.util.opam import OpamSwitch
 
 logger: logging.Logger = logging.getLogger(__name__)
 logger.setLevel(default_log_level())
@@ -68,9 +69,8 @@ class Project(ABC):
     metadata_storage : MetadataStorage
         MetadataStorage for referencing all possible metadata
         configurations for the project.
-    metadata : os.PathLike or `ProjectMetadata`
-        ProjectMetadata object containing metadata
-        for project or the path to a .yml file where it can be extracted
+    opam_switch : OpamSwitch
+        Object for tracking OpamSwitch relevant for this project
     sentence_extraction_method : SentenceExtractionMethod
         The method by which sentences are extracted.
 
@@ -92,33 +92,23 @@ class Project(ABC):
             self,
             dir_abspath: str,
             metadata_storage: MetadataStorage,
-            metadata: Optional[Union[PathLike,
-                                     ProjectMetadata]] = None,
+            opam_switch : Optional[OpamSwitch] = None,
             sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI,
             num_cores: Optional[int] = None):
         """
         Initialize Project object.
         """
-        if metadata is None:
-            metadata = ProjectMetadata(
-                path.basename(dir_abspath),
-                serapi_options='',
-                build_cmd=[],
-                clean_cmd=[],
-                install_cmd=[])
-        elif isinstance(metadata, (str, pathlib.PosixPath)):
-            formatter = infer_format(metadata)
-            data = ProjectMetadata.load(metadata, fmt=formatter)
-            if len(data) > 1:
-                raise ValueError(
-                    f"{len(data)} metadata instances found in ({metadata})."
-                    f"Manually pass a single ProjectMetadata instance instead.")
-            metadata = data[0]
         self.dir_abspath = dir_abspath
         self.metadata_storage = metadata_storage
         self.size_bytes = self._get_size_bytes()
         self.sentence_extraction_method = sentence_extraction_method
-        self.metadata = metadata
+        if opam_switch is not None:
+            self.opam_switch = opam_switch
+        else:
+            self.opam_switch = OpamSwitch()
+        self.metadata = self.metadata_storage.get(os.basename(dir_abspath), 
+                                                  self.opam_switch.coq_version,
+                                                  self.opam_switch.ocaml_version)
         self.num_cores = num_cores
 
     @property
