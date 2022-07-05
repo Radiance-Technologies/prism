@@ -5,43 +5,34 @@ import json
 import os
 from multiprocessing import Pool
 from pathlib import Path
-from re import sub
-from typing import Dict, Tuple
+from typing import Dict, Set, Tuple
 
 from prism.project import ProjectDir
 from prism.project.base import SEM
+from prism.project.util import name_variants
 
 
-def camel_case(s):
-    s = sub(r"(-)+", " ", s).title().replace(" ", "")
-    return s
+def ignore_roots(path: Path) -> Set[str]:
+    """
+    Generate list of possible path stems to ignore.
 
+    Parameters
+    ----------
+    path : Path
+        Directory containing all project directories.
 
-def _variants(name):
-    variants = set()
-    variants.add(name)
-    lower = name.lower()
-    if lower != name:
-        variants.add(lower)
-    variants.add(name.replace('-', ''))
-    variants.add(name.replace('-', '_'))
-    variants.add(camel_case(name))
-    if '-coq' in name:
-        variants = variants.union(_variants(name.replace('-coq', '')))
-    if 'coq-' in name:
-        variants = variants.union(_variants(name.replace('coq-', '')))
-    if '-coq-' in name:
-        variants = variants.union(_variants(name.replace('-coq-', '')))
-    return variants
-
-
-def ignore_roots(path):
+    Returns
+    -------
+    Set[str]
+        A list of names that should be ignored if found
+        in a path.
+    """
     path = Path(path)
     proj_dirs = set(next(os.walk(path.parent))[1])
     projects = proj_dirs
     projects.remove(path.stem)
     for p in iter(proj_dirs):
-        projects = projects.union(_variants(p))
+        projects = projects.union(name_variants(p))
     return projects
 
 
