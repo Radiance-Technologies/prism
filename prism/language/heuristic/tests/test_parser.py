@@ -89,6 +89,7 @@ class TestHeuristicParser(unittest.TestCase):
                            24],
             fail_indices={},
             nesting_allowed=[False for _ in range(25)],
+            requirements=set(),
             custom_tactics=set())
         sentences = HeuristicParser._get_sentences(self.test_contents["simple"])
         actual_stats = HeuristicParser._compute_sentence_statistics(sentences)
@@ -154,6 +155,7 @@ class TestHeuristicParser(unittest.TestCase):
                                               6),
                                        repeat(True,
                                               11))),
+            requirements={'Program'},
             custom_tactics=set())
         sentences = HeuristicParser._get_sentences(self.test_contents["nested"])
         actual_stats = HeuristicParser._compute_sentence_statistics(sentences)
@@ -315,6 +317,15 @@ class TestHeuristicParser(unittest.TestCase):
                     ]
                 ],
                 []),
+            requirements={
+                'FMapAVL',
+                'Coq.List',
+                'Coq.Relations',
+                'OrderedTypeAlt',
+                'FSetAVL',
+                'Coq.ZArith',
+                'Coq.RelationClasses'
+            },
             theorem_indices=expected_theorem_indices,
             starter_indices=expected_starter_indices,
             tactic_indices=expected_tactic_indices,
