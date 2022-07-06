@@ -4,7 +4,7 @@ Provides internal utilities for heuristic parsing of Coq source files.
 
 import re
 from functools import partialmethod
-from typing import Iterable, List, Optional, Tuple
+from typing import Iterable, List, Optional, Set, Tuple
 
 from prism.util.re import regex_from_options
 
@@ -69,7 +69,8 @@ class ParserUtils:
     """
     Commands that could be mistakenly attributed as proof starters.
     """
-    program_starters = {"Program"}
+    program_starters = {"Program",
+                        r"#\[.*program.*\]"}
     """
     Vernacular commands that signal the beginning of a `Program`.
 
@@ -396,7 +397,9 @@ class ParserUtils:
             'Monomorphic',
             'Cumulative',
             'NonCumulative',
-            "Private"
+            "Private",
+            "Program",
+            r"#\[.+\]"
         },
         True,
         False)
@@ -404,6 +407,22 @@ class ParserUtils:
     (Legacy) attributes are prefixes applied to certain sentences.
 
     See https://coq.inria.fr/refman/language/core/basic.html#attributes.
+    """
+    requirement_starters = regex_from_options({"From",
+                                               "Require"},
+                                              True,
+                                              False)
+    """
+    Commands to require loading compiled files and libraries.
+    """
+    logical_path_definers = regex_from_options(
+        ['Require Import',
+         'Require Export',
+         'Require'],
+        False,
+        False)
+    """
+    Used to define logical paths of loaded files and libraries.
     """
 
     @classmethod
@@ -416,7 +435,7 @@ class ParserUtils:
     ) -> bool:
         if strip_mods:
             sentence = cls.strip_control(sentence)
-            sentence = cls.strip_attributes(sentence)
+            sentence, _ = cls.strip_attributes(sentence)
         if (forbidden_regex is not None and re.match(forbidden_regex,
                                                      sentence) is not None):
             return False
@@ -446,6 +465,10 @@ class ParserUtils:
     """
     Return whether the given sentence defines a tactic.
     """
+    defines_requirement = partialmethod(_is_command_type, requirement_starters)
+    """
+    Return whether given sentence defines a required module or file.
+    """
 
     @classmethod
     def extract_tactic_name(cls, sentence: str) -> str:
@@ -459,6 +482,42 @@ class ParserUtils:
             sentence,
             maxsplit=1)[1].lstrip()
         return re.split(r"\s+", remainder, maxsplit=1)[0]
+
+    @classmethod
+    def extract_requirements(cls, sentence: str) -> Set[str]:
+        """
+        Return logical name of loaded files from a load command.
+
+        Assumes `ParserUtils.defines_requirement` is True for sentence.
+        The full logical path is returned, including the ``dirpath``
+        specified by the ``From`` command.
+
+        See coq documentation for loading compiled files for
+        more details:
+        https://coq.inria.fr/distrib/current/refman/proof-engine/vernacular-commands.html?highlight=from#compiled-files
+        """  # noqa: B950
+        dirpath: str = ''
+        # Split sentence into either a string containing requirements.
+        # If there is a From command, it will be in the first value of
+        # returned array
+        reqs = re.split(cls.logical_path_definers, sentence)
+        # Remove empty strings to ensure check for from command works.
+        # Otherwise an empty string could be first in ``reqs``.
+        reqs = [r for r in reqs if r]
+        # Check if there is a From command
+        if cls.defines_requirement(reqs[0]):
+            dirpath = ''.join(re.split(cls.requirement_starters,
+                                       reqs.pop(0))).strip()
+        # Split remainder requirements, accounting for multiple
+        # requirements in a single string.
+        reqs = [r_ for r in reqs for r_ in r.split() if r_]
+        # Append dirpath to requirements to form the full logical path
+        # for each requirement.
+        if dirpath:
+            reqs = ['.'.join((dirpath, r)) for r in reqs if r]
+        # Remove period that end the sentence and remove
+        # leading and trailing whitespaces.
+        return {r.rstrip('.').lstrip(' ').rstrip(' ') for r in reqs if r}
 
     is_fail = partialmethod(_is_command_type, re.compile("^Fail"))
     """
@@ -548,28 +607,47 @@ class ParserUtils:
             return None
 
     @classmethod
-    def strip_attribute(cls, sentence: str) -> str:
+    def strip_attribute(cls, sentence: str) -> Tuple[str, Optional[str]]:
         """
         Strip an attribute from the start of the sentence.
+
+        Returns
+        -------
+        stripped : str
+            The sentence stripped of its leading attribute.
+        attribute : Optional[str]
+            The leading attribute or None if there is no attribute.
         """
-        if re.match(ParserUtils.attributes, sentence) is not None:
-            return re.split(
+        attribute = re.match(ParserUtils.attributes, sentence)
+        if attribute is not None:
+            attribute = attribute.group()
+            stripped = re.split(
                 ParserUtils.attributes,
                 sentence,
                 maxsplit=1)[1].lstrip()
+            return stripped, attribute
         else:
-            return sentence
+            return sentence, attribute
 
     @classmethod
-    def strip_attributes(cls, sentence: str) -> str:
+    def strip_attributes(cls, sentence: str) -> Tuple[str, List[str]]:
         """
         Strip any attributes from the start of the sentence.
+
+        Returns
+        -------
+        stripped : str
+            The sentence stripped of its leading attributes.
+        attributes : List[str]
+            The stripped attributes in order of appearance.
         """
-        stripped = ParserUtils.strip_attribute(sentence)
-        while len(stripped) < len(sentence):
+        attributes = []
+        stripped, attribute = ParserUtils.strip_attribute(sentence)
+        while attribute is not None:
+            attributes.append(attribute)
             sentence = stripped
-            stripped = ParserUtils.strip_attribute(sentence)
-        return stripped
+            stripped, attribute = ParserUtils.strip_attribute(sentence)
+        return stripped, attributes
 
     @classmethod
     def strip_control(cls, sentence: str) -> str:

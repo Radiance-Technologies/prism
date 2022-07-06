@@ -2,6 +2,7 @@
 Module providing CoqGym project repository class representations.
 """
 import random
+from enum import Enum
 from typing import List, Optional
 
 from git import Commit, Repo
@@ -9,6 +10,204 @@ from git import Commit, Repo
 from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
 from prism.project.base import Project
+from prism.project.metadata.dataclass import ProjectMetadata
+
+
+class CommitTraversalStrategy(Enum):
+    """
+    Enum used for describing iteration algorithm.
+    """
+
+    NEW_FIRST = 1
+    """
+    Progress through newer and newer commits
+    until all have been finished.
+    """
+    OLD_FIRST = 2
+    """
+    Progress through older and older commits
+    until all have been finished.
+    """
+    CURLICUE_NEW = 3
+    """
+    Alternate newer and older steps progressively
+    from the center, assuming the center is a newer
+    step.
+    """
+    CURLICUE_OLD = 4
+    """
+    Alternate newer and older steps progressively
+    from the center, assuming the center is an older
+    step.
+    """
+
+
+class CommitIterator:
+    """
+    Class for handling iteration over a range of commits.
+    """
+
+    def __init__(
+        self,
+        repo: Repo,
+        commit_sha: str,
+        march_strategy: Optional[
+            CommitTraversalStrategy] = CommitTraversalStrategy.NEW_FIRST):
+        """
+        Initialize CommitIterator.
+
+        Parameters
+        ----------
+        repo : git.Repo
+            Repo, the commits of which we wish to iterate through.
+
+        commit_sha : str
+            Initial commit which we wish to treat as the starting point
+            for the iteration
+
+        march_strategy : CommitTraversalStrategy
+            The particular method of iterating over the repo which
+            we wish to use.
+        """
+        self._repo = repo
+        print("Inside CommitIterator: ", repo.commit())
+        self._commits = [repo.commit()] + list(repo.commit().iter_parents())
+        print("Inside CommitIterator: ", self._commits[: 5])
+        self._commit_sha = commit_sha
+        self._commit_sha_list = [x.hexsha for x in self._commits]
+        self._commit_idx = self._commit_sha_list.index(self._commit_sha)
+        if self._commit_sha not in self._commit_sha_list:
+            raise KeyError("Commit sha supplied to CommitIterator not in repo")
+
+        self._march_strategy = march_strategy
+        nmf = CommitTraversalStrategy.NEW_FIRST
+        omf = CommitTraversalStrategy.OLD_FIRST
+        crn = CommitTraversalStrategy.CURLICUE_NEW
+        cro = CommitTraversalStrategy.CURLICUE_OLD
+        self._next_func_dict = {
+            nmf: self.new_first,
+            omf: self.old_first,
+            crn: self.curlicue,
+            cro: self.curlicue
+        }
+        self._next_func = self._next_func_dict[self._march_strategy]
+
+        self._last_ret = ""
+        self._newest_commit = None
+        self._oldest_commit = None
+        self.init_commit_indices()
+
+    def __iter__(self):
+        """
+        Initialize iterator.
+        """
+        self.init_commit_indices()
+        if self._march_strategy == CommitTraversalStrategy.CURLICUE_NEW \
+           or self._march_strategy == CommitTraversalStrategy.NEW_FIRST:
+            self._last_ret = "old"
+            self._newest_commit = self._commit_idx
+        elif (self._march_strategy == CommitTraversalStrategy.CURLICUE_OLD
+              or self._march_strategy == CommitTraversalStrategy.OLD_FIRST):
+            self._last_ret = "new"
+            self._oldest_commit = self._commit_idx
+        return self
+
+    def __next__(self):
+        """
+        Return next value in container.
+        """
+        return self._next_func()
+
+    def init_commit_indices(self):
+        """
+        Initialize commit indices.
+
+        Initialize the newest and oldest commit indices, according to
+        where the starting commit is.
+        """
+        if self._commit_idx > 0:
+            self._newest_commit = self._commit_idx - 1
+        else:
+            self._newest_commit = None
+        if self._commit_idx < len(self._commits) - 1:
+            self._oldest_commit = self._commit_idx + 1
+        else:
+            self._oldest_commit = None
+
+    def set_center_commit(self, sha):
+        """
+        Reset center commit.
+        """
+        if sha not in self._commit_sha_list:
+            raise KeyError("Commit sha supplied to CommitIterator not in repo")
+        self._commit_sha = sha
+        self._commit_idx = self._commit_sha_list.index(self._commit_sha)
+        self.init_commit_indices()
+
+    def new_first(self):
+        """
+        Return newer commits until none remain, then older.
+
+        The commit traversal strategy which follows all progressively
+        newer commits before it returns older commits.
+        """
+        if self._newest_commit >= 0:
+            tmp_idx = self._newest_commit
+            self._newest_commit = self._newest_commit - 1
+            return self._commits[tmp_idx]
+        elif self._oldest_commit < len(self._commits):
+            tmp_idx = self._oldest_commit
+            self._oldest_commit = self._oldest_commit + 1
+            return self._commits[tmp_idx]
+        else:
+            raise StopIteration
+
+    def old_first(self):
+        """
+        Return older commits until none remain, then newer.
+
+        The commit traversal strategy which follows all progressively
+        older commits before it returns newer commits.
+        """
+        if self._oldest_commit < len(self._commits):
+            tmp_idx = self._oldest_commit
+            self._oldest_commit = self._oldest_commit + 1
+            return self._commits[tmp_idx]
+        elif self._newest_commit >= 0:
+            tmp_idx = self._newest_commit
+            self._newest_commit = self._newest_commit - 1
+            return self._commits[tmp_idx]
+        else:
+            raise StopIteration
+
+    def curlicue(self):
+        """
+        Return commits in a progressively widened area about the center.
+
+        The commit traversal strategy which alternates between newer and
+        older commits, progressively widening the distance from the
+        central commit.
+        """
+        if self._newest_commit == 0:
+            self._last_ret = "new"
+        if self._oldest_commit == len(self._commits):
+            self._last_ret = "old"
+        if self._last_ret == "old" and self._newest_commit >= 0:
+            self._last_ret = "new"
+            tmp_idx = self._newest_commit
+            self._newest_commit = self._newest_commit - 1
+            return self._commits[tmp_idx]
+        elif (self._last_ret == "new"
+              and self._oldest_commit < len(self._commits)):
+            self._last_ret = "old"
+            tmp_idx = self._oldest_commit
+            self._oldest_commit = self._oldest_commit + 1
+            return self._commits[tmp_idx]
+        else:
+            if self._last_ret != "new" and self._last_ret != "old":
+                raise Exception("Malformed")
+            else:
+                raise StopIteration
 
 
 class ProjectRepo(Repo, Project):
@@ -27,8 +226,29 @@ class ProjectRepo(Repo, Project):
         self.current_commit_name = None  # i.e., HEAD
 
     @property
+    def commit_sha(self) -> str:  # noqa: D102
+        self.commit().hexsha
+
+    @property
+    def metadata(self) -> ProjectMetadata:  # noqa: D102
+        return self.metadata_storage.get(
+            self.name,
+            self.remote_url,
+            self.commit_sha,
+            self.opam_switch.get_installed_version("coq"),
+            self.opam_switch.get_installed_version("ocaml"))
+
+    @property
+    def name(self) -> str:  # noqa: D102
+        return self.remote_url.split('.git')[0].split('/')[-1]
+
+    @property
     def path(self) -> str:  # noqa: D102
         return self.working_dir
+
+    @property
+    def remote_url(self) -> str:  # noqa: D102
+        return self.remote().url
 
     def _get_file(
             self,

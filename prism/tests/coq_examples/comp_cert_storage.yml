@@ -1,0 +1,70 @@
+autofill: true
+build_cmd:
+  0: 0
+clean_cmd:
+  0: 1
+command_sequences:
+- - commands:
+    - ./configure x86_64-linux
+    - make
+  - 0
+- - commands:
+    - make clean
+  - 1
+contexts:
+- - coq_version: null
+    ocaml_version: null
+    revision:
+      commit_sha: 7b3bc19117e48d601e392f2db2c135c7df1d8376
+      project_source:
+        project_name: CompCert
+        repo_url: https://github.com/AbsInt/CompCert
+  - 0
+coq_dependencies:
+  0:
+  - 0
+  - 1
+default_build_cmd: []
+default_clean_cmd: []
+default_coq_version: 8.10.2
+default_install_cmd: []
+default_ocaml_version: 4.07.2
+default_serapi_version: 8.10.0+0.7.2
+ignore_path_regex: {}
+indices:
+  command_sequences: 2
+  contexts: 1
+  ocaml_packages: 3
+  opam_repositories: 1
+install_cmd: {}
+ocaml_packages:
+- - coq-flocq
+  - 0
+- - coq-menhirlib
+  - 1
+- - menhir
+  - 2
+opam_dependencies:
+  0:
+  - 2
+opam_repos:
+  0:
+  - 0
+opam_repositories:
+- - coq-released https://coq.inria.fr/opam/released
+  - 0
+project_sources:
+- project_name: CompCert
+  repo_url: https://github.com/AbsInt/CompCert
+projects:
+- CompCert
+revisions:
+- commit_sha: 7b3bc19117e48d601e392f2db2c135c7df1d8376
+  project_source:
+    project_name: CompCert
+    repo_url: https://github.com/AbsInt/CompCert
+serapi_options:
+  0: -R lib,compcert.lib -R common,compcert.common -R x86_64,compcert.x86_64 -R x86,compcert.x86
+    -R backend,compcert.backend -R cfrontend,compcert.cfrontend -R driver,compcert.driver
+    -R exportclight,compcert.exportclight -R cparser,compcert.cparser -R flocq,Flocq
+    -R MenhirLib,MenhirLib

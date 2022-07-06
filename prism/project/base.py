@@ -7,7 +7,6 @@ import random
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from functools import partialmethod
-from os import PathLike, path
 from typing import List, Optional, Tuple, Union
 
 from seutil import BashUtils, bash
@@ -16,9 +15,10 @@ from prism.data.document import CoqDocument
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
 from prism.project.exception import ProjectBuildError
 from prism.project.metadata import ProjectMetadata
+from prism.project.metadata.storage import MetadataStorage
 from prism.project.strace import IQR, CoqContext, strace_build
-from prism.util.io import infer_format
 from prism.util.logging import default_log_level
+from prism.util.opam import OpamSwitch
 from prism.util.opam.api import OpamAPI
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -66,9 +66,11 @@ class Project(ABC):
     ----------
     dir_abspath : str
         The absolute path to the project's root directory.
-    metadata : os.PathLike or `ProjectMetadata`
-        ProjectMetadata object containing metadata
-        for project or the path to a .yml file where it can be extracted
+    metadata_storage : MetadataStorage
+        MetadataStorage for referencing all possible metadata
+        configurations for the project.
+    opam_switch : OpamSwitch
+        Object for tracking OpamSwitch relevant for this project
     sentence_extraction_method : SentenceExtractionMethod
         The method by which sentences are extracted.
 
@@ -89,43 +91,27 @@ class Project(ABC):
     def __init__(
             self,
             dir_abspath: str,
-            metadata: Optional[Union[PathLike,
-                                     ProjectMetadata]] = None,
+            metadata_storage: MetadataStorage,
+            opam_switch: Optional[OpamSwitch] = None,
             sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI,
             num_cores: Optional[int] = None):
         """
         Initialize Project object.
         """
-        if metadata is None:
-            metadata = ProjectMetadata(
-                path.basename(dir_abspath),
-                serapi_options='',
-                build_cmd=[],
-                clean_cmd=[],
-                install_cmd=[])
-        elif isinstance(metadata, (str, pathlib.PosixPath)):
-            formatter = infer_format(metadata)
-            data = ProjectMetadata.load(metadata, fmt=formatter)
-            if len(data) > 1:
-                raise ValueError(
-                    f"{len(data)} metadata instances found in ({metadata})."
-                    f"Manually pass a single ProjectMetadata instance instead.")
-            metadata = data[0]
         self.dir_abspath = dir_abspath
+        self.metadata_storage = metadata_storage
         self.size_bytes = self._get_size_bytes()
         self.sentence_extraction_method = sentence_extraction_method
-        self.metadata = metadata
+        if opam_switch is not None:
+            self.opam_switch = opam_switch
+        else:
+            self.opam_switch = OpamSwitch()
         self.num_cores = num_cores
 
     @property
     def build_cmd(self) -> List[str]:
         """
-        Return ``self.metadata.build_cmd``.
-
-        Returns
-        -------
-        List[str]
-            List of build commands located in project metadata.
+        Return the list of commands that build the project.
         """
         cmd_list = self.metadata.build_cmd
         for i in range(len(cmd_list)):
@@ -136,38 +122,34 @@ class Project(ABC):
     @property
     def clean_cmd(self) -> List[str]:
         """
-        Return ``self.metadata.clean_cmd``.
-
-        Returns
-        -------
-        List[str]
-            List of clean commands located in project metadata.
+        Return the list of commands that clean project build artifacts.
         """
         return self.metadata.clean_cmd
 
     @property
     def install_cmd(self) -> List[str]:
         """
-        Return ``self.metadata.install_cmd``.
-
-        Returns
-        -------
-        List[str]
-            List of install commands located in project metadata.
+        Return the list of commands that install the project.
         """
         return self.metadata.install_cmd
 
     @property
+    def metadata(self) -> ProjectMetadata:
+        """
+        Get up-to-date metadata for the project.
+        """
+        return self.metadata_storage.get(
+            self.name,
+            self.opam_switch.get_installed_version("coq"),
+            self.opam_switch.get_installed_version("ocaml"))
+
+    @property
+    @abstractmethod
     def name(self) -> str:
         """
-        Return ``self.metadata.project_name``.
-
-        Returns
-        -------
-        str
-            Project name located in project metadata.
+        Return the name of the project.
         """
-        return self.metadata.project_name
+        ...
 
     @property
     @abstractmethod

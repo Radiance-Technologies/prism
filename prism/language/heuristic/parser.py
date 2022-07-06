@@ -119,6 +119,10 @@ class HeuristicParser:
         """
         Custom tactics defined in the document via `Ltac` commands.
         """
+        requirements: Set[str] = default_field(set())
+        """
+        Required modules and files in parsed file.
+        """
         _depth: int = field(init=False)
         """
         The depth after the final recorded sentence.
@@ -262,6 +266,20 @@ class HeuristicParser:
                 self._increment_depth(depth_change)
             self._add_proof_index(index)
 
+        def _add_requirements(self, sentence_sans_attributes: str) -> None:
+            """
+            Record requirements given by sentence.
+
+            Parameters
+            ----------
+            sentence_sans_attributes : str
+                A sentence that defines required logical path(s).
+            """
+            new_reqs = ParserUtils.extract_requirements(
+                sentence_sans_attributes)
+            self.requirements = self.requirements.union(new_reqs)
+            self._increment_depth(0)
+
         def _add_tactic(self) -> None:
             """
             Record the occurrence of a tactic in proof mode.
@@ -271,7 +289,10 @@ class HeuristicParser:
             self._increment_depth(0)
             self._add_proof_index(index)
 
-        def _add_theorem(self, sentence_sans_attributes: str) -> None:
+        def _add_theorem(
+                self,
+                sentence_sans_attributes: str,
+                is_program: bool) -> None:
             """
             Record the occurrence of a "theorem" that may require proof.
 
@@ -284,10 +305,13 @@ class HeuristicParser:
             sentence_sans_attributes : str
                 A sentence that explicitly starts a proof without any
                 preceding modifiers or attributes.
+            is_program : bool
+                Whether this sentence is adorned with a ``program``
+                attribute.
             """
             index = self.num_sentences
             self.theorem_indices.add(index)
-            if ParserUtils.is_program_starter(sentence_sans_attributes):
+            if is_program:
                 self.program_indices.append(index)
             self._increment_depth(1)
             self._add_proof_index(index)
@@ -336,8 +360,10 @@ class HeuristicParser:
                 statistics.
             """
             sentence_sans_control = ParserUtils.strip_control(sentence)
-            sentence_sans_attributes = ParserUtils.strip_attributes(
+            sentence_sans_attributes, attributes = ParserUtils.strip_attributes(
                 sentence_sans_control)
+            is_program = any(
+                [ParserUtils.is_program_starter(a) for a in attributes])
             nested_proof_command = ParserUtils.sets_nested_proofs(
                 sentence_sans_attributes)
             if nested_proof_command is not None:
@@ -351,8 +377,9 @@ class HeuristicParser:
                 self.nesting_allowed.append(nesting_allowed)
                 if ParserUtils.is_fail(sentence):
                     self._add_failure()
-                elif ParserUtils.is_theorem_starter(sentence_sans_attributes):
-                    self._add_theorem(sentence_sans_attributes)
+                elif (ParserUtils.is_theorem_starter(sentence_sans_attributes)
+                      or is_program):
+                    self._add_theorem(sentence_sans_attributes, is_program)
                 elif ParserUtils.is_proof_starter(sentence_sans_attributes):
                     self._add_proof_starter(sentence_sans_attributes)
                 elif ParserUtils.is_proof_ender(sentence_sans_attributes):
@@ -362,6 +389,8 @@ class HeuristicParser:
                 elif ParserUtils.is_tactic(sentence_sans_attributes,
                                            self.custom_tactics):
                     self._add_tactic()
+                elif ParserUtils.defines_requirement(sentence_sans_attributes):
+                    self._add_requirements(sentence_sans_attributes)
                 else:
                     if ParserUtils.is_query(sentence_sans_attributes):
                         index = self.num_sentences
@@ -588,7 +617,7 @@ class HeuristicParser:
                 ]
                 sentence = sentences[i]
             sentence_sans_control = ParserUtils.strip_control(sentence)
-            sentence_sans_attributes = ParserUtils.strip_attributes(
+            sentence_sans_attributes, _ = ParserUtils.strip_attributes(
                 sentence_sans_control)
             # restore notation
             if sentence_sans_attributes.startswith(cls.notation_mask):

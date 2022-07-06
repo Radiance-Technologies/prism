@@ -21,7 +21,6 @@ repos:
     rev: v3.4.0
     hooks:
       - id: trailing-whitespace
-      - id: check-docstring-first
       - id: debug-statements
       - id: requirements-txt-fixer
       - id: check-merge-conflict
