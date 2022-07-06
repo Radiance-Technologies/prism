@@ -23,8 +23,9 @@ class TestOpamSwitch(unittest.TestCase):
         """
         Test retrieval of cached property versions.
         """
+        self.test_switch.install('coq', version='8.10.2', yes=True)
         version = self.test_switch.coq_version
-        self.assertEqual(version, "8.15.2")
+        self.assertEqual(version, "8.10.2")
 
     def test_get_ocaml_version(self):
         """

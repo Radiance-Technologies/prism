@@ -68,11 +68,11 @@ class OpamSwitch:
         """
         Obtain relevant coq_version for this particular Opam switch.
         """
-        r = self.run("opam show coq --raw").stdout.split("\n")
+        r = self.run("opam list coq -i").stdout.split("\n")
         if len(r) > 2:
-            if 'coq' not in r[1]:
+            if 'coq' not in r[2]:
                 raise ValueError("Opam returned version for incorrect package")
-            regex = r"version: \"(.*)\""
+            regex = r"coq\s*([\d\.]*)\s*Formal proof management system"
             matchObj = re.match(regex, r[2])
             if matchObj:
                 return matchObj.groups()[0]
@@ -86,11 +86,11 @@ class OpamSwitch:
         """
         Obtain relevant ocaml_version for this particular Opam switch.
         """
-        r = self.run("opam show ocaml --raw").stdout.split("\n")
+        r = self.run("opam list ocaml -i").stdout.split("\n")
         if len(r) > 2:
-            if 'ocaml' not in r[1]:
+            if 'ocaml' not in r[2]:
                 raise ValueError("Opam returned version for incorrect package")
-            regex = r"version: \"(.*)\""
+            regex = r"ocaml\s*([\d\.]*)\s*The OCaml compiler \(virtual package\)"
             matchObj = re.match(regex, r[2])
             if matchObj:
                 return matchObj.groups()[0]
@@ -236,7 +236,7 @@ class OpamSwitch:
             for dep in dependencies
         }
 
-    def install(self, pkg: str, version: Optional[str] = None) -> None:
+    def install(self, pkg: str, version: Optional[str] = None, yes: Optional[bool] = False) -> None:
         """
         Install the indicated package.
 
@@ -247,6 +247,8 @@ class OpamSwitch:
         version : Optional[str], optional
             A specific version of the package, by default None.
             If not given, then the default version will be installed.
+        yes : Optional[bool], optional
+            Whether to include the --yes flag for installation.
 
         Exceptions
         ----------
@@ -256,7 +258,10 @@ class OpamSwitch:
         """
         if version is not None:
             pkg = f"{pkg}.{version}"
-        self.run(f"opam install {pkg}")
+        cmd = f"opam install {pkg}"
+        if yes:
+            cmd = cmd + " -y"
+        self.run(cmd)
 
     def remove_pkg(
         self,
