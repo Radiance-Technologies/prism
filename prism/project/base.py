@@ -311,9 +311,9 @@ class Project(ABC):
                     f"Command {cmd} finished with return code {r.returncode}.")
         self.metadata.serapi_options = str(
             sum([c.iqr for c in contexts],
-                IQR({},
-                    {},
-                    {},
+                IQR(set(),
+                    set(),
+                    set(),
                     self.path)))
         # self.num_cores = old_num_cores
         return self.serapi_options

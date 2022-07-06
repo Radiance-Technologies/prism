@@ -25,7 +25,7 @@ _REGEX = r'.*\.v$'
 
 
 @dataclass
-class ProcContext():
+class ProcContext:
     """
     Process context data class.
     """
@@ -36,7 +36,7 @@ class ProcContext():
 
 
 @dataclass
-class IQR():
+class IQR:
     """
     Dataclass for storing IQR arguments.
 
