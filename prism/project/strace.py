@@ -95,24 +95,14 @@ class IQR():
 
         Parameters
         ----------
-        owd : os.PathLike, optional
-            The path relative to which the IQR options are presumed to
-            have been originally defined, by default "".
         pwd : os.PathLike, optional
             The path relative to which the IQR options should be
             reinterpreted, by default "".
-            This path is assumed to be a subpath of 'owd'.
 
         Returns
         -------
         str
             The reinterpreted arguments.
-
-        Raises
-        ------
-        ValueError
-            If `pwd` is not a subpath of `owd`, i.e., if `owd` does not
-            contain `pwd`.
         """
         prefix = get_relative_path(self.pwd, pwd)
         return IQR(
