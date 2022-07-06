@@ -72,7 +72,7 @@ class OpamSwitch:
         if len(r) > 2:
             if 'coq' not in r[2]:
                 raise ValueError("Opam returned version for incorrect package")
-            regex = r"coq\s*([\d\.]*)\s*Formal proof management system"
+            regex = r"coq\s*(\S*)\s*.*"
             matchObj = re.match(regex, r[2])
             if matchObj:
                 return matchObj.groups()[0]
