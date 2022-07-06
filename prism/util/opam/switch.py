@@ -13,7 +13,7 @@ from typing import ClassVar, Dict, List, Optional
 from seutil import bash
 
 from .constraint import VersionConstraint
-from .version import OCamlVersion, Version
+from .version import OCamlVersion, OpamVersion, Version
 
 logger = logging.getLogger(__file__)
 logger.setLevel(logging.DEBUG)
@@ -200,7 +200,47 @@ class OpamSwitch:
             for dep in dependencies
         }
 
-    def install(self, pkg: str, version: Optional[str] = None) -> None:
+    def get_installed_version(self, package_name: str) -> Optional[str]:
+        """
+        Get the installed version of the given package.
+
+        Parameters
+        ----------
+        package_name : str
+            The name of an Opam package.
+
+        Returns
+        -------
+        str or None
+            The installed version of the package or None if it is not
+            installed in this switch.
+
+        Raises
+        ------
+        RuntimeError
+            If Opam yields information for a package by a different
+            name.
+        """
+        r = self.run(f"opam list {package_name} -i").stdout.split("\n")
+        if len(r) > 2:
+            # output has following form:
+            #  Packages matching: installed & name-match(<package_name>)
+            #  Name # Installed # Synopsis
+            #  <package_name> <version> <description>
+            fields = r[2].split()
+            name, installed = fields[0], fields[1]
+            if package_name != name:
+                raise RuntimeError(
+                    f"Expected package {package_name}, got {name}")
+            return str(OpamVersion.parse(installed))
+        else:
+            return None
+
+    def install(
+            self,
+            pkg: str,
+            version: Optional[str] = None,
+            yes: Optional[bool] = False) -> None:
         """
         Install the indicated package.
 
@@ -211,6 +251,8 @@ class OpamSwitch:
         version : Optional[str], optional
             A specific version of the package, by default None.
             If not given, then the default version will be installed.
+        yes : Optional[bool], optional
+            Whether to include the --yes flag for installation.
 
         Exceptions
         ----------
@@ -220,7 +262,10 @@ class OpamSwitch:
         """
         if version is not None:
             pkg = f"{pkg}.{version}"
-        self.run(f"opam install {pkg}")
+        cmd = f"opam install {pkg}"
+        if yes:
+            cmd = cmd + " -y"
+        self.run(cmd)
 
     def remove_pkg(
         self,

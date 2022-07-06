@@ -3,12 +3,9 @@ Test suite for prism.util.opam.
 """
 import re
 import unittest
-from pathlib import Path
 from typing import Dict
 
 from prism.util.opam import OCamlVersion, OpamAPI, Version, VersionConstraint
-
-TEST_DIR = Path(__file__).parent
 
 
 class TestOpamSwitch(unittest.TestCase):
@@ -58,6 +55,17 @@ class TestOpamSwitch(unittest.TestCase):
                 VersionConstraint()
         }
         self.assertEqual(actual, expected)
+
+    def test_get_installed_version(self):
+        """
+        Test retrieval of installed versions.
+        """
+        self.assertIsNone(self.test_switch.get_installed_version("coq"))
+        self.test_switch.install('coq', version="8.10.2", yes=True)
+        version = self.test_switch.get_installed_version("coq")
+        self.assertEqual(version, "8.10.2")
+        version = self.test_switch.get_installed_version("ocaml")
+        self.assertEqual(version, self.ocaml_version)
 
     def test_install_remove(self):
         """

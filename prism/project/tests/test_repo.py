@@ -10,6 +10,7 @@ import git
 
 from prism.project import ProjectRepo, SentenceExtractionMethod
 from prism.project.metadata import ProjectMetadata
+from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import CommitIterator, CommitTraversalStrategy
 
 TEST_DIR = os.path.dirname(__file__)
@@ -72,9 +73,12 @@ class TestCommitIter(unittest.TestCase):
                 ["make"],
                 ["make install"],
                 ["make clean"])
+            cls.metadata_storage = MetadataStorage()
+            for metadata in cls.metadatas.values():
+                cls.metadata_storage.insert(metadata)
             cls.projects[project_name] = ProjectRepo(
                 project_path,
-                cls.metadatas[project_name],
+                cls.metadata_storage,
                 sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
 
     def test_iterator_newest_first(self):

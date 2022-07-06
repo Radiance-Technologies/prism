@@ -11,3 +11,4 @@ _TEST_ROOT = Path(__file__)
 _PROJECT_ROOT = _TEST_ROOT.parent
 _COQ_EXAMPLES_PATH = _PROJECT_ROOT / "coq_examples"
 _MINIMAL_METADATA = _COQ_EXAMPLES_PATH / "minimal_metadata.yml"
+_MINIMAL_METASTORAGE = _COQ_EXAMPLES_PATH / "comp_cert_storage.yml"
