@@ -236,7 +236,11 @@ class OpamSwitch:
             for dep in dependencies
         }
 
-    def install(self, pkg: str, version: Optional[str] = None, yes: Optional[bool] = False) -> None:
+    def install(
+            self,
+            pkg: str,
+            version: Optional[str] = None,
+            yes: Optional[bool] = False) -> None:
         """
         Install the indicated package.
 
