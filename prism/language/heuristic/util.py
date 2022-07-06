@@ -69,7 +69,8 @@ class ParserUtils:
     """
     Commands that could be mistakenly attributed as proof starters.
     """
-    program_starters = {"Program"}
+    program_starters = {"Program",
+                        r"#\[.*program.*\]"}
     """
     Vernacular commands that signal the beginning of a `Program`.
 
@@ -396,7 +397,9 @@ class ParserUtils:
             'Monomorphic',
             'Cumulative',
             'NonCumulative',
-            "Private"
+            "Private",
+            "Program",
+            r"#\[.+\]"
         },
         True,
         False)
@@ -432,7 +435,7 @@ class ParserUtils:
     ) -> bool:
         if strip_mods:
             sentence = cls.strip_control(sentence)
-            sentence = cls.strip_attributes(sentence)
+            sentence, _ = cls.strip_attributes(sentence)
         if (forbidden_regex is not None and re.match(forbidden_regex,
                                                      sentence) is not None):
             return False
@@ -604,28 +607,47 @@ class ParserUtils:
             return None
 
     @classmethod
-    def strip_attribute(cls, sentence: str) -> str:
+    def strip_attribute(cls, sentence: str) -> Tuple[str, Optional[str]]:
         """
         Strip an attribute from the start of the sentence.
+
+        Returns
+        -------
+        stripped : str
+            The sentence stripped of its leading attribute.
+        attribute : Optional[str]
+            The leading attribute or None if there is no attribute.
         """
-        if re.match(ParserUtils.attributes, sentence) is not None:
-            return re.split(
+        attribute = re.match(ParserUtils.attributes, sentence)
+        if attribute is not None:
+            attribute = attribute.group()
+            stripped = re.split(
                 ParserUtils.attributes,
                 sentence,
                 maxsplit=1)[1].lstrip()
+            return stripped, attribute
         else:
-            return sentence
+            return sentence, attribute
 
     @classmethod
-    def strip_attributes(cls, sentence: str) -> str:
+    def strip_attributes(cls, sentence: str) -> Tuple[str, List[str]]:
         """
         Strip any attributes from the start of the sentence.
+
+        Returns
+        -------
+        stripped : str
+            The sentence stripped of its leading attributes.
+        attributes : List[str]
+            The stripped attributes in order of appearance.
         """
-        stripped = ParserUtils.strip_attribute(sentence)
-        while len(stripped) < len(sentence):
+        attributes = []
+        stripped, attribute = ParserUtils.strip_attribute(sentence)
+        while attribute is not None:
+            attributes.append(attribute)
             sentence = stripped
-            stripped = ParserUtils.strip_attribute(sentence)
-        return stripped
+            stripped, attribute = ParserUtils.strip_attribute(sentence)
+        return stripped, attributes
 
     @classmethod
     def strip_control(cls, sentence: str) -> str:
