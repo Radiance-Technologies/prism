@@ -29,6 +29,10 @@ class ProjectDir(Project):
             raise DirHasNoCoqFiles(f"{dir_abspath} has no Coq files.")
 
     @property
+    def name(self) -> str:  # noqa: D102
+        return pathlib.Path(self.working_dir).stem
+
+    @property
     def path(self) -> str:  # noqa: D102
         return self.working_dir
 

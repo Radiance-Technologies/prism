@@ -13,7 +13,7 @@ from typing import ClassVar, Dict, List, Optional
 from seutil import bash
 
 from .constraint import VersionConstraint
-from .version import OCamlVersion, Version
+from .version import OCamlVersion, OpamVersion, Version
 
 logger = logging.getLogger(__file__)
 logger.setLevel(logging.DEBUG)
@@ -62,42 +62,6 @@ class OpamSwitch:
         Return the name of the switch.
         """
         return self.name
-
-    @cached_property
-    def coq_version(self) -> str:
-        """
-        Obtain relevant coq_version for this particular Opam switch.
-        """
-        r = self.run("opam list coq -i").stdout.split("\n")
-        if len(r) > 2:
-            if 'coq' not in r[2]:
-                raise ValueError("Opam returned version for incorrect package")
-            regex = r"coq\s*(\S*)\s*.*"
-            matchObj = re.match(regex, r[2])
-            if matchObj:
-                return matchObj.groups()[0]
-            else:
-                raise ValueError("Coq version malformed")
-        else:
-            raise ValueError("Coq version not found")
-
-    @cached_property
-    def ocaml_version(self) -> str:
-        """
-        Obtain relevant ocaml_version for this particular Opam switch.
-        """
-        r = self.run("opam list ocaml -i").stdout.split("\n")
-        if len(r) > 2:
-            if 'ocaml' not in r[2]:
-                raise ValueError("Opam returned version for incorrect package")
-            regex = r"ocaml\s*([\d\.]*)\s*The OCaml compiler \(virtual package\)"
-            matchObj = re.match(regex, r[2])
-            if matchObj:
-                return matchObj.groups()[0]
-            else:
-                raise ValueError("Ocaml version malformed")
-        else:
-            raise ValueError("Ocaml version not found")
 
     @cached_property
     def _environ(self) -> Dict[str, str]:
@@ -235,6 +199,42 @@ class OpamSwitch:
             VersionConstraint.parse(dep[1] if len(dep) > 1 else "")
             for dep in dependencies
         }
+
+    def get_installed_version(self, package_name: str) -> Optional[str]:
+        """
+        Get the installed version of the given package.
+
+        Parameters
+        ----------
+        package_name : str
+            The name of an Opam package.
+
+        Returns
+        -------
+        str or None
+            The installed version of the package or None if it is not
+            installed in this switch.
+
+        Raises
+        ------
+        RuntimeError
+            If Opam yields information for a package by a different
+            name.
+        """
+        r = self.run(f"opam list {package_name} -i").stdout.split("\n")
+        if len(r) > 2:
+            # output has following form:
+            #  Packages matching: installed & name-match(<package_name>)
+            #  Name # Installed # Synopsis
+            #  <package_name> <version> <description>
+            fields = r[2].split()
+            name, installed = fields[0], fields[1]
+            if package_name != name:
+                raise RuntimeError(
+                    f"Expected package {package_name}, got {name}")
+            return str(OpamVersion.parse(installed))
+        else:
+            return None
 
     def install(
             self,

@@ -2,12 +2,9 @@
 Test suite for prism.util.opam.
 """
 import unittest
-from pathlib import Path
 from subprocess import CalledProcessError
 
 from prism.util.opam import OpamAPI, OpamSwitch
-
-TEST_DIR = Path(__file__).parent
 
 
 class TestOpamAPI(unittest.TestCase):

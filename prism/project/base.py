@@ -2,7 +2,6 @@
 Module providing CoqGym project class representations.
 """
 import logging
-import os
 import pathlib
 import random
 from abc import ABC, abstractmethod
@@ -15,6 +14,7 @@ from seutil import BashUtils
 from prism.data.document import CoqDocument
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
 from prism.project.exception import ProjectBuildError
+from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 from prism.util.logging import default_log_level
 from prism.util.opam import OpamSwitch
@@ -104,21 +104,12 @@ class Project(ABC):
             self.opam_switch = opam_switch
         else:
             self.opam_switch = OpamSwitch()
-        self.metadata = self.metadata_storage.get(
-            os.path.basename(dir_abspath),
-            self.opam_switch.coq_version,
-            self.opam_switch.ocaml_version)
         self.num_cores = num_cores
 
     @property
     def build_cmd(self) -> List[str]:
         """
-        Return ``self.metadata.build_cmd``.
-
-        Returns
-        -------
-        List[str]
-            List of build commands located in project metadata.
+        Return the list of commands that build the project.
         """
         cmd_list = self.metadata.build_cmd
         for i in range(len(cmd_list)):
@@ -129,38 +120,34 @@ class Project(ABC):
     @property
     def clean_cmd(self) -> List[str]:
         """
-        Return ``self.metadata.clean_cmd``.
-
-        Returns
-        -------
-        List[str]
-            List of clean commands located in project metadata.
+        Return the list of commands that clean project build artifacts.
         """
         return self.metadata.clean_cmd
 
     @property
     def install_cmd(self) -> List[str]:
         """
-        Return ``self.metadata.install_cmd``.
-
-        Returns
-        -------
-        List[str]
-            List of install commands located in project metadata.
+        Return the list of commands that install the project.
         """
         return self.metadata.install_cmd
 
     @property
+    def metadata(self) -> ProjectMetadata:
+        """
+        Get up-to-date metadata for the project.
+        """
+        return self.metadata_storage.get(
+            self.name,
+            self.opam_switch.get_installed_version("coq"),
+            self.opam_switch.get_installed_version("ocaml"))
+
+    @property
+    @abstractmethod
     def name(self) -> str:
         """
-        Return ``self.metadata.project_name``.
-
-        Returns
-        -------
-        str
-            Project name located in project metadata.
+        Return the name of the project.
         """
-        return self.metadata.project_name
+        ...
 
     @property
     @abstractmethod

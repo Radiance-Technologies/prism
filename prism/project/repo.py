@@ -10,6 +10,7 @@ from git import Commit, Repo
 from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
 from prism.project.base import Project
+from prism.project.metadata.dataclass import ProjectMetadata
 
 
 class CommitTraversalStrategy(Enum):
@@ -224,18 +225,32 @@ class ProjectRepo(Repo, Project):
         Project.__init__(self, dir_abspath, *args, **kwargs)
         self.remote_url = self.remote().url
         self.commit_sha = self.commit().hexsha
-        self.repo_name = self.remote().url.split('.git')[0].split('/')[-1]
-        self.metadata = self.metadata_storage.get(
-            self.repo_name,
+        self.current_commit_name = None  # i.e., HEAD
+
+    @property
+    def commit_sha(self) -> str:  # noqa: D102
+        self.commit().hexsha
+
+    @property
+    def metadata(self) -> ProjectMetadata:  # noqa: D102
+        return self.metadata_storage.get(
+            self.name,
             self.remote_url,
             self.commit_sha,
-            self.opam_switch.coq_version,
-            self.opam_switch.ocaml_version)
-        self.current_commit_name = None  # i.e., HEAD
+            self.opam_switch.get_installed_version("coq"),
+            self.opam_switch.get_installed_version("ocaml"))
+
+    @property
+    def name(self) -> str:  # noqa: D102
+        return self.remote_url.split('.git')[0].split('/')[-1]
 
     @property
     def path(self) -> str:  # noqa: D102
         return self.working_dir
+
+    @property
+    def remote_url(self) -> str:  # noqa: D102
+        return self.remote().url
 
     def _get_file(
             self,
