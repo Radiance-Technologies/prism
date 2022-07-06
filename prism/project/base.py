@@ -16,7 +16,7 @@ from prism.data.document import CoqDocument
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
 from prism.project.exception import ProjectBuildError
 from prism.project.metadata import ProjectMetadata
-from prism.project.strace import CoqContext, strace_build
+from prism.project.strace import IQR, CoqContext, strace_build
 from prism.util.io import infer_format
 from prism.util.logging import default_log_level
 from prism.util.opam.api import OpamAPI
@@ -328,8 +328,11 @@ class Project(ABC):
                 logging.debug(
                     f"Command {cmd} finished with return code {r.returncode}.")
         self.metadata.serapi_options = str(
-            sum(contexts),
-            start=CoqContext.empty_context())
+            sum([c.iqr for c in contexts],
+                IQR({},
+                    {},
+                    {},
+                    self.path)))
         # self.num_cores = old_num_cores
         return self.serapi_options
 

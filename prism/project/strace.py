@@ -18,6 +18,7 @@ import lark
 from strace_parser.parser import get_parser
 
 from prism.util.opam.api import OpamAPI
+from prism.util.path import get_relative_path
 
 _EXECUTABLE = 'coqc'
 _REGEX = r'.*\.v$'
@@ -38,21 +39,105 @@ class ProcContext():
 class IQR():
     """
     Dataclass for storing IQR arguments.
+
+    See https://coq.inria.fr/refman/practical-tools/coq-commands.html
+    for more information.
     """
 
-    I: List[str]  # noqa: E741
-    Q: List[Tuple[str, str]]  # List of pairs of str
-    R: List[Tuple[str, str]]  # List of pairs of str
+    I: Set[str]  # noqa: E741
+    Q: Set[Tuple[str, str]]  # set of pairs of str
+    R: Set[Tuple[str, str]]  # set of pairs of str
+    pwd: os.PathLike = ""
+    """
+    The working directory to which all of the options are assumed to be
+    relative.
+    """
+    delim: str = ","
+    """
+    The delimiter used between relative and logical paths, by default a
+    comma for compatibility with SerAPI.
+    A space should be used for compatibility with Coq.
+    """
+
+    def __add__(self, other: 'IQR') -> 'IQR':  # noqa: D105
+        if not isinstance(other, IQR):
+            return NotImplemented
+        self_pwd = pathlib.Path(self.pwd)
+        other_pwd = pathlib.Path(other.pwd)
+        if self_pwd != other_pwd:
+            pwd = os.path.commonpath([self_pwd, other_pwd])
+            return self.relocate(pwd) + other.relocate(pwd)
+        else:
+            return IQR(self.I + other.I, self.Q + other.Q, self.R + other.R)
+
+    def __str__(self) -> str:
+        """
+        Get the options as they would appear on the command line.
+        """
+        options = [f"-I {i}" for i in self.I]
+        options.extend([f"-Q {p}{self.delim}{q}" for p, q in self.Q])
+        options.extend([f"-R {p}{self.delim}{r}" for p, r in self.R])
+        return " ".join(options)
+
+    def union(self, other: 'IQR') -> 'IQR':
+        """
+        Compute the union of two IQR configurations.
+
+        If the configurations do not share the same working directory,
+        then the working directory of their union will be the longest
+        common path shared between their working directories.
+        """
+        return self + other
+
+    def relocate(self, pwd: os.PathLike) -> 'IQR':
+        """
+        Reinterpret the IQR arguments relative to another path.
+
+        Parameters
+        ----------
+        owd : os.PathLike, optional
+            The path relative to which the IQR options are presumed to
+            have been originally defined, by default "".
+        pwd : os.PathLike, optional
+            The path relative to which the IQR options should be
+            reinterpreted, by default "".
+            This path is assumed to be a subpath of 'owd'.
+
+        Returns
+        -------
+        str
+            The reinterpreted arguments.
+
+        Raises
+        ------
+        ValueError
+            If `pwd` is not a subpath of `owd`, i.e., if `owd` does not
+            contain `pwd`.
+        """
+        prefix = get_relative_path(self.pwd, pwd)
+        return IQR(
+            {str(prefix / i) for i in self.I},
+            {(str(prefix / p),
+              q) for p,
+             q in self.Q},
+            {(str(prefix / p),
+              r) for p,
+             r in self.R},
+            pwd,
+            self.delim)
 
     @classmethod
-    def extract_iqr(cls, args: List[str]) -> 'IQR':
+    def extract_iqr(cls, args: List[str], pwd: os.PathLike = "") -> 'IQR':
         """
         Extract IQR args from command args; return as IQR dataclass.
 
         Parameters
         ----------
         args : List[str]
-            A list of string arguments associated with a command
+            A list of string arguments associated with a command.
+        pwd : os.PathLike, optional
+            The directory in which the command was executed, by default
+            an empty string.
 
         Returns
         -------
@@ -89,79 +174,59 @@ class IQR():
         args, _ = parser.parse_known_args(args)
 
         return cls(
-            I=args.I,
-            Q=[tuple(i) for i in args.Q],
-            R=[tuple(i) for i in args.R])
+            I=set(args.I),
+            Q={tuple(i) for i in args.Q},
+            R={tuple(i) for i in args.R},
+            pwd=pwd)
 
 
 @dataclass
 class CoqContext:
     """
-    Coq context class.
+    A class that captures the context of a Coq executable invocation.
     """
 
     pwd: str
+    """
+    The working directory at the time of the invocation.
+    """
     executable: str
+    """
+    The name of the Coq executable.
+    """
     target: str
+    """
+    A target of the Coq executable, e.g., a Coq source file.
+    """
     args: List[str] = field(default_factory=list)
+    """
+    The arguments of the executable (which implicitly includes the
+    target).
+    """
     env: Dict[str, str] = field(default_factory=dict)
+    """
+    The environment variables at the time of the invocation (which
+    implicitly contains the working directory).
+    """
     iqr: IQR = field(init=False)
-    iqr_set: Set[str] = field(default_factory=set)
-    iqr_root: Optional[str] = None
-
-    def __add__(self, other: 'CoqContext') -> 'CoqContext':
-        """
-        Combine this instance of `CoqContext` with another.
-
-        Resulting iqr_set is union of self.iqr_set and other.iqr_set.
-        For other fields, prefer this instance's fields, but use the
-        other's if this one's are empty.
-
-        Parameters
-        ----------
-        other : CoqContext
-            The other `CoqContext` instance to combine with this one.
-
-        Returns
-        -------
-        CoqContext
-            The combined `CoqContext` instance
-
-        Raises
-        ------
-        ValueError
-            If `other` is not a CoqContext instance
-        """
-        if not isinstance(other, CoqContext):
-            raise ValueError(f"CoqContext cannot be added with {type(other)}")
-        out = CoqContext(
-            pwd=self.pwd if self.pwd else other.pwd,
-            executable=self.executable if self.executable else other.executable,
-            target=self.target if self.target else other.target,
-            env=self.env if self.env else other.env,
-            iqr_root=self.iqr_root
-            if self.iqr_root is not None else other.iqr_root)
-        out.iqr_set = self.iqr_set.union(other.iqr_set)
-        return out
+    """
+    The IQR options contained in the given `args`.
+    """
 
     def __post_init__(self):
         """
-        Grab the internal IQR args.
+        Grab the internal IQR args, if any.
         """
-        self.iqr = IQR.extract_iqr(self.args)
-        # Update iqr_set
-        self._iqr_to_iqr_set()
+        self.iqr = IQR.extract_iqr(self.args, self.pwd)
 
     def __str__(self) -> str:
         """
-        Return a string representation of the `self.iqr_str`.
-
-        Returns
-        -------
-        str
-            String representation of the iqr set.
+        Return a string representation of the original command.
         """
-        return " ".join(sorted(self.iqr_set))
+        args = [f'{nm}={val}' for nm, val in self.env.items()]
+        args.append(self.executable)
+        args.extend(self.args)
+        return " ".join(args)
 
     @classmethod
     def empty_context(cls) -> 'CoqContext':
@@ -169,34 +234,6 @@ class CoqContext:
         Return an empty `CoqContext`.
         """
         return cls("", "", "", [])
-
-    def _iqr_to_iqr_set(self):
-        """
-        Resolve IQR paths to project root and combine them.
-        """
-        if self.iqr_root is None:
-            resolve_paths = False
-        else:
-            resolve_paths = True
-        pwd = pathlib.Path(self.env['PWD'])
-        if self.iqr.I:
-            for cur_i in self.iqr.I:
-                new_i = (pwd / pathlib.Path(cur_i)).relative_to(
-                    self.iqr_root) if resolve_paths else cur_i
-                i_str = f"-I {new_i}"
-                self.iqr_set.add(i_str)
-        if self.iqr.Q:
-            for cur_q in self.iqr.Q:
-                new_q = (pwd / pathlib.Path(cur_q[0])).relative_to(
-                    self.iqr_root) if resolve_paths else cur_q[0]
-                q_str = f"-Q {new_q},{cur_q[1]}"
-                self.iqr_set.add(q_str)
-        if self.iqr.R:
-            for cur_r in self.iqr.R:
-                new_r = (pwd / pathlib.Path(cur_r[0])).relative_to(
-                    self.iqr_root) if resolve_paths else cur_r[0]
-                r_str = f"-R {new_r},{cur_r[1]}"
-                self.iqr_set.add(r_str)
 
 
 def _dict_of_list(el: Sequence[str], split: str = '=') -> Dict[str, str]:
@@ -412,7 +449,8 @@ def strace_build(
     executable : str
         The executable to watch for while `command` is running
     regex : str
-        The pattern to search for while `command` is running
+        The pattern to search for while `command` is running that
+        identifies the target of the executable.
     workdir : Optional[str]
         The cwd to execute the `command` in, by default None
     strace_logdir : Optional[str]
@@ -422,7 +460,7 @@ def strace_build(
     -------
     List[CoqContext]
         These `CoqContext` objects contain the information gleaned from
-        strace. If there are any iqr args present, they will be within
+        strace. If there are any IQR args present, they will be within
         these objects.
     """
 
