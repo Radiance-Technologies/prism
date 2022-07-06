@@ -223,8 +223,6 @@ class ProjectRepo(Repo, Project):
         """
         Repo.__init__(self, dir_abspath)
         Project.__init__(self, dir_abspath, *args, **kwargs)
-        self.remote_url = self.remote().url
-        self.commit_sha = self.commit().hexsha
         self.current_commit_name = None  # i.e., HEAD
 
     @property
