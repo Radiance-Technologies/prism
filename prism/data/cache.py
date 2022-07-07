@@ -6,10 +6,10 @@ import time
 
 from multiprocessing import Process
 
-from prism.project.base import Project
 from prism.project.repo import ProjectRepo, CommitIterator
 
 from .dataset import CoqGymBaseDataset
+
 
 def cache_extract(project: ProjectRepo):
     time.sleep(random.random())
@@ -38,6 +38,3 @@ class Looper:
 
         for process in processes:
             process.join()
-            
-
-
