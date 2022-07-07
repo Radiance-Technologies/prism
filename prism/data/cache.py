@@ -3,10 +3,9 @@ Module for looping over dataset and extracting caches.
 """
 import random
 import time
-
 from multiprocessing import Process
 
-from prism.project.repo import ProjectRepo, CommitIterator
+from prism.project.repo import CommitIterator, ProjectRepo
 
 from .dataset import CoqGymBaseDataset
 
@@ -25,6 +24,7 @@ def cache_extract(project: ProjectRepo):
 
 
 class Looper:
+
     def __init__(self, dataset: CoqGymBaseDataset):
         self.dataset = dataset
         return
