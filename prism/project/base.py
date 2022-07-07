@@ -309,8 +309,7 @@ class Project(ABC):
         def or_(x, y):
             return x | y
 
-        # <TODO>: Need to save updated metadata to storage here
-        self.metadata.serapi_options = str(
+        serapi_options = str(
             reduce(
                 or_,
                 [c.iqr for c in contexts],
@@ -318,8 +317,11 @@ class Project(ABC):
                     set(),
                     set(),
                     self.path)))
+        self.metadata_storage.update(
+            self.metadata,
+            serapi_options=serapi_options)
         # self.num_cores = old_num_cores
-        return self.serapi_options
+        return serapi_options
 
     clean = partialmethod(_make, "clean", "Cleaning")
     """

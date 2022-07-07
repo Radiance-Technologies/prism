@@ -244,17 +244,10 @@ class TestProject(unittest.TestCase):
         for match in re.finditer(r"(-R|-Q|-I) [^\s]+", output):
             actual_result.add(match.group())
         expected_result = {
-            "-R flocq,Flocq",
-            "-R x86_64,compcert.x86_64",
-            "-R x86,compcert.x86",
-            "-R backend,compcert.backend",
-            "-R exportclight,compcert.exportclight",
-            "-R common,compcert.common",
-            "-R MenhirLib,MenhirLib",
-            "-R cfrontend,compcert.cfrontend",
-            "-R lib,compcert.lib",
-            "-R cparser,compcert.cparser",
-            "-R driver,compcert.driver"
+            '-R vendor/array/src,Array',
+            '-R src,SepLogic',
+            '-R vendor/simple-classes/src,Classes',
+            '-R vendor/tactical/src,Tactical'
         }
         self.assertEqual(actual_result, expected_result)
 
