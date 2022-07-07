@@ -15,9 +15,9 @@ from prism.project.metadata.storage import MetadataStorage
 from prism.data.cache import Looper
 
 
-class TestCoqGymBaseDataset(unittest.TestCase):
+class TestLooper(unittest.TestCase):
     """
-    Tests for `CoqGymBaseDataset`.
+    Tests for `Looper`.
     """
 
     @classmethod
@@ -81,9 +81,9 @@ class TestCoqGymBaseDataset(unittest.TestCase):
             del repo
             shutil.rmtree(os.path.join(cls.repo_paths[project_name]))
 
-    def test_init_with_project_repo_and_dir_list(self):
+    def test_looper(self):
         """
-        Test instantiation with `ProjectRepo` using `base_dir` arg.
+        Test instantiation with `ProjectRepo`.
         """
         dataset = CoqGymBaseDataset(
             project_class=ProjectRepo,
