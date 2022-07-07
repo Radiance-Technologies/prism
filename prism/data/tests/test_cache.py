@@ -7,12 +7,11 @@ import unittest
 
 import git
 
+from prism.data.cache import Looper
 from prism.data.dataset import CoqGymBaseDataset
 from prism.project import ProjectRepo, SentenceExtractionMethod
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
-
-from prism.data.cache import Looper
 
 
 class TestCoqGymBaseDataset(unittest.TestCase):
