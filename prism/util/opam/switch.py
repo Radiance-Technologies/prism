@@ -124,7 +124,7 @@ class OpamSwitch:
 
         Exceptions
         ----------
-        subprocess.CalledProcessError
+        CalledProcessError
             If the addition fails it will raise this exception
         """
         if repo_addr is not None:
