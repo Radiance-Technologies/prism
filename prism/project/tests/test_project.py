@@ -10,12 +10,14 @@ import subprocess
 import sys
 import unittest
 from itertools import chain
+from pathlib import Path
 
 import git
 
 from prism.data.document import CoqDocument
 from prism.project.base import SEM, Project, SentenceExtractionMethod
 from prism.project.dir import ProjectDir
+from prism.project.metadata.dataclass import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
 from prism.tests import (
@@ -23,7 +25,7 @@ from prism.tests import (
     _MINIMAL_METADATA,
     _MINIMAL_METASTORAGE,
 )
-from prism.util.opam.api import OpamAPI
+from prism.util.opam.switch import OpamSwitch
 
 
 class TestProject(unittest.TestCase):
@@ -57,6 +59,55 @@ class TestProject(unittest.TestCase):
                 cls.test_list[coq_file] = contents[f"{coq_file}_test_list"]
                 cls.test_glom_list[coq_file] = contents[
                     f"{coq_file}_test_glom_list"]
+        # set up artifacts for test_build_and_get_igr
+        test_path = Path(__file__).parent
+        repo_path = test_path / "coq-sep-logic"
+        if not os.path.exists(repo_path):
+            test_repo = git.Repo.clone_from(
+                "https://github.com/tchajed/coq-sep-logic",
+                repo_path)
+        else:
+            test_repo = git.Repo(repo_path)
+        metadata = ProjectMetadata.load(
+            _COQ_EXAMPLES_PATH / "coq_sep_logic.yml")[0]
+        storage = MetadataStorage()
+        storage.insert(metadata.at_level(0))
+        storage.insert(metadata)
+        test_repo.git.checkout(metadata.commit_sha)
+        cls.test_iqr_project = ProjectRepo(
+            repo_path,
+            storage,
+            sentence_extraction_method=SEM.HEURISTIC,
+            num_cores=8)
+        # Complete pre-req setup.
+        # Use the default switch since there are no dependencies beyond
+        # Coq and the package will not be installed.
+        switch = OpamSwitch()
+        coq_version = switch.get_installed_version("coq")
+        if switch.get_installed_version("coq") is None:
+            coq_version = "8.10.2"
+            switch.install("coq", coq_version, yes=True)
+        cls.assertFalse(TestProject(), metadata.opam_repos)
+        for repo in metadata.opam_repos:
+            switch.add_repo(*repo.split())
+        cls.assertFalse(TestProject(), metadata.opam_dependencies)
+        cls.assertFalse(TestProject(), metadata.coq_dependencies)
+        for dep in chain(metadata.opam_dependencies, metadata.coq_dependencies):
+            output = dep.split(".", maxsplit=1)
+            if len(output) == 1:
+                pkg = output[0]
+                ver = None
+            else:
+                pkg, ver = output
+            switch.install(pkg, ver)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        """
+        Clean up build artifacts produced as test side-effects.
+        """
+        repo_path = cls.test_iqr_project.path
+        shutil.rmtree(repo_path)
 
     def test_extract_sentences_heuristic(self):
         """
@@ -187,40 +238,8 @@ class TestProject(unittest.TestCase):
         """
         Test `Project` method builds and extracts IQR flags.
         """
-        test_path = os.path.dirname(__file__)
-        repo_path = os.path.join(test_path, "CompCert")
-        if not os.path.exists(repo_path):
-            test_repo = git.Repo.clone_from(
-                "https://github.com/AbsInt/CompCert",
-                repo_path)
-        else:
-            test_repo = git.Repo(repo_path)
-        try:
-            # If this is being run from prism
-            storage = MetadataStorage.load("pearls/dataset/agg_coq_repos.yml")
-        except FileNotFoundError:
-            # If this is being run from coq-pearls
-            storage = MetadataStorage.load("dataset/agg_coq_repos.yml")
-        metadata = storage.get("CompCert")
-        test_repo.git.checkout("7b3bc19117e48d601e392f2db2c135c7df1d8376")
-        project = ProjectRepo(repo_path, metadata, SEM.HEURISTIC, num_cores=8)
-        # Complete pre-req setup
-        OpamAPI.create_switch("CompCert", "4.07.1")
-        OpamAPI.set_switch("CompCert")
-        coq_version = "8.10.2"
-        OpamAPI.run(f"opam pin --yes coq {coq_version}")
-        for repo in metadata.opam_repos:
-            OpamAPI.add_repo(*repo.split())
-        for dep in chain(metadata.opam_dependencies, metadata.coq_dependencies):
-            output = dep.split(".", maxsplit=1)
-            if len(output) == 1:
-                pkg = output[0]
-                ver = None
-            else:
-                pkg, ver = output
-            OpamAPI.install(pkg, ver)
-        output = project.build_and_get_iqr()
-        self.assertEqual(output, project.serapi_options)
+        output = self.test_iqr_project.build_and_get_iqr()
+        self.assertEqual(output, self.test_iqr_project.serapi_options)
         actual_result = set()
         for match in re.finditer(r"(-R|-Q|-I) [^\s]+", output):
             actual_result.add(match.group())
@@ -238,10 +257,6 @@ class TestProject(unittest.TestCase):
             "-R driver,compcert.driver"
         }
         self.assertEqual(actual_result, expected_result)
-        # Clean up
-        # OpamAPI.remove_switch("CompCert")
-        del test_repo
-        shutil.rmtree(os.path.join(repo_path))
 
 
 class TestProjectRepo(unittest.TestCase):

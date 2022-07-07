@@ -6,10 +6,10 @@ import pathlib
 import random
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-from functools import partialmethod
+from functools import partialmethod, reduce
 from typing import List, Optional, Tuple, Union
 
-from seutil import BashUtils, bash
+from seutil import bash
 
 from prism.data.document import CoqDocument
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
@@ -19,7 +19,6 @@ from prism.project.metadata.storage import MetadataStorage
 from prism.project.strace import IQR, CoqContext, strace_build
 from prism.util.logging import default_log_level
 from prism.util.opam import OpamSwitch
-from prism.util.opam.api import OpamAPI
 
 logger: logging.Logger = logging.getLogger(__name__)
 logger.setLevel(default_log_level())
@@ -247,7 +246,7 @@ class Project(ABC):
         if not commands:
             raise RuntimeError(
                 f"{target.capitalize()} command not set for {self.name}.")
-        r = BashUtils.run(" && ".join(commands))
+        r = self.opam_switch.run(" && ".join(commands))
         status = "failed" if r.return_code != 0 else "finished"
         msg = (
             f"{action} {status}! Return code is {r.return_code}! "
@@ -279,10 +278,6 @@ class Project(ABC):
         if self.serapi_options is None:
             self.build_and_get_iqr()
             return 0, "", ""
-            # <TODO>: Need to figure out some mechanism to save
-            # the new metadata (serapi_options) back to the main storage
-            # Problem is, the project has no awareness of the storage
-            # so it needs to be a callback or something. Not sure.
         else:
             return self._make("build", "Compilation")
 
@@ -302,15 +297,23 @@ class Project(ABC):
         # old_num_cores = self.num_cores
         # self.num_cores = 1
         contexts: List[CoqContext] = []
+        env = self.opam_switch.environ
         for cmd in self.build_cmd:
             if "make" in cmd.lower() or "dune" in cmd.lower():
-                contexts += strace_build(cmd, workdir=self.path)
+                contexts += strace_build(cmd, workdir=self.path, env=env)
             else:
-                r = bash.run(cmd, cwd=self.path, env=OpamAPI._environ())
+                r = bash.run(cmd, cwd=self.path, env=env)
                 logging.debug(
                     f"Command {cmd} finished with return code {r.returncode}.")
+
+        def or_(x, y):
+            return x | y
+
+        # <TODO>: Need to save updated metadata to storage here
         self.metadata.serapi_options = str(
-            sum([c.iqr for c in contexts],
+            reduce(
+                or_,
+                [c.iqr for c in contexts],
                 IQR(set(),
                     set(),
                     set(),

@@ -17,7 +17,6 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 import lark
 from strace_parser.parser import get_parser
 
-from prism.util.opam.api import OpamAPI
 from prism.util.path import get_relative_path
 
 _EXECUTABLE = 'coqc'
@@ -59,16 +58,21 @@ class IQR:
     A space should be used for compatibility with Coq.
     """
 
-    def __add__(self, other: 'IQR') -> 'IQR':  # noqa: D105
+    def __or__(self, other: 'IQR') -> 'IQR':  # noqa: D105
         if not isinstance(other, IQR):
             return NotImplemented
-        self_pwd = pathlib.Path(self.pwd)
-        other_pwd = pathlib.Path(other.pwd)
+        self_pwd = pathlib.Path(self.pwd).absolute()
+        other_pwd = pathlib.Path(other.pwd).absolute()
         if self_pwd != other_pwd:
             pwd = os.path.commonpath([self_pwd, other_pwd])
-            return self.relocate(pwd) + other.relocate(pwd)
+            return self.relocate(pwd) | other.relocate(pwd)
         else:
-            return IQR(self.I + other.I, self.Q + other.Q, self.R + other.R)
+            return IQR(
+                self.I | other.I,
+                self.Q | other.Q,
+                self.R | other.R,
+                self.pwd,
+                self.delim)
 
     def __str__(self) -> str:
         """
@@ -87,7 +91,7 @@ class IQR:
         then the working directory of their union will be the longest
         common path shared between their working directories.
         """
-        return self + other
+        return self | other
 
     def relocate(self, pwd: os.PathLike) -> 'IQR':
         """
@@ -261,8 +265,8 @@ def _record_context(line: str,
     """
     Write a CoqContext record for each executable arg matching regex.
 
-    creates and writes to a file a pycoq_context record for each
-    argument matching regex in a call of executable
+    Creates and writes to a file a pycoq_context record for each
+    argument matching regex in a call of executable.
     """
     record = _parse_strace_line(parser, line)
     p_context = ProcContext(
@@ -406,7 +410,7 @@ def _parse_strace_logdir(logdir: str,
     """
     logging.info(
         f"pycoq: parsing strace log "
-        f"execve({executable}) and recording"
+        f"execve({executable}) and recording "
         f"arguments that match {regex} in cwd {os.getcwd()}")
     parser = get_parser()
     res = []
@@ -424,7 +428,8 @@ def strace_build(
         executable: str = _EXECUTABLE,
         regex: str = _REGEX,
         workdir: Optional[str] = None,
-        strace_logdir: Optional[str] = None) -> List[CoqContext]:
+        strace_logdir: Optional[str] = None,
+        **kwargs) -> List[CoqContext]:
     """
     Trace calls of executable using regex.
 
@@ -435,16 +440,18 @@ def strace_build(
     Parameters
     ----------
     command : str
-        The command to run using strace
+        The command to run using ``strace``.
     executable : str
-        The executable to watch for while `command` is running
+        The executable to watch for while `command` is running.
     regex : str
         The pattern to search for while `command` is running that
         identifies the target of the executable.
     workdir : Optional[str]
-        The cwd to execute the `command` in, by default None
+        The cwd to execute the `command` in, by default None.
     strace_logdir : Optional[str]
-        The directory to store the temporary strace logs in
+        The directory in which to store the temporary strace logs.
+    kwargs : Dict[str, Any]
+        Additional keyword arguments to `subprocess.run`.
 
     Returns
     -------
@@ -462,17 +469,13 @@ def strace_build(
             logdir: str):
         logfname = os.path.join(logdir, 'strace.log')
         logging.info(
-            f"pycoq: tracing {executable} accesing {regex} while "
+            f"pycoq: tracing {executable} accessing {regex} while "
             f"executing {command} from {workdir} with "
             f"curdir {os.getcwd()}")
         strace_cmd = (
             'strace -e trace=execve -v -ff -s 100000000 -xx -ttt -o'
             f' {logfname} {command}')
-        r = subprocess.run(
-            strace_cmd.split(),
-            cwd=workdir,
-            env=OpamAPI._environ())
-        # r = OpamAPI.run(strace_cmd)
+        r = subprocess.run(strace_cmd, cwd=workdir, shell=True, **kwargs)
         if r.stdout is not None:
             for line in iter(str(r.stdout).splitlines, ''):
                 logging.debug(f"strace stdout: {line}")
