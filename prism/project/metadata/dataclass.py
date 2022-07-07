@@ -201,6 +201,8 @@ class ProjectMetadata:
         This defines a partial order over metadata since some metadata
         will not be comparable.
         """
+        if not isinstance(other, ProjectMetadata):
+            return NotImplemented
         if self.project_name != other.project_name:
             return False
         return (
