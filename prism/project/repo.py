@@ -215,17 +215,19 @@ class ProjectRepo(Repo, Project):
     Based on GitPython's `Repo` class.
     """
 
-    def __init__(self, dir_abspath: str, *args, **kwargs):
+    def __init__(self, dir_abspath: str, commit_sha: str, *args, **kwargs):
         """
         Initialize Project object.
         """
         Repo.__init__(self, dir_abspath)
         Project.__init__(self, dir_abspath, *args, **kwargs)
         self.current_commit_name = None  # i.e., HEAD
+        self._commit_sha = commit_sha
+        self.git.checkout(self._commit_sha)
 
     @property
     def commit_sha(self) -> str:  # noqa: D102
-        self.commit().hexsha
+        return self.commit().hexsha
 
     @property
     def metadata(self) -> ProjectMetadata:  # noqa: D102
