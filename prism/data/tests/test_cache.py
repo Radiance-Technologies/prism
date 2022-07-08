@@ -39,6 +39,16 @@ class TestLooper(unittest.TestCase):
             "circuits": "coq-contribs/circuits",
             "GeoCoq": "GeoCoq/GeoCoq"
         }
+        cls.commit_shas = {
+            "CompCert": "7b3bc19117e48d601e392f2db2c135c7df1d8376",
+            "circuits": "f2cec6067f2c58e280c5b460e113d738b387be15",
+            "GeoCoq": "09a02dc56715b3308689843dd872209262beb5af"
+        }
+        cls.build_cmds = {
+            "CompCert": ["./configure x86_64-linux", "make"],
+            "circuits": ["make"],
+            "GeoCoq": ["./configure.sh", "make"]
+        }
         cls.repo_paths = {}
         cls.repos = {}
         cls.projects = {}
@@ -57,11 +67,15 @@ class TestLooper(unittest.TestCase):
             # TODO: Use real metadata and test building
             cls.metadatas[project_name] = ProjectMetadata(
                 project_name,
-                ["make"],
+                ["make"], #cls.build_cmds[project_name],
                 ["make install"],
-                ["make clean"])
+                ["make clean"],
+                project_url=f"https://github.com/{project}",
+                commit_sha=cls.commit_shas[project_name])
         for project_metadata in cls.metadatas.values():
+            print(project_metadata)
             cls.metadata_storage.insert(project_metadata)
+        print(cls.metadata_storage.get("CompCert"))
         for project_name in cls.metadatas.keys():
             cls.projects[project_name] = ProjectRepo(
                 cls.repo_paths[project_name],
@@ -84,12 +98,13 @@ class TestLooper(unittest.TestCase):
         """
         Test instantiation with `ProjectRepo`.
         """
-        dataset = CoqGymBaseDataset(
-            project_class=ProjectRepo,
-            dir_list=self.repo_paths.values(),
-            metadata_storage=MetadataStorage(),
-            sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
-        looper = Looper(dataset)
+        #dataset = CoqGymBaseDataset(
+        #    project_class=ProjectRepo,
+        #    dir_list=self.repo_paths.values(),
+        #    metadata_storage=self.metadata_storage,
+        #    sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
+        print(self.dataset.projects['CompCert'].metadata)
+        looper = Looper(self.dataset)
         looper()
         self.fail()
 
