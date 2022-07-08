@@ -2,6 +2,7 @@
 Module providing CoqGym project class representations.
 """
 import logging
+import os
 import pathlib
 import random
 from abc import ABC, abstractmethod
@@ -247,15 +248,15 @@ class Project(ABC):
             raise RuntimeError(
                 f"{target.capitalize()} command not set for {self.name}.")
         r = self.opam_switch.run(" && ".join(commands))
-        status = "failed" if r.return_code != 0 else "finished"
+        status = "failed" if r.returncode != 0 else "finished"
         msg = (
-            f"{action} {status}! Return code is {r.return_code}! "
+            f"{action} {status}! Return code is {r.returncode}! "
             f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
-        if r.return_code != 0:
+        if r.returncode != 0:
             raise ProjectBuildError(msg)
         else:
             logger.debug(msg)
-        return (r.return_code, r.stdout, r.stderr)
+        return (r.returncode, r.stdout, r.stderr)
 
     @abstractmethod
     def _pre_get_random(self, **kwargs):
@@ -276,12 +277,12 @@ class Project(ABC):
         Build the project.
         """
         if self.serapi_options is None:
-            self.build_and_get_iqr()
-            return 0, "", ""
+            _, rcode, stdout, stderr = self.build_and_get_iqr()
+            return rcode, stdout, stderr
         else:
             return self._make("build", "Compilation")
 
-    def build_and_get_iqr(self) -> str:
+    def build_and_get_iqr(self) -> Tuple[str, int, str, str]:
         """
         Build project and get IQR options, simultaneously.
 
@@ -292,19 +293,37 @@ class Project(ABC):
         -------
         str
             The IQR flags string that should be stored in serapi_options
+        int
+            The return code of the last-executed command
+        str
+            The total stdout of all commands run
+        str
+            The total stderr of all commands run
         """
-        # Set self.num_cores to 1 for the duration of this function
-        # old_num_cores = self.num_cores
-        # self.num_cores = 1
         contexts: List[CoqContext] = []
+        stdout_out = ""
+        stderr_out = ""
         env = self.opam_switch.environ
         for cmd in self.build_cmd:
             if "make" in cmd.lower() or "dune" in cmd.lower():
-                contexts += strace_build(cmd, workdir=self.path, env=env)
+                context, rcode_out, stdout, stderr = strace_build(
+                    cmd,
+                    workdir=self.path,
+                    env=env)
+                contexts += context
             else:
-                r = bash.run(cmd, cwd=self.path, env=env)
+                r = bash.run(cmd, cwd=self.path, env=env, capture_output=True)
+                rcode_out = r.returncode
+                stdout = r.stdout
+                stderr = r.stderr
                 logging.debug(
                     f"Command {cmd} finished with return code {r.returncode}.")
+            stdout_out = os.linesep.join((stdout_out, stdout))
+            stderr_out = os.linesep.join((stderr_out, stderr))
+            # Emulate the behavior of _make where commands are joined by
+            # &&.
+            if rcode_out:
+                break
 
         def or_(x, y):
             return x | y
@@ -320,8 +339,7 @@ class Project(ABC):
         self.metadata_storage.update(
             self.metadata,
             serapi_options=serapi_options)
-        # self.num_cores = old_num_cores
-        return serapi_options
+        return serapi_options, rcode_out, stdout_out, stderr_out
 
     clean = partialmethod(_make, "clean", "Cleaning")
     """

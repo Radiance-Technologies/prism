@@ -429,7 +429,10 @@ def strace_build(
         regex: str = _REGEX,
         workdir: Optional[str] = None,
         strace_logdir: Optional[str] = None,
-        **kwargs) -> List[CoqContext]:
+        **kwargs) -> Tuple[List[CoqContext],
+                           int,
+                           str,
+                           str]:
     """
     Trace calls of executable using regex.
 
@@ -459,6 +462,12 @@ def strace_build(
         These `CoqContext` objects contain the information gleaned from
         strace. If there are any IQR args present, they will be within
         these objects.
+    int
+        The return code of the strace command
+    str
+        The stdout of the strace command
+    str
+        The stderr of the strace command
     """
 
     def _strace_build(
@@ -466,7 +475,10 @@ def strace_build(
             regex: str,
             workdir: str,
             command: str,
-            logdir: str):
+            logdir: str) -> Tuple[List[CoqContext],
+                                  int,
+                                  str,
+                                  str]:
         logfname = os.path.join(logdir, 'strace.log')
         logging.info(
             f"pycoq: tracing {executable} accessing {regex} while "
@@ -475,12 +487,23 @@ def strace_build(
         strace_cmd = (
             'strace -e trace=execve -v -ff -s 100000000 -xx -ttt -o'
             f' {logfname} {command}')
-        r = subprocess.run(strace_cmd, cwd=workdir, shell=True, **kwargs)
+        r = subprocess.run(
+            strace_cmd,
+            cwd=workdir,
+            shell=True,
+            capture_output=True,
+            **kwargs)
         if r.stdout is not None:
             for line in iter(str(r.stdout).splitlines, ''):
                 logging.debug(f"strace stdout: {line}")
         logging.info('strace finished')
-        return _parse_strace_logdir(logdir, executable, regex)
+        return (
+            _parse_strace_logdir(logdir,
+                                 executable,
+                                 regex),
+            r.returncode,
+            str(r.stdout),
+            str(r.stderr))
 
     if strace_logdir is None:
         with tempfile.TemporaryDirectory() as _logdir:

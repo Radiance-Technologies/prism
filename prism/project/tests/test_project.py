@@ -238,7 +238,7 @@ class TestProject(unittest.TestCase):
         """
         Test `Project` method builds and extracts IQR flags.
         """
-        output = self.test_iqr_project.build_and_get_iqr()
+        output, rcode, stdout, stderr = self.test_iqr_project.build_and_get_iqr()
         self.assertEqual(output, self.test_iqr_project.serapi_options)
         actual_result = set()
         for match in re.finditer(r"(-R|-Q|-I) [^\s]+", output):
@@ -250,6 +250,9 @@ class TestProject(unittest.TestCase):
             '-R vendor/tactical/src,Tactical'
         }
         self.assertEqual(actual_result, expected_result)
+        self.assertEqual(rcode, 0)
+        self.assertTrue(stdout)
+        self.assertFalse(stderr)
 
 
 class TestProjectRepo(unittest.TestCase):
