@@ -157,6 +157,14 @@ class MetadataStorage:
     This class provides storage and retrieval methods for metadata
     across multiple projects and versions. An object of this class
     effectively serves as an in-memory database for project metadata.
+
+    Notes
+    -----
+    Note that the order of insertion matters when one metadata overrides
+    another.
+    If the metadata of higher precedence is inserted first, then it will
+    not be considered to inherit its metadata from the lower precedence
+    version even if identical.
     """
 
     # options
@@ -642,6 +650,72 @@ class MetadataStorage:
             metadata_kwargs.setdefault('install_cmd', self.default_install_cmd)
             metadata_kwargs.setdefault('clean_cmd', self.default_clean_cmd)
         return ProjectMetadata(**metadata_kwargs)
+
+    def get_project_revisions(
+            self,
+            project_name: str,
+            project_url: Optional[str] = None) -> Set[str]:
+        """
+        Get the set of revisions for a given project.
+
+        Note that this is NOT the complete list of commits that exist
+        across all sources for the project but rather just those commits
+        that have been assigned unique metadata entries in the storage.
+
+        Parameters
+        ----------
+        project_name : str
+            The name of a project in the storage.
+        project_url : Optional[str], optional
+            A source URL for the project, by default None.
+            If None, then all commits for all sources are returned.
+
+        Returns
+        -------
+        Set[str]
+            A set of commit SHAs for the given project.
+
+        Raises
+        ------
+        KeyError
+            If the project does not possess any metadata.
+        """
+        if project_name not in self.projects:
+            raise KeyError(f"Unknown project: {project_name}")
+        return {
+            r.commit_sha
+            for r in self.revisions
+            if r.project_source.project_name == project_name and (
+                project_url is None or r.project_source.repo_url == project_url)
+            and r.commit_sha is not None
+        }
+
+    def get_project_sources(self, project_name: str) -> Set[str]:
+        """
+        Get the set of repository URLs, if any, for the given project.
+
+        Parameters
+        ----------
+        project_name : str
+            The name of a project in the storage.
+
+        Returns
+        -------
+        Set[str]
+            A set of URLs from which the project may be obtained.
+
+        Raises
+        ------
+        KeyError
+            If the project does not possess any metadata.
+        """
+        if project_name not in self.projects:
+            raise KeyError(f"Unknown project: {project_name}")
+        return {
+            s.repo_url
+            for s in self.project_sources
+            if s.project_name == project_name and s.repo_url is not None
+        }
 
     def insert(self, metadata: ProjectMetadata) -> None:
         """
