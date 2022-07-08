@@ -9,12 +9,12 @@ import logging
 import os
 import pathlib
 import re
-import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 import lark
+from seutil import bash
 from strace_parser.parser import get_parser
 
 from prism.util.path import get_relative_path
@@ -487,14 +487,9 @@ def strace_build(
         strace_cmd = (
             'strace -e trace=execve -v -ff -s 100000000 -xx -ttt -o'
             f' {logfname} {command}')
-        r = subprocess.run(
-            strace_cmd,
-            cwd=workdir,
-            shell=True,
-            capture_output=True,
-            **kwargs)
+        r = bash.run(strace_cmd, cwd=workdir, **kwargs)
         if r.stdout is not None:
-            for line in iter(str(r.stdout).splitlines, ''):
+            for line in r.stdout.splitlines():
                 logging.debug(f"strace stdout: {line}")
         logging.info('strace finished')
         return (

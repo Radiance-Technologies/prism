@@ -247,7 +247,7 @@ class Project(ABC):
         if not commands:
             raise RuntimeError(
                 f"{target.capitalize()} command not set for {self.name}.")
-        r = self.opam_switch.run(" && ".join(commands))
+        r = self.opam_switch.run(" && ".join(commands), cwd=self.path)
         status = "failed" if r.returncode != 0 else "finished"
         msg = (
             f"{action} {status}! Return code is {r.returncode}! "
@@ -312,7 +312,7 @@ class Project(ABC):
                     env=env)
                 contexts += context
             else:
-                r = bash.run(cmd, cwd=self.path, env=env, capture_output=True)
+                r = bash.run(cmd, cwd=self.path, env=env)
                 rcode_out = r.returncode
                 stdout = r.stdout
                 stderr = r.stderr

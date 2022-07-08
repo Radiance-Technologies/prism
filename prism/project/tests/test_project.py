@@ -251,8 +251,12 @@ class TestProject(unittest.TestCase):
         }
         self.assertEqual(actual_result, expected_result)
         self.assertEqual(rcode, 0)
-        self.assertTrue(stdout)
-        self.assertFalse(stderr)
+        # build normally and compare output
+        self.test_iqr_project.clean()
+        _, expected_output, expected_err = self.test_iqr_project.build()
+        # Test endswith because submodules do not need to be re-initted.
+        self.assertTrue(stdout.endswith(expected_output))
+        self.assertTrue(stderr.endswith(expected_err))
 
 
 class TestProjectRepo(unittest.TestCase):
