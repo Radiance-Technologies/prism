@@ -82,7 +82,7 @@ class DatasetMetadata:
             return json.load(f)
 
 
-class CoqGymBaseDataset:
+class CoqProjectBaseDataset:
     """
     Base dataset for CoqGym data.
 

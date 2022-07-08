@@ -25,13 +25,13 @@ from prism.util.opam.switch import OpamSwitch
 
 class TestProject(unittest.TestCase):
     """
-    Class for testing coqgym_base module.
+    Test suite for Project class.
     """
 
     @classmethod
     def setUpClass(cls):
         """
-        Set up class for testing coqgym_base module.
+        Set up shared project files for unit tests.
         """
         expected_filename = os.path.join(
             _COQ_EXAMPLES_PATH,
