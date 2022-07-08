@@ -45,9 +45,11 @@ class TestLooper(unittest.TestCase):
             "GeoCoq": "09a02dc56715b3308689843dd872209262beb5af"
         }
         cls.build_cmds = {
-            "CompCert": ["./configure x86_64-linux", "make"],
+            "CompCert": ["./configure x86_64-linux",
+                         "make"],
             "circuits": ["make"],
-            "GeoCoq": ["./configure.sh", "make"]
+            "GeoCoq": ["./configure.sh",
+                       "make"]
         }
         cls.repo_paths = {}
         cls.repos = {}

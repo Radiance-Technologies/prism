@@ -4,8 +4,8 @@ Module for looping over dataset and extracting caches.
 import os
 import random
 import time
-
 from multiprocessing import Process
+
 from tqdm.contrib.concurrent import process_map
 
 from prism.project.repo import CommitIterator, ProjectRepo
@@ -42,4 +42,8 @@ class Looper:
     def __call__(self):
         wait_times = [0.5, 1.0, 1.5]
         vals = zip(self.dataset.projects.values(), wait_times)
-        r = process_map(cache_extract, vals, max_workers=10, desc="Cache extraction")
+        r = process_map(
+            cache_extract,
+            vals,
+            max_workers=10,
+            desc="Cache extraction")
