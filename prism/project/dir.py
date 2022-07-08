@@ -1,6 +1,7 @@
 """
 Module providing CoqGym project directory class representations.
 """
+import os
 import pathlib
 import warnings
 from typing import List
@@ -19,7 +20,7 @@ class ProjectDir(Project):
     is a git repository or not.
     """
 
-    def __init__(self, dir_abspath: str, *args, **kwargs):
+    def __init__(self, dir_abspath: os.PathLike, *args, **kwargs):
         """
         Initialize Project object.
         """
@@ -33,7 +34,7 @@ class ProjectDir(Project):
         return pathlib.Path(self.working_dir).stem
 
     @property
-    def path(self) -> str:  # noqa: D102
+    def path(self) -> os.PathLike:  # noqa: D102
         return self.working_dir
 
     def _get_file(self, filename: str, *args, **kwargs) -> CoqDocument:

@@ -274,7 +274,7 @@ class ProjectRepo(Repo, Project):
         return self.remote_url.split('.git')[0].split('/')[-1]
 
     @property
-    def path(self) -> str:  # noqa: D102
+    def path(self) -> os.PathLike:  # noqa: D102
         return self.working_dir
 
     @property
