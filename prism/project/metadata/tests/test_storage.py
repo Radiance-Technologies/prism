@@ -4,6 +4,7 @@ Test suite for project metadata storage utilities.
 
 import os
 import unittest
+from copy import copy
 from pathlib import Path
 
 import seutil.io as io
@@ -32,7 +33,7 @@ class TestMetadataStorage(unittest.TestCase):
         Set up common metadata.
         """
         self.projects_yaml = TEST_DIR / "projects.yml"
-        self.metadata = ProjectMetadata.load(self.projects_yaml)
+        self.metadata = list(reversed(ProjectMetadata.load(self.projects_yaml)))
         return super().setUp()
 
     def test_insert(self):
@@ -42,6 +43,8 @@ class TestMetadataStorage(unittest.TestCase):
         metadata = ProjectMetadata("test", [], [], [])
         storage = MetadataStorage()
         storage.insert(metadata)
+        with self.assertRaises(KeyError):
+            storage.insert(metadata)
         expected = MetadataStorage()
         expected.projects = {'test'}
         expected.project_sources = {ProjectSource('test',
@@ -182,6 +185,99 @@ class TestMetadataStorage(unittest.TestCase):
             self.assertTrue(storage, expected)
         with self.assertRaises(KeyError):
             storage.insert(self.metadata[0])
+
+    def test_remove(self):
+        """
+        Verify that records can be removed.
+        """
+        storage = MetadataStorage(autofill=False)
+        for metadata in self.metadata:
+            storage.insert(metadata)
+        base_metadata = self.metadata[0]
+        override = self.metadata[1]
+        # verify that the inherited values got wiped out
+        with self.subTest("remove_base"):
+            storage.remove(base_metadata)
+            with self.assertRaises(KeyError):
+                storage.populate(base_metadata)
+            expected = ProjectMetadata(
+                override.project_name,
+                [],
+                [],
+                [],
+                override.ocaml_version,
+                override.coq_version,
+                serapi_options=override.serapi_options,
+                project_url=override.project_url,
+                commit_sha=override.commit_sha)
+            self.assertEqual(expected, storage.populate(override))
+        # restore base metadata
+        storage.insert(base_metadata)
+        with self.subTest("remove_override"):
+            storage.remove(override)
+            expected = copy(base_metadata)
+            expected.project_url = override.project_url
+            expected.commit_sha = override.commit_sha
+            expected.ocaml_version = override.ocaml_version
+            self.assertEqual(expected, storage.populate(override))
+            self.assertEqual(base_metadata, storage.populate(base_metadata))
+
+    def test_update(self):
+        """
+        Verify that records can be updated.
+        """
+        storage = MetadataStorage()
+        for metadata in self.metadata:
+            storage.insert(metadata)
+        base_metadata = self.metadata[0]
+        override = self.metadata[1]
+        self.assertGreater(override, base_metadata)
+        with self.subTest("update_inherited"):
+            # verify inherited values get updated
+            new_field_value = {'coq-released'}
+            expected_base = copy(base_metadata)
+            expected_base.opam_repos = new_field_value
+            expected_override = copy(override)
+            expected_override.opam_repos = new_field_value
+            storage.update(base_metadata, opam_repos=new_field_value)
+            updated_base = storage.populate(base_metadata)
+            updated_override = storage.populate(override)
+            self.assertEqual(updated_base, expected_base)
+            self.assertEqual(updated_override, expected_override)
+        with self.subTest("override_inherited"):
+            # verify one can override a default through an update
+            new_field_value = {'coq-mathcomp-ssreflect',
+                               'coq-games'}
+            expected_override.coq_dependencies = new_field_value
+            storage.update(override, coq_dependencies=new_field_value)
+            updated_base = storage.populate(base_metadata)
+            updated_override = storage.populate(override)
+            self.assertEqual(updated_base, expected_base)
+            self.assertEqual(updated_override, expected_override)
+        with self.subTest("override_inherited"):
+            # verify one can update an overridden attribute
+            new_field_value = {'coq-mathcomp-ssreflect'}
+            expected_base.coq_dependencies = new_field_value
+            storage.update(base_metadata, coq_dependencies=new_field_value)
+            updated_base = storage.populate(base_metadata)
+            updated_override = storage.populate(override)
+            self.assertEqual(updated_base, expected_base)
+            self.assertEqual(updated_override, expected_override)
+        with self.subTest("update_implied"):
+            # verify one can update an implied context
+            new_field_value = {'coq-games'}
+            expected_novel = copy(expected_base)
+            expected_novel.project_url = override.project_url
+            expected_novel.commit_sha = "fake_test_sha"
+            storage.update(expected_novel, coq_dependencies=new_field_value)
+            updated_base = storage.populate(base_metadata)
+            updated_novel = storage.populate(expected_novel)
+            expected_novel.coq_dependencies = new_field_value
+            updated_override = storage.populate(override)
+            self.assertEqual(updated_novel, expected_novel)
+            # verify other metadata is not affected
+            self.assertEqual(updated_base, expected_base)
+            self.assertEqual(updated_override, expected_override)
 
     def test_serialization(self):
         """

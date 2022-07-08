@@ -93,6 +93,33 @@ class Context:
                 f"Incompatible Coq/OCaml versions specified: coq={self.coq_version}, "
                 f"ocaml={self.ocaml_version}")
 
+    def as_metadata(self) -> ProjectMetadata:
+        """
+        Place this context in an otherwise empty metadata record.
+        """
+        return ProjectMetadata(
+            self.revision.project_source.project_name,
+            [],
+            [],
+            [],
+            str(self.ocaml_version) if self.ocaml_version is not None else None,
+            str(self.coq_version) if self.coq_version is not None else None,
+            project_url=self.revision.project_source.repo_url,
+            commit_sha=self.revision.commit_sha)
+
+    @classmethod
+    def from_metadata(cls, metadata: ProjectMetadata) -> 'Context':
+        """
+        Create a `Context` corresponding to provided metadata.
+        """
+        return Context(
+            Revision(
+                ProjectSource(metadata.project_name,
+                              metadata.project_url),
+                metadata.commit_sha),
+            metadata.coq_version,
+            metadata.ocaml_version)
+
 
 @dataclass(frozen=True)
 class CommandSequence:
@@ -116,13 +143,20 @@ class IgnorePathRegex:
     regex: str
 
 
+ContextID = int
+CommandSequenceID = int
+PackageID = int
+RepoID = int
+
+
 @dataclass
 class MetadataStorage:
     """
     A central repository for project metadata.
 
     This class provides storage and retrieval methods for metadata
-    across multiple projects and versions.
+    across multiple projects and versions. An object of this class
+    effectively serves as an in-memory database for project metadata.
     """
 
     # options
@@ -135,24 +169,26 @@ class MetadataStorage:
     projects: Set[str] = default_field(set())
     project_sources: Set[ProjectSource] = default_field(set())
     revisions: Set[Revision] = default_field(set())
-    contexts: Dict[Context, int] = default_field(dict())
+    contexts: Dict[Context, ContextID] = default_field(dict())
     # one-to-one overridable fields
     # match metadata field names exactly
-    serapi_options: Dict[int, str] = default_field(dict())
-    build_cmd: Dict[int, int] = default_field(dict())
-    install_cmd: Dict[int, int] = default_field(dict())
-    clean_cmd: Dict[int, int] = default_field(dict())
+    serapi_options: Dict[ContextID, str] = default_field(dict())
+    build_cmd: Dict[ContextID, CommandSequenceID] = default_field(dict())
+    install_cmd: Dict[ContextID, CommandSequenceID] = default_field(dict())
+    clean_cmd: Dict[ContextID, CommandSequenceID] = default_field(dict())
     # one-to-many overridable fields
     # match metadata field names exactly
-    opam_repos: Dict[int, Set[int]] = default_field(dict())
-    coq_dependencies: Dict[int, Set[int]] = default_field(dict())
-    opam_dependencies: Dict[int, Set[int]] = default_field(dict())
-    ignore_path_regex: Dict[int, Set[str]] = default_field(dict())
+    opam_repos: Dict[ContextID, Set[RepoID]] = default_field(dict())
+    coq_dependencies: Dict[ContextID, Set[PackageID]] = default_field(dict())
+    opam_dependencies: Dict[ContextID, Set[PackageID]] = default_field(dict())
+    ignore_path_regex: Dict[ContextID, Set[str]] = default_field(dict())
     # meta-metadata
-    ocaml_packages: bidict[str, int] = default_field(bidict())
-    opam_repositories: bidict[str, int] = default_field(bidict())
-    command_sequences: bidict[CommandSequence, int] = default_field(bidict())
+    ocaml_packages: bidict[str, PackageID] = default_field(bidict())
+    opam_repositories: bidict[str, RepoID] = default_field(bidict())
+    command_sequences: bidict[CommandSequence,
+                              CommandSequenceID] = default_field(bidict())
     # incrementable IDs
+    # where int = Union[ContextID, PackageID, ...]
     indices: Dict[str, int] = default_field(dict())
     # default fields
     default_coq_version: str = '8.10.2'
@@ -170,6 +206,9 @@ class MetadataStorage:
         'commit_sha',
         'serapi_version'
     }
+    _mutable_fields: ClassVar[Set[str]] = {
+        f.name for f in fields(ProjectMetadata)
+    }.difference(_final_fields)
     """
     Metadata fields that cannot be overridden.
     """
@@ -355,9 +394,9 @@ class MetadataStorage:
         bool
             Whether any metadata exists precisely for the given
             arguments or not.
-            That is, if the metadata for the implied `Context` is only
-            defined through inheritance from default values, then the
-            result will be False.
+            That is, if the metadata for the implied `Context` is not
+            defined or is only defined through inheritance from default
+            values, then the result will be False.
         """
         context = Context(
             Revision(ProjectSource(project_name,
@@ -392,6 +431,114 @@ class MetadataStorage:
                 except KeyError:
                     pass
         return True
+
+    def _insert_field(
+            self,
+            context_id: int,
+            field_name: str,
+            field_value: Optional[T],
+            default_value: Optional[T]) -> None:
+        """
+        Insert a field's value for the given context.
+
+        The value is taken from a given metadata and it only actually
+        inserted if it differs from the default (i.e., if it overrides
+        the default).
+
+        Parameters
+        ----------
+        context_id : int
+            The ID of a metadata record.
+        field_name : str
+            The name of the field.
+        field_value : Optional[T]
+            The value to insert for the field
+        default_value : Optional[T]
+            The default field value.
+        """
+        if field_name not in self._final_fields:
+            # Is this a new value?
+            if (field_value is not None and field_value != default_value):
+                if field_name in self._attr_bidicts:
+                    index = self._attr_bidicts[field_name]
+                    if index == 'command_sequences':
+                        val = self._add_to_index(
+                            index,
+                            field_value,
+                            key_maker=CommandSequence)
+                    else:
+                        val = {
+                            self._add_to_index(index,
+                                               val) for val in field_value
+                        }
+                    getattr(self, field_name)[context_id] = val
+                elif field_name in ['ignore_path_regex']:
+                    getattr(self, field_name)[context_id] = set(field_value)
+                elif field_name == "serapi_options":
+                    self.serapi_options[context_id] = field_value
+
+    def _process_record_args(
+        self,
+        project_name: Union[str,
+                            ProjectMetadata],
+        project_url: Optional[str] = None,
+        commit_sha: Optional[str] = None,
+        coq_version: Optional[Union[str,
+                                    Version]] = None,
+        ocaml_version: Optional[Union[str,
+                                      Version]] = None
+    ) -> Tuple[str,
+               str,
+               str,
+               str,
+               str]:
+        """
+        Process record-identifying arguments.
+
+        If the first argument is an instance of `ProjectMetadata`, then
+        it is unpacked into the other arguments. Otherwise, the given
+        arguments are returned unaffected.
+        """
+        if isinstance(project_name, ProjectMetadata):
+            arg_mask = [
+                project_url is not None,
+                commit_sha is not None,
+                coq_version is not None,
+                ocaml_version is not None
+            ]
+            if any(arg_mask):
+                arg_names = [
+                    'project_url',
+                    'commit_sha',
+                    'coq_version',
+                    'ocaml_version'
+                ]
+                raise ValueError(
+                    f"{[nm for nm, m in zip(arg_names, arg_mask) if m]} must be None "
+                    "if metadata is provided.")
+            project_url = project_name.project_url
+            commit_sha = project_name.commit_sha
+            coq_version = project_name.coq_version
+            ocaml_version = project_name.ocaml_version
+            project_name = project_name.project_name
+        return project_name, project_url, commit_sha, coq_version, ocaml_version
+
+    def _remove_field(self, context_id: int, field_name: str) -> None:
+        """
+        Remove a field from the indicated record.
+
+        If the field is not explicitly defined for the indicated
+        context (it is inherited), then there is no effect.
+
+        Parameters
+        ----------
+        context_id : int
+            The ID of a metadata record.
+        field_name : str
+            The name of the field.
+        """
+        if field_name not in self._final_fields:
+            getattr(self, field_name).pop(context_id, None)
 
     def get(
             self,
@@ -462,13 +609,14 @@ class MetadataStorage:
         # retrieve mutable field values, falling back to lower precedent
         # metadata if needed
         for view_i in temp_metadata.levels(reverse=True):
-            defined = defined or self._get(
+            defined_i = self._get(
                 view_i.project_name,
                 view_i.project_url,
                 view_i.commit_sha,
                 view_i.coq_version,
                 view_i.ocaml_version,
                 metadata_kwargs)
+            defined = defined or defined_i
         # is the metadata completely undefined with no default to fall
         # back upon?
         if not defined:
@@ -526,47 +674,52 @@ class MetadataStorage:
         default = self._get_default(metadata)
         for field in fields(ProjectMetadata):
             field_name = field.name
-            if field_name not in self._final_fields:
-                field_value = getattr(metadata, field_name)
-                # Is this a new value?
-                if (field_value is not None
-                        and field_value != getattr(default,
-                                                   field_name)):
-                    if field_name in self._attr_bidicts:
-                        index = self._attr_bidicts[field_name]
-                        if index == 'command_sequences':
-                            val = self._add_to_index(
-                                index,
-                                field_value,
-                                key_maker=CommandSequence)
-                        else:
-                            val = {
-                                self._add_to_index(index,
-                                                   val) for val in field_value
-                            }
-                        getattr(self, field_name)[context_id] = val
-                    elif field_name in ['ignore_path_regex']:
-                        getattr(self, field_name)[context_id] = set(field_value)
-                    elif field_name == "serapi_options":
-                        self.serapi_options[context_id] = field_value
+            self._insert_field(
+                context_id,
+                field_name,
+                getattr(metadata,
+                        field_name),
+                getattr(default,
+                        field_name))
+
+    def populate(
+            self,
+            metadata: ProjectMetadata,
+            autofill: Optional[bool] = None) -> ProjectMetadata:
+        """
+        Retrieve the fields for the given metadata.
+
+        Equivalent to calling `get` with the project name, url, etc. of
+        `metadata`. The provided metadata is not altered.
+        """
+        return self.get(
+            metadata.project_name,
+            metadata.project_url,
+            metadata.commit_sha,
+            metadata.coq_version,
+            metadata.ocaml_version,
+            autofill)
 
     def remove(
             self,
-            project_name: str,
+            project_name: Union[str,
+                                ProjectMetadata],
             project_url: Optional[str] = None,
             commit_sha: Optional[str] = None,
             coq_version: Optional[Union[str,
                                         Version]] = None,
             ocaml_version: Optional[Union[str,
                                           Version]] = None,
-            cascade: bool = True) -> None:
+            cascade: bool = False) -> None:
         """
         Remove the indicated metadata from storage.
 
         Parameters
         ----------
-        project_name : str
-            The name of a project.
+        project_name : str or ProjectMetadata
+            The name of a project or the metadata to be updated.
+            If metadata is provided, its contents are ignored except for
+            the purposes of identifying the record.
         project_url : Optional[str], optional
             The URL of the project's (Git) repository, by default None.
         commit_sha : Optional[str], optional
@@ -587,8 +740,34 @@ class MetadataStorage:
         ------
         KeyError
             If no such metadata exists.
+        ValueError
+            If `project_name` is an instance of `ProjectMetadata` and
+            any of `project_url`, `commit_sha`, `coq_version`, or
+            `ocaml_version` are not None.
         """
-        raise NotImplementedError()
+        if cascade:
+            raise NotImplementedError(
+                "Cascaded deletions are not yet supported.")
+        (project_name,
+         project_url,
+         commit_sha,
+         coq_version,
+         ocaml_version) = self._process_record_args(
+             project_name,
+             project_url,
+             commit_sha,
+             coq_version,
+             ocaml_version)
+        context = Context(
+            Revision(ProjectSource(project_name,
+                                   project_url),
+                     commit_sha),
+            coq_version,
+            ocaml_version)
+        context_id = self.contexts[context]
+        for field_name in self._mutable_fields:
+            self._remove_field(context_id, field_name)
+        self.contexts.pop(context)
 
     def serialize(self, fmt: io.Fmt = io.Fmt.yaml) -> Dict[str, Any]:
         """
@@ -623,7 +802,8 @@ class MetadataStorage:
 
     def update(
             self,
-            project_name: str,
+            project_name: Union[str,
+                                ProjectMetadata],
             project_url: Optional[str] = None,
             commit_sha: Optional[str] = None,
             coq_version: Optional[Union[str,
@@ -636,8 +816,10 @@ class MetadataStorage:
 
         Parameters
         ----------
-        project_name : str
-            The name of a project.
+        project_name : str or ProjectMetadata
+            The name of a project or the metadata to be updated.
+            If metadata is provided, its contents are ignored except for
+            the purposes of identifying the record.
         project_url : Optional[str], optional
             The URL of the project's (Git) repository, by default None.
         commit_sha : Optional[str], optional
@@ -654,10 +836,55 @@ class MetadataStorage:
 
         Raises
         ------
+        AttributeError
+            If an unknown field name is provided in a keyword argument.
         KeyError
             If no such metadata exists.
+        ValueError
+            If `project_name` is an instance of `ProjectMetadata` and
+            any of `project_url`, `commit_sha`, `coq_version`, or
+            `ocaml_version` are not None.
         """
-        raise NotImplementedError("Updating metadata not yet supported.")
+        (project_name,
+         project_url,
+         commit_sha,
+         coq_version,
+         ocaml_version) = self._process_record_args(
+             project_name,
+             project_url,
+             commit_sha,
+             coq_version,
+             ocaml_version)
+        if kwargs:
+            context = Context(
+                Revision(ProjectSource(project_name,
+                                       project_url),
+                         commit_sha),
+                coq_version,
+                ocaml_version)
+            metadata = context.as_metadata()
+            try:
+                context_id = self.contexts[context]
+            except KeyError:
+                is_implied = False
+                for view in metadata.levels(reverse=True, inclusive=False):
+                    if Context.from_metadata(view) in self.contexts:
+                        # this metadata is implied to exist
+                        is_implied = True
+                        # create an explicit record of it
+                        context_id = self._add_context(context)
+                        break
+                if not is_implied:
+                    raise
+            default = self._get_default(metadata)
+            for field_name, field_value in kwargs.items():
+                self._remove_field(context_id, field_name)
+                self._insert_field(
+                    context_id,
+                    field_name,
+                    field_value,
+                    getattr(default,
+                            field_name))
 
     @classmethod
     def deserialize(cls, data: Dict[str, Any]) -> 'MetadataStorage':
