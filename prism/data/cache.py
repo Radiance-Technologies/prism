@@ -32,7 +32,8 @@ class Looper:
         return
 
     def __call__(self):
-        process_map(cache_extract,
-                    self.dataset.projects.values(),
-                    max_workers=10,
-                    desc="Cache extraction")
+        process_map(
+            cache_extract,
+            self.dataset.projects.values(),
+            max_workers=10,
+            desc="Cache extraction")

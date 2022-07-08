@@ -35,7 +35,9 @@ class DatasetFactory:
         cls.build_cmds = {
             "bellantonicook": ["make"],
             "circuits": ["make"],
-            "coq-cunit": ["./configure.sh", "make"]}
+            "coq-cunit": ["./configure.sh",
+                          "make"]
+        }
 
         cls.repo_paths = {}
         cls.repos = {}
