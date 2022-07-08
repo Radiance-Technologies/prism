@@ -233,6 +233,9 @@ class TestProject(unittest.TestCase):
         """
         Test `Project` method builds and extracts IQR flags.
         """
+        # ensure we are starting from clean slate so that strace can
+        # work its magic
+        self.test_iqr_project.clean()
         output, rcode, stdout, stderr = self.test_iqr_project.build_and_get_iqr()
         self.assertEqual(output, self.test_iqr_project.serapi_options)
         actual_result = set()
