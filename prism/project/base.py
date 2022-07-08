@@ -1,5 +1,5 @@
 """
-Module providing CoqGym project class representations.
+Module providing Coq project class representations.
 """
 import logging
 import os

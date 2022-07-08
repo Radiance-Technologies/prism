@@ -1,5 +1,5 @@
 """
-Module providing the base dataset object for the CoqGym interface.
+Module providing the base dataset object for Coq projects.
 """
 import json
 import os
@@ -84,7 +84,7 @@ class DatasetMetadata:
 
 class CoqProjectBaseDataset:
     """
-    Base dataset for CoqGym data.
+    Base dataset for Coq data spread across multiple projects.
 
     Attributes
     ----------
@@ -126,7 +126,7 @@ class CoqProjectBaseDataset:
             metadata_storage: Optional[MetadataStorage] = None,
             **project_class_kwargs):
         """
-        Initialize the CoqGymDataset object.
+        Initialize the `CoqProjectDataset` object.
 
         Provide exactly one of `projects`, `base_dir`, or `dir_list`.
 
@@ -286,7 +286,7 @@ class CoqProjectBaseDataset:
                    None,
                    None]:
         """
-        Yield Coq files from CoqGymBaseDataset.
+        Yield Coq files from `CoqProjectBaseDataset`.
 
         Parameters
         ----------
@@ -445,7 +445,7 @@ class CoqProjectBaseDataset:
                                                    None,
                                                    None]:
         """
-        Yield Coq sentences from CoqGymBaseDataset.
+        Yield Coq sentences from `CoqProjectBaseDataset`.
 
         Parameters
         ----------

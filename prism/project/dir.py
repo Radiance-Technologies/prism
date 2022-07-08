@@ -1,5 +1,5 @@
 """
-Module providing CoqGym project directory class representations.
+Module providing Coq project directory class representations.
 """
 import os
 import pathlib
