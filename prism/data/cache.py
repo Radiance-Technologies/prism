@@ -2,13 +2,11 @@
 Module for looping over dataset and extracting caches.
 """
 import os
-import random
 import time
-from multiprocessing import Process
 
 from tqdm.contrib.concurrent import process_map
 
-from prism.project.repo import CommitIterator, ProjectRepo
+from prism.project.repo import CommitIterator
 
 from .dataset import CoqGymBaseDataset
 
@@ -34,8 +32,7 @@ class Looper:
         return
 
     def __call__(self):
-        r = process_map(
-            cache_extract,
-            self.dataset.projects.values(),
-            max_workers=10,
-            desc="Cache extraction")
+        process_map(cache_extract,
+                    self.dataset.projects.values(),
+                    max_workers=10,
+                    desc="Cache extraction")

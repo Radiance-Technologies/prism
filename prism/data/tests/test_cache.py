@@ -14,7 +14,6 @@ from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 
 
-
 class DatasetFactory:
 
     def __init__(cls):
@@ -36,15 +35,14 @@ class DatasetFactory:
         cls.build_cmds = {
             "bellantonicook": ["make"],
             "circuits": ["make"],
-            "coq-cunit": ["./configure.sh",
-                        "make"]
-        }
+            "coq-cunit": ["./configure.sh", "make"]}
+
         cls.repo_paths = {}
         cls.repos = {}
         cls.projects = {}
         cls.metadatas = {}
         cls.metadata_storage = MetadataStorage()
-        
+
         cls.init_repo_paths()
         cls.insert_metadata()
         cls.init_projects()
@@ -71,7 +69,7 @@ class DatasetFactory:
                 ["make clean"],
                 project_url=f"https://github.com/{project}",
                 commit_sha=cls.commit_shas[project_name])
-        
+
     def insert_metadata(cls):
         for project_metadata in cls.metadatas.values():
             print(project_metadata)
@@ -86,7 +84,6 @@ class DatasetFactory:
                 num_cores=8,
                 sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
 
-    
 
 class TestLooper(unittest.TestCase):
     """
