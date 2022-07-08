@@ -784,7 +784,7 @@ command_sequences:
     - make
   - 12
 - - commands:
-    - opam pin -j 4 add https://github.com/MetaCoq/metacoq.git#75f0cb9b8494cd0a856b77a664c662a59ddde447
+    - opam pin -y -j 4 add https://github.com/MetaCoq/metacoq.git#75f0cb9b8494cd0a856b77a664c662a59ddde447
     - make
   - 13
 - - commands:

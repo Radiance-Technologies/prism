@@ -1,0 +1,17 @@
+- build_cmd:
+  - git submodule update --init --recursive
+  - make
+  clean_cmd:
+  - make clean
+  commit_sha: 5ff00345ca0fa0c323dcf0eb1ac23f79107f863f
+  coq_dependencies: []
+  coq_version: 8.10.2
+  ignore_path_regex: []
+  install_cmd: []
+  ocaml_version: null
+  opam_dependencies: []
+  opam_repos: []
+  project_name: coq-sep-logic
+  project_url: https://github.com/tchajed/coq-sep-logic
+  serapi_options: null
+  serapi_version: 8.10.0+0.7.2
