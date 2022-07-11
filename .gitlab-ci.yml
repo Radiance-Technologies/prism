@@ -75,3 +75,7 @@ runTests:
     - eval $(opam env)
     - source setup_coq.sh -n
     - make test
+  artifacts:
+    expose_as: 'test logs'
+    paths: ['test_logs/']
+    expire_in: 1 week

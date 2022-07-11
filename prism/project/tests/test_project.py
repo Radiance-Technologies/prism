@@ -237,6 +237,12 @@ class TestProject(unittest.TestCase):
         # work its magic
         self.test_iqr_project.clean()
         output, rcode, stdout, stderr = self.test_iqr_project.build_and_get_iqr()
+        if not os.path.exists("./test_logs"):
+            os.makedirs("./test_logs")
+        with open("./test_logs/test_build_and_get_iqr.txt", "wt") as f:
+            print(f"rcode = {rcode}", file=f)
+            print(f"\nstdout = \n {stdout}", file=f)
+            print(f"\nstderr = \n {stderr}", file=f)
         self.assertEqual(output, self.test_iqr_project.serapi_options)
         actual_result = set()
         for match in re.finditer(r"(-R|-Q|-I) [^\s]+", output):
