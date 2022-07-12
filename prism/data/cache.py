@@ -13,6 +13,11 @@ def cache_extract(project):
     """
     Extract cache from series of commits.
     """
+    # This method is a simple placeholder for 
+    # the actual cache extraction. It seemed
+    # desirable to have a stub which demonstrated
+    # on a per-project and per-commit basis
+    # that some operation could be performed
     os.chdir("./{0}".format(project.name))
     iterator = CommitIterator(project, project.commit().hexsha)
     counter = 0
