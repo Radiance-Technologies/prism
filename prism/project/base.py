@@ -1,5 +1,5 @@
 """
-Module providing CoqGym project class representations.
+Module providing Coq project class representations.
 """
 import logging
 import os
@@ -90,7 +90,7 @@ class Project(ABC):
 
     def __init__(
             self,
-            dir_abspath: str,
+            dir_abspath: os.PathLike,
             metadata_storage: MetadataStorage,
             opam_switch: Optional[OpamSwitch] = None,
             sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI,
@@ -153,7 +153,7 @@ class Project(ABC):
 
     @property
     @abstractmethod
-    def path(self) -> str:
+    def path(self) -> os.PathLike:
         """
         Get the path to the project's root directory.
         """

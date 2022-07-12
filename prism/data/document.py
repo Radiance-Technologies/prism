@@ -15,7 +15,7 @@ from prism.language.gallina.util import ParserUtils
 from prism.language.sexp import SexpNode
 from prism.language.token import Token
 
-from .sentence import VernacularSentence
+from .vernac_sentence import VernacularSentence
 
 
 @dataclass

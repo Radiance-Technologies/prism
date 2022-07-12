@@ -16,27 +16,22 @@ import git
 
 from prism.data.document import CoqDocument
 from prism.project.base import SEM, Project, SentenceExtractionMethod
-from prism.project.dir import ProjectDir
 from prism.project.metadata.dataclass import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
-from prism.tests import (
-    _COQ_EXAMPLES_PATH,
-    _MINIMAL_METADATA,
-    _MINIMAL_METASTORAGE,
-)
+from prism.tests import _COQ_EXAMPLES_PATH
 from prism.util.opam.switch import OpamSwitch
 
 
 class TestProject(unittest.TestCase):
     """
-    Class for testing coqgym_base module.
+    Test suite for Project class.
     """
 
     @classmethod
     def setUpClass(cls):
         """
-        Set up class for testing coqgym_base module.
+        Set up shared project files for unit tests.
         """
         expected_filename = os.path.join(
             _COQ_EXAMPLES_PATH,
@@ -238,6 +233,9 @@ class TestProject(unittest.TestCase):
         """
         Test `Project` method builds and extracts IQR flags.
         """
+        # ensure we are starting from clean slate so that strace can
+        # work its magic
+        self.test_iqr_project.clean()
         output, rcode, stdout, stderr = self.test_iqr_project.build_and_get_iqr()
         self.assertEqual(output, self.test_iqr_project.serapi_options)
         actual_result = set()
@@ -254,121 +252,12 @@ class TestProject(unittest.TestCase):
         # build normally and compare output
         self.test_iqr_project.clean()
         _, expected_output, expected_err = self.test_iqr_project.build()
-        # Test endswith because submodules do not need to be re-initted.
-        self.assertTrue(stdout.endswith(expected_output))
+        # Test containment rather than equality because
+        #   * submodules do not need to be re-initted, changing output
+        #   * compilation order is not deterministic
+        self.assertTrue(
+            set(stdout.splitlines()).issuperset(expected_output.splitlines()))
         self.assertTrue(stderr.endswith(expected_err))
-
-
-class TestProjectRepo(unittest.TestCase):
-    """
-    Class for testing `ProjectRepo`.
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        """
-        Resolve the module path and clone CompCert repo.
-        """
-        cls.meta_path = _MINIMAL_METADATA
-        cls.metastorage_path = _MINIMAL_METASTORAGE
-        cls.test_path = os.path.dirname(__file__)
-        cls.repo_path = os.path.join(cls.test_path, "CompCert")
-        try:
-            cls.test_repo = git.Repo.clone_from(
-                "https://github.com/AbsInt/CompCert.git",
-                cls.repo_path)
-        except git.GitCommandError:
-            cls.test_repo = git.Repo(cls.repo_path)
-        # Checkout HEAD of master as of March 14, 2022
-        cls.master_hash = "9d3521b4db46773239a2c5f9f6970de826075508"
-        cls.test_repo.git.checkout(cls.master_hash)
-        cls.meta_storage = MetadataStorage.load(cls.metastorage_path)
-        cls.project = ProjectRepo(
-            cls.repo_path,
-            cls.meta_storage,
-            sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
-
-    def test_get_file(self):
-        """
-        Ensure get_file method returns a file as expected.
-        """
-        file_object = self.project.get_file(
-            os.path.join(self.repo_path,
-                         "cfrontend",
-                         "Ctypes.v"),
-            self.master_hash)
-        self.assertEqual(
-            file_object.abspath,
-            os.path.join(self.repo_path,
-                         "cfrontend",
-                         "Ctypes.v"))
-        self.assertGreater(len(file_object.source_code), 0)
-
-    def test_get_random_commit(self):
-        """
-        Ensure a sensible commit object is returned.
-        """
-        commit_hash = self.project.get_random_commit()
-        self.assertEqual(len(commit_hash.hexsha), 40)
-
-    def test_get_random_file(self):
-        """
-        Ensure a correctly-formed random file is returned.
-        """
-        random_file = self.project.get_random_file(commit_name=self.master_hash)
-        self.assertTrue(random_file.abspath.endswith(".v"))
-        self.assertGreater(len(random_file.source_code), 0)
-
-    def test_get_random_sentence(self):
-        """
-        Ensure a properly-formed random sentence is returned.
-        """
-        random_sentence = self.project.get_random_sentence(
-            commit_name=self.master_hash)
-        self.assertIsInstance(random_sentence, str)
-        self.assertTrue(random_sentence.endswith('.'))
-
-    def test_get_random_sentence_pair(self):
-        """
-        Ensure correctly-formed sentence pairs are returned.
-        """
-        random_pair = self.project.get_random_sentence_pair_adjacent(
-            commit_name=self.master_hash)
-        for sentence in random_pair:
-            self.assertIsInstance(sentence, str)
-            self.assertTrue(sentence.endswith('.'))
-            self.assertGreater(len(sentence), 0)
-
-    @classmethod
-    def tearDownClass(cls):
-        """
-        Remove the cloned CompCert repo.
-        """
-        del cls.test_repo
-        shutil.rmtree(os.path.join(cls.repo_path))
-
-
-class TestProjectDir(TestProjectRepo):
-    """
-    Tests for `ProjectDir`, based on `TestProjectRepo`.
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        """
-        Set the project to use `ProjectDir` instead of `ProjectRepo`.
-        """
-        super().setUpClass()
-        cls.project = ProjectDir(
-            cls.repo_path,
-            cls.meta_storage,
-            sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
-
-    def test_get_random_commit(self):
-        """
-        Ignore; this method is not implemented in `ProjectDir`.
-        """
-        pass
 
 
 if __name__ == "__main__":
