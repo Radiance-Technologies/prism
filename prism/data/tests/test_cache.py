@@ -108,14 +108,14 @@ class TestLooper(unittest.TestCase):
     """
 
     @classmethod
-    def setUpClass(self):
+    def setUpClass(cls):
         """
         Use the base constructor, with some additions.
         """
         self.tester = DatasetFactory()
 
     @classmethod
-    def tearDownClass(self):
+    def tearDownClass(cls):
         """
         Remove the cloned repos.
         """
