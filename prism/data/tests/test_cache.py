@@ -112,16 +112,16 @@ class TestLooper(unittest.TestCase):
         """
         Use the base constructor, with some additions.
         """
-        self.tester = DatasetFactory()
+        cls.tester = DatasetFactory()
 
     @classmethod
     def tearDownClass(cls):
         """
         Remove the cloned repos.
         """
-        for project_name, repo in self.tester.repos.items():
+        for project_name, repo in cls.tester.repos.items():
             del repo
-            shutil.rmtree(os.path.join(self.tester.repo_paths[project_name]))
+            shutil.rmtree(os.path.join(cls.tester.repo_paths[project_name]))
 
     def test_looper(self):
         """
