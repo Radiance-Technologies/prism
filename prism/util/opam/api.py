@@ -2,6 +2,9 @@
 Defines an interface for programmatically querying OPAM.
 """
 import logging
+import pathlib
+import re
+import shutil
 import subprocess
 import warnings
 from contextlib import contextmanager
@@ -54,6 +57,12 @@ class OpamAPI:
         compiler : Union[str, Version]
             A version of the OCaml compiler on which to base the switch.
 
+        Returns
+        -------
+        OpamSwitch
+            The created switch.
+
+
         Raises
         ------
         subprocess.CalledProcessError
@@ -79,6 +88,85 @@ class OpamAPI:
             return OpamSwitch(switch_name, opam_root)
         OpamSwitch.check_returncode(command, r)
         return OpamSwitch(switch_name, opam_root)
+
+    @classmethod
+    def clone_switch(
+            cls,
+            switch_name: str,
+            clone_name: str,
+            opam_root: Optional[PathLike] = None) -> None:
+        """
+        Clone the indicated switch.
+
+        Parameters
+        ----------
+        switch_name : str
+            The name of an existing switch to clone,
+            belonging to the active root.
+        clone_name : str
+            The name to use for the cloned switch. 
+        
+        Returns
+        -------
+        OpamSwitch
+            The cloned switch.
+
+        Raises
+        ------
+        ValueError
+            switch_name doesn't exist
+        or: clone_name already exists
+        or: an invalid switch name was passed in
+        """
+        # assuming we aren't on windows.
+        # if we are, this is difficult because the opam manual
+        # doesn't even say where the default opam root should be.
+        current_opam_root = pathlib.Path(opam_root
+                                      or cls.active_switch.root
+                                      or "~/.opam/").expanduser()
+
+
+        destination = current_opam_root/clone_name
+
+        if len(destination.parents)!=len(current_opam_root.parents)+1:
+            raise ValueError(f"{clone_name} is a path, \
+                              not the name of a switch.")
+
+        # we have to be extremely here.
+        # if someone asked for a switch with the name "config"
+        # and we carelessly deleted whatever was called "config",
+        # it would brick the switch.
+        if destination.exists():
+            raise ValueError("The proposed switch name already exists \
+                              or there's a file with that name. \
+                              Won't delete existing files.")
+
+        source = current_opam_root/switch_name
+
+        if len(source.parents)!=len(current_opam_root.parents)+1:
+            raise ValueError("f{switch_name} is a path, \
+                              not the name of a switch.")
+
+        if not source.is_dir():
+            raise ValueError(f"Source switch {switch_name} doesn't \
+                               exist in {current_opam_root}.")
+
+        config = (current_opam_root/"config")
+
+        config.write_text(re.sub(
+            r'installed-switches *: *\[((?:\"(?:[^\"]|\\\")+\" *)*)\]',
+            f"installed-switches: [\\1 \"{clone_name}\"]",
+            config.read_text()))
+
+        shutil.copytree(source,destination,symlinks=True)
+
+        switch_config_dir= destination/".opam-switch"
+        (switch_config_dir/"environment").unlink(missing_ok=True)
+
+        (switch_config_dir/"config/ocaml.config").unlink(missing_ok=True)
+
+        return OpamSwitch(clone_name,str(current_opam_root))
+
 
     @classmethod
     def remove_switch(
