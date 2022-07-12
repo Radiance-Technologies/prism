@@ -15,6 +15,7 @@ from prism.project.metadata.storage import MetadataStorage
 
 
 class DatasetFactory:
+
     def __init__(cls):
         cls.test_path = os.path.dirname(__file__)
         # HEAD commits as of March 14, 2022

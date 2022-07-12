@@ -74,11 +74,11 @@ class CommitIterator:
         self._repo = repo
         # For the purposes of iteration (whatever the state of the
         # repo when the iterator is constructed) it is assumed that
-        # the head of the repo at construction time is the furthest 
+        # the head of the repo at construction time is the furthest
         # forward that we are interested in traversing.
         self._repo_initial_head = repo.commit(repo._original_head)
         parent_list = list(repo.commit(self._repo_initial_head).iter_parents())
-        self._commits = [self._repo_initial_head] + parent_list 
+        self._commits = [self._repo_initial_head] + parent_list
         self._commit_sha = commit_sha
         self._commit_sha_list = [x.hexsha for x in self._commits]
         self._commit_idx = self._commit_sha_list.index(self._commit_sha)
@@ -223,21 +223,26 @@ class ProjectRepo(Repo, Project):
     Based on GitPython's `Repo` class.
     """
 
-    def __init__(self, dir_abspath: str, commit_sha: Optional[str] = None, *args, **kwargs):
+    def __init__(
+            self,
+            dir_abspath: str,
+            commit_sha: Optional[str] = None,
+            *args,
+            **kwargs):
         """
         Initialize Project object.
         """
         Repo.__init__(self, dir_abspath)
         Project.__init__(self, dir_abspath, *args, **kwargs)
         self.current_commit_name = None  # i.e., HEAD
-        
+
         name_and_url = (self.name, self.remote_url.split('.git')[0])
         storage = self.metadata_storage
         try:
             project_revisions = storage.get_project_revisions(*name_and_url)
         except KeyError:
             project_revisions = set()
-        
+
         if len(project_revisions) != 1:
             self._commit_sha = commit_sha
         elif len(project_revisions) == 1:

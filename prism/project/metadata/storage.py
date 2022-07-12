@@ -682,7 +682,6 @@ class MetadataStorage:
             and r.commit_sha is not None
         }
 
-
     def insert(self, metadata: ProjectMetadata) -> None:
         """
         Insert new metadata into the repository.
