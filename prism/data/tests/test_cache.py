@@ -15,7 +15,6 @@ from prism.project.metadata.storage import MetadataStorage
 
 
 class DatasetFactory:
-
     def __init__(cls):
         cls.test_path = os.path.dirname(__file__)
         # HEAD commits as of March 14, 2022
@@ -113,7 +112,8 @@ class TestLooper(unittest.TestCase):
         Test instantiation with `ProjectRepo`.
         """
         looper = Looper(self.tester.dataset)
-        looper()
+        print(self.tester.test_path)
+        looper(self.tester.test_path)
 
 
 if __name__ == "__main__":

@@ -78,6 +78,7 @@ class TestCommitIter(unittest.TestCase):
                 cls.metadata_storage.insert(metadata)
             cls.projects[project_name] = ProjectRepo(
                 project_path,
+                cls.master_hashes[project_name],
                 cls.metadata_storage,
                 sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
 
@@ -86,6 +87,7 @@ class TestCommitIter(unittest.TestCase):
         Test iterator basic functionality.
         """
         repo = self.projects['GeoCoq']
+        print(repo.commit().hexsha)
         hashes = [
             GEOCOQ_COMMIT_134,
             GEOCOQ_COMMIT_135,
@@ -96,6 +98,7 @@ class TestCommitIter(unittest.TestCase):
         commit_iter = CommitIterator(repo, GEOCOQ_COMMIT_134)
         hashes_test = list(itertools.islice(commit_iter, 5))
         hashes_test = [x.hexsha for x in hashes_test]
+        print(hashes_test)
         self.assertEqual(hashes, hashes_test)
 
     def test_iterator_oldest_first(self):
@@ -116,6 +119,7 @@ class TestCommitIter(unittest.TestCase):
             CommitTraversalStrategy.OLD_FIRST)
         hashes_test = list(itertools.islice(commit_iter, 5))
         hashes_test = [x.hexsha for x in hashes_test]
+        print(hashes_test)
         self.assertEqual(hashes, hashes_test)
 
     def test_iterator_curlicue_new(self):

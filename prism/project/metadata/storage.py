@@ -643,6 +643,46 @@ class MetadataStorage:
             metadata_kwargs.setdefault('clean_cmd', self.default_clean_cmd)
         return ProjectMetadata(**metadata_kwargs)
 
+    def get_project_revisions(
+            self,
+            project_name: str,
+            project_url: Optional[str] = None) -> Set[str]:
+        """
+        Get the set of revisions for a given project.
+
+        Note that this is NOT the complete list of commits that exist
+        across all sources for the project but rather just those commits
+        that have been assigned unique metadata entries in the storage.
+
+        Parameters
+        ----------
+        project_name : str
+            The name of a project in the storage.
+        project_url : Optional[str], optional
+            A source URL for the project, by default None.
+            If None, then all commits for all sources are returned.
+
+        Returns
+        -------
+        Set[str]
+            A set of commit SHAs for the given project.
+
+        Raises
+        ------
+        KeyError
+            If the project does not possess any metadata.
+        """
+        if project_name not in self.projects:
+            raise KeyError(f"Unknown project: {project_name}")
+        return {
+            r.commit_sha
+            for r in self.revisions
+            if r.project_source.project_name == project_name and (
+                project_url is None or r.project_source.repo_url == project_url)
+            and r.commit_sha is not None
+        }
+
+
     def insert(self, metadata: ProjectMetadata) -> None:
         """
         Insert new metadata into the repository.

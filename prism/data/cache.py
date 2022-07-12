@@ -11,9 +11,7 @@ from prism.project.repo import CommitIterator
 from .dataset import CoqGymBaseDataset
 
 
-def cache_extract(input_tuple):
-    project, wait_time = input_tuple
-    time.sleep(wait_time)
+def cache_extract(project):
     os.chdir("./{0}".format(project.name))
     iterator = CommitIterator(project, project.commit().hexsha)
     counter = 0
@@ -31,7 +29,8 @@ class Looper:
         self.dataset = dataset
         return
 
-    def __call__(self):
+    def __call__(self, working_dir):
+        os.chdir(working_dir)
         process_map(
             cache_extract,
             self.dataset.projects.values(),

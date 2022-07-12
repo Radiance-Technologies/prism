@@ -207,9 +207,11 @@ class TestProjectRepo(unittest.TestCase):
         cls.master_hash = "9d3521b4db46773239a2c5f9f6970de826075508"
         cls.test_repo.git.checkout(cls.master_hash)
         cls.meta_storage = MetadataStorage.load(cls.metastorage_path)
+        print(cls.meta_storage.get_project_revisions("CompCert", "https://github.com/AbsInt/CompCert"))
         cls.project = ProjectRepo(
             cls.repo_path,
-            cls.meta_storage,
+            commit_sha=None,
+            metadata_storage=cls.meta_storage,
             sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
 
     def test_get_file(self):

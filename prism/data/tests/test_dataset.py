@@ -64,6 +64,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         for project_name in cls.metadatas.keys():
             cls.projects[project_name] = ProjectRepo(
                 cls.repo_paths[project_name],
+                cls.master_hashes[project_name],
                 cls.metadata_storage,
                 sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
         cls.dataset = CoqGymBaseDataset(

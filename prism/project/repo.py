@@ -1,6 +1,8 @@
 """
 Module providing CoqGym project repository class representations.
 """
+from __future__ import annotations
+
 import random
 from enum import Enum
 from typing import List, Optional
@@ -49,7 +51,7 @@ class CommitIterator:
 
     def __init__(
         self,
-        repo: Repo,
+        repo: ProjectRepo,
         commit_sha: str,
         march_strategy: Optional[
             CommitTraversalStrategy] = CommitTraversalStrategy.NEW_FIRST):
@@ -58,7 +60,7 @@ class CommitIterator:
 
         Parameters
         ----------
-        repo : git.Repo
+        repo : prism.ProjectRepo
             Repo, the commits of which we wish to iterate through.
 
         commit_sha : str
@@ -70,7 +72,13 @@ class CommitIterator:
             we wish to use.
         """
         self._repo = repo
-        self._commits = [repo.commit()] + list(repo.commit().iter_parents())
+        # For the purposes of iteration (whatever the state of the
+        # repo when the iterator is constructed) it is assumed that
+        # the head of the repo at construction time is the furthest 
+        # forward that we are interested in traversing.
+        self._repo_initial_head = repo.commit(repo._original_head)
+        parent_list = list(repo.commit(self._repo_initial_head).iter_parents())
+        self._commits = [self._repo_initial_head] + parent_list 
         self._commit_sha = commit_sha
         self._commit_sha_list = [x.hexsha for x in self._commits]
         self._commit_idx = self._commit_sha_list.index(self._commit_sha)
@@ -215,15 +223,32 @@ class ProjectRepo(Repo, Project):
     Based on GitPython's `Repo` class.
     """
 
-    def __init__(self, dir_abspath: str, commit_sha: str, *args, **kwargs):
+    def __init__(self, dir_abspath: str, commit_sha: Optional[str] = None, *args, **kwargs):
         """
         Initialize Project object.
         """
         Repo.__init__(self, dir_abspath)
         Project.__init__(self, dir_abspath, *args, **kwargs)
         self.current_commit_name = None  # i.e., HEAD
-        self._commit_sha = commit_sha
-        self.git.checkout(self._commit_sha)
+        
+        name_and_url = (self.name, self.remote_url.split('.git')[0])
+        storage = self.metadata_storage
+        try:
+            project_revisions = storage.get_project_revisions(*name_and_url)
+        except KeyError:
+            project_revisions = set()
+        
+        if len(project_revisions) != 1:
+            self._commit_sha = commit_sha
+        elif len(project_revisions) == 1:
+            self._commit_sha = next(iter(project_revisions))
+        else:
+            self._commit_sha = self.commit().hexsha
+
+        self._original_head = self.commit().hexsha
+
+        if self._commit_sha is not None:
+            self.git.checkout(self._commit_sha)
 
     @property
     def commit_sha(self) -> str:  # noqa: D102
