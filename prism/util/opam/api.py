@@ -151,20 +151,8 @@ class OpamAPI:
             raise ValueError(f"Source switch {switch_name} doesn't \
                                exist in {current_opam_root}.")
 
-        config = (current_opam_root/"config")
-
-        config.write_text(re.sub(
-            r'installed-switches *: *\[((?:\"(?:[^\"]|\\\")+\" *)*)\]',
-            f"installed-switches: [\\1 \"{clone_name}\"]",
-            config.read_text()))
-
         shutil.copytree(source,destination,symlinks=True)
-
-        switch_config_dir= destination/".opam-switch"
-        (switch_config_dir/"environment").unlink(missing_ok=True)
-
-        (switch_config_dir/"config/ocaml.config").unlink(missing_ok=True)
-
+        
         return OpamSwitch(clone_name,str(current_opam_root))
 
 
