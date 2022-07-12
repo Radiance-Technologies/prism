@@ -201,7 +201,7 @@ class TestProjectRepo(unittest.TestCase):
         cls.meta_storage = MetadataStorage.load(cls.metastorage_path)
         cls.project = ProjectRepo(
             cls.repo_path,
-            cls.meta_storage,
+            metadata_storage=cls.meta_storage,
             sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
 
     def test_get_file(self):

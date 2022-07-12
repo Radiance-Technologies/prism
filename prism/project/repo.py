@@ -264,6 +264,7 @@ class ProjectRepo(Repo, Project):
                 # re-raise original error
                 raise
             Repo.__init__(self, dir_abspath)
+        print(args)
         Project.__init__(self, dir_abspath, *args, **kwargs)
         self.current_commit_name = None  # i.e., HEAD
 

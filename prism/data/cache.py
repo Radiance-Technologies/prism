@@ -7,7 +7,7 @@ from tqdm.contrib.concurrent import process_map
 
 from prism.project.repo import CommitIterator
 
-from .dataset import CoqGymBaseDataset
+from prism.data.dataset import CoqProjectBaseDataset
 
 
 def cache_extract(project):
@@ -30,13 +30,13 @@ class Looper:
     Loop through all commits in all projects.
     """
 
-    def __init__(self, dataset: CoqGymBaseDataset):
+    def __init__(self, dataset: CoqProjectBaseDataset):
         """
         Initialize Looper object.
 
         Parameters
         ----------
-        dataset : CoqGymBaseDataset
+        dataset : CoqProjectBaseDataset
             Dataset object used to loop through all
             commits in all projects, building each
             commit and extracting the build cache.

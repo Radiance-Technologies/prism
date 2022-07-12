@@ -1,5 +1,5 @@
 """
-Test module for prism.data.coqgym.dataset module.
+Test module for prism.data.dataset module.
 """
 import os
 import shutil
@@ -8,7 +8,7 @@ import unittest
 import git
 
 from prism.data.cache import Looper
-from prism.data.dataset import CoqGymBaseDataset
+from prism.data.dataset import CoqProjectBaseDataset
 from prism.project import ProjectRepo, SentenceExtractionMethod
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
@@ -54,7 +54,7 @@ class DatasetFactory:
         self.init_repo_paths()
         self.insert_metadata()
         self.init_projects()
-        self.dataset = CoqGymBaseDataset(
+        self.dataset = CoqProjectBaseDataset(
             project_class=ProjectRepo,
             projects=self.projects)
 
