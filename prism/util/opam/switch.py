@@ -307,6 +307,15 @@ class OpamSwitch:
             If the removal fails it will raise this exception
         """
         self.run(f"opam repo remove {repo_name}")
+    
+    @cached_property
+    def parent(self):
+        """
+        Name of the switch that this switch was cloned from.
+
+        If this switch ISN'T a clone, this is the name of this switch.
+        """
+        return Path(self.env['OPAM_SWITCH_PREFIX']).name
 
     def run(
             self,
@@ -321,12 +330,33 @@ class OpamSwitch:
         if env is None:
             env = self.environ
 
-        switch_location = Path(self.env["OPAM_SWITCH_PREFIX"])
+        opam_root = Path(self.root or '~/.opam').expanduser()
         real_name = self.name or 'default'
-        if real_name!=switch_location.name:
+        if real_name!=self.parent:
+            # this is a clone and it needs to be mounted
+            # at the location it thinks it is at.
+            src = opam_root/real_name
+            dest = opam_root/self.parent
+
+
+            # out of excessive caution,
+            # let's ensure we didn't get passed something
+            # crazy like a switch called ".."
+            # or "../././/."
+            # before we bind mount to it.
+            if (Path(real_name)==Path("..") or Path(self.parent)==Path("..")):
+                raise ValueError("Illegal name for opam switch: '..'.")
+            # also, that it's not a directory.
+            if (len(Path(real_name).parts)!=1 or len(Path(self.parent).parts)!=1):
+                raise ValueError("Was given a switch named like a directory.")
+           
+            if not dest.exists():
+                # we need a mountpoint.
+                # maybe the original clone was deleted?
+                dest.mkdir()
+
             command = 'bwrap --dev-bind / / --bind' \
-                      + f' {switch_location.parent/real_name}' \
-                      + f' {switch_location} -- {command}'
+                      + f' {src} {dest} -- {command}'
         r = bash.run(command, env=env, **kwargs)
         if check:
             self.check_returncode(command, r)
