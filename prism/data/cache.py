@@ -5,9 +5,8 @@ import os
 
 from tqdm.contrib.concurrent import process_map
 
-from prism.project.repo import CommitIterator
-
 from prism.data.dataset import CoqProjectBaseDataset
+from prism.project.repo import CommitIterator
 
 
 def cache_extract(project):
