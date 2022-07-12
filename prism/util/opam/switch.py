@@ -2,13 +2,12 @@
 Provides an object-oriented abstraction of OPAM switches.
 """
 import logging
-import pathlib
 import os
 import re
 from dataclasses import dataclass
 from functools import cached_property
-from pathlib import Path
 from os import PathLike
+from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess
 from typing import ClassVar, Dict, List, Optional
 
@@ -80,16 +79,15 @@ class OpamSwitch:
         CalledProcessError
             If the ``opam env`` command fails.
         """
-        
         opam_env = {}
 
-        r = (Path(self.root or '~/.opam/').expanduser()
-            /(self.name or 'default')
-            /'.opam-switch/environment').read_text()
+        r = (
+            Path(self.root or '~/.opam/').expanduser() /
+            (self.name or 'default') / '.opam-switch/environment').read_text()
 
         envs: List[str] = r.split('\n')[::-1]
         for env in envs:
-            if (env==''):
+            if (env == ''):
                 continue
             var, _, val, _ = env.strip().split("\t")
             opam_env[var] = val
@@ -108,9 +106,8 @@ class OpamSwitch:
             environ['PATH'] = os.pathsep.join([new_path, environ['PATH']])
         if self.root is not None:
             environ['OPAMROOT'] = self.root
-        
+
         environ['OPAMSWITCH'] = Path(self.env["OPAM_SWITCH_PREFIX"]).name
-        
 
         return environ
 
@@ -307,7 +304,7 @@ class OpamSwitch:
             If the removal fails it will raise this exception
         """
         self.run(f"opam repo remove {repo_name}")
-    
+
     @cached_property
     def parent(self):
         """
@@ -332,24 +329,25 @@ class OpamSwitch:
 
         opam_root = Path(self.root or '~/.opam').expanduser()
         real_name = self.name or 'default'
-        if real_name!=self.parent:
+        if real_name != self.parent:
             # this is a clone and it needs to be mounted
             # at the location it thinks it is at.
-            src = opam_root/real_name
-            dest = opam_root/self.parent
-
+            src = opam_root / real_name
+            dest = opam_root / self.parent
 
             # out of excessive caution,
             # let's ensure we didn't get passed something
             # crazy like a switch called ".."
             # or "../././/."
             # before we bind mount to it.
-            if (Path(real_name)==Path("..") or Path(self.parent)==Path("..")):
+            if (Path(real_name) == Path("..")
+                    or Path(self.parent) == Path("..")):
                 raise ValueError("Illegal name for opam switch: '..'.")
             # also, that it's not a directory.
-            if (len(Path(real_name).parts)!=1 or len(Path(self.parent).parts)!=1):
+            if (len(Path(real_name).parts) != 1
+                    or len(Path(self.parent).parts) != 1):
                 raise ValueError("Was given a switch named like a directory.")
-           
+
             if not dest.exists():
                 # we need a mountpoint.
                 # maybe the original clone was deleted?

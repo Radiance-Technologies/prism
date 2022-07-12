@@ -2,8 +2,6 @@
 Defines an interface for programmatically querying OPAM.
 """
 import logging
-import pathlib
-import re
 import shutil
 import subprocess
 import warnings
@@ -105,8 +103,8 @@ class OpamAPI:
             The name of an existing switch to clone,
             belonging to the active root.
         clone_name : str
-            The name to use for the cloned switch. 
-        
+            The name to use for the cloned switch.
+
         Returns
         -------
         OpamSwitch
@@ -125,39 +123,41 @@ class OpamAPI:
         # doesn't even say where the default opam root should be.
         current_opam_root = Path(opam_root or "~/.opam/").expanduser()
 
+        destination = current_opam_root / clone_name
 
-        destination = current_opam_root/clone_name
-
-        if len(destination.parents)!=len(current_opam_root.parents)+1 or Path(clone_name)==Path(".."):
-            raise ValueError(f"{clone_name} is a path," \
-                              + " not the name of a switch.")
+        if (len(destination.parents) != len(current_opam_root.parents) + 1
+                or Path(clone_name) == Path("..")):
+            raise ValueError(
+                f"{clone_name} is a path," + " not the name of a switch.")
 
         # we have to be extremely here.
         # if someone asked for a switch with the name "config"
         # and we carelessly deleted whatever was called "config",
         # it would brick the switch.
         if destination.exists():
-            raise ValueError("The proposed switch name already exists" \
-                              + " or there's a file with that name." \
-                              + " Won't delete existing files.")
+            raise ValueError(
+                "The proposed switch name already exists"
+                + " or there's a file with that name."
+                + " Won't delete existing files.")
 
-        source = current_opam_root/switch_name
+        source = current_opam_root / switch_name
 
-        if len(source.parents)!=len(current_opam_root.parents)+1 or Path(switch_name)==Path(".."):
-            raise ValueError(f"{switch_name} is a path, " \
-                              + "not the name of a switch.")
+        if (len(source.parents) != len(current_opam_root.parents) + 1
+                or Path(switch_name) == Path("..")):
+            raise ValueError(
+                f"{switch_name} is a path, " + "not the name of a switch.")
 
         if not source.is_dir():
-            raise ValueError(f"Source switch {switch_name} doesn't"
-                              +  " exist in {current_opam_root}.")
+            raise ValueError(
+                f"Source switch {switch_name} doesn't"
+                + " exist in {current_opam_root}.")
 
-        if not (source/".opam-switch").is_dir():
+        if not (source / ".opam-switch").is_dir():
             raise ValueError(f"Source dir {source} doesn't look like a switch.")
 
-        shutil.copytree(source,destination,symlinks=True)
-        
-        return OpamSwitch(clone_name,str(current_opam_root))
+        shutil.copytree(source, destination, symlinks=True)
 
+        return OpamSwitch(clone_name, str(current_opam_root))
 
     @classmethod
     def remove_switch(
@@ -187,8 +187,8 @@ class OpamAPI:
             indicated switch does not exist.
         """
         if isinstance(switch, str):
-            switch = OpamSwitch(switch,None)
-        
+            switch = OpamSwitch(switch, None)
+
         if (switch.parent != (switch.name or 'default')):
             # this is a clone.
             # opam was about to delete the clone
