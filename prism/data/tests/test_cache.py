@@ -18,16 +18,16 @@ class DatasetFactory:
     """
     Create test dataset.
 
-    Useful for debugging if interactability is
-    desired in an interpreter session. 
+    Useful for debugging if interactability is desired in an interpreter
+    session.
     """
 
     def __init__(self):
         self.test_path = os.path.dirname(__file__)
         # HEAD commits as of March 14, 2022
         self.project_names = {"bellantonicook",
-                             "circuits",
-                             "coq-cunit"}
+                              "circuits",
+                              "coq-cunit"}
         self.target_projects = {
             "bellantonicook": "davidnowak/bellantonicook",
             "circuits": "coq-contribs/circuits",
