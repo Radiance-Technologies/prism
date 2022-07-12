@@ -13,7 +13,7 @@ def cache_extract(project):
     """
     Extract cache from series of commits.
     """
-    # This method is a simple placeholder for 
+    # This method is a simple placeholder for
     # the actual cache extraction. It seemed
     # desirable to have a stub which demonstrated
     # on a per-project and per-commit basis
