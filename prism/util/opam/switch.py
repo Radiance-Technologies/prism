@@ -2,10 +2,12 @@
 Provides an object-oriented abstraction of OPAM switches.
 """
 import logging
+import pathlib
 import os
 import re
 from dataclasses import dataclass
 from functools import cached_property
+from pathlib import Path
 from os import PathLike
 from subprocess import CalledProcessError, CompletedProcess
 from typing import ClassVar, Dict, List, Optional
@@ -39,7 +41,7 @@ class OpamSwitch:
     """
     The name of the switch, by default None.
 
-    If None, then this implies usage of the default switch.
+    If None, then this implies usage of the "default" switch.
     Equivalent to setting ``$OPAMSWITCH`` to `name`.
     """
     root: Optional[PathLike] = None
@@ -78,17 +80,19 @@ class OpamSwitch:
         CalledProcessError
             If the ``opam env`` command fails.
         """
+        
         opam_env = {}
-        environ = dict(os.environ)
-        if self.root is not None:
-            environ['OPAMROOT'] = self.root
-        if self.name is not None:
-            environ['OPAMSWITCH'] = self.name
-        r = self.run("opam env", env=environ)
-        envs: List[str] = r.stdout.split(';')[0 :-1 : 2]
+
+        r = (Path(self.root or '~/.opam/').expanduser()
+            /(self.name or 'default')
+            /'.opam-switch/environment').read_text()
+
+        envs: List[str] = r.split('\n')[::-1]
         for env in envs:
-            var, val = env.strip().split("=", maxsplit=1)
-            opam_env[var] = val.strip("'")
+            if (env==''):
+                continue
+            var, _, val, _ = env.strip().split("\t")
+            opam_env[var] = val
         return opam_env
 
     @property
@@ -104,8 +108,10 @@ class OpamSwitch:
             environ['PATH'] = os.pathsep.join([new_path, environ['PATH']])
         if self.root is not None:
             environ['OPAMROOT'] = self.root
-        if self.name is not None:
-            environ['OPAMSWITCH'] = self.name
+        
+        environ['OPAMSWITCH'] = Path(self.env["OPAM_SWITCH_PREFIX"]).name
+        
+
         return environ
 
     def add_repo(self, repo_name: str, repo_addr: Optional[str] = None) -> None:
@@ -314,6 +320,13 @@ class OpamSwitch:
         """
         if env is None:
             env = self.environ
+
+        switch_location = Path(self.env["OPAM_SWITCH_PREFIX"])
+        real_name = self.name or 'default'
+        if real_name!=switch_location.name:
+            command = 'bwrap --dev-bind / / --bind' \
+                      + f' {switch_location.parent/real_name}' \
+                      + f' {switch_location} -- {command}'
         r = bash.run(command, env=env, **kwargs)
         if check:
             self.check_returncode(command, r)
