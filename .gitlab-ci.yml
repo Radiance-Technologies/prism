@@ -21,7 +21,7 @@ stages:
 
 before_script:
   - apt-get -y update
-  - apt-get -y install pkg-config make opam
+  - apt-get -y install pkg-config make opam strace
   - pip install virtualenv
   - virtualenv venv
   - source venv/bin/activate
@@ -75,3 +75,7 @@ runTests:
     - eval $(opam env)
     - source setup_coq.sh -n
     - make test
+  artifacts:
+    expose_as: 'test logs'
+    paths: ['test_logs/']
+    expire_in: 1 week

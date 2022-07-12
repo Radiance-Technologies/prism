@@ -157,6 +157,14 @@ class MetadataStorage:
     This class provides storage and retrieval methods for metadata
     across multiple projects and versions. An object of this class
     effectively serves as an in-memory database for project metadata.
+
+    Notes
+    -----
+    Note that the order of insertion matters when one metadata overrides
+    another.
+    If the metadata of higher precedence is inserted first, then it will
+    not be considered to inherit its metadata from the lower precedence
+    version even if identical.
     """
 
     # options
@@ -680,6 +688,33 @@ class MetadataStorage:
             if r.project_source.project_name == project_name and (
                 project_url is None or r.project_source.repo_url == project_url)
             and r.commit_sha is not None
+        }
+
+    def get_project_sources(self, project_name: str) -> Set[str]:
+        """
+        Get the set of repository URLs, if any, for the given project.
+
+        Parameters
+        ----------
+        project_name : str
+            The name of a project in the storage.
+
+        Returns
+        -------
+        Set[str]
+            A set of URLs from which the project may be obtained.
+
+        Raises
+        ------
+        KeyError
+            If the project does not possess any metadata.
+        """
+        if project_name not in self.projects:
+            raise KeyError(f"Unknown project: {project_name}")
+        return {
+            s.repo_url
+            for s in self.project_sources
+            if s.project_name == project_name and s.repo_url is not None
         }
 
     def insert(self, metadata: ProjectMetadata) -> None:

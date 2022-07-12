@@ -1,5 +1,5 @@
 """
-Module providing the base dataset object for the CoqGym interface.
+Module providing the base dataset object for Coq projects.
 """
 import json
 import os
@@ -25,7 +25,7 @@ ProjectDict = Dict[str, Union[ProjectRepo, ProjectDir]]
 MetadataDict = TypeVar("MetadataDict")
 
 
-class Metadata:
+class DatasetMetadata:
     """
     Helper class to load a dataset metadata.
 
@@ -58,7 +58,7 @@ class Metadata:
         Load metadata from file and return contents in dict format.
         """
         if self.filetype == 'json':
-            data = Metadata.from_json(self.path)
+            data = DatasetMetadata.from_json(self.path)
         else:
             raise ValueError(f"Unknown filetype: {self.filetype}")
         return data
@@ -78,12 +78,13 @@ class Metadata:
         """
         Load a json from given the filename.
         """
-        return json.load(open(path))
+        with open(path) as f:
+            return json.load(f)
 
 
-class CoqGymBaseDataset:
+class CoqProjectBaseDataset:
     """
-    Base dataset for CoqGym data.
+    Base dataset for Coq data spread across multiple projects.
 
     Attributes
     ----------
@@ -125,7 +126,7 @@ class CoqGymBaseDataset:
             metadata_storage: Optional[MetadataStorage] = None,
             **project_class_kwargs):
         """
-        Initialize the CoqGymDataset object.
+        Initialize the `CoqProjectDataset` object.
 
         Provide exactly one of `projects`, `base_dir`, or `dir_list`.
 
@@ -285,7 +286,7 @@ class CoqGymBaseDataset:
                    None,
                    None]:
         """
-        Yield Coq files from CoqGymBaseDataset.
+        Yield Coq files from `CoqProjectBaseDataset`.
 
         Parameters
         ----------
@@ -444,7 +445,7 @@ class CoqGymBaseDataset:
                                                    None,
                                                    None]:
         """
-        Yield Coq sentences from CoqGymBaseDataset.
+        Yield Coq sentences from `CoqProjectBaseDataset`.
 
         Parameters
         ----------

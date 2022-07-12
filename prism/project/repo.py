@@ -1,18 +1,22 @@
 """
-Module providing CoqGym project repository class representations.
+Module providing Coq project repository class representations.
 """
 from __future__ import annotations
 
+import os
+import pathlib
 import random
 from enum import Enum
 from typing import List, Optional
 
+import git
 from git import Commit, Repo
 
 from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
 from prism.project.base import Project
 from prism.project.metadata.dataclass import ProjectMetadata
+from prism.project.metadata.storage import MetadataStorage
 
 
 class CommitTraversalStrategy(Enum):
@@ -225,14 +229,41 @@ class ProjectRepo(Repo, Project):
 
     def __init__(
             self,
-            dir_abspath: str,
+            dir_abspath: os.PathLike,
             commit_sha: Optional[str] = None,
             *args,
             **kwargs):
         """
         Initialize Project object.
         """
-        Repo.__init__(self, dir_abspath)
+        try:
+            Repo.__init__(self, dir_abspath)
+        except git.exc.NoSuchPathError:
+            dir_abspath = pathlib.Path(dir_abspath)
+            storage = [a for a in args if isinstance(a, MetadataStorage)]
+            if not storage:
+                storage = kwargs.get('metadata_storage')
+            else:
+                storage = storage[0]
+            try:
+                # try to infer project name from stem
+                project_urls = storage.get_project_sources(dir_abspath.stem)
+            except KeyError:
+                project_urls = set()
+            if project_urls:
+                # clone from first viable URL
+                for project_url in project_urls:
+                    try:
+                        Repo.clone_from(project_url, dir_abspath)
+                    except git.exc.GitCommandError:
+                        continue
+                    else:
+                        break
+            else:
+                # no viable sources to clone from
+                # re-raise original error
+                raise
+            Repo.__init__(self, dir_abspath)
         Project.__init__(self, dir_abspath, *args, **kwargs)
         self.current_commit_name = None  # i.e., HEAD
 
@@ -273,7 +304,7 @@ class ProjectRepo(Repo, Project):
         return self.remote_url.split('.git')[0].split('/')[-1]
 
     @property
-    def path(self) -> str:  # noqa: D102
+    def path(self) -> os.PathLike:  # noqa: D102
         return self.working_dir
 
     @property

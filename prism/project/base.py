@@ -1,21 +1,23 @@
 """
-Module providing CoqGym project class representations.
+Module providing Coq project class representations.
 """
 import logging
+import os
 import pathlib
 import random
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-from functools import partialmethod
+from functools import partialmethod, reduce
 from typing import List, Optional, Tuple, Union
 
-from seutil import BashUtils
+from seutil import bash
 
 from prism.data.document import CoqDocument
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
 from prism.project.exception import ProjectBuildError
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
+from prism.project.strace import IQR, CoqContext, strace_build
 from prism.util.logging import default_log_level
 from prism.util.opam import OpamSwitch
 
@@ -88,7 +90,7 @@ class Project(ABC):
 
     def __init__(
             self,
-            dir_abspath: str,
+            dir_abspath: os.PathLike,
             metadata_storage: MetadataStorage,
             opam_switch: Optional[OpamSwitch] = None,
             sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI,
@@ -113,7 +115,7 @@ class Project(ABC):
         """
         cmd_list = self.metadata.build_cmd
         for i in range(len(cmd_list)):
-            if 'make' in cmd_list[i]:
+            if 'make' in cmd_list[i] and self.num_cores is not None:
                 cmd_list[i] = cmd_list[i] + " -j{0}".format(self.num_cores)
         return cmd_list
 
@@ -151,7 +153,7 @@ class Project(ABC):
 
     @property
     @abstractmethod
-    def path(self) -> str:
+    def path(self) -> os.PathLike:
         """
         Get the path to the project's root directory.
         """
@@ -245,16 +247,16 @@ class Project(ABC):
         if not commands:
             raise RuntimeError(
                 f"{target.capitalize()} command not set for {self.name}.")
-        r = BashUtils.run(" && ".join(commands))
-        status = "failed" if r.return_code != 0 else "finished"
+        r = self.opam_switch.run(" && ".join(commands), cwd=self.path)
+        status = "failed" if r.returncode != 0 else "finished"
         msg = (
-            f"{action} {status}! Return code is {r.return_code}! "
+            f"{action} {status}! Return code is {r.returncode}! "
             f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
-        if r.return_code != 0:
+        if r.returncode != 0:
             raise ProjectBuildError(msg)
         else:
             logger.debug(msg)
-        return (r.return_code, r.stdout, r.stderr)
+        return (r.returncode, r.stdout, r.stderr)
 
     @abstractmethod
     def _pre_get_random(self, **kwargs):
@@ -270,10 +272,74 @@ class Project(ABC):
         """
         pass
 
-    build = partialmethod(_make, "build", "Compilation")
-    """
-    Build the project.
-    """
+    def build(self) -> Tuple[int, str, str]:
+        """
+        Build the project.
+        """
+        if self.serapi_options is None:
+            _, rcode, stdout, stderr = self.build_and_get_iqr()
+            return rcode, stdout, stderr
+        else:
+            return self._make("build", "Compilation")
+
+    def build_and_get_iqr(self) -> Tuple[str, int, str, str]:
+        """
+        Build project and get IQR options, simultaneously.
+
+        Invoking this function will replace any serapi_options already
+        present in the metadata.
+
+        Returns
+        -------
+        str
+            The IQR flags string that should be stored in serapi_options
+        int
+            The return code of the last-executed command
+        str
+            The total stdout of all commands run
+        str
+            The total stderr of all commands run
+        """
+        contexts: List[CoqContext] = []
+        stdout_out = ""
+        stderr_out = ""
+        env = self.opam_switch.environ
+        for cmd in self.build_cmd:
+            if "make" in cmd.lower() or "dune" in cmd.lower():
+                context, rcode_out, stdout, stderr = strace_build(
+                    cmd,
+                    workdir=self.path,
+                    env=env)
+                contexts += context
+            else:
+                r = bash.run(cmd, cwd=self.path, env=env)
+                rcode_out = r.returncode
+                stdout = r.stdout
+                stderr = r.stderr
+                logging.debug(
+                    f"Command {cmd} finished with return code {r.returncode}.")
+            stdout_out = os.linesep.join((stdout_out, stdout))
+            stderr_out = os.linesep.join((stderr_out, stderr))
+            # Emulate the behavior of _make where commands are joined by
+            # &&.
+            if rcode_out:
+                break
+
+        def or_(x, y):
+            return x | y
+
+        serapi_options = str(
+            reduce(
+                or_,
+                [c.iqr for c in contexts],
+                IQR(set(),
+                    set(),
+                    set(),
+                    self.path)))
+        self.metadata_storage.update(
+            self.metadata,
+            serapi_options=serapi_options)
+        return serapi_options, rcode_out, stdout_out, stderr_out
 
     clean = partialmethod(_make, "clean", "Cleaning")
     """

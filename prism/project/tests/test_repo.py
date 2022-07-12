@@ -1,5 +1,7 @@
 """
 Test module for prism.project.repo module.
+""" """
+Test module for prism.data.project module.
 """
 import itertools
 import os
@@ -12,6 +14,7 @@ from prism.project import ProjectRepo, SentenceExtractionMethod
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import CommitIterator, CommitTraversalStrategy
+from prism.tests import _MINIMAL_METADATA, _MINIMAL_METASTORAGE
 
 TEST_DIR = os.path.dirname(__file__)
 PROJECT_DIR = os.path.dirname(TEST_DIR)
@@ -170,6 +173,95 @@ class TestCommitIter(unittest.TestCase):
         for project_name, repo in cls.repos.items():
             del repo
             shutil.rmtree(os.path.join(cls.repo_paths[project_name]))
+
+
+class TestProjectRepo(unittest.TestCase):
+    """
+    Class for testing `ProjectRepo`.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        """
+        Resolve the module path and clone CompCert repo.
+        """
+        cls.meta_path = _MINIMAL_METADATA
+        cls.metastorage_path = _MINIMAL_METASTORAGE
+        cls.test_path = os.path.dirname(__file__)
+        cls.repo_path = os.path.join(cls.test_path, "CompCert")
+        try:
+            cls.test_repo = git.Repo.clone_from(
+                "https://github.com/AbsInt/CompCert.git",
+                cls.repo_path)
+        except git.GitCommandError:
+            cls.test_repo = git.Repo(cls.repo_path)
+        # Checkout HEAD of master as of March 14, 2022
+        cls.master_hash = "9d3521b4db46773239a2c5f9f6970de826075508"
+        cls.test_repo.git.checkout(cls.master_hash)
+        cls.meta_storage = MetadataStorage.load(cls.metastorage_path)
+        cls.project = ProjectRepo(
+            cls.repo_path,
+            cls.meta_storage,
+            sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
+
+    def test_get_file(self):
+        """
+        Ensure get_file method returns a file as expected.
+        """
+        file_object = self.project.get_file(
+            os.path.join(self.repo_path,
+                         "cfrontend",
+                         "Ctypes.v"),
+            self.master_hash)
+        self.assertEqual(
+            file_object.abspath,
+            os.path.join(self.repo_path,
+                         "cfrontend",
+                         "Ctypes.v"))
+        self.assertGreater(len(file_object.source_code), 0)
+
+    def test_get_random_commit(self):
+        """
+        Ensure a sensible commit object is returned.
+        """
+        commit_hash = self.project.get_random_commit()
+        self.assertEqual(len(commit_hash.hexsha), 40)
+
+    def test_get_random_file(self):
+        """
+        Ensure a correctly-formed random file is returned.
+        """
+        random_file = self.project.get_random_file(commit_name=self.master_hash)
+        self.assertTrue(random_file.abspath.endswith(".v"))
+        self.assertGreater(len(random_file.source_code), 0)
+
+    def test_get_random_sentence(self):
+        """
+        Ensure a properly-formed random sentence is returned.
+        """
+        random_sentence = self.project.get_random_sentence(
+            commit_name=self.master_hash)
+        self.assertIsInstance(random_sentence, str)
+        self.assertTrue(random_sentence.endswith('.'))
+
+    def test_get_random_sentence_pair(self):
+        """
+        Ensure correctly-formed sentence pairs are returned.
+        """
+        random_pair = self.project.get_random_sentence_pair_adjacent(
+            commit_name=self.master_hash)
+        for sentence in random_pair:
+            self.assertIsInstance(sentence, str)
+            self.assertTrue(sentence.endswith('.'))
+            self.assertGreater(len(sentence), 0)
+
+    @classmethod
+    def tearDownClass(cls):
+        """
+        Remove the cloned CompCert repo.
+        """
+        del cls.test_repo
+        shutil.rmtree(os.path.join(cls.repo_path))
 
 
 if __name__ == "__main__":

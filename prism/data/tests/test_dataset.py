@@ -1,5 +1,5 @@
 """
-Test module for prism.data.coqgym.dataset module.
+Test module for prism.data.dataset module.
 """
 import os
 import shutil
@@ -7,15 +7,15 @@ import unittest
 
 import git
 
-from prism.data.dataset import CoqGymBaseDataset
+from prism.data.dataset import CoqProjectBaseDataset
 from prism.project import ProjectDir, ProjectRepo, SentenceExtractionMethod
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 
 
-class TestCoqGymBaseDataset(unittest.TestCase):
+class TestCoqProjectBaseDataset(unittest.TestCase):
     """
-    Tests for `CoqGymBaseDataset`.
+    Tests for `CoqProjectBaseDataset`.
     """
 
     @classmethod
@@ -67,7 +67,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
                 cls.master_hashes[project_name],
                 cls.metadata_storage,
                 sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
-        cls.dataset = CoqGymBaseDataset(
+        cls.dataset = CoqProjectBaseDataset(
             project_class=ProjectRepo,
             projects=cls.projects)
 
@@ -141,7 +141,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         """
         Test instantiation with `ProjectDir` using `base_dir` arg.
         """
-        dataset = CoqGymBaseDataset(
+        dataset = CoqProjectBaseDataset(
             project_class=ProjectDir,
             base_dir=self.test_path,
             metadata_storage=MetadataStorage(),
@@ -157,7 +157,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         """
         Test instantiation with `ProjectDir` using `base_dir` arg.
         """
-        dataset = CoqGymBaseDataset(
+        dataset = CoqProjectBaseDataset(
             project_class=ProjectDir,
             dir_list=self.repo_paths.values(),
             metadata_storage=MetadataStorage(),
@@ -173,7 +173,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         """
         Test instantiation with `ProjectRepo` using `base_dir` arg.
         """
-        dataset = CoqGymBaseDataset(
+        dataset = CoqProjectBaseDataset(
             project_class=ProjectRepo,
             base_dir=self.test_path,
             metadata_storage=MetadataStorage(),
@@ -190,7 +190,7 @@ class TestCoqGymBaseDataset(unittest.TestCase):
         """
         Test instantiation with `ProjectRepo` using `base_dir` arg.
         """
-        dataset = CoqGymBaseDataset(
+        dataset = CoqProjectBaseDataset(
             project_class=ProjectRepo,
             dir_list=self.repo_paths.values(),
             metadata_storage=MetadataStorage(),

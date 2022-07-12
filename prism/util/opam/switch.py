@@ -64,23 +64,6 @@ class OpamSwitch:
         return self.name
 
     @cached_property
-    def _environ(self) -> Dict[str, str]:
-        """
-        Get the complete environment suitable for use with `subprocess`.
-        """
-        environ = dict(os.environ)
-        new_path = self.env.pop('PATH', None)
-        environ.update(self.env)
-        if new_path is not None:
-            self.env.update({'PATH': new_path})
-            environ['PATH'] = os.pathsep.join([new_path, environ['PATH']])
-        if self.root is not None:
-            environ['OPAMROOT'] = self.root
-        if self.name is not None:
-            environ['OPAMSWITCH'] = self.name
-        return environ
-
-    @cached_property
     def env(self) -> Dict[str, str]:
         """
         Get the environment for this switch.
@@ -107,6 +90,23 @@ class OpamSwitch:
             var, val = env.strip().split("=", maxsplit=1)
             opam_env[var] = val.strip("'")
         return opam_env
+
+    @property
+    def environ(self) -> Dict[str, str]:
+        """
+        Get the complete environment suitable for use with `subprocess`.
+        """
+        environ = dict(os.environ)
+        new_path = self.env.pop('PATH', None)
+        environ.update(self.env)
+        if new_path is not None:
+            self.env.update({'PATH': new_path})
+            environ['PATH'] = os.pathsep.join([new_path, environ['PATH']])
+        if self.root is not None:
+            environ['OPAMROOT'] = self.root
+        if self.name is not None:
+            environ['OPAMSWITCH'] = self.name
+        return environ
 
     def add_repo(self, repo_name: str, repo_addr: Optional[str] = None) -> None:
         """
@@ -307,13 +307,14 @@ class OpamSwitch:
             command: str,
             check: bool = True,
             env: Optional[Dict[str,
-                               str]] = None) -> CompletedProcess:
+                               str]] = None,
+            **kwargs) -> CompletedProcess:
         """
         Run a given command and check for errors.
         """
         if env is None:
-            env = self._environ
-        r = bash.run(command, env=env)
+            env = self.environ
+        r = bash.run(command, env=env, **kwargs)
         if check:
             self.check_returncode(command, r)
         return r

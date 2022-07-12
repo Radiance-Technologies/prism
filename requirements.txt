@@ -5,3 +5,4 @@ prettytable
 pytest
 pytest-cov
 seutil >= 0.7.1
+strace-parser
