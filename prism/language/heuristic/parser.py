@@ -664,7 +664,7 @@ class HeuristicParser:
             "Heuristic proof extraction not yet implemented")
 
     @classmethod
-    def parse_sentences(
+    def parse_sentences_from_file(
             cls,
             file_path: str,
             encoding: str = 'utf-8',
@@ -699,10 +699,13 @@ class HeuristicParser:
             file_path,
             CoqParser.parse_source(file_path),
             project_path=project_path)
-        return cls.parse_sentences_from_source(document, encoding, glom_proofs)
+        return cls.parse_sentences_from_document(
+            document,
+            encoding,
+            glom_proofs)
 
     @classmethod
-    def parse_sentences_from_source(
+    def parse_sentences_from_document(
             cls,
             document: CoqDocument,
             encoding: str = 'utf-8',
@@ -732,10 +735,6 @@ class HeuristicParser:
             flag.
         """
         file_contents = document.source_code
-        if isinstance(document.source_code, bytes):
-            file_contents = CoqParser.decode_byte_string(
-                file_contents,
-                encoding)
         sentences = cls._get_sentences(file_contents)
         stats = cls._compute_sentence_statistics(sentences)
         if glom_proofs:
@@ -751,7 +750,7 @@ class SerAPIParser(HeuristicParser):
     """
 
     @classmethod
-    def parse_sentences_from_source(
+    def parse_sentences_from_document(
             cls,
             document: CoqDocument,
             _encoding: str = "utf-8",

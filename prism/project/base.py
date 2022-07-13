@@ -504,7 +504,7 @@ class Project(ABC):
             sentences, with proofs glommed (or not) depending on input
             flag.
         """
-        return sentence_extraction_method.parser().parse_sentences_from_source(
-            document,
-            encoding,
-            glom_proofs)
+        return sentence_extraction_method.parser(
+        ).parse_sentences_from_document(document,
+                                        encoding,
+                                        glom_proofs)
