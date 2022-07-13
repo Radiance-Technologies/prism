@@ -71,7 +71,8 @@ class SexpParser:
             The deserialized representation of the given s-expression.
         """
         sexp, end_pos = cls.parse_recur(sexp_str, 0)
-        if end_pos != len(sexp_str):
+        remainder = sexp_str[end_pos :]
+        if remainder and not remainder.isspace():
             cls.logger.warning(
                 "Parsing did not terminate at the last character! "
                 f"({end_pos}/{len(sexp_str)})")
