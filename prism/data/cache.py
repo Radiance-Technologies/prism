@@ -11,8 +11,8 @@ from typing import Optional, Set
 
 import seutil as su
 
-from prism.project.metadata import ProjectMetadata
 from prism.language.gallina.analyze import SexpInfo
+from prism.project.metadata import ProjectMetadata
 
 
 @dataclass
