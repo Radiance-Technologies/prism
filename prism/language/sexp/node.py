@@ -40,7 +40,7 @@ class SexpNode(abc.ABC):
 
     @abc.abstractmethod
     def __deepcopy__(self, memodict=None) -> 'SexpNode':  # noqa: D105
-        raise NotImplementedError
+        ...
 
     def __getitem__(self, index: int) -> 'SexpNode':
         """
@@ -75,6 +75,10 @@ class SexpNode(abc.ABC):
 
         return children[index]
 
+    @abc.abstractmethod
+    def __eq__(self, other: 'SexpNode') -> bool:  # noqa: D105
+        ...
+
     def __len__(self) -> int:
         """
         Get the number of immediate children.
@@ -94,7 +98,7 @@ class SexpNode(abc.ABC):
         """
         Get a representation of this subtree as an s-expression.
         """
-        pass
+        ...
 
     @abc.abstractmethod
     def contains_str(self, s: str) -> bool:
@@ -106,7 +110,7 @@ class SexpNode(abc.ABC):
         bool
             The number of nodes in the tree rooted at this `SexpNode`.
         """
-        pass
+        ...
 
     @property
     def content(self) -> str:
@@ -162,7 +166,7 @@ class SexpNode(abc.ABC):
         int
             The height of the tree rooted at this `SexpNode`.
         """
-        pass
+        ...
 
     @property
     @abc.abstractmethod
@@ -175,7 +179,7 @@ class SexpNode(abc.ABC):
         int
             The number of nodes in the tree rooted at this `SexpNode`.
         """
-        pass
+        ...
 
     @property
     @abc.abstractmethod
@@ -188,7 +192,7 @@ class SexpNode(abc.ABC):
         int
             The number of leaves in the tree rooted at this `SexpNode`.
         """
-        pass
+        ...
 
     @abc.abstractmethod
     def apply_recur(self, func: Callable[["SexpNode"], RecurAction]) -> None:
@@ -201,7 +205,7 @@ class SexpNode(abc.ABC):
             A function that must necessarily modify its given `SexpNode`
             in-place or modifies variables in its closure.
         """
-        pass
+        ...
 
     def backward_depth_first_sequence(
         self,
@@ -288,7 +292,7 @@ class SexpNode(abc.ABC):
             The (possibly `children_filtering_func`-modified) content
             of this node's filtered subtree.
         """
-        pass
+        ...
 
     def get_children(self) -> Optional[List["SexpNode"]]:
         """
@@ -384,7 +388,7 @@ class SexpNode(abc.ABC):
             The modified s-expression to replace this s-expression node,
             or None if deleting this node from parent list.
         """
-        pass
+        ...
 
     @abc.abstractmethod
     def pretty_format(self, max_depth: int = np.PINF) -> str:
@@ -396,7 +400,7 @@ class SexpNode(abc.ABC):
         str
             A pretty human-readable string for this s-expression.
         """
-        pass
+        ...
 
     def serialize(self) -> str:
         """
@@ -414,7 +418,7 @@ class SexpNode(abc.ABC):
         """
         Convert this s-expression to Python lists and strings.
         """
-        pass
+        ...
 
     @classmethod
     def deserialize(cls, data: str) -> 'SexpNode':

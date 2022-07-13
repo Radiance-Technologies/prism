@@ -27,6 +27,12 @@ class SexpList(SexpNode):
     def __deepcopy__(self, memodict=None) -> 'SexpList':  # noqa: D105
         return SexpList([copy.deepcopy(c) for c in self.children])
 
+    def __eq__(self, other: SexpNode) -> bool:  # noqa: D105
+        if not isinstance(other, SexpNode):
+            return NotImplemented
+        else:
+            return other.is_list() and self.children == other.children
+
     def __str__(self) -> str:  # noqa: D105
         s = "("
         last_is_str = False
