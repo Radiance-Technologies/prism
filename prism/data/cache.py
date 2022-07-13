@@ -7,17 +7,18 @@ import queue
 from dataclasses import dataclass
 from multiprocessing import Process, Queue
 from pathlib import Path
-from typing import List
+from typing import Optional, Set
 
 import seutil as su
 
 from prism.project.metadata import ProjectMetadata
+from prism.language.gallina.analyze import SexpInfo
 
 
-@dataclass(frozen=True)
-class RepairMiningCache:
+@dataclass
+class RepairMiningCacheEntry:
     """
-    Dataclass representing repair mining cache objects.
+    Dataclass representing repair mining cache entries.
     """
 
     identifier: str
@@ -26,20 +27,19 @@ class RepairMiningCache:
     object being cached
     """
     object_type: str
-    """The type of Coq entity represented by this cache object"""
+    """The type of Coq entity represented by this cache entry"""
     file_path: Path
-    """Path to the file from which this cached block was created"""
-    line_numbers: List[int]
-    """Line numbers from which this cached block was created"""
-    sertop_success: bool
     """
-    True if this code segment successfully runs under sertop; False
-    if this code segment fails to run under sertop
+    Path (relative to the project root) to the file from which this
+    cache entry was created
     """
-    project_metadata: ProjectMetadata
+    line_numbers: SexpInfo.Loc
+    """Coq file location from which this cache entry was created"""
+    sertop_outcome: Optional[str]
     """
-    Metadata associated with the project this cache object was
-    extracted from
+    If this code segment successfully runs under sertop, the value is
+    `None`. Otherwise, the value is the error message produced by sertop
+    when running the segment.
     """
 
     def dump(
@@ -85,7 +85,22 @@ class RepairMiningCache:
         return cache
 
 
-class RepairMiningCacheStorage:
+@dataclass
+class RepairMiningCacheFile:
+    """
+    Object that reflects the contents of a repair mining cache file.
+    """
+
+    project_metadata: ProjectMetadata
+    """
+    Metadata associated with the project this cache object was
+    extracted from
+    """
+    cache_entries: Set[RepairMiningCacheEntry]
+    """Set of cache entries reflected in this cache file"""
+
+
+class RepairMiningCache:
     """
     Object regulating access to repair mining cache on disk.
 
@@ -109,7 +124,6 @@ class RepairMiningCacheStorage:
         Root folder of repair mining cache structure
     op_queue : Queue
         Multiprocessing queue for operations on on-disk cache
-    status_pipe
     """
 
     def __init__(self, root: os.PathLike):
