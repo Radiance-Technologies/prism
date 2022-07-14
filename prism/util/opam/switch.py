@@ -435,7 +435,7 @@ class OpamSwitch:
                     finally:
                         # restore original directories
                         os.rename(dest, src)
-                        os.rename(tmp, src)
+                        os.rename(tmp, dest)
                 else:
                     raise
         return r
