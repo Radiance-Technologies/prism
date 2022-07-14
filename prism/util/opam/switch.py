@@ -36,7 +36,7 @@ class OpamSwitch:
 
     _whitespace_regex: ClassVar[re.Pattern] = re.compile(r"\s+")
     _newline_regex: ClassVar[re.Pattern] = re.compile("\n")
-    _external_dirname: str = "_opam"
+    _external_dirname: ClassVar[str] = "_opam"
     switch_name: InitVar[Optional[str]] = None
     """
     The name of the switch, by default None.
@@ -75,10 +75,10 @@ class OpamSwitch:
         """
         if switch_name is None:
             # get the name of the current default (global) switch
-            switch_name = bash.run("opam var switch").stdout
+            switch_name = bash.run("opam var switch").stdout.strip()
         if switch_root is None:
             # get the name of the current default root
-            switch_root = bash.run("opam var root").stdout
+            switch_root = bash.run("opam var root").stdout.strip()
         if self.is_external(switch_name):
             # ensure local switch name is unambiguous
             switch_name = str(Path(switch_name).absolute())
@@ -169,6 +169,8 @@ class OpamSwitch:
         origin = original_prefix.name
         if origin == self._external_dirname:
             origin = str(original_prefix.parent)
+        if origin == self.name:
+            origin = None
         return origin
 
     @cached_property
@@ -425,7 +427,7 @@ class OpamSwitch:
         """
         # based on `get_root` at src/format/opamSwitch.ml in Opam's
         # GitHub repository
-        if cls._is_external(name):
+        if cls.is_external(name):
             path = Path(name).absolute() / cls._external_dirname
         else:
             path = Path(root) / name
