@@ -2,7 +2,6 @@
 Test suite for prism.util.opam.
 """
 import unittest
-from subprocess import CalledProcessError
 
 from prism.util.opam import OpamAPI, OpamSwitch
 
@@ -14,6 +13,68 @@ class TestOpamAPI(unittest.TestCase):
 
     test_switch_name = "test_switch"
     ocaml_version = "4.07.1"
+    clone = None
+
+    def test_clone_switch(self):
+        """
+        Verify that switches can be cloned and used.
+        """
+        clone = OpamAPI.clone_switch(
+            self.test_switch_name,
+            "test_cloned_switch")
+        with self.subTest("install"):
+            self.assertIsNone(clone.get_installed_version("coq-shell"))
+            clone.install("coq-shell", version='1', yes=True)
+            version = clone.get_installed_version("coq-shell")
+            self.assertEqual(version, "1")
+            version = clone.get_installed_version("ocaml")
+            self.assertEqual(version, self.ocaml_version)
+        with self.subTest("sandbox-install-forward"):
+            # verify that the original switch is isolated from the clone
+            self.assertIsNone(
+                self.test_switch.get_installed_version("coq-shell"))
+            self.test_switch.install("coq-shell", version='1', yes=True)
+            version = self.test_switch.get_installed_version("coq-shell")
+            self.assertEqual(version, "1")
+        with self.subTest("sandbox-install-backward"):
+            # verify that the clone is isolated from the original switch
+            self.test_switch.install("conf-dpkg", version='1', yes=True)
+            self.assertIsNone(clone.get_installed_version("conf-dpkg"))
+            clone.install("conf-dpkg", version='1', yes=True)
+            version = clone.get_installed_version("conf-dpkg")
+            self.assertEqual(version, "1")
+        with self.subTest("remove"):
+            clone.remove_pkg("coq-shell")
+            self.assertIsNone(clone.get_installed_version("coq-shell"))
+            self.test_switch.remove_pkg("conf-dpkg")
+            self.assertIsNone(
+                self.test_switch.get_installed_version("conf-dpkg"))
+        with self.subTest("sandbox-remove"):
+            self.assertIsNotNone(clone.get_installed_version("conf-dpkg"))
+            self.assertIsNotNone(
+                self.test_switch.get_installed_version("coq-shell"))
+        with self.subTest("sandbox-repo-forward"):
+            # verify that the original switch is isolated from the clone
+            clone.add_repo("coq-released", "https://coq.inria.fr/opam/released")
+            r = self.test_switch.run("opam repo list")
+            r.check_returncode()
+            returned = r.stdout
+            self.assertFalse(
+                "coq-released "
+                "https://coq.inria.fr/opam/released" in returned)
+            clone.remove_repo("coq-released")
+        with self.subTest("sandbox-repo-backward"):
+            # verify that the clone is isolated from the original switch
+            self.test_switch.add_repo(
+                "coq-released",
+                "https://coq.inria.fr/opam/released")
+            r = clone.run("opam repo list")
+            r.check_returncode()
+            returned = r.stdout
+            self.assertFalse(
+                "coq-released "
+                "https://coq.inria.fr/opam/released" in returned)
+            self.test_switch.remove_repo("coq-released")
 
     def test_create_switch(self):
         """
@@ -61,10 +122,11 @@ class TestOpamAPI(unittest.TestCase):
         Doubles as test for switch removal.
         """
         OpamAPI.remove_switch(cls.test_switch)
-        with cls.assertRaises(TestOpamAPI(), CalledProcessError):
+        with cls.assertRaises(TestOpamAPI(), ValueError):
             OpamAPI.remove_switch(cls.test_switch)
-        with cls.assertRaises(TestOpamAPI(), CalledProcessError):
+        with cls.assertRaises(TestOpamAPI(), ValueError):
             OpamAPI.remove_switch(cls.test_switch_name)
+        OpamAPI.remove_switch("test_cloned_switch")
 
 
 if __name__ == '__main__':
