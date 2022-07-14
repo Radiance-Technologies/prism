@@ -77,7 +77,7 @@ class OpamAPI:
             If a switch with the given name already exists.
         """
         if isinstance(compiler, str):
-            compiler = OCamlVersion.parse(compiler)
+            compiler = f"ocaml-base-compiler.{OCamlVersion.parse(compiler)}"
         command = f'opam switch create {switch_name} {compiler}'
         r = cls.run(command, check=False, opam_root=opam_root)
         if (r.returncode == 2
