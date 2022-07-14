@@ -2,7 +2,6 @@
 Module for looping over dataset and extracting caches.
 """
 import os
-
 from typing import Callable, Iterable
 
 from tqdm.contrib.concurrent import process_map
@@ -29,10 +28,14 @@ class ProjectLooper:
     Loop through all commits in all projects.
     """
 
-    def __init__(self, 
-                 dataset: CoqProjectBaseDataset,
-                 get_commit_iterator : Callable[[ProjectRepo], Iterable[str]],
-                 process_commit : Callable[[ProjectRepo, str], None]):
+    def __init__(
+            self,
+            dataset: CoqProjectBaseDataset,
+            get_commit_iterator: Callable[[ProjectRepo],
+                                          Iterable[str]],
+            process_commit: Callable[[ProjectRepo,
+                                      str],
+                                     None]):
         """
         Initialize ProjectLooper object.
 
@@ -49,7 +52,7 @@ class ProjectLooper:
             top-level of a module, and cannot be a lambda.
 
         process_commit : Callable[[ProjectRepo, str], None]
-            Function for performing an operation on or with a 
+            Function for performing an operation on or with a
             project at a given commit. Must be declared at the
             top-level of a module, and cannot be a lambda.
         """
@@ -62,13 +65,14 @@ class ProjectLooper:
         Run looping functionality.
         """
         projects = list(self.dataset.projects.values())
-        job_list = [(x, 
-                     self.get_commit_iterator, 
-                     self.process_commit, 
-                     working_dir) for x in projects]
+        job_list = [
+            (x,
+             self.get_commit_iterator,
+             self.process_commit,
+             working_dir) for x in projects
+        ]
         process_map(
             loop_action,
             job_list,
             max_workers=num_workers,
             desc="Cache extraction")
-

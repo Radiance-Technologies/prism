@@ -13,14 +13,16 @@ from prism.project import ProjectRepo, SentenceExtractionMethod
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 
+
 def get_commit_iterator(p):
     print("Repo name: ", p.name)
     return [p.commit().hexsha]
 
+
 def process_commit(p, c):
-            print("Repo!: ", p.name)
-            p.git.checkout(c)
-            p.build()
+    print("Repo!: ", p.name)
+    p.git.checkout(c)
+    p.build()
 
 
 class DatasetFactory:
@@ -136,9 +138,10 @@ class TestProjectLooper(unittest.TestCase):
         """
         Test instantiation with `ProjectRepo`.
         """
-        project_looper = ProjectLooper(self.tester.dataset, 
-                                       get_commit_iterator,
-                                       process_commit)
+        project_looper = ProjectLooper(
+            self.tester.dataset,
+            get_commit_iterator,
+            process_commit)
         project_looper(self.tester.test_path)
 
 
