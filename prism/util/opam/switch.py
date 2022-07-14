@@ -423,7 +423,7 @@ class OpamSwitch:
                         "Are you running in an unprivileged Docker container? "
                         "Falling back to terrible alternative. ")
                     # temporarily switch clone and origin directories
-                    tmp = dest + "-temp"
+                    tmp = str(dest) + "-temp"
                     os.rename(dest, tmp)
                     os.rename(src, dest)
                     r = bash.run(
