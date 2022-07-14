@@ -51,21 +51,25 @@ class OpamSwitch:
     Equivalent to setting ``$OPAMROOT`` to `root`.
     """
 
-    def __init__(self,name=None,root=None):
+    def __init__(self, name=None, root=None):
 
         if (root is None):
             root = Path("~/.opam").expanduser()
         if (name is None):
             # figuring out the current switch...
-            m = re.search(r"switch *: *\"([^\"]+)\"",(root/"config").read_text())
+            m = re.search(
+                r"switch *: *\"([^\"]+)\"",
+                (root / "config").read_text())
             if (m is None):
-                raise ValueError("Can't figure out what switch is being used automatically. Was opam initialized?")
+                raise ValueError(
+                    "Can't figure out what switch is being used automatically."
+                    + " Was opam initialized?")
             name = m.group(1)
 
         # this is horrid, but this is the recommended way to
         # initialize values of a frozen class (see PEP557)
-        object.__setattr__(self,"root",root)
-        object.__setattr__(self,"name",name)
+        object.__setattr__(self, "root", root)
+        object.__setattr__(self, "name", name)
 
         # force computation of environment to validate switch exists
         self.env
@@ -93,9 +97,8 @@ class OpamSwitch:
         """
         opam_env = {}
 
-        r = (
-            Path(self.root)/
-            self.name / '.opam-switch/environment').read_text()
+        r = (Path(self.root) / self.name
+             / '.opam-switch/environment').read_text()
 
         envs: List[str] = r.split('\n')[::-1]
         for env in envs:
@@ -116,11 +119,11 @@ class OpamSwitch:
         if new_path is not None:
             self.env.update({'PATH': new_path})
             environ['PATH'] = os.pathsep.join([new_path, environ['PATH']])
-        
+
         environ['OPAMROOT'] = self.root
 
         environ['OPAMSWITCH'] = Path(self.env["OPAM_SWITCH_PREFIX"]).name
-        
+
         return environ
 
     def add_repo(self, repo_name: str, repo_addr: Optional[str] = None) -> None:
