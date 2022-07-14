@@ -84,7 +84,7 @@ class OpamSwitch:
             switch_name = str(Path(switch_name).absolute())
         object.__setattr__(self, 'name', switch_name)
         object.__setattr__(self, 'root', switch_root)
-        object.__setattr__(self, '_is_external', self.is_external(self._name))
+        object.__setattr__(self, '_is_external', self.is_external(self.name))
         # force computation of environment to validate switch exists
         self.env
 
