@@ -15,12 +15,16 @@ from prism.project.metadata.storage import MetadataStorage
 
 
 def get_commit_iterator(p):
-    print("Repo name: ", p.name)
+    """
+    Get commit iterator (this is an example).
+    """
     return [p.commit().hexsha]
 
 
 def process_commit(p, c):
-    print("Repo!: ", p.name)
+    """
+    Process commit (this is an example).
+    """
     p.git.checkout(c)
     p.build()
 
