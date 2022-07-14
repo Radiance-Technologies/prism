@@ -21,7 +21,7 @@ stages:
 
 before_script:
   - apt-get -y update
-  - apt-get -y install pkg-config make opam strace
+  - apt-get -y install pkg-config make opam strace bubblewrap
   - pip install virtualenv
   - virtualenv venv
   - source venv/bin/activate
