@@ -417,7 +417,7 @@ class OpamSwitch:
                     "bwrap: Creating new namespace failed: "
                     "Operation not permitted")
                 if (_allow_unsafe_clone and self.is_clone and r.returncode == 1
-                        and r.stderr == permission_error):
+                        and r.stderr.strip() == permission_error):
                     warnings.warn(
                         "Unable to invoke 'bwrap'. "
                         "Are you running in an unprivileged Docker container? "
