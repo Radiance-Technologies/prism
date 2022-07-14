@@ -196,7 +196,7 @@ class OpamAPI:
             # that's bad.
             raise NotImplementedError("won't remove cloned switch")
             # i hesitate to write my own "rm -rf" procedure for clones.
-        
+
         cls.run(f'opam switch remove {switch.name} -y', opam_root=opam_root)
 
     @classmethod
