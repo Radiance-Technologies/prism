@@ -64,7 +64,6 @@ class OpamAPI:
         OpamSwitch
             The created switch.
 
-
         Raises
         ------
         subprocess.CalledProcessError
