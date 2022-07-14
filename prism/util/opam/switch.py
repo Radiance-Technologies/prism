@@ -398,7 +398,9 @@ class OpamSwitch:
                 # we need a mountpoint.
                 # maybe the original clone was deleted?
                 dest.mkdir()
-            command = f'bwrap --dev-bind / / --bind {src} {dest} -- {command}'
+            command = (
+                'bwrap --cap-add CAP_SYS_ADMIN --dev-bind / / '
+                f'--bind {src} {dest} -- {command}')
         r = bash.run(command, env=env, **kwargs)
         if check:
             self.check_returncode(command, r)
