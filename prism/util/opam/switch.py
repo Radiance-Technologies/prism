@@ -20,7 +20,7 @@ logger = logging.getLogger(__file__)
 logger.setLevel(logging.DEBUG)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class OpamSwitch:
     """
     An OPAM switch.
@@ -51,10 +51,22 @@ class OpamSwitch:
     Equivalent to setting ``$OPAMROOT`` to `root`.
     """
 
-    def __post_init__(self) -> None:
-        """
-        Perform validation.
-        """
+    def __init__(self,name=None,root=None):
+
+        if (root is None):
+            root = Path("~/.opam").expanduser()
+        if (name is None):
+            # figuring out the current switch...
+            m = re.search(r"switch *: *\"([^\"]+)\"",(root/"config").read_text())
+            if (m is None):
+                raise ValueError("Can't figure out what switch is being used automatically. Was opam initialized?")
+            name = m.group(1)
+
+        # this is horrid, but this is the recommended way to
+        # initialize values of a frozen class (see PEP557)
+        object.__setattr__(self,"root",root)
+        object.__setattr__(self,"name",name)
+
         # force computation of environment to validate switch exists
         self.env
 
@@ -82,8 +94,8 @@ class OpamSwitch:
         opam_env = {}
 
         r = (
-            Path(self.root or '~/.opam/').expanduser() /
-            (self.name or 'default') / '.opam-switch/environment').read_text()
+            Path(self.root)/
+            self.name / '.opam-switch/environment').read_text()
 
         envs: List[str] = r.split('\n')[::-1]
         for env in envs:
@@ -104,11 +116,11 @@ class OpamSwitch:
         if new_path is not None:
             self.env.update({'PATH': new_path})
             environ['PATH'] = os.pathsep.join([new_path, environ['PATH']])
-        if self.root is not None:
-            environ['OPAMROOT'] = self.root
+        
+        environ['OPAMROOT'] = self.root
 
         environ['OPAMSWITCH'] = Path(self.env["OPAM_SWITCH_PREFIX"]).name
-
+        
         return environ
 
     def add_repo(self, repo_name: str, repo_addr: Optional[str] = None) -> None:
@@ -327,12 +339,11 @@ class OpamSwitch:
         if env is None:
             env = self.environ
 
-        opam_root = Path(self.root or '~/.opam').expanduser()
-        real_name = self.name or 'default'
-        if real_name != self.parent:
+        opam_root = Path(self.root)
+        if self.name != self.parent:
             # this is a clone and it needs to be mounted
             # at the location it thinks it is at.
-            src = opam_root / real_name
+            src = opam_root / self.name
             dest = opam_root / self.parent
 
             # out of excessive caution,
@@ -340,11 +351,11 @@ class OpamSwitch:
             # crazy like a switch called ".."
             # or "../././/."
             # before we bind mount to it.
-            if (Path(real_name) == Path("..")
+            if (Path(self.name) == Path("..")
                     or Path(self.parent) == Path("..")):
                 raise ValueError("Illegal name for opam switch: '..'.")
             # also, that it's not a directory.
-            if (len(Path(real_name).parts) != 1
+            if (len(Path(self.name).parts) != 1
                     or len(Path(self.parent).parts) != 1):
                 raise ValueError("Was given a switch named like a directory.")
 

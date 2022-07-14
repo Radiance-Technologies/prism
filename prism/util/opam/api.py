@@ -187,17 +187,17 @@ class OpamAPI:
             indicated switch does not exist.
         """
         if isinstance(switch, str):
-            switch = OpamSwitch(switch, None)
+            switch = OpamSwitch(switch, opam_root)
 
-        if (switch.parent != (switch.name or 'default')):
+        if (switch.parent != switch.name):
             # this is a clone.
             # opam was about to delete the clone
             # AND the mountpoint for the base.
             # that's bad.
             raise NotImplementedError("won't remove cloned switch")
             # i hesitate to write my own "rm -rf" procedure for clones.
-
-        cls.run(f'opam switch remove {switch} -y', opam_root=opam_root)
+        
+        cls.run(f'opam switch remove {switch.name} -y', opam_root=opam_root)
 
     @classmethod
     def run(
