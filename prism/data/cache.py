@@ -10,10 +10,14 @@ from prism.data.dataset import CoqProjectBaseDataset
 from prism.project.repo import ProjectRepo
 
 
-def loop_action(input_tuple: Tuple[ProjectRepo,
-                                   Callable[[ProjectRepo], Iterable[str]],
-                                   Callable[[ProjectRepo, str], None],
-                                   str]):
+def loop_action(
+    input_tuple: Tuple[ProjectRepo,
+                       Callable[[ProjectRepo],
+                                Iterable[str]],
+                       Callable[[ProjectRepo,
+                                 str],
+                                None],
+                       str]):
     """
     Perform a given action on a project with a given iterator generator.
 
@@ -36,7 +40,6 @@ def loop_action(input_tuple: Tuple[ProjectRepo,
         working_dir
             Directory in which all repositories for projects
             are housed.
-
     """
     project, get_commit_iterator, process_commit, working_dir = input_tuple
     os.chdir(working_dir)
