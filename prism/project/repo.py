@@ -64,7 +64,7 @@ class CommitIterator:
 
         Parameters
         ----------
-        repo : prism.ProjectRepo
+        repo : ProjectRepo
             Repo, the commits of which we wish to iterate through.
 
         commit_sha : str

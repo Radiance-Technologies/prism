@@ -7,11 +7,20 @@ import unittest
 
 import git
 
-from prism.data.cache import Looper
+from prism.data.cache import ProjectLooper
 from prism.data.dataset import CoqProjectBaseDataset
 from prism.project import ProjectRepo, SentenceExtractionMethod
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
+
+def get_commit_iterator(p):
+    print("Repo name: ", p.name)
+    return [p.commit().hexsha]
+
+def process_commit(p, c):
+            print("Repo!: ", p.name)
+            p.git.checkout(c)
+            p.build()
 
 
 class DatasetFactory:
@@ -102,9 +111,9 @@ class DatasetFactory:
                 sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
 
 
-class TestLooper(unittest.TestCase):
+class TestProjectLooper(unittest.TestCase):
     """
-    Tests for `Looper`.
+    Tests for `ProjectLooper`.
     """
 
     @classmethod
@@ -123,13 +132,14 @@ class TestLooper(unittest.TestCase):
             del repo
             shutil.rmtree(os.path.join(cls.tester.repo_paths[project_name]))
 
-    def test_looper(self):
+    def test_ProjectLooper(self):
         """
         Test instantiation with `ProjectRepo`.
         """
-        looper = Looper(self.tester.dataset)
-        print(self.tester.test_path)
-        looper(self.tester.test_path)
+        project_looper = ProjectLooper(self.tester.dataset, 
+                                       get_commit_iterator,
+                                       process_commit)
+        project_looper(self.tester.test_path)
 
 
 if __name__ == "__main__":
