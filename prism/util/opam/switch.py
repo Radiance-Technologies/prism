@@ -139,7 +139,7 @@ class OpamSwitch:
 
         environ['OPAMROOT'] = self.root
 
-        environ['OPAMSWITCH'] = self.name
+        environ['OPAMSWITCH'] = self.name if not self.is_clone else self.origin
 
         return environ
 

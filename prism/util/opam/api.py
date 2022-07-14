@@ -160,8 +160,8 @@ class OpamAPI:
             If the original is deleted, then an empty directory will be
             created as a mountpoint for the clones, which will prevent
             you from creating a new switch with the old name.
-
-        Not implemented for clones.
+            Therefore, one must ensure that originals are not deleted
+            independently of their clones.
 
         Parameters
         ----------
@@ -170,29 +170,23 @@ class OpamAPI:
 
         Raises
         ------
-        subprocess.CalledProcessError
-            If the `opam switch remove` command fails, e.g., if the
-            indicated switch does not exist.
+        ValueError
+            If the indicated switch does not exist.
         """
-        if isinstance(switch, str):
-            switch = OpamSwitch(switch, opam_root)
+        if isinstance(switch, OpamSwitch):
+            switch = switch.name
+        # validate switch exists
+        switch = OpamSwitch(switch, opam_root)
         opam_root = switch.root
 
         if switch.is_clone:
-            # this is a clone.
-            # opam was about to delete the clone
-            # AND the mountpoint for the base.
-            # that's bad.
-            # Ensure that the origin is already deleted to proceed.
-            origin_path = OpamSwitch.get_root(opam_root, switch.origin)
-            if origin_path.exists() and any(origin_path.iterdir()):
-                raise NotImplementedError(
-                    "Cloned switches cannot currently be deleted independently "
-                    "from their origin. Delete the origin first, then retry. "
-                    f"Origin: {switch.origin}; Clone: {switch.name}")
-            # i hesitate to write my own "rm -rf" procedure for clones.
-
-        cls.run(f'opam switch remove {switch.name} -y', opam_root=opam_root)
+            # This is a clone, not a registered existing switch.
+            # Opam will refuse to remove it.
+            # Delete the associated directory, taking care not to delete
+            # (follow) any symlinks.
+            shutil.rmtree(switch.path)
+        else:
+            cls.run(f'opam switch remove {switch.name} -y', opam_root=opam_root)
 
     @classmethod
     def run(
@@ -228,9 +222,8 @@ class OpamAPI:
 
         Raises
         ------
-        subprocess.CalledProcessError
-            If the `opam env` comand fails, e.g., if the indicated
-            switch does not exist.
+        ValueError
+            If the indicated switch does not exist.
         """
         cls.active_switch = OpamSwitch(switch_name, opam_root)
 
