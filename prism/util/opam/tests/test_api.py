@@ -4,6 +4,7 @@ Test suite for prism.util.opam.
 import unittest
 
 from prism.util.opam import OpamAPI, OpamSwitch
+from prism.util.opam.switch import _allow_unsafe_clone
 
 
 class TestOpamAPI(unittest.TestCase):
@@ -19,6 +20,7 @@ class TestOpamAPI(unittest.TestCase):
         """
         Verify that switches can be cloned and used.
         """
+        _allow_unsafe_clone.append(True)
         clone = OpamAPI.clone_switch(
             self.test_switch_name,
             "test_cloned_switch")
@@ -75,6 +77,7 @@ class TestOpamAPI(unittest.TestCase):
                 "coq-released "
                 "https://coq.inria.fr/opam/released" in returned)
             self.test_switch.remove_repo("coq-released")
+        _allow_unsafe_clone.pop()
 
     def test_create_switch(self):
         """

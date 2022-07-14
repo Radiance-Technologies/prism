@@ -4,6 +4,7 @@ Provides an object-oriented abstraction of OPAM switches.
 import logging
 import os
 import re
+import warnings
 from dataclasses import InitVar, dataclass, field
 from functools import cached_property
 from os import PathLike
@@ -16,8 +17,16 @@ from seutil import bash
 from .constraint import VersionConstraint
 from .version import OCamlVersion, OpamVersion, Version
 
+__all__ = ['OpamSwitch']
+
 logger = logging.getLogger(__file__)
 logger.setLevel(logging.DEBUG)
+
+_allow_unsafe_clone = []
+# Private module variable to allow fallback in OpamSwitch.run for clones
+# that cannot invoke bwrap in an unprivileged container (e.g., a docker
+# container runner within Gitlab CI)
+# Very hacky and ugly.
 
 
 @dataclass(frozen=True)
@@ -398,12 +407,37 @@ class OpamSwitch:
                 # we need a mountpoint.
                 # maybe the original clone was deleted?
                 dest.mkdir()
-            command = (
-                'bwrap --cap-add CAP_SYS_ADMIN --dev-bind / / '
-                f'--bind {src} {dest} -- {command}')
+            command = f'bwrap --dev-bind / / --bind {src} {dest} -- {command}'
         r = bash.run(command, env=env, **kwargs)
         if check:
-            self.check_returncode(command, r)
+            try:
+                self.check_returncode(command, r)
+            except CalledProcessError:
+                permission_error = (
+                    "bwrap: Creating new namespace failed: "
+                    "Operation not permitted")
+                if (_allow_unsafe_clone and self.is_clone and r.returncode == 1
+                        and r.stderr == permission_error):
+                    warnings.warn(
+                        "Unable to invoke 'bwrap'. "
+                        "Are you running in an unprivileged Docker container? "
+                        "Falling back to terrible alternative. ")
+                    # temporarily switch clone and origin directories
+                    tmp = dest + "-temp"
+                    os.rename(dest, tmp)
+                    os.rename(src, dest)
+                    r = bash.run(
+                        command.split("--")[-1].strip(),
+                        env=env,
+                        **kwargs)
+                    try:
+                        self.check_returncode(command, r)
+                    finally:
+                        # restore original directories
+                        os.rename(dest, src)
+                        os.rename(tmp, src)
+                else:
+                    raise
         return r
 
     @classmethod
