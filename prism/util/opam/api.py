@@ -8,7 +8,6 @@ import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass
 from os import PathLike
-from pathlib import Path
 from typing import ClassVar, Generator, Optional, Union
 
 from .switch import OpamSwitch
@@ -25,6 +24,10 @@ class OpamAPI:
 
     Note that OPAM must be installed to use all of the features of this
     class.
+
+    This class and its counterpart `OpamSwitch` each maintain the global
+    environment as an invariant, i.e., neither ever sets, removes, or
+    modifies any environment variables.
 
     .. warning::
         This class does not yet fully support the full expressivity of
@@ -93,9 +96,14 @@ class OpamAPI:
             cls,
             switch_name: str,
             clone_name: str,
-            opam_root: Optional[PathLike] = None) -> None:
+            opam_root: Optional[PathLike] = None) -> OpamSwitch:
         """
         Clone the indicated switch.
+
+        .. warning::
+            Cloning switches is an unsafe optimization and one should
+            generally not interact with any switches produced in this
+            manner outside the context of `OpamAPI` and `OpamSwitch`.
 
         Parameters
         ----------
@@ -104,6 +112,10 @@ class OpamAPI:
             belonging to the active root.
         clone_name : str
             The name to use for the cloned switch.
+        opam_root : Optional[PathLike]
+            The root of the existing switch and the resulting clone.
+            Support for clones at different roots is currently not
+            available.
 
         Returns
         -------
@@ -113,51 +125,27 @@ class OpamAPI:
         Raises
         ------
         ValueError
-            switch_name doesn't exist
-        or: clone_name already exists
-        or: an invalid switch name was passed in
-        or: tried to clone something that wasn't a switch
+            If `switch_name` is not the name of any existing switch or
+            `clone_name` already exists or is otherwise invalid.
         """
-        # assuming we aren't on windows.
-        # if we are, this is difficult because the opam manual
-        # doesn't even say where the default opam root should be.
-        current_opam_root = Path(opam_root or "~/.opam/").expanduser()
+        # validates that the source switch exists as side-effect
+        origin = OpamSwitch(switch_name, opam_root)
+        opam_root = origin.root
 
-        destination = current_opam_root / clone_name
+        destination = OpamSwitch.get_root(opam_root, clone_name)
 
-        if (len(destination.parents) != len(current_opam_root.parents) + 1
-                or Path(clone_name) == Path("..")):
-            raise ValueError(
-                f"{clone_name} is a path," + " not the name of a switch.")
-
-        # we have to be extremely here.
+        # we have to be extremely careful here.
         # if someone asked for a switch with the name "config"
         # and we carelessly deleted whatever was called "config",
         # it would brick the switch.
         if destination.exists():
             raise ValueError(
-                "The proposed switch name already exists"
-                + " or there's a file with that name."
-                + " Won't delete existing files.")
+                f"The proposed switch name '{clone_name}' already exists"
+                " or there's a file with that name.")
 
-        source = current_opam_root / switch_name
+        shutil.copytree(origin.path, destination, symlinks=True)
 
-        if (len(source.parents) != len(current_opam_root.parents) + 1
-                or Path(switch_name) == Path("..")):
-            raise ValueError(
-                f"{switch_name} is a path, " + "not the name of a switch.")
-
-        if not source.is_dir():
-            raise ValueError(
-                f"Source switch {switch_name} doesn't"
-                + " exist in {current_opam_root}.")
-
-        if not (source / ".opam-switch").is_dir():
-            raise ValueError(f"Source dir {source} doesn't look like a switch.")
-
-        shutil.copytree(source, destination, symlinks=True)
-
-        return OpamSwitch(clone_name, str(current_opam_root))
+        return OpamSwitch(clone_name, opam_root)
 
     @classmethod
     def remove_switch(
@@ -168,10 +156,11 @@ class OpamAPI:
         """
         Remove the indicated switch.
 
-        WARNING: Some switches are used as mountpoints for their clones.
-        If the original is deleted, then an empty directory will be
-        created as a mountpoint for the clones, which will prevent
-        you from creating a new switch with the old name.
+        .. warning::
+            Some switches are used as mountpoints for their clones.
+            If the original is deleted, then an empty directory will be
+            created as a mountpoint for the clones, which will prevent
+            you from creating a new switch with the old name.
 
         Not implemented for clones.
 
@@ -188,13 +177,20 @@ class OpamAPI:
         """
         if isinstance(switch, str):
             switch = OpamSwitch(switch, opam_root)
+        opam_root = switch.root
 
-        if (switch.parent != switch.name):
+        if switch.is_clone:
             # this is a clone.
             # opam was about to delete the clone
             # AND the mountpoint for the base.
             # that's bad.
-            raise NotImplementedError("won't remove cloned switch")
+            # Ensure that the origin is already deleted to proceed.
+            origin_path = OpamSwitch.get_root(opam_root, switch.origin)
+            if origin_path.exists() and any(origin_path.iterdir()):
+                raise NotImplementedError(
+                    "Cloned switches cannot currently be deleted independently "
+                    "from their origin. Delete the origin first, then retry. "
+                    f"Origin: {switch.origin}; Clone: {switch.name}")
             # i hesitate to write my own "rm -rf" procedure for clones.
 
         cls.run(f'opam switch remove {switch.name} -y', opam_root=opam_root)
