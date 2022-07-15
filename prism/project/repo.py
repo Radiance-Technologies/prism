@@ -267,22 +267,17 @@ class ProjectRepo(Repo, Project):
         Project.__init__(self, dir_abspath, *args, **kwargs)
         self.current_commit_name = None  # i.e., HEAD
 
-        name_and_url = (self.name, self.remote_url.split('.git')[0])
         storage = self.metadata_storage
         try:
-            project_revisions = storage.get_project_revisions(*name_and_url)
+            project_revisions = storage.get_project_revisions(self.name,
+                                                              self.remote_url)
         except KeyError:
             project_revisions = set()
 
-        if len(project_revisions) == 1:
-            commit_sha = next(iter(project_revisions))
-        elif commit_sha is None:
-            commit_sha = self.commit().hexsha
-
-        self._original_head = self.commit().hexsha
-
         if commit_sha is not None:
             self.git.checkout(commit_sha)
+        elif len(project_revisions) > 0:
+            self.git.checkout(next(iter(project_revisions)))
 
     @property
     def commit_sha(self) -> str:  # noqa: D102

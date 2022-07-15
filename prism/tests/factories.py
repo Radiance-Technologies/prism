@@ -1,5 +1,5 @@
 """
-Test module for prism.data.dataset module.
+Util module for creating sample objects.
 """
 import os
 import shutil
@@ -12,31 +12,9 @@ from prism.data.dataset import CoqProjectBaseDataset
 from prism.project import ProjectRepo, SentenceExtractionMethod
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
-from prism.tests import DatasetFactory
-
-def get_commit_iterator(p):
-    """
-    Get commit iterator (this is an example).
-    """
-    return [p.commit().hexsha]
 
 
-def process_commit(p, c):
-    """
-    Process commit (this is an example).
-    """
-    p.git.checkout(c)
-    p.build()
-
-'''
-class DatasetFactory:
-    """
-    Create test dataset.
-
-    Useful for debugging if interactability is desired in an interpreter
-    session.
-    """
-
+class BaseFactory:
     def __init__(self):
         self.test_path = os.path.dirname(__file__)
         # HEAD commits as of March 14, 2022
@@ -60,18 +38,13 @@ class DatasetFactory:
                           "make"]
         }
 
-        self.repo_paths = {}
-        self.repos = {}
-        self.projects = {}
-        self.metadatas = {}
-        self.metadata_storage = MetadataStorage()
 
+class RepoFactory(BaseFactory):
+    def __init__(self):
+        super().__init__()
+        self.repos = {}
+        self.repo_paths = {}
         self.init_repo_paths()
-        self.insert_metadata()
-        self.init_projects()
-        self.dataset = CoqProjectBaseDataset(
-            project_class=ProjectRepo,
-            projects=self.projects)
 
     def init_repo_paths(self):
         """
@@ -87,6 +60,16 @@ class DatasetFactory:
             except git.GitCommandError:
                 repo = git.Repo(project_path)
             self.repos[project_name] = repo
+
+
+class MetadataFactory(RepoFactory):
+    def __init__(self):
+        super().__init__()
+        self.metadatas = {}
+        self.init_metadatas()
+
+    def init_metadatas(self):
+        for project_name, project in self.target_projects.items():
             # TODO: Use real metadata and test building
             self.metadatas[project_name] = ProjectMetadata(
                 project_name,
@@ -96,13 +79,26 @@ class DatasetFactory:
                 project_url=f"https://github.com/{project}",
                 commit_sha=self.commit_shas[project_name])
 
+
+class MetadataStorageFactory(MetadataFactory):
+    def __init__(self):
+        super().__init__()
+        self.metadata_storage = MetadataStorage()
+        self.insert_metadata()
+
     def insert_metadata(self):
         """
         Insert metadata into metadata storage.
         """
         for project_metadata in self.metadatas.values():
-            print(project_metadata)
             self.metadata_storage.insert(project_metadata)
+
+
+class ProjectFactory(MetadataStorageFactory):
+    def __init__(self):
+        super().__init__()
+        self.projects = {}
+        self.init_projects()
 
     def init_projects(self):
         """
@@ -115,39 +111,18 @@ class DatasetFactory:
                 self.metadata_storage,
                 num_cores=8,
                 sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
-'''
 
-class TestProjectLooper(unittest.TestCase):
+
+class DatasetFactory(ProjectFactory):
     """
-    Tests for `ProjectLooper`.
+    Create test dataset.
+
+    Useful for debugging if interactability is desired in an interpreter
+    session.
     """
 
-    @classmethod
-    def setUpClass(cls):
-        """
-        Use the base constructor, with some additions.
-        """
-        cls.tester = DatasetFactory()
-
-    @classmethod
-    def tearDownClass(cls):
-        """
-        Remove the cloned repos.
-        """
-        for project_name, repo in cls.tester.repos.items():
-            del repo
-            shutil.rmtree(os.path.join(cls.tester.repo_paths[project_name]))
-
-    def test_ProjectLooper(self):
-        """
-        Test instantiation with `ProjectRepo`.
-        """
-        project_looper = ProjectLooper(
-            self.tester.dataset,
-            get_commit_iterator,
-            process_commit)
-        project_looper(self.tester.test_path)
-
-
-if __name__ == "__main__":
-    unittest.main()
+    def __init__(self):
+        super().__init__()
+        self.dataset = CoqProjectBaseDataset(
+            project_class=ProjectRepo,
+            projects=self.projects)

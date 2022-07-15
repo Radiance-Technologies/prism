@@ -19,6 +19,7 @@ from prism.project.metadata.storage import (
     Revision,
 )
 from prism.util.opam import OCamlVersion
+from prism.tests import ProjectFactory
 
 TEST_DIR = Path(__file__).parent
 
@@ -300,6 +301,26 @@ class TestMetadataStorage(unittest.TestCase):
             loaded = MetadataStorage.load(storage_file)
             self.assertEqual(storage, loaded)
             os.remove(storage_file)
+
+    def test_get_project_revisions(self):
+        """
+        Verify that get_project_revisions returns valid results for a project.
+        """
+        factory = ProjectFactory()
+        metadata_storage = factory.metadata_storage
+        for proj_name in factory.project_names:
+            with self.subTest(proj_name):
+                project = factory.projects[proj_name]
+                
+                revs = metadata_storage.get_project_revisions(project.name,
+                                                            project.remote_url)
+                self.assertTrue(len(revs) == 1)
+                expected = factory.commit_shas[proj_name]
+                self.assertTrue(next(iter(revs)) == expected)
+
+
+
+
 
 
 if __name__ == '__main__':
