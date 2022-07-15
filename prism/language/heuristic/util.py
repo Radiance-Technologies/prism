@@ -471,6 +471,29 @@ class ParserUtils:
     """
 
     @classmethod
+    def extract_identifier(cls, sentence: str) -> Tuple[str, str]:
+        """
+        Get the identifier and type for a sentence.
+
+        Assumes the sentence can be identified.
+
+        Returns
+        -------
+        type : str
+            The type of the command, e.g., ``"Theorem"``.
+        identifier : str
+            The name of the command, e.g., ``"plus_n"``.
+        """
+        sentence_sans_control = ParserUtils.strip_control(sentence)
+        sentence_sans_attributes, _ = ParserUtils.strip_attributes(
+            sentence_sans_control)
+        tokens = sentence_sans_attributes.split()
+        if len(tokens) >= 2:
+            return tokens[0], tokens[1]
+        else:
+            return tokens[0], ""
+
+    @classmethod
     def extract_tactic_name(cls, sentence: str) -> str:
         """
         Get the name of a custom tactic from its definition.
