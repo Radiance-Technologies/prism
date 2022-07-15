@@ -18,8 +18,8 @@ from prism.project.metadata.storage import (
     ProjectSource,
     Revision,
 )
-from prism.util.opam import OCamlVersion
 from prism.tests import ProjectFactory
+from prism.util.opam import OCamlVersion
 
 TEST_DIR = Path(__file__).parent
 
@@ -313,8 +313,7 @@ class TestMetadataStorage(unittest.TestCase):
                 project = factory.projects[proj_name]
 
                 g_p_revisions = metadata_storage.get_project_revisions
-                revs = g_p_revisions(project.name,
-                                     project.remote_url)
+                revs = g_p_revisions(project.name, project.remote_url)
                 self.assertTrue(len(revs) == 1)
                 expected = factory.commit_shas[proj_name]
                 self.assertTrue(next(iter(revs)) == expected)

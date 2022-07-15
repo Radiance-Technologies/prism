@@ -269,8 +269,9 @@ class ProjectRepo(Repo, Project):
 
         storage = self.metadata_storage
         try:
-            project_revisions = storage.get_project_revisions(self.name,
-                                                              self.remote_url)
+            project_revisions = storage.get_project_revisions(
+                self.name,
+                self.remote_url)
         except KeyError:
             project_revisions = set()
 

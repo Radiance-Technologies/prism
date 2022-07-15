@@ -12,6 +12,7 @@ from prism.project.metadata.storage import MetadataStorage
 
 
 class BaseFactory:
+
     def __init__(self):
         self.test_path = os.path.dirname(__file__)
         # HEAD commits as of March 14, 2022
@@ -37,6 +38,7 @@ class BaseFactory:
 
 
 class RepoFactory(BaseFactory):
+
     def __init__(self):
         super().__init__()
         self.repos = {}
@@ -60,6 +62,7 @@ class RepoFactory(BaseFactory):
 
 
 class MetadataFactory(RepoFactory):
+
     def __init__(self):
         super().__init__()
         self.metadatas = {}
@@ -78,6 +81,7 @@ class MetadataFactory(RepoFactory):
 
 
 class MetadataStorageFactory(MetadataFactory):
+
     def __init__(self):
         super().__init__()
         self.metadata_storage = MetadataStorage()
@@ -92,6 +96,7 @@ class MetadataStorageFactory(MetadataFactory):
 
 
 class ProjectFactory(MetadataStorageFactory):
+
     def __init__(self):
         super().__init__()
         self.projects = {}

@@ -7,12 +7,14 @@ stored with a fixed-path relationship to the rest of the package.
 
 from pathlib import Path
 
-from .factories import (DatasetFactory,
-                        ProjectFactory,
-                        MetadataStorageFactory,
-                        MetadataFactory,
-                        RepoFactory,
-                        BaseFactory)
+from .factories import (
+    BaseFactory,
+    DatasetFactory,
+    MetadataFactory,
+    MetadataStorageFactory,
+    ProjectFactory,
+    RepoFactory,
+)
 
 _TEST_ROOT = Path(__file__)
 _PROJECT_ROOT = _TEST_ROOT.parent
