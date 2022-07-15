@@ -2,7 +2,7 @@
 Module for looping over dataset and extracting caches.
 """
 import os
-from typing import Callable, Iterable, Tuple, Union
+from typing import Callable, Iterable, Union
 
 from tqdm.contrib.concurrent import process_map
 

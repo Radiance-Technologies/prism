@@ -274,6 +274,8 @@ class ProjectRepo(Repo, Project):
         except KeyError:
             project_revisions = set()
 
+        self._original_head = self.commit().hexsha
+
         if commit_sha is not None:
             self.git.checkout(commit_sha)
         elif len(project_revisions) > 0:

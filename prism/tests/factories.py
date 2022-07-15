@@ -2,12 +2,9 @@
 Util module for creating sample objects.
 """
 import os
-import shutil
-import unittest
 
 import git
 
-from prism.data.cache import ProjectLooper
 from prism.data.dataset import CoqProjectBaseDataset
 from prism.project import ProjectRepo, SentenceExtractionMethod
 from prism.project.metadata import ProjectMetadata

@@ -304,23 +304,20 @@ class TestMetadataStorage(unittest.TestCase):
 
     def test_get_project_revisions(self):
         """
-        Verify that get_project_revisions returns valid results for a project.
+        Verify that function returns valid results for a project.
         """
         factory = ProjectFactory()
         metadata_storage = factory.metadata_storage
         for proj_name in factory.project_names:
             with self.subTest(proj_name):
                 project = factory.projects[proj_name]
-                
-                revs = metadata_storage.get_project_revisions(project.name,
-                                                            project.remote_url)
+
+                g_p_revisions = metadata_storage.get_project_revisions
+                revs = g_p_revisions(project.name,
+                                     project.remote_url)
                 self.assertTrue(len(revs) == 1)
                 expected = factory.commit_shas[proj_name]
                 self.assertTrue(next(iter(revs)) == expected)
-
-
-
-
 
 
 if __name__ == '__main__':
