@@ -4,7 +4,7 @@ Test module for prism.data.dataset module.
 import unittest
 
 from prism.data.cache import ProjectLooper
-from prism.tests import DatasetFactory
+from prism.tests.factories import DatasetFactory
 
 
 def get_commit_iterator(p):

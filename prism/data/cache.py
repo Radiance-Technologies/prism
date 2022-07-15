@@ -48,7 +48,7 @@ def loop_action(
 
 def pass_func(args):
     """
-    Utility function for unpacking arguments.
+    Unpack arguments.
     """
     loop_action(*args)
 

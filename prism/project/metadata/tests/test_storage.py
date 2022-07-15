@@ -18,7 +18,7 @@ from prism.project.metadata.storage import (
     ProjectSource,
     Revision,
 )
-from prism.tests import ProjectFactory
+from prism.tests.factories import ProjectFactory
 from prism.util.opam import OCamlVersion
 
 TEST_DIR = Path(__file__).parent

@@ -13,7 +13,9 @@ from prism.project.metadata.storage import MetadataStorage
 
 
 class BaseFactory:
-
+    """
+    Base factory for testing prism projects.
+    """
     def __init__(self):
         self.test_path = os.path.dirname(__file__)
         # HEAD commits as of March 14, 2022
@@ -38,11 +40,16 @@ class BaseFactory:
         }
 
     def cleanup(self):
+        """
+        Perform cleanup.
+        """
         pass
 
 
 class RepoFactory(BaseFactory):
-
+    """
+    Repo factory for testing prism projects.
+    """
     def __init__(self):
         super().__init__()
         self.repos = {}
@@ -65,6 +72,9 @@ class RepoFactory(BaseFactory):
             self.repos[project_name] = repo
 
     def cleanup(self):
+        """
+        Cleanup repositories.
+        """
         for project_name, repo in self.repos.items():
             del repo
             shutil.rmtree(os.path.join(self.repo_paths[project_name]))
@@ -72,7 +82,9 @@ class RepoFactory(BaseFactory):
 
 
 class MetadataFactory(RepoFactory):
-
+    """
+    Metadata factory for testing prism projects.
+    """
     def __init__(self):
         super().__init__()
         self.metadatas = {}
@@ -90,11 +102,16 @@ class MetadataFactory(RepoFactory):
                 commit_sha=self.commit_shas[project_name])
 
     def cleanup(self):
+        """
+        Perform cleanup.
+        """
         super().cleanup()
 
 
 class MetadataStorageFactory(MetadataFactory):
-
+    """
+    MetadataStorage factory for testing prism projects.
+    """
     def __init__(self):
         super().__init__()
         self.metadata_storage = MetadataStorage()
@@ -108,11 +125,16 @@ class MetadataStorageFactory(MetadataFactory):
             self.metadata_storage.insert(project_metadata)
 
     def cleanup(self):
+        """
+        Perform cleanup.
+        """
         super().cleanup()
 
 
 class ProjectFactory(MetadataStorageFactory):
-
+    """
+    Project factory for testing prism projects.
+    """
     def __init__(self):
         super().__init__()
         self.projects = {}
@@ -131,6 +153,9 @@ class ProjectFactory(MetadataStorageFactory):
                 sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
 
     def cleanup(self):
+        """
+        Perform cleanup.
+        """
         super().cleanup()
 
 
@@ -149,4 +174,7 @@ class DatasetFactory(ProjectFactory):
             projects=self.projects)
 
     def cleanup(self):
+        """
+        Perform cleanup.
+        """
         super().cleanup()
