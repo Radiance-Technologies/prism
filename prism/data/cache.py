@@ -11,10 +11,14 @@ from prism.project.repo import ProjectRepo
 
 
 def loop_action(
-    project: ProjectRepo,
-    get_commit_iterator: Callable[[ProjectRepo], Iterable[str]],
-    process_commit: Callable[[ProjectRepo, str], None],
-    working_dir: Union[os.PathLike, str]):
+        project: ProjectRepo,
+        get_commit_iterator: Callable[[ProjectRepo],
+                                      Iterable[str]],
+        process_commit: Callable[[ProjectRepo,
+                                  str],
+                                 None],
+        working_dir: Union[os.PathLike,
+                           str]):
     """
     Perform a given action on a project with a given iterator generator.
 
@@ -40,6 +44,7 @@ def loop_action(
     iterator = get_commit_iterator(project)
     for commit in iterator:
         process_commit(project, commit)
+
 
 def pass_func(args):
     """

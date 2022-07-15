@@ -277,7 +277,7 @@ class ProjectRepo(Repo, Project):
         if len(project_revisions) == 1:
             commit_sha = next(iter(project_revisions))
         elif commit_sha is None:
-            commit_sha = self.commit().hexsha 
+            commit_sha = self.commit().hexsha
 
         self._original_head = self.commit().hexsha
 
@@ -302,7 +302,7 @@ class ProjectRepo(Repo, Project):
         return self.remote_url.split('.git')[0].split('/')[-1]
 
     @property
-    def original_head(self) -> str: # noqa: D102
+    def original_head(self) -> str:  # noqa: D102
         return self._original_head
 
     @property
