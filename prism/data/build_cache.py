@@ -2,10 +2,9 @@
 Tools for handling repair mining cache.
 """
 import os
-import queue
 import tempfile
-from dataclasses import dataclass, field
-from multiprocessing import Process, Queue
+from dataclasses import InitVar, dataclass, field
+from multiprocessing.pool import Pool
 from pathlib import Path
 from typing import Dict, Iterable, Optional, Set, Tuple, Union
 
@@ -13,7 +12,6 @@ import seutil as su
 
 from prism.language.gallina.analyze import SexpInfo
 from prism.project.metadata import ProjectMetadata
-from prism.util.radpytools.dataclasses import immutable_dataclass
 
 
 @dataclass
@@ -45,14 +43,32 @@ class VernacCommandData:
 
     def __hash__(self) -> int:  # noqa: D105
         # do not include the error
-        return hash(self.location)
+        return hash((self.identifier, self.command_type, self.location))
+
+
+@dataclass
+class ProjectCommitData:
+    """
+    Object that reflects the contents of a repair mining cache file.
+    """
+
+    project_metadata: ProjectMetadata
+    """
+    Metadata that identifies the project name, commit, Coq version, and
+    other relevant data for reproduction and of the cache.
+    """
+    command_data: Dict[str, Set[VernacCommandData]]
+    """
+    A map from file names relative to the root of the project to the set
+    of command results.
+    """
 
     def dump(
             self,
             output_filepath: os.PathLike,
             fmt: su.io.Fmt = su.io.Fmt.yaml) -> None:
         """
-        Serialize repair mining cache and writes to .yml file.
+        Serialize data to text file.
 
         Parameters
         ----------
@@ -68,7 +84,7 @@ class VernacCommandData:
     def load(
             cls,
             filepath: os.PathLike,
-            fmt: su.io.Fmt = su.io.Fmt.yaml) -> 'VernacCommandData':
+            fmt: Optional[su.io.Fmt] = None) -> 'ProjectCommitData':
         """
         Load repair mining cache from file.
 
@@ -76,9 +92,9 @@ class VernacCommandData:
         ----------
         filepath : os.PathLike
             Filepath containing repair mining cache.
-        fmt : su.io.Fmt, optional
-            Designated format of the input file,
-            by default `su.io.Fmt.yaml`.
+        fmt : Optional[su.io.Fmt], optional
+            Designated format of the input file, by default None.
+            If None, then the format is inferred from the extension.
 
         Returns
         -------
@@ -89,24 +105,6 @@ class VernacCommandData:
 
 
 @dataclass
-class ProjectCommitData:
-    """
-    Object that reflects the contents of a repair mining cache file.
-    """
-
-    project_metadata: ProjectMetadata
-    """
-    Metadata that identifies the project name, commit, Coq version, and
-    other relevant data for reproduction and of the cache.
-    """
-    cache_entries: Dict[str, Set[VernacCommandData]]
-    """
-    A map from file names relative to the root of the project to the set
-    of cached command results.
-    """
-
-
-@immutable_dataclass
 class CoqProjectBuildCache:
     """
     Object regulating access to repair mining cache on disk.
@@ -124,47 +122,34 @@ class CoqProjectBuildCache:
     ├── Project 2/
     |   └── ...
     └── ...
-
-    Attributes
-    ----------
-    root : Path
-        Root folder of repair mining cache structure
-    fmt : su.io.Fmt
-        The serialization format with which to cache data.
     """
 
     root: Path
     """
     Root folder of repair mining cache structure
     """
-    fmt: su.io.Fmt = su.io.Fmt.yaml
+    fmt_ext: str = "yml"
     """
-    The serialization format with which to cache data.
+    The extension for the cache files that defines their format.
     """
-    _writer_queue: Queue = field(init=False)
+    num_workers: InitVar[int] = 1
     """
-    Multiprocessing queue for operations on on-disk cache
+    The number of workers available for asynchronously writing cache
+    files.
     """
-    _worker_process: Process = field(init=False)
+    _worker_pool: Pool = field(init=False)
     """
-    The job that commits cache files to disk.
+    Multiprocessing pool for writing cache files to disk on demand.
     """
 
-    def __init__(self):
+    def __post_init__(self, num_workers: int):
         """
         Instantiate object.
-
-        Parameters
-        ----------
-        root : Path
-            Root folder of repair mining cache structure
         """
         self.root = Path(self.root)
         if not self.root.exists():
             os.makedirs(self.root)
-        self._writer_queue: Queue = Queue()
-        self._worker_process = Process(target=self._writer_worker)
-        self._worker_process.start()
+        self._worker_pool = Pool(processes=num_workers)
 
     def __contains__(  # noqa: D105
             self,
@@ -172,6 +157,18 @@ class CoqProjectBuildCache:
                        ProjectMetadata,
                        Tuple[str]]) -> bool:
         return self.contains(obj)
+
+    def __del__(self) -> None:  # noqa: D105
+        # close the multiprocessing pool
+        self._worker_pool.close()
+        self._worker_pool.terminate()
+
+    @property
+    def fmt(self) -> su.io.Fmt:
+        """
+        Get the serialization format with which to cache data.
+        """
+        return su.io.infer_fmt_from_ext(self.fmt_ext)
 
     def _contains_data(self, data: ProjectCommitData) -> bool:
         return self.get_path_from_data(data).exists()
@@ -181,40 +178,6 @@ class CoqProjectBuildCache:
 
     def _contains_fields(self, fields: Tuple[str]) -> bool:
         return self.get_path_from_fields(*fields).exists()
-
-    def _write(self, data: ProjectCommitData) -> None:
-        """
-        Write the project commit's data to disk.
-
-        This should not in normal circumstances be called directly.
-
-        Parameters
-        ----------
-        data : ProjectCommitData
-            The data to be written to disk.
-        """
-        data_path = self.get_path_from_data(data)
-        cache_dir = data_path.parent
-        if not cache_dir.exists():
-            os.makedirs(str(cache_dir))
-        # Ensure that we write the cache atomically.
-        # First, we write to a temporary file so that if we get
-        # interrupted, we aren't left with a corrupted cache.
-        with tempfile.mkstemp() as (f, tmpfile):
-            f.write(su.io.serialize(data, fmt=self.fmt))
-        # Then, we atomically move the file to the correct, final path.
-        os.replace(tmpfile, data_path)
-
-    def _writer_worker(self):
-        """
-        Wait for and serve requests to write data to file.
-        """
-        while True:
-            try:
-                data = self._writer_queue.get_nowait()
-            except queue.Empty:
-                continue
-            self._write(data)
 
     def contains(
             self,
@@ -297,9 +260,10 @@ class CoqProjectBuildCache:
         """
         Get the file path for identifying fields of a cache.
         """
-        return self.root / project / commit / (
-            coq_version.replace(".",
-                                "_") + ".yml")
+        return self.root / project / commit / '.'.join(
+            [coq_version.replace(".",
+                                 "_"),
+             self.fmt_ext])
 
     def get_path_from_metadata(self, metadata: ProjectMetadata) -> str:
         """
@@ -310,7 +274,7 @@ class CoqProjectBuildCache:
             metadata.commit_sha,
             metadata.coq_version)
 
-    def insert(self, data: ProjectCommitData):
+    def insert(self, data: ProjectCommitData, block: bool = True) -> None:
         """
         Cache a new element of data on disk.
 
@@ -318,6 +282,9 @@ class CoqProjectBuildCache:
         ----------
         data : ProjectCommitData
             The data to be cached.
+        block : bool, optional
+            Whether to wait for the operation to complete or not, by
+            default True.
 
         Raises
         ------
@@ -325,13 +292,13 @@ class CoqProjectBuildCache:
             If the cache file already exists. In this case, `update`
             should be called instead.
         """
-        if self._contains_data(data):
+        if data in self:
             raise RuntimeError(
                 "Cache file already exists. Call `update` instead.")
         else:
-            self.write(data)
+            self.write(data, block)
 
-    def update(self, data: ProjectCommitData) -> None:
+    def update(self, data: ProjectCommitData, block: bool = True) -> None:
         """
         Update an existing cache file on disk.
 
@@ -339,6 +306,9 @@ class CoqProjectBuildCache:
         ----------
         data : ProjectCommitData
             The object to be re-cached.
+        block : bool, optional
+            Whether to wait for the operation to complete or not, by
+            default True.
 
         Raises
         ------
@@ -346,13 +316,13 @@ class CoqProjectBuildCache:
             If the cache file does not exist, `insert` should be called
             instead
         """
-        if not self._contains_data(data):
+        if data not in self:
             raise RuntimeError(
                 "Cache file does not exist. Call `insert` instead.")
         else:
-            self.write(data)
+            self.write(data, block)
 
-    def write(self, data: ProjectMetadata) -> None:
+    def write(self, data: ProjectMetadata, block: bool = False) -> None:
         """
         Cache the data to disk regardless of whether it already exists.
 
@@ -361,4 +331,41 @@ class CoqProjectBuildCache:
         data : ProjectMetadata
             The object to be cached.
         """
-        self._writer_queue.put(data)
+        kwargs = {
+            'data_path': self.get_path_from_data(data),
+            'data': data,
+            'tmpdir': self.root,
+            'ext': self.fmt_ext
+        }
+        if block:
+            self._worker_pool.apply(self._write, kwds=kwargs)
+        else:
+            self._worker_pool.apply_async(self._write, kwds=kwargs)
+
+    @staticmethod
+    def _write(
+            data: ProjectCommitData,
+            data_path: Path,
+            tmpdir: str,
+            ext: str) -> None:
+        """
+        Write the project commit's data to disk.
+
+        This should not in normal circumstances be called directly.
+
+        Parameters
+        ----------
+        data : ProjectCommitData
+            The data to be written to disk.
+        """
+        cache_dir = data_path.parent
+        if not cache_dir.exists():
+            os.makedirs(str(cache_dir))
+        # Ensure that we write the cache atomically.
+        # First, we write to a temporary file so that if we get
+        # interrupted, we aren't left with a corrupted cache.
+        with tempfile.NamedTemporaryFile("w", delete=False, dir=tmpdir) as f:
+            pass
+        data.dump(f.name, su.io.infer_fmt_from_ext(ext))
+        # Then, we atomically move the file to the correct, final path.
+        os.replace(f.name, data_path)
