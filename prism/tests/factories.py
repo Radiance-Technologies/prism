@@ -94,6 +94,9 @@ class MetadataFactory(RepoFactory):
         self.init_metadatas()
 
     def init_metadatas(self):
+        """
+        Initialize metadatas.
+        """
         for project_name, project in self.target_projects.items():
             # TODO: Use real metadata and test building
             self.metadatas[project_name] = ProjectMetadata(
