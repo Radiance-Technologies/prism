@@ -1,46 +1,51 @@
 """
 Tools for handling repair mining cache.
 """
-import hashlib
 import os
 import queue
-from dataclasses import dataclass
+import tempfile
+from dataclasses import dataclass, field
 from multiprocessing import Process, Queue
 from pathlib import Path
-from typing import Optional, Set
+from typing import Dict, Iterable, Optional, Set, Tuple, Union
 
 import seutil as su
 
 from prism.language.gallina.analyze import SexpInfo
 from prism.project.metadata import ProjectMetadata
+from prism.util.radpytools.dataclasses import immutable_dataclass
 
 
 @dataclass
-class RepairMiningCacheEntry:
+class VernacCommandData:
     """
-    Dataclass representing repair mining cache entries.
+    The evaluated result for a single Vernacular command.
     """
 
-    identifier: str
+    identifier: Optional[str]
     """
-    Unique (relative to the containing file) identifier for the Coq
-    object being cached
+    Identifier for the command being cached, e.g., the name of the
+    corresponding theorem, lemma, or definition.
+    If no identifier exists (for example, if it is an import statement)
+    or can be meaningfully defined, then None.
     """
-    object_type: str
-    """The type of Coq entity represented by this cache entry"""
-    file_path: Path
+    command_type: str
     """
-    Path (relative to the project root) to the file from which this
-    cache entry was created
+    The type of command, e.g., Theorem, Inductive, etc.
     """
-    line_numbers: SexpInfo.Loc
-    """Coq file location from which this cache entry was created"""
-    sertop_outcome: Optional[str]
+    location: SexpInfo.Loc
     """
-    If this code segment successfully runs under sertop, the value is
-    `None`. Otherwise, the value is the error message produced by sertop
-    when running the segment.
+    The location of the command within a project.
     """
+    command_error: Optional[str]
+    """
+    The error, if any, that results when trying to execute the command
+    (e.g., within the ``sertop``). If there is no error, then None.
+    """
+
+    def __hash__(self) -> int:  # noqa: D105
+        # do not include the error
+        return hash(self.location)
 
     def dump(
             self,
@@ -63,7 +68,7 @@ class RepairMiningCacheEntry:
     def load(
             cls,
             filepath: os.PathLike,
-            fmt: su.io.Fmt = su.io.Fmt.yaml) -> 'RepairMiningCache':
+            fmt: su.io.Fmt = su.io.Fmt.yaml) -> 'VernacCommandData':
         """
         Load repair mining cache from file.
 
@@ -77,30 +82,32 @@ class RepairMiningCacheEntry:
 
         Returns
         -------
-        RepairMiningCache
+        ProjectCommitData
             Loaded repair mining cache
         """
-        data = su.io.load(filepath, fmt)
-        cache = su.io.deserialize(data, cls)
-        return cache
+        return su.io.load(filepath, fmt, clz=cls)
 
 
 @dataclass
-class RepairMiningCacheFile:
+class ProjectCommitData:
     """
     Object that reflects the contents of a repair mining cache file.
     """
 
     project_metadata: ProjectMetadata
     """
-    Metadata associated with the project this cache object was
-    extracted from
+    Metadata that identifies the project name, commit, Coq version, and
+    other relevant data for reproduction and of the cache.
     """
-    cache_entries: Set[RepairMiningCacheEntry]
-    """Set of cache entries reflected in this cache file"""
+    cache_entries: Dict[str, Set[VernacCommandData]]
+    """
+    A map from file names relative to the root of the project to the set
+    of cached command results.
+    """
 
 
-class RepairMiningCache:
+@immutable_dataclass
+class CoqProjectBuildCache:
     """
     Object regulating access to repair mining cache on disk.
 
@@ -109,8 +116,8 @@ class RepairMiningCache:
     Root/
     ├── Project 1/
     |   ├── Commit hash 1/
-    |   |   ├── cache file 1.yml
-    |   |   ├── cache file 2.yml
+    |   |   ├── cache_file_1.yml
+    |   |   ├── cache_file_2.yml
     |   |   └── ...
     |   ├── Commit hash 2/
     |   └── ...
@@ -122,11 +129,28 @@ class RepairMiningCache:
     ----------
     root : Path
         Root folder of repair mining cache structure
-    op_queue : Queue
-        Multiprocessing queue for operations on on-disk cache
+    fmt : su.io.Fmt
+        The serialization format with which to cache data.
     """
 
-    def __init__(self, root: os.PathLike):
+    root: Path
+    """
+    Root folder of repair mining cache structure
+    """
+    fmt: su.io.Fmt = su.io.Fmt.yaml
+    """
+    The serialization format with which to cache data.
+    """
+    _writer_queue: Queue = field(init=False)
+    """
+    Multiprocessing queue for operations on on-disk cache
+    """
+    _worker_process: Process = field(init=False)
+    """
+    The job that commits cache files to disk.
+    """
+
+    def __init__(self):
         """
         Instantiate object.
 
@@ -135,101 +159,103 @@ class RepairMiningCache:
         root : Path
             Root folder of repair mining cache structure
         """
-        self.root = root
-        if not Path(self.root).exists():
+        self.root = Path(self.root)
+        if not self.root.exists():
             os.makedirs(self.root)
-        self.writer_queue: Queue = Queue()
-        self.worker_process = Process(target=self._writer_worker)
-        self.worker_process.start()
+        self._writer_queue: Queue = Queue()
+        self._worker_process = Process(target=self._writer_worker)
+        self._worker_process.start()
 
-    def _check_existence(
+    def __contains__(  # noqa: D105
             self,
-            project: str,
-            commit: str,
-            cache_object: RepairMiningCache):
-        filename = self._get_file_name(
-            project,
-            commit,
-            cache_object.file_path,
-            cache_object.identifier)
-        if (Path(self.root) / project / commit / filename).exists():
-            return True
+            obj: Union[ProjectCommitData,
+                       ProjectMetadata,
+                       Tuple[str]]) -> bool:
+        return self.contains(obj)
 
-    def _get_file_name(
-            self,
-            project: str,
-            commit: str,
-            file_path: str,
-            identifier: str) -> str:
-        m = hashlib.sha256()
-        m.update(project.encode('utf-8'))
-        m.update(commit.encode('utf-8'))
-        m.update(file_path.encode('utf-8'))
-        m.update(identifier.encode('utf-8'))
-        return m.hexdigest()
+    def _contains_data(self, data: ProjectCommitData) -> bool:
+        return self.get_path_from_data(data).exists()
 
-    def _insert(
-            self,
-            project: str,
-            commit: str,
-            cache_object: RepairMiningCache):
-        filename = self._get_file_name(
-            project,
-            commit,
-            cache_object.file_path,
-            cache_object.identifier)
-        parent = Path(self.root) / project / commit
-        if not parent.exists():
-            os.makedirs(str(parent))
-        fullpath = parent / filename
-        cache_object.dump(fullpath)
+    def _contains_metadata(self, metadata: ProjectMetadata) -> bool:
+        return self.get_path_from_metadata(metadata).exists()
 
-    def _writer_worker(self):
-        while True:
-            try:
-                obj = self.writer_queue.get_nowait()
-            except queue.Empty:
-                continue
-            project, commit, cache_object = obj
-            self._insert(project, commit, cache_object)
+    def _contains_fields(self, fields: Tuple[str]) -> bool:
+        return self.get_path_from_fields(*fields).exists()
 
-    def insert(
-            self,
-            project: str,
-            commit: str,
-            cache_object: RepairMiningCache):
+    def _write(self, data: ProjectCommitData) -> None:
         """
-        Insert cache object into cache folder structure on disk.
+        Write the project commit's data to disk.
+
+        This should not in normal circumstances be called directly.
 
         Parameters
         ----------
-        project : str
-            The name of the project
-        commit : str
-            The commit hash
-        cache_object : RepairMiningCache
-            The cache object to be inserted
+        data : ProjectCommitData
+            The data to be written to disk.
+        """
+        data_path = self.get_path_from_data(data)
+        cache_dir = data_path.parent
+        if not cache_dir.exists():
+            os.makedirs(str(cache_dir))
+        # Ensure that we write the cache atomically.
+        # First, we write to a temporary file so that if we get
+        # interrupted, we aren't left with a corrupted cache.
+        with tempfile.mkstemp() as (f, tmpfile):
+            f.write(su.io.serialize(data, fmt=self.fmt))
+        # Then, we atomically move the file to the correct, final path.
+        os.replace(tmpfile, data_path)
+
+    def _writer_worker(self):
+        """
+        Wait for and serve requests to write data to file.
+        """
+        while True:
+            try:
+                data = self._writer_queue.get_nowait()
+            except queue.Empty:
+                continue
+            self._write(data)
+
+    def contains(
+            self,
+            obj: Union[ProjectCommitData,
+                       ProjectMetadata,
+                       Tuple[str]]) -> bool:
+        """
+        Return whether an entry on disk exists for the given data.
+
+        Parameters
+        ----------
+        obj : Union[ProjectCommitData, ProjectMetadata, Tuple[str]]
+            An object that identifies a project commit's cache.
+
+        Returns
+        -------
+        bool
+            Whether data for the given object is already cached on disk.
 
         Raises
         ------
-        RuntimeError
-            If the cache file already exists. In this case, `update`
-            should be called instead.
+        TypeError
+            If the object is not a `ProjectCommitData`,
+            `ProjeceMetadata`, or iterable of fields.
         """
-        if self._check_existence(project, commit, cache_object):
-            raise RuntimeError(
-                "Cache file already exists. Call `update` instead.")
+        if isinstance(obj, ProjectCommitData):
+            return self._contains_data(obj)
+        elif isinstance(obj, ProjectMetadata):
+            return self._contains_metadata(obj)
+        elif isinstance(obj, Iterable):
+            return self._contains_fields(*obj)
         else:
-            self.writer_queue.put((project, commit, cache_object))
+            raise TypeError(f"Arguments of type {type(obj)} not supported.")
 
     def get(
             self,
             project: str,
             commit: str,
-            file_path: str,
-            identifier: str) -> RepairMiningCache:
+            coq_version: str) -> ProjectCommitData:
         """
-        Fetch a cache object from the on-disk folder structure.
+        Fetch a data object from the on-disk folder structure.
 
         Parameters
         ----------
@@ -237,14 +263,12 @@ class RepairMiningCache:
             The name of the project
         commit : str
             The commit hash to fetch from
-        file_path : str
-            The original Coq file path for the cache to be fetched
-        identifier : str
-            The Coq object identifier to be fetched
+        coq_version : str
+            The Coq version
 
         Returns
         -------
-        RepairMiningCache
+        ProjectCommitData
             The fetched cache object
 
         Raises
@@ -252,30 +276,69 @@ class RepairMiningCache:
         ValueError
             If the specified cache object does not exist on disk
         """
-        filename = self._get_file_name(project, commit, file_path, identifier)
-        fullpath = Path(self.root) / project / commit / filename
-        if not fullpath.exists():
-            raise ValueError(f"No cache file exists at {fullpath}.")
+        data_path = self.get_path_from_fields(project, commit, coq_version)
+        if not data_path.exists():
+            raise ValueError(f"No cache file exists at {data_path}.")
         else:
-            cache = RepairMiningCache.load(fullpath)
-            return cache
+            data = ProjectCommitData.load(data_path)
+            return data
 
-    def update(
+    def get_path_from_data(self, data: ProjectCommitData) -> Path:
+        """
+        Get the file path for a given project commit cache.
+        """
+        return self.get_path_from_metadata(data.project_metadata)
+
+    def get_path_from_fields(
             self,
             project: str,
             commit: str,
-            cache_object: RepairMiningCache):
+            coq_version: str) -> str:
+        """
+        Get the file path for identifying fields of a cache.
+        """
+        return self.root / project / commit / (
+            coq_version.replace(".",
+                                "_") + ".yml")
+
+    def get_path_from_metadata(self, metadata: ProjectMetadata) -> str:
+        """
+        Get the file path for a given metadata.
+        """
+        return self.get_path_from_fields(
+            metadata.project_name,
+            metadata.commit_sha,
+            metadata.coq_version)
+
+    def insert(self, data: ProjectCommitData):
+        """
+        Cache a new element of data on disk.
+
+        Parameters
+        ----------
+        data : ProjectCommitData
+            The data to be cached.
+
+        Raises
+        ------
+        RuntimeError
+            If the cache file already exists. In this case, `update`
+            should be called instead.
+        """
+        if self._contains_data(data):
+            raise RuntimeError(
+                "Cache file already exists. Call `update` instead.")
+        else:
+            self.write(data)
+
+    def update(self, data: ProjectCommitData) -> None:
         """
         Update an existing cache file on disk.
 
         Parameters
         ----------
-        project : str
-            The name of the project
-        commit : str
-            The commit hash to be updated
-        cache_object : RepairMiningCache
-            The cache object to be updated
+        data : ProjectCommitData
+            The object to be re-cached.
 
         Raises
         ------
@@ -283,8 +346,19 @@ class RepairMiningCache:
             If the cache file does not exist, `insert` should be called
             instead
         """
-        if not self._check_existence(project, commit, cache_object):
+        if not self._contains_data(data):
             raise RuntimeError(
                 "Cache file does not exist. Call `insert` instead.")
         else:
-            self.writer_queue.put((project, commit, cache_object))
+            self.write(data)
+
+    def write(self, data: ProjectMetadata) -> None:
+        """
+        Cache the data to disk regardless of whether it already exists.
+
+        Parameters
+        ----------
+        data : ProjectMetadata
+            The object to be cached.
+        """
+        self._writer_queue.put(data)
