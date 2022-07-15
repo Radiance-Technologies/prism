@@ -16,6 +16,7 @@ class BaseFactory:
     """
     Base factory for testing prism projects.
     """
+
     def __init__(self):
         self.test_path = os.path.dirname(__file__)
         # HEAD commits as of March 14, 2022
@@ -50,6 +51,7 @@ class RepoFactory(BaseFactory):
     """
     Repo factory for testing prism projects.
     """
+
     def __init__(self):
         super().__init__()
         self.repos = {}
@@ -85,6 +87,7 @@ class MetadataFactory(RepoFactory):
     """
     Metadata factory for testing prism projects.
     """
+
     def __init__(self):
         super().__init__()
         self.metadatas = {}
@@ -112,6 +115,7 @@ class MetadataStorageFactory(MetadataFactory):
     """
     MetadataStorage factory for testing prism projects.
     """
+
     def __init__(self):
         super().__init__()
         self.metadata_storage = MetadataStorage()
@@ -135,6 +139,7 @@ class ProjectFactory(MetadataStorageFactory):
     """
     Project factory for testing prism projects.
     """
+
     def __init__(self):
         super().__init__()
         self.projects = {}
