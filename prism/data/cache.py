@@ -26,15 +26,12 @@ def loop_action(
     ----------
     project : ProjectRepo
         Project to be operated on.
-
     get_commit_iterator : Callable[[ProjectRepo], Iterable[str]]
         Function for obtaining an iterator of commits for
         the given project.
-
     process_commit : Callable[[ProjectRepo,str], None]
         Function for performing some action on or
         with the project at a given commit.
-
     working_dir : Union[os.PathLike, str]
         Directory in which all repositories for projects
         are housed.
@@ -75,12 +72,10 @@ class ProjectLooper:
             Dataset object used to loop through all
             commits in all projects, building each
             commit and extracting the build cache.
-
         get_commit_iterator : Callable[[ProjectRepo], Iterable[str]]
             Function for deriving an iterable of commit shas
             from a ProjectRepo. Must be declared at the
             top-level of a module, and cannot be a lambda.
-
         process_commit : Callable[[ProjectRepo, str], None]
             Function for performing an operation on or with a
             project at a given commit. Must be declared at the
