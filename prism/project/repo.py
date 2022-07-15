@@ -274,17 +274,15 @@ class ProjectRepo(Repo, Project):
         except KeyError:
             project_revisions = set()
 
-        if len(project_revisions) != 1:
-            self._commit_sha = commit_sha
-        elif len(project_revisions) == 1:
-            self._commit_sha = next(iter(project_revisions))
-        else:
-            self._commit_sha = self.commit().hexsha
+        if len(project_revisions) == 1:
+            commit_sha = next(iter(project_revisions))
+        elif commit_sha is None:
+            commit_sha = self.commit().hexsha 
 
         self._original_head = self.commit().hexsha
 
-        if self._commit_sha is not None:
-            self.git.checkout(self._commit_sha)
+        if commit_sha is not None:
+            self.git.checkout(commit_sha)
 
     @property
     def commit_sha(self) -> str:  # noqa: D102
@@ -302,6 +300,10 @@ class ProjectRepo(Repo, Project):
     @property
     def name(self) -> str:  # noqa: D102
         return self.remote_url.split('.git')[0].split('/')[-1]
+
+    @property
+    def original_head(self) -> str: # noqa: D102
+        return self._original_head
 
     @property
     def path(self) -> os.PathLike:  # noqa: D102
