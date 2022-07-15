@@ -317,6 +317,7 @@ class TestMetadataStorage(unittest.TestCase):
                 self.assertTrue(len(revs) == 1)
                 expected = factory.commit_shas[proj_name]
                 self.assertTrue(next(iter(revs)) == expected)
+        factory.cleanup()
 
 
 if __name__ == '__main__':

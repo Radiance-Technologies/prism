@@ -1,8 +1,6 @@
 """
 Test module for prism.data.dataset module.
 """
-import os
-import shutil
 import unittest
 
 from prism.data.cache import ProjectLooper
@@ -41,9 +39,7 @@ class TestProjectLooper(unittest.TestCase):
         """
         Remove the cloned repos.
         """
-        for project_name, repo in cls.tester.repos.items():
-            del repo
-            shutil.rmtree(os.path.join(cls.tester.repo_paths[project_name]))
+        cls.tester.cleanup()
 
     def test_ProjectLooper(self):
         """

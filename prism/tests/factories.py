@@ -2,6 +2,7 @@
 Util module for creating sample objects.
 """
 import os
+import shutil
 
 import git
 
@@ -36,6 +37,9 @@ class BaseFactory:
                           "make"]
         }
 
+    def cleanup(self):
+        pass
+
 
 class RepoFactory(BaseFactory):
 
@@ -60,6 +64,12 @@ class RepoFactory(BaseFactory):
                 repo = git.Repo(project_path)
             self.repos[project_name] = repo
 
+    def cleanup(self):
+        for project_name, repo in self.repos.items():
+            del repo
+            shutil.rmtree(os.path.join(self.repo_paths[project_name]))
+        super().cleanup()
+
 
 class MetadataFactory(RepoFactory):
 
@@ -79,6 +89,9 @@ class MetadataFactory(RepoFactory):
                 project_url=f"https://github.com/{project}",
                 commit_sha=self.commit_shas[project_name])
 
+    def cleanup(self):
+        super().cleanup()
+
 
 class MetadataStorageFactory(MetadataFactory):
 
@@ -93,6 +106,9 @@ class MetadataStorageFactory(MetadataFactory):
         """
         for project_metadata in self.metadatas.values():
             self.metadata_storage.insert(project_metadata)
+
+    def cleanup(self):
+        super().cleanup()
 
 
 class ProjectFactory(MetadataStorageFactory):
@@ -114,6 +130,9 @@ class ProjectFactory(MetadataStorageFactory):
                 num_cores=8,
                 sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
 
+    def cleanup(self):
+        super().cleanup()
+
 
 class DatasetFactory(ProjectFactory):
     """
@@ -128,3 +147,6 @@ class DatasetFactory(ProjectFactory):
         self.dataset = CoqProjectBaseDataset(
             project_class=ProjectRepo,
             projects=self.projects)
+
+    def cleanup(self):
+        super().cleanup()
