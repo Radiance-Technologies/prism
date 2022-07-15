@@ -258,7 +258,7 @@ class ProjectRepo(Repo, Project):
 
     @property
     def commit_sha(self) -> str:  # noqa: D102
-        self.commit().hexsha
+        return self.commit().hexsha
 
     @property
     def metadata(self) -> ProjectMetadata:  # noqa: D102
