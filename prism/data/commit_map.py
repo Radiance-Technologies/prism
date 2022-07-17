@@ -10,7 +10,7 @@ from prism.data.dataset import CoqProjectBaseDataset
 from prism.project.repo import ProjectRepo
 
 
-def loop_action(
+def project_commit_fmap(
         project: ProjectRepo,
         get_commit_iterator: Callable[[ProjectRepo],
                                       Iterable[str]],
@@ -47,12 +47,12 @@ def pass_func(args):
     """
     Unpack arguments.
     """
-    loop_action(*args)
+    project_commit_fmap(*args)
 
 
-class ProjectLooper:
+class ProjectCommitMapper:
     """
-    Loop through all commits in all projects.
+    Map a function over commits in all projects of a dataset.
     """
 
     def __init__(
@@ -85,7 +85,7 @@ class ProjectLooper:
         self.get_commit_iterator = get_commit_iterator
         self.process_commit = process_commit
 
-    def __call__(self, working_dir, num_workers=1):
+    def __call__(self, working_dir, num_workers: int = 1):
         """
         Run looping functionality.
         """

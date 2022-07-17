@@ -1,9 +1,9 @@
 """
-Test module for prism.data.dataset module.
+Test module for `prism.data.commit_map` module.
 """
 import unittest
 
-from prism.data.cache import ProjectLooper
+from prism.data.commit_map import ProjectCommitMapper
 from prism.tests.factories import DatasetFactory
 
 
@@ -22,9 +22,9 @@ def process_commit(p, c):
     p.build()
 
 
-class TestProjectLooper(unittest.TestCase):
+class TestProjectCommitMapper(unittest.TestCase):
     """
-    Tests for `ProjectLooper`.
+    Tests for `ProjectCommitMapper`.
     """
 
     @classmethod
@@ -41,11 +41,11 @@ class TestProjectLooper(unittest.TestCase):
         """
         cls.tester.cleanup()
 
-    def test_ProjectLooper(self):
+    def test_ProjectCommitMapper(self):
         """
         Test instantiation with `ProjectRepo`.
         """
-        project_looper = ProjectLooper(
+        project_looper = ProjectCommitMapper(
             self.tester.dataset,
             get_commit_iterator,
             process_commit)
