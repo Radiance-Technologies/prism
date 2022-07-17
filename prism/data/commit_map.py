@@ -2,7 +2,7 @@
 Module for looping over dataset and extracting caches.
 """
 import os
-from typing import Callable, Iterable, Union
+from typing import Callable, Iterable
 
 from tqdm.contrib.concurrent import process_map
 
@@ -16,9 +16,7 @@ def project_commit_fmap(
                                       Iterable[str]],
         process_commit: Callable[[ProjectRepo,
                                   str],
-                                 None],
-        working_dir: Union[os.PathLike,
-                           str]):
+                                 None]) -> None:
     """
     Perform a given action on a project with a given iterator generator.
 
@@ -32,12 +30,8 @@ def project_commit_fmap(
     process_commit : Callable[[ProjectRepo,str], None]
         Function for performing some action on or
         with the project at a given commit.
-    working_dir : Union[os.PathLike, str]
-        Directory in which all repositories for projects
-        are housed.
     """
-    os.chdir(working_dir)
-    os.chdir("./{0}".format(project.name))
+    os.chdir(project.path)
     iterator = get_commit_iterator(project)
     for commit in iterator:
         process_commit(project, commit)
@@ -91,10 +85,9 @@ class ProjectCommitMapper:
         """
         projects = list(self.dataset.projects.values())
         job_list = [
-            (x,
+            (p,
              self.get_commit_iterator,
-             self.process_commit,
-             working_dir) for x in projects
+             self.process_commit) for p in projects
         ]
         process_map(
             pass_func,
