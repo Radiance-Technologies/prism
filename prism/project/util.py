@@ -33,15 +33,10 @@ class GitURL(str):
         """
         if not isinstance(other, str):
             return super().__eq__(other)
-        elif self.endswith(".git"):
-            if other.endswith(".git"):
-                return super().__eq__(other)
-            else:
-                return super().__eq__(other + ".git")
-        elif other.endswith(".git"):
-            return super().__eq__(other[:-4])
-        else:
+        elif isinstance(other, GitURL):
             return super().__eq__(other)
+        else:
+            return self == GitURL(other)
 
     def __hash__(self) -> int:  # noqa: D105
         return super().__hash__()
