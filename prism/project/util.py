@@ -11,6 +11,42 @@ from typing import Set, Union
 URL = str
 
 
+class GitURL(str):
+    """
+    A Git repository URL either ending in ``".git"`` or not.
+    """
+
+    def __new__(cls, content: str):
+        """
+        Standardize representation by removing ``".git"`` suffix.
+        """
+        if content.endswith(".git"):
+            content = content[:-4]
+        return str.__new__(cls, content)
+
+    def __eq__(self, other: object) -> bool:
+        """
+        Return whether two URLs are equal.
+
+        Equality is invariant to the presence of ``".git"`` suffixes.
+        For example, ``GitURL("x.git") == "x"`` evaluates to True.
+        """
+        if not isinstance(other, str):
+            return super().__eq__(other)
+        elif self.endswith(".git"):
+            if other.endswith(".git"):
+                return super().__eq__(other)
+            else:
+                return super().__eq__(other + ".git")
+        elif other.endswith(".git"):
+            return super().__eq__(other[:-4])
+        else:
+            return super().__eq__(other)
+
+    def __hash__(self) -> int:  # noqa: D105
+        return super().__hash__()
+
+
 def camel_case_names(name: str) -> Set[str]:
     """
     Return name but in camel case format.

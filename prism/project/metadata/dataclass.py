@@ -4,11 +4,12 @@ Contains all metadata related to paticular GitHub repositories.
 
 import os
 # from collections.abc import Iterable
-from dataclasses import asdict, dataclass
-from typing import Iterable, Iterator, List, Optional, Set
+from dataclasses import asdict, dataclass, fields
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Set
 
 import seutil as su
 
+from prism.project.util import GitURL
 from prism.util.radpytools.dataclasses import default_field
 
 from .version_info import version_info
@@ -129,7 +130,7 @@ class ProjectMetadata:
     Only dependencies that are not handled by the project's build system
     need to be listed here.
     """
-    project_url: Optional[str] = None
+    project_url: Optional[GitURL] = None
     """
     If available, this is the URL hosting the authoritative source code
     or repository (e.g., Git) of a particular project in the dataset.
@@ -176,8 +177,8 @@ class ProjectMetadata:
                 f"Incompatible Coq/SerAPI versions specified: coq={self.coq_version}, "
                 f"SerAPI={self.serapi_version}")
         # standardize project url
-        if self.project_url is not None and self.project_url.endswith(".git"):
-            self.project_url = self.project_url[:-4]
+        if self.project_url is not None:
+            self.project_url = GitURL(self.project_url)
 
     def __gt__(self, other: 'ProjectMetadata') -> bool:
         """
@@ -315,6 +316,17 @@ class ProjectMetadata:
                 fields['coq_version'] = None
                 fields['serapi_version'] = None
         return ProjectMetadata(**fields)
+
+    def serialize(self) -> Dict[str, Any]:  # noqa: D102
+        # workaround for bug in seutil that skips custom serialization
+        # for subclasses of primitive types like str
+        serialized = {
+            f.name: su.io.serialize(getattr(self,
+                                            f.name)) for f in fields(self)
+        }
+        if self.project_url is not None:
+            serialized['project_url'] = str(self.project_url)
+        return serialized
 
     @classmethod
     def dump(
