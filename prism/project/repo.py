@@ -265,22 +265,30 @@ class ProjectRepo(Repo, Project):
                 raise
             Repo.__init__(self, dir_abspath)
         Project.__init__(self, dir_abspath, *args, **kwargs)
-        self.current_commit_name = None  # i.e., HEAD
+        self.current_commit_name: Optional[str] = None  # i.e., HEAD
+        """
+        The name/SHA of the current virtual commit.
+
+        By default None, which serves as an alias for the current index
+        HEAD, this attribute controls access to commit files without
+        requiring one to actually change the working tree.
+        """
+        # NOTE (AG): I question the value of this attribute and its
+        # current usage and wonder if it could be refactored to
+        # something simpler.
 
         storage = self.metadata_storage
-        try:
-            project_revisions = storage.get_project_revisions(
-                self.name,
-                self.remote_url)
-        except KeyError:
-            project_revisions = set()
 
-        self._original_head = self.commit().hexsha
+        self.reset_head = self.commit().hexsha
+        """
+        The SHA for a commit that serves as a restore point.
+
+        By default, this is defined as the SHA of the checked out commit
+        at the time that the `ProjectRepo` is instantiated.
+        """
 
         if commit_sha is not None:
             self.git.checkout(commit_sha)
-        elif len(project_revisions) > 0:
-            self.git.checkout(next(iter(project_revisions)))
 
     @property
     def commit_sha(self) -> str:  # noqa: D102
@@ -298,10 +306,6 @@ class ProjectRepo(Repo, Project):
     @property
     def name(self) -> str:  # noqa: D102
         return self.remote_url.split('.git')[0].split('/')[-1]
-
-    @property
-    def original_head(self) -> str:  # noqa: D102
-        return self._original_head
 
     @property
     def path(self) -> os.PathLike:  # noqa: D102
