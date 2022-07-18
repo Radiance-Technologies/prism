@@ -12,6 +12,9 @@
 
 (** Here's another comment *)
 
+Notation "n .+1" := (S n)(at level 2, left associativity, format "n .+1"): nat_scope.
+
+Coercion b2Prop (x : bool) := x = true.
 
 Inductive seq : nat -> Set :=
   | niln : seq 0
