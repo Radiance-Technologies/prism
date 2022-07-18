@@ -155,8 +155,8 @@ class ProjectFactory(MetadataStorageFactory):
         for project_name in self.metadatas.keys():
             self.projects[project_name] = ProjectRepo(
                 self.repo_paths[project_name],
-                self.commit_shas[project_name],
                 self.metadata_storage,
+                commit_sha=self.commit_shas[project_name],
                 num_cores=8,
                 sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
 
