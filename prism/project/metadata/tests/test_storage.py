@@ -18,6 +18,7 @@ from prism.project.metadata.storage import (
     ProjectSource,
     Revision,
 )
+from prism.tests.factories import ProjectFactory
 from prism.util.opam import OCamlVersion
 
 TEST_DIR = Path(__file__).parent
@@ -35,6 +36,47 @@ class TestMetadataStorage(unittest.TestCase):
         self.projects_yaml = TEST_DIR / "projects.yml"
         self.metadata = list(reversed(ProjectMetadata.load(self.projects_yaml)))
         return super().setUp()
+
+    def test_get_project_revisions(self):
+        """
+        Verify that function returns valid results for a project.
+        """
+        factory = ProjectFactory()
+        metadata_storage = factory.metadata_storage
+        for proj_name in factory.project_names:
+            with self.subTest(proj_name):
+                project = factory.projects[proj_name]
+
+                g_p_revisions = metadata_storage.get_project_revisions
+                revs = g_p_revisions(project.name, project.remote_url)
+                self.assertTrue(len(revs) == 1)
+                expected = factory.commit_shas[proj_name]
+                self.assertTrue(next(iter(revs)) == expected)
+        factory.cleanup()
+
+    def test_git_extension_invariance(self):
+        """
+        Verify that the storage is invariant to URL ``.git`` extensions.
+        """
+        storage = MetadataStorage()
+        for metadata in sorted(self.metadata):
+            storage.insert(metadata)
+        self.assertEqual(
+            metadata,
+            storage.get(
+                metadata.project_name,
+                metadata.project_url,
+                metadata.commit_sha,
+                metadata.coq_version,
+                metadata.ocaml_version))
+        self.assertEqual(
+            metadata,
+            storage.get(
+                metadata.project_name,
+                metadata.project_url + ".git",
+                metadata.commit_sha,
+                metadata.coq_version,
+                metadata.ocaml_version))
 
     def test_insert(self):
         """

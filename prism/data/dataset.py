@@ -219,7 +219,7 @@ class CoqProjectBaseDataset:
                     project = project_class(
                         os.path.join(base_dir,
                                      proj_dir),
-                        metadata_storage,
+                        metadata_storage=metadata_storage,
                         **project_class_kwargs)
                     self.projects[project.name] = project
                 except (InvalidGitRepositoryError, DirHasNoCoqFiles):
@@ -249,7 +249,7 @@ class CoqProjectBaseDataset:
             try:
                 project = project_class(
                     directory,
-                    metadata_storage,
+                    metadata_storage=metadata_storage,
                     **project_class_kwargs)
                 self.projects[project.name] = project
             except InvalidGitRepositoryError as e:

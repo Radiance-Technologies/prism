@@ -24,6 +24,7 @@ import seutil.io as io
 from bidict import bidict
 
 from prism.project.metadata.dataclass import ProjectMetadata
+from prism.project.util import GitURL
 from prism.util.opam import OCamlVersion, Version
 from prism.util.radpytools.dataclasses import default_field
 
@@ -39,7 +40,24 @@ class ProjectSource:
     """
 
     project_name: str
-    repo_url: Optional[str]
+    repo_url: Optional[GitURL]
+
+    def __post_init__(self):
+        """
+        Standardize URLs.
+        """
+        if self.repo_url is not None:
+            object.__setattr__(self, 'repo_url', GitURL(self.repo_url))
+
+    def serialize(self) -> Dict[str, str]:  # noqa: D102
+        # workaround for bug in seutil that skips custom serialization
+        # for subclasses of primitive types like str
+        return {
+            'project_name':
+                self.project_name,
+            'repo_url':
+                str(self.repo_url) if self.repo_url is not None else None
+        }
 
 
 @dataclass(frozen=True)

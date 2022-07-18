@@ -1,6 +1,8 @@
 """
 Module providing Coq project repository class representations.
 """
+from __future__ import annotations
+
 import os
 import pathlib
 import random
@@ -53,7 +55,7 @@ class CommitIterator:
 
     def __init__(
         self,
-        repo: Repo,
+        repo: ProjectRepo,
         commit_sha: str,
         march_strategy: Optional[
             CommitTraversalStrategy] = CommitTraversalStrategy.NEW_FIRST):
@@ -62,7 +64,7 @@ class CommitIterator:
 
         Parameters
         ----------
-        repo : git.Repo
+        repo : ProjectRepo
             Repo, the commits of which we wish to iterate through.
 
         commit_sha : str
@@ -74,9 +76,13 @@ class CommitIterator:
             we wish to use.
         """
         self._repo = repo
-        print("Inside CommitIterator: ", repo.commit())
-        self._commits = [repo.commit()] + list(repo.commit().iter_parents())
-        print("Inside CommitIterator: ", self._commits[: 5])
+        # For the purposes of iteration (whatever the state of the
+        # repo when the iterator is constructed) it is assumed that
+        # the head of the repo at construction time is the furthest
+        # forward that we are interested in traversing.
+        self._repo_initial_head = repo.commit(repo.reset_head)
+        parent_list = list(repo.commit(self._repo_initial_head).iter_parents())
+        self._commits = [self._repo_initial_head] + parent_list
         self._commit_sha = commit_sha
         self._commit_sha_list = [x.hexsha for x in self._commits]
         self._commit_idx = self._commit_sha_list.index(self._commit_sha)
@@ -221,7 +227,12 @@ class ProjectRepo(Repo, Project):
     Based on GitPython's `Repo` class.
     """
 
-    def __init__(self, dir_abspath: os.PathLike, *args, **kwargs):
+    def __init__(
+            self,
+            dir_abspath: os.PathLike,
+            *args,
+            commit_sha: Optional[str] = None,
+            **kwargs):
         """
         Initialize Project object.
         """
@@ -254,7 +265,30 @@ class ProjectRepo(Repo, Project):
                 raise
             Repo.__init__(self, dir_abspath)
         Project.__init__(self, dir_abspath, *args, **kwargs)
-        self.current_commit_name = None  # i.e., HEAD
+        self.current_commit_name: Optional[str] = None  # i.e., HEAD
+        """
+        The name/SHA of the current virtual commit.
+
+        By default None, which serves as an alias for the current index
+        HEAD, this attribute controls access to commit files without
+        requiring one to actually change the working tree.
+        """
+        # NOTE (AG): I question the value of this attribute and its
+        # current usage and wonder if it could be refactored to
+        # something simpler.
+
+        storage = self.metadata_storage
+
+        self.reset_head = self.commit().hexsha
+        """
+        The SHA for a commit that serves as a restore point.
+
+        By default, this is defined as the SHA of the checked out commit
+        at the time that the `ProjectRepo` is instantiated.
+        """
+
+        if commit_sha is not None:
+            self.git.checkout(commit_sha)
 
     @property
     def commit_sha(self) -> str:  # noqa: D102

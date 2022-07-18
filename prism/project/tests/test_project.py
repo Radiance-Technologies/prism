@@ -71,7 +71,7 @@ class TestProject(unittest.TestCase):
         test_repo.git.checkout(metadata.commit_sha)
         cls.test_iqr_project = ProjectRepo(
             repo_path,
-            storage,
+            metadata_storage=storage,
             sentence_extraction_method=SEM.HEURISTIC,
             num_cores=8)
         # Complete pre-req setup.
