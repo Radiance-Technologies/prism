@@ -80,7 +80,7 @@ class CommitIterator:
         # repo when the iterator is constructed) it is assumed that
         # the head of the repo at construction time is the furthest
         # forward that we are interested in traversing.
-        self._repo_initial_head = repo.commit(repo._original_head)
+        self._repo_initial_head = repo.commit(repo.reset_head)
         parent_list = list(repo.commit(self._repo_initial_head).iter_parents())
         self._commits = [self._repo_initial_head] + parent_list
         self._commit_sha = commit_sha
