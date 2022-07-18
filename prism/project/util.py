@@ -31,9 +31,7 @@ class GitURL(str):
         Equality is invariant to the presence of ``".git"`` suffixes.
         For example, ``GitURL("x.git") == "x"`` evaluates to True.
         """
-        if not isinstance(other, str):
-            return super().__eq__(other)
-        elif isinstance(other, GitURL):
+        if not isinstance(other, str) or isinstance(other, GitURL):
             return super().__eq__(other)
         else:
             return self == GitURL(other)
