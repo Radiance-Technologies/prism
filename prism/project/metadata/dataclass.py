@@ -175,6 +175,9 @@ class ProjectMetadata:
             raise ValueError(
                 f"Incompatible Coq/SerAPI versions specified: coq={self.coq_version}, "
                 f"SerAPI={self.serapi_version}")
+        # standardize project url
+        if self.project_url is not None and self.project_url.endswith(".git"):
+            self.project_url = self.project_url[:-4]
 
     def __gt__(self, other: 'ProjectMetadata') -> bool:
         """

@@ -54,6 +54,30 @@ class TestMetadataStorage(unittest.TestCase):
                 self.assertTrue(next(iter(revs)) == expected)
         factory.cleanup()
 
+    def test_git_extension_invariance(self):
+        """
+        Verify that the storage is invariant to URL ``.git`` extensions.
+        """
+        storage = MetadataStorage()
+        for metadata in sorted(self.metadata):
+            storage.insert(metadata)
+        self.assertEqual(
+            metadata,
+            storage.get(
+                metadata.project_name,
+                metadata.project_url,
+                metadata.commit_sha,
+                metadata.coq_version,
+                metadata.ocaml_version))
+        self.assertEqual(
+            metadata,
+            storage.get(
+                metadata.project_name,
+                metadata.project_url + ".git",
+                metadata.commit_sha,
+                metadata.coq_version,
+                metadata.ocaml_version))
+
     def test_insert(self):
         """
         Verify that metadata can be inserted.

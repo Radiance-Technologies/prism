@@ -40,6 +40,16 @@ class ProjectSource:
 
     project_name: str
     repo_url: Optional[str]
+    """
+    The project URL sans `.git` extension.
+    """
+
+    def __post_init__(self):
+        """
+        Standardize URLs.
+        """
+        if self.repo_url is not None and self.repo_url.endswith(".git"):
+            object.__setattr__(self, 'repo_url', self.repo_url[:-4])
 
 
 @dataclass(frozen=True)
