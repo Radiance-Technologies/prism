@@ -2,7 +2,7 @@
 Module for looping over dataset and extracting caches.
 """
 import os
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Optional
 
 from tqdm.contrib.concurrent import process_map
 
@@ -56,7 +56,8 @@ class ProjectCommitMapper:
                                           Iterable[str]],
             process_commit: Callable[[ProjectRepo,
                                       str],
-                                     None]):
+                                     None],
+            task_description: Optional[str] = None):
         """
         Initialize ProjectLooper object.
 
@@ -74,10 +75,14 @@ class ProjectCommitMapper:
             Function for performing an operation on or with a
             project at a given commit. Must be declared at the
             top-level of a module, and cannot be a lambda.
+        task_description : Optional[str], optional
+            A short description of the mapping operation yielded from
+            `get_commit_iterator` and `process_commit`.
         """
         self.dataset = dataset
         self.get_commit_iterator = get_commit_iterator
         self.process_commit = process_commit
+        self._task_description = task_description
 
     def __call__(self, working_dir, num_workers: int = 1):
         """
@@ -89,8 +94,19 @@ class ProjectCommitMapper:
              self.get_commit_iterator,
              self.process_commit) for p in projects
         ]
+        # BUG: This may cause an OSError on program exit in Python 3.8
+        # or earlier.
         process_map(
             pass_func,
             job_list,
             max_workers=num_workers,
-            desc="Cache extraction")
+            desc=self.task_description)
+
+    @property
+    def task_description(self) -> str:
+        """
+        Get a description of the map's purpose.
+        """
+        if self._task_description is None:
+            return "Map over project commits"
+        return self._task_description

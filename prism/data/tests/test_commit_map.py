@@ -48,7 +48,8 @@ class TestProjectCommitMapper(unittest.TestCase):
         project_looper = ProjectCommitMapper(
             self.tester.dataset,
             get_commit_iterator,
-            process_commit)
+            process_commit,
+            "Test mapping")
         project_looper(self.tester.test_path)
 
 
