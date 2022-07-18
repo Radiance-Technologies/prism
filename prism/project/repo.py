@@ -230,8 +230,8 @@ class ProjectRepo(Repo, Project):
     def __init__(
             self,
             dir_abspath: os.PathLike,
-            commit_sha: Optional[str] = None,
             *args,
+            commit_sha: Optional[str] = None,
             **kwargs):
         """
         Initialize Project object.
