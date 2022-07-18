@@ -94,7 +94,7 @@ class Project(ABC):
             metadata_storage: MetadataStorage,
             opam_switch: Optional[OpamSwitch] = None,
             sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI,
-            num_cores: Optional[int] = 1):
+            num_cores: Optional[int] = None):
         """
         Initialize Project object.
         """
