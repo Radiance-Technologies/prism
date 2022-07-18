@@ -6,6 +6,7 @@ from typing import Dict, List
 
 from prism.interface.coq.exception import CoqExn
 from prism.interface.coq.serapi import SerAPI
+from prism.interface.coq.util import normalize_spaces
 from prism.language.heuristic.parser import HeuristicParser
 from prism.language.sexp.parser import SexpParser
 from prism.tests import _COQ_EXAMPLES_PATH
@@ -110,22 +111,6 @@ class TestSerAPI(unittest.TestCase):
                 serapi.execute(nested_sentences[15])
                 self.assertFalse(serapi.is_in_proof_mode)
 
-    def test_recovery(self):
-        """
-        Verify that control may be recovered after an exception.
-        """
-        with SerAPI() as serapi:
-            with self.assertRaises(CoqExn):
-                serapi.execute("Require Import.")
-            try:
-                # capture an error message
-                serapi.execute("Require Import.")
-            except CoqExn as e:
-                self.assertEqual(
-                    e.msg,
-                    "Syntax error: [constr:global] expected after "
-                    "[export_token] (in [vernac:gallina_ext]).")
-
     def test_multiprocessing(self):
         """
         Verify that multiple SerAPI contexts can be managed at once.
@@ -144,6 +129,37 @@ class TestSerAPI(unittest.TestCase):
                 "Inductive nat : Set :=  O : nat | S : forall _ : nat, nat"
             ]
             self.assertEqual(actual, expected)
+
+    def test_recovery(self):
+        """
+        Verify that control may be recovered after an exception.
+        """
+        with SerAPI() as serapi:
+            with self.assertRaises(CoqExn):
+                serapi.execute("Require Import.")
+            try:
+                # capture an error message
+                serapi.execute("Require Import.")
+            except CoqExn as e:
+                self.assertEqual(
+                    e.msg,
+                    "Syntax error: [constr:global] expected after "
+                    "[export_token] (in [vernac:gallina_ext]).")
+            # verify execution of normal commands is successful
+            serapi.execute("Inductive const := C | D.")
+            serapi.execute(
+                'Definition swap (c : const) := match c with | C => D | D => C end.'
+            )
+            actual = serapi.query_vernac("Print swap.")
+            expected = normalize_spaces(
+                """
+            swap = fun c : const => match c with
+                               | C => D
+                                    | D => C
+                                    end
+                 : forall _ : const, const
+            """).strip()
+            self.assertEqual(normalize_spaces(actual[0]), expected)
 
 
 if __name__ == '__main__':

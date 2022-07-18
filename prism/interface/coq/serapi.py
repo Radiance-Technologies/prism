@@ -219,7 +219,7 @@ class SerAPI:
     @property
     def is_in_proof_mode(self) -> bool:
         """
-        Return whether the interpreter is in proof model.
+        Return whether the interpreter is in proof mode.
 
         Property alias for `has_open_goals`.
         """
