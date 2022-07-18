@@ -25,7 +25,8 @@ class TestSerAPI(unittest.TestCase):
         cls.sentences = {}
         for filename in ['simple', 'nested', 'Alphabet']:
             cls.sentences[filename] = HeuristicParser.parse_sentences_from_file(
-                _COQ_EXAMPLES_PATH / f"{filename}.v")
+                _COQ_EXAMPLES_PATH / f"{filename}.v",
+                glom_proofs=False)
 
     def test_execute(self):
         """
@@ -63,10 +64,10 @@ class TestSerAPI(unittest.TestCase):
                               (ep 16))))))))))
             """)
         with SerAPI() as serapi:
-            responses = serapi.execute("Require Import Coq.Program.Basics.")
+            responses, _ = serapi.execute("Require Import Coq.Program.Basics.")
             self.assertEqual(str(responses[0]), '(Answer 20 Ack)')
             self.assertEqual(str(responses[1]), '(Answer 20 Completed)')
-            responses, ast = serapi.execute('Locate "_ ∘ _".', True)
+            responses, _, ast = serapi.execute('Locate "_ ∘ _".', True)
             self.assertEqual(str(responses[0]), '(Answer 23 Ack)')
             self.assertEqual(str(responses[1]), '(Answer 23 Completed)')
             self.assertEqual(SexpParser.parse(ast), expected_ast)
@@ -86,15 +87,28 @@ class TestSerAPI(unittest.TestCase):
                 serapi.execute(simple_sentences[2])
                 self.assertTrue(serapi.has_open_goals())
                 self.assertTrue(serapi.is_in_proof_mode)
+        nested_sentences = self.sentences['nested']
         with self.subTest("nested"):
             with SerAPI() as serapi:
-                pass
-
-    def test_execute_file(self):
-        """
-        Verify that entire files can be executed (multiple commands).
-        """
-        pass
+                self.assertFalse(serapi.has_open_goals())
+                serapi.execute(nested_sentences[0])
+                self.assertFalse(serapi.has_open_goals())
+                serapi.execute(nested_sentences[1])
+                self.assertTrue(serapi.is_in_proof_mode)
+                for i in range(3):
+                    # this includes a mid-proof import
+                    serapi.execute(nested_sentences[2 + i])
+                    self.assertTrue(serapi.has_open_goals())
+                serapi.execute(nested_sentences[5])
+                self.assertFalse(serapi.has_open_goals())
+                # set nested proofs allowed
+                serapi.execute(nested_sentences[6])
+                self.assertFalse(serapi.has_open_goals())
+                for i in range(8):
+                    serapi.execute(nested_sentences[7 + i])
+                    self.assertTrue(serapi.is_in_proof_mode)
+                serapi.execute(nested_sentences[15])
+                self.assertFalse(serapi.is_in_proof_mode)
 
     def test_recovery(self):
         """
@@ -116,6 +130,20 @@ class TestSerAPI(unittest.TestCase):
         """
         Verify that multiple SerAPI contexts can be managed at once.
         """
+        pass
+
+    def test_query_vernac(self):
+        """
+        Verify that queries generate feedback.
+        """
+        with SerAPI() as serapi:
+            serapi.execute(
+                "Inductive nat : Type := O : nat | S (n : nat) : nat.")
+            actual = serapi.query_vernac("Print nat.")
+            expected = [
+                "Inductive nat : Set :=  O : nat | S : forall _ : nat, nat"
+            ]
+            self.assertEqual(actual, expected)
 
 
 if __name__ == '__main__':

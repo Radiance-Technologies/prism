@@ -259,6 +259,7 @@ class SerAPI:
         return_ast: bool = False
     ) -> Union[List[SexpNode],
                Tuple[List[SexpNode],
+                     List[str],
                      Optional[str]]]:
         """
         Execute a command.
@@ -275,16 +276,19 @@ class SerAPI:
         -------
         responses : List[SexpNode]
             The response from SerAPI after execution of the command.
+        feedback : List[str]
+            Feedback from the Coq Proof Assistant to the executed
+            command.
         ast : str, optional
             If `return_ast` is True, then the AST of `cmd` is also
             returned.
         """
         state_id, ast = self.send_add(cmd, return_ast)
-        responses, _ = self.send(f"(Exec {state_id})")
+        responses, feedback, _ = self.send(f"(Exec {state_id})")
         if return_ast:
-            return responses, ast.pretty_format() if ast is not None else ast
+            return responses, feedback, ast.pretty_format() if ast is not None else ast
         else:
-            return responses
+            return responses, feedback
 
     def has_open_goals(self) -> bool:
         """
@@ -293,7 +297,7 @@ class SerAPI:
         If there are open goals, then the Coq interpreter is in proof
         mode.
         """
-        responses, _ = self.send("(Query () Goals)")
+        responses, _, _ = self.send("(Query () Goals)")
         assert responses[1][2][0] == SexpString("ObjList")
         return responses[1][2][1] != SexpList()
 
@@ -362,7 +366,7 @@ class SerAPI:
         """
         if sexp_str not in self.constr_cache:
             try:
-                responses, _ = self.send(
+                responses, _, _ = self.send(
                     f"(Print ((pp_format PpStr)) (CoqConstr {sexp_str}))"
                 )
                 self.constr_cache[sexp_str] = normalize_spaces(
@@ -377,7 +381,7 @@ class SerAPI:
                     str(responses[0][2][1][0][1]))
         return self.constr_cache[sexp_str]
 
-    def pull(self) -> int:
+    def pull(self, index: int = -1) -> int:
         """
         Remove a frame created by `push`.
 
@@ -389,8 +393,15 @@ class SerAPI:
         int
             The size of the pulled frame.
         """
-        states = self.frame_stack.pop()
-        self.frame_stack[-1].extend(states)
+        num_frames = len(self.frame_stack)
+        if index >= num_frames or index < -num_frames:
+            raise IndexError(
+                f"Frame {index} is out of bounds [{-num_frames}, {num_frames-1}]"
+            )
+        if index >= 0:
+            index = index - len(self.frame_stack)
+        states = self.frame_stack.pop(index)
+        self.frame_stack[index].extend(states)
         return len(states)
 
     def push(self) -> None:
@@ -421,7 +432,7 @@ class SerAPI:
         AbstractSyntaxTree
             The AST for the given command.
         """
-        responses, _ = self.send(f'(Parse () "{escape(cmd)}")')
+        responses, _, _ = self.send(f'(Parse () "{escape(cmd)}")')
         ast = responses[1][2][1][0]
         assert ast[0] == SexpString("CoqAst")
         return ast
@@ -433,7 +444,7 @@ class SerAPI:
         """
         Query the global environment.
         """
-        responses, _ = self.send("(Query () Env)")
+        responses, _, _ = self.send("(Query () Env)")
         env = responses[1][2][1][0]
 
         # store the constants
@@ -552,7 +563,7 @@ class SerAPI:
         abandoned_goals : List[Goal]
             A list of abandoned goals.
         """
-        responses, _ = self.send("(Query () Goals)")
+        responses, _, _ = self.send("(Query () Goals)")
         assert responses[1][2][0] == SexpString("ObjList")
         if responses[1][2][1] == []:  # no goals
             return [], [], [], []
@@ -609,7 +620,7 @@ class SerAPI:
         str
             The physical path bound to `lib`.
         """
-        responses, _ = self.send(f'(Query () (LocateLibrary "{lib}"))')
+        responses, _, _ = self.send(f'(Query () (LocateLibrary "{lib}"))')
         physical_path = str(responses[1][2][1][0][3])
         return physical_path
 
@@ -629,10 +640,10 @@ class SerAPI:
         str
             _description_
         """
-        responses, _ = self.send(f'(Query () (Locate "{qualid}"))')
+        responses, _, _ = self.send(f'(Query () (Locate "{qualid}"))')
         if responses[1][2][1] == [] and qualid.startswith("SerTop."):
             qualid = qualid[len("SerTop."):]
-            responses, _ = self.send(f'(Query () (Locate "{qualid}"))')
+            responses, _, _ = self.send(f'(Query () (Locate "{qualid}"))')
         assert len(responses[1][2][1]) == 1
         short_responses = responses[1][2][1][0][1][0][1]
         assert short_responses[1][0] == SexpString("DirPath")
@@ -666,7 +677,7 @@ class SerAPI:
             If an error is encountered when evaluating the given term.
         """
         try:
-            responses, _ = self.send(f"(Query () (Type {term_sexp}))")
+            responses, _, _ = self.send(f"(Query () (Type {term_sexp}))")
         except CoqExn as ex:
             if ex.err_msg == "Not_found":
                 return None
@@ -679,31 +690,45 @@ class SerAPI:
         else:
             return type_sexp
 
-    def query_vernac(self, cmd: str) -> Tuple[List[SexpNode], str]:
+    def query_vernac(self, cmd: str) -> List[str]:
         """
         Execute a vernacular command and retrieve the result.
 
         In other words, execute a vernacular query command such as
         ``Print`` or ``Check``.
+        A vernacular command such as ``Inductive`` is expected to yield
+        an empty list.
 
         Parameters
         ----------
         cmd : str
-            _description_
+            A Coq command.
 
         Returns
         -------
-        Tuple[List[AbstractSyntaxTree], str]
-            _description_
-        """
-        # TODO: Make this work
-        return self.send(f'(Query () (Vernac "{escape(cmd)}"))')
+        feedback : List[str]
+            A list of non-fatal errors, warnings, debug statements, or
+            other output yielded from Coq in response to executing
+            `cmd`.
 
-    def send(self, cmd: str) -> Tuple[List[SexpNode], str]:
+        Examples
+        --------
+        >>> with SerAPI() as serapi:
+        ...     _ = serapi.execute("Inductive enum := C | D.")
+        ...     serapi.query_vernac("Print enum.")
+        ['Inductive enum : Set :=  C : enum | D : enum']
+        """
+        _, feedback, _ = self.send(f'(Query () (Vernac "{escape(cmd)}"))')
+        return feedback
+
+    def send(self, cmd: str) -> Tuple[List[SexpNode], List[str], str]:
         """
         Send a command to SerAPI and retrieve the responses.
 
-        _extended_summary_
+        Parameters
+        ----------
+        cmd : str
+            A Coq command.
 
         Returns
         -------
@@ -737,7 +762,7 @@ class SerAPI:
         for num in re.findall(r"(?<=\(Answer) \d+", raw_responses):
             assert int(num) == ack_num
         responses = []
-        msg_str = []
+        feedback = []
         for item in raw_responses.split("\x00"):
             item = item.strip()
             if item == "":
@@ -755,24 +780,18 @@ class SerAPI:
                 raise CoqExn(
                     parsed_item[2][1][5][1].pretty_format(),
                     str(parsed_item[2]))
-            if item.startswith("(Feedback"):  # ignore feedback for now
-                # TODO: Do not ignore feedback
+            if item.startswith("(Feedback"):
                 try:
                     msg = parsed_item[1][3][1]
-                    if (isinstance(msg,
-                                   list) and msg != []
+                    if (msg.is_list() and msg != []
                             and msg[0] == SexpString("Message")):
-                        msg_sexp, _ = self.send(
-                            "(Print ((pp_format PpStr)) "
-                            f"(CoqPp {msg[3]}))"
-                        )
-                        msg_str.extend([str(x[1]) for x in msg_sexp[1][2][1]])
+                        assert msg[4][1].is_string()
+                        feedback.append(msg[4][1].get_content())
                 except IndexError:
                     pass
                 continue
             responses.append(parsed_item)
-        msg_str = "\n".join(msg_str)
-        return responses, raw_responses
+        return responses, feedback, raw_responses
 
     def send_add(self,
                  cmd: str,
@@ -796,7 +815,7 @@ class SerAPI:
             The AST of the added command or None if `return_ast` is
             False.
         """
-        _, raw_responses = self.send(f'(Add () "{escape(cmd)}")')
+        _, _, raw_responses = self.send(f'(Add () "{escape(cmd)}")')
         state_ids = [
             int(sid) for sid in ADDED_STATE_PATTERN.findall(raw_responses)
         ]
@@ -819,7 +838,7 @@ class SerAPI:
         """
         self._proc.sendeof()
         # pexpect doesn't close everything it should
-        self._proc._proc.stdout.close()
+        self._proc.proc.stdout.close()
         try:
             self._proc.kill(signal.SIGKILL)
         except ProcessLookupError:
