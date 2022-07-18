@@ -1,0 +1,131 @@
+autofill: true
+build_cmd:
+  0: 0
+  2: 0
+clean_cmd:
+  0: 2
+  2: 2
+command_sequences:
+- - commands:
+    - make -j8
+  - 0
+- - commands:
+    - make
+    - make install
+  - 1
+- - commands:
+    - make clean
+  - 2
+contexts:
+- - coq_version: null
+    ocaml_version: null
+    revision:
+      commit_sha: null
+      project_source:
+        project_name: float
+        repo_url: null
+  - 0
+- - coq_version:
+      extra: null
+      major: '8'
+      minor: '10'
+      patch: '2'
+      prerelease: null
+    ocaml_version: null
+    revision:
+      commit_sha: a4b445bad8b8d0afb725d64472b194d234676ce0
+      project_source:
+        project_name: float
+        repo_url: https://github.com/coq-contribs/float
+  - 1
+- - coq_version: null
+    ocaml_version: null
+    revision:
+      commit_sha: null
+      project_source:
+        project_name: lambda
+        repo_url: null
+  - 2
+- - coq_version:
+      extra: null
+      major: '8'
+      minor: '10'
+      patch: '2'
+      prerelease: null
+    ocaml_version: null
+    revision:
+      commit_sha: f531eede1b2088eff15b856558ec40f177956b96
+      project_source:
+        project_name: lambda
+        repo_url: https://github.com/coq-contribs/lambda
+  - 3
+coq_dependencies:
+  0:
+  - 0
+  2:
+  - 0
+default_build_cmd: []
+default_clean_cmd: []
+default_coq_version: 8.10.2
+default_install_cmd: []
+default_ocaml_version: 4.07.2
+default_serapi_version: 8.10.0+0.7.2
+ignore_path_regex:
+  0:
+  - null
+  2:
+  - null
+indices:
+  command_sequences: 3
+  contexts: 4
+  ocaml_packages: 1
+  opam_repositories: 1
+install_cmd:
+  0: 1
+  2: 1
+ocaml_packages:
+- - null
+  - 0
+opam_dependencies:
+  0:
+  - 0
+  2:
+  - 0
+opam_repos:
+  0:
+  - 0
+  2:
+  - 0
+opam_repositories:
+- - null
+  - 0
+project_sources:
+- project_name: lambda
+  repo_url: https://github.com/coq-contribs/lambda
+- project_name: float
+  repo_url: https://github.com/coq-contribs/float
+- project_name: lambda
+  repo_url: null
+- project_name: float
+  repo_url: null
+projects:
+- lambda
+- float
+revisions:
+- commit_sha: null
+  project_source:
+    project_name: lambda
+    repo_url: null
+- commit_sha: null
+  project_source:
+    project_name: float
+    repo_url: null
+- commit_sha: a4b445bad8b8d0afb725d64472b194d234676ce0
+  project_source:
+    project_name: float
+    repo_url: https://github.com/coq-contribs/float
+- commit_sha: f531eede1b2088eff15b856558ec40f177956b96
+  project_source:
+    project_name: lambda
+    repo_url: https://github.com/coq-contribs/lambda
+serapi_options: {}

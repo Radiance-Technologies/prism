@@ -4,9 +4,11 @@ Provides an object-oriented abstraction of OPAM switches.
 import logging
 import os
 import re
-from dataclasses import dataclass
+import warnings
+from dataclasses import InitVar, dataclass, field
 from functools import cached_property
 from os import PathLike
+from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess
 from typing import ClassVar, Dict, List, Optional
 
@@ -15,8 +17,16 @@ from seutil import bash
 from .constraint import VersionConstraint
 from .version import OCamlVersion, OpamVersion, Version
 
+__all__ = ['OpamSwitch']
+
 logger = logging.getLogger(__file__)
 logger.setLevel(logging.DEBUG)
+
+_allow_unsafe_clone = []
+# Private module variable to allow fallback in OpamSwitch.run for clones
+# that cannot invoke bwrap in an unprivileged container (e.g., a docker
+# container runner within Gitlab CI)
+# Very hacky and ugly.
 
 
 @dataclass(frozen=True)
@@ -35,25 +45,55 @@ class OpamSwitch:
 
     _whitespace_regex: ClassVar[re.Pattern] = re.compile(r"\s+")
     _newline_regex: ClassVar[re.Pattern] = re.compile("\n")
-    name: Optional[str] = None
+    _external_dirname: ClassVar[str] = "_opam"
+    switch_name: InitVar[Optional[str]] = None
     """
     The name of the switch, by default None.
 
-    If None, then this implies usage of the default switch.
+    If None, then this implies usage of the "default" switch.
+    """
+    switch_root: InitVar[Optional[PathLike]] = None
+    """
+    The root path in which to create the switch, by default None.
+
+    If None, then this implies usage of the "default" root.
+    """
+    name: str = field(init=False)
+    """
+    The name of the switch.
+
     Equivalent to setting ``$OPAMSWITCH`` to `name`.
     """
-    root: Optional[PathLike] = None
+    root: PathLike = field(init=False)
     """
-    The current root path, by default None.
+    The root in which the switch was created.
 
-    If None, then this implies usage of the default root.
     Equivalent to setting ``$OPAMROOT`` to `root`.
     """
+    _is_external: bool = field(init=False)
+    """
+    Whether this is an external (i.e., local) switch.
+    """
 
-    def __post_init__(self) -> None:
+    def __post_init__(
+            self,
+            switch_name: Optional[str],
+            switch_root: Optional[PathLike]):
         """
-        Perform validation.
+        Realize switch name and root and perform validation.
         """
+        if switch_name is None:
+            # get the name of the current default (global) switch
+            switch_name = bash.run("opam var switch").stdout.strip()
+        if switch_root is None:
+            # get the name of the current default root
+            switch_root = bash.run("opam var root").stdout.strip()
+        if self.is_external(switch_name):
+            # ensure local switch name is unambiguous
+            switch_name = str(Path(switch_name).absolute())
+        object.__setattr__(self, 'name', switch_name)
+        object.__setattr__(self, 'root', switch_root)
+        object.__setattr__(self, '_is_external', self.is_external(self.name))
         # force computation of environment to validate switch exists
         self.env
 
@@ -75,20 +115,23 @@ class OpamSwitch:
 
         Raises
         ------
-        CalledProcessError
-            If the ``opam env`` command fails.
+        ValueError
+            If no switch exists at the configured path.
         """
         opam_env = {}
-        environ = dict(os.environ)
-        if self.root is not None:
-            environ['OPAMROOT'] = self.root
-        if self.name is not None:
-            environ['OPAMSWITCH'] = self.name
-        r = self.run("opam env", env=environ)
-        envs: List[str] = r.stdout.split(';')[0 :-1 : 2]
+
+        try:
+            r = (self.path / '.opam-switch/environment').read_text()
+        except FileNotFoundError:
+            raise ValueError(
+                f"No such switch: {self.name} with root {self.root}")
+
+        envs: List[str] = r.split('\n')[::-1]
         for env in envs:
-            var, val = env.strip().split("=", maxsplit=1)
-            opam_env[var] = val.strip("'")
+            if (env == ''):
+                continue
+            var, _, val, _ = env.strip().split("\t")
+            opam_env[var] = val
         return opam_env
 
     @property
@@ -102,11 +145,49 @@ class OpamSwitch:
         if new_path is not None:
             self.env.update({'PATH': new_path})
             environ['PATH'] = os.pathsep.join([new_path, environ['PATH']])
-        if self.root is not None:
-            environ['OPAMROOT'] = self.root
-        if self.name is not None:
-            environ['OPAMSWITCH'] = self.name
+
+        environ['OPAMROOT'] = self.root
+
+        environ['OPAMSWITCH'] = self.name if not self.is_clone else self.origin
+
         return environ
+
+    @property
+    def is_clone(self) -> bool:
+        """
+        Return whether this switch is a clone or not.
+        """
+        return self.origin is not None
+
+    @cached_property
+    def origin(self) -> Optional[str]:
+        """
+        Get the name of the switch from which this switch was cloned.
+
+        If this switch *isn't* a clone, then ``None`` is returned.
+
+        Notes
+        -----
+        If this switch was cloned from a clone, then this yields the
+        original clone's origin. One can apply this rule recursively to
+        conclude that the origin always refers to a real switch.
+        """
+        # get the original switch name from the copied and unaltered
+        # environment file
+        original_prefix = Path(self.env['OPAM_SWITCH_PREFIX'])
+        origin = original_prefix.name
+        if origin == self._external_dirname:
+            origin = str(original_prefix.parent)
+        if origin == self.name:
+            origin = None
+        return origin
+
+    @cached_property
+    def path(self) -> Path:
+        """
+        Get the path to the switch directory.
+        """
+        return self.get_root(self.root, self.name)
 
     def add_repo(self, repo_name: str, repo_addr: Optional[str] = None) -> None:
         """
@@ -314,10 +395,88 @@ class OpamSwitch:
         """
         if env is None:
             env = self.environ
+        if self.is_clone:
+            # this is a clone and it needs to be mounted
+            # at the location it thinks it is at
+            # for the duration of the command
+            src = self.path
+            # by limitations of `OpamAPI.clone_switch`, a clone must
+            # share the root of its origin
+            dest = self.get_root(self.root, self.origin)
+            if not dest.exists():
+                # we need a mountpoint.
+                # maybe the original clone was deleted?
+                dest.mkdir()
+            command = f'bwrap --dev-bind / / --bind {src} {dest} -- {command}'
         r = bash.run(command, env=env, **kwargs)
         if check:
-            self.check_returncode(command, r)
+            try:
+                self.check_returncode(command, r)
+            except CalledProcessError:
+                permission_error = (
+                    "bwrap: Creating new namespace failed: "
+                    "Operation not permitted")
+                if (_allow_unsafe_clone and self.is_clone and r.returncode == 1
+                        and r.stderr.strip() == permission_error):
+                    warnings.warn(
+                        "Unable to invoke 'bwrap'. "
+                        "Are you running in an unprivileged Docker container? "
+                        "Falling back to terrible alternative. ")
+                    # temporarily switch clone and origin directories
+                    tmp = str(dest) + "-temp"
+                    os.rename(dest, tmp)
+                    os.rename(src, dest)
+                    r = bash.run(
+                        command.split("--")[-1].strip(),
+                        env=env,
+                        **kwargs)
+                    try:
+                        self.check_returncode(command, r)
+                    finally:
+                        # restore original directories
+                        os.rename(dest, src)
+                        os.rename(tmp, dest)
+                else:
+                    raise
         return r
+
+    @classmethod
+    def get_root(cls, root: PathLike, name: str) -> Path:
+        """
+        Get the root directory of the switch's files.
+
+        Note that this is not to be confused with the Opam root, which
+        may differ in the case of external (local) switches.
+
+        Parameters
+        ----------
+        root : PathLike
+            The Opam root with respect to which the hypothetical switch
+            `name` should be evaluated.
+        name : str
+            The name of a hypothetical switch.
+
+        Returns
+        -------
+        Path
+            The absolute path to the switch's directory.
+        """
+        # based on `get_root` at src/format/opamSwitch.ml in Opam's
+        # GitHub repository
+        if cls.is_external(name):
+            path = Path(name).absolute() / cls._external_dirname
+        else:
+            path = Path(root) / name
+        return path.absolute()
+
+    @classmethod
+    def is_external(cls, name: str) -> bool:
+        """
+        Return whether `name` denotes an external (i.e., local) switch.
+        """
+        # based on `is_external` at src/format/opamSwitch.ml in Opam's
+        # GitHub repository
+        return name.startswith(".") or os.path.sep in name
 
     @staticmethod
     def check_returncode(command: str, r: CompletedProcess) -> None:

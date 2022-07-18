@@ -2,6 +2,7 @@
 Defines an interface for programmatically querying OPAM.
 """
 import logging
+import shutil
 import subprocess
 import warnings
 from contextlib import contextmanager
@@ -23,6 +24,10 @@ class OpamAPI:
 
     Note that OPAM must be installed to use all of the features of this
     class.
+
+    This class and its counterpart `OpamSwitch` each maintain the global
+    environment as an invariant, i.e., neither ever sets, removes, or
+    modifies any environment variables.
 
     .. warning::
         This class does not yet fully support the full expressivity of
@@ -54,6 +59,11 @@ class OpamAPI:
         compiler : Union[str, Version]
             A version of the OCaml compiler on which to base the switch.
 
+        Returns
+        -------
+        OpamSwitch
+            The created switch.
+
         Raises
         ------
         subprocess.CalledProcessError
@@ -67,7 +77,7 @@ class OpamAPI:
             If a switch with the given name already exists.
         """
         if isinstance(compiler, str):
-            compiler = OCamlVersion.parse(compiler)
+            compiler = f"ocaml-base-compiler.{OCamlVersion.parse(compiler)}"
         command = f'opam switch create {switch_name} {compiler}'
         r = cls.run(command, check=False, opam_root=opam_root)
         if (r.returncode == 2
@@ -81,6 +91,62 @@ class OpamAPI:
         return OpamSwitch(switch_name, opam_root)
 
     @classmethod
+    def clone_switch(
+            cls,
+            switch_name: str,
+            clone_name: str,
+            opam_root: Optional[PathLike] = None) -> OpamSwitch:
+        """
+        Clone the indicated switch.
+
+        .. warning::
+            Cloning switches is an unsafe optimization and one should
+            generally not interact with any switches produced in this
+            manner outside the context of `OpamAPI` and `OpamSwitch`.
+
+        Parameters
+        ----------
+        switch_name : str
+            The name of an existing switch to clone,
+            belonging to the active root.
+        clone_name : str
+            The name to use for the cloned switch.
+        opam_root : Optional[PathLike]
+            The root of the existing switch and the resulting clone.
+            Support for clones at different roots is currently not
+            available.
+
+        Returns
+        -------
+        OpamSwitch
+            The cloned switch.
+
+        Raises
+        ------
+        ValueError
+            If `switch_name` is not the name of any existing switch or
+            `clone_name` already exists or is otherwise invalid.
+        """
+        # validates that the source switch exists as side-effect
+        origin = OpamSwitch(switch_name, opam_root)
+        opam_root = origin.root
+
+        destination = OpamSwitch.get_root(opam_root, clone_name)
+
+        # we have to be extremely careful here.
+        # if someone asked for a switch with the name "config"
+        # and we carelessly deleted whatever was called "config",
+        # it would brick the switch.
+        if destination.exists():
+            raise ValueError(
+                f"The proposed switch name '{clone_name}' already exists"
+                " or there's a file with that name.")
+
+        shutil.copytree(origin.path, destination, symlinks=True)
+
+        return OpamSwitch(clone_name, opam_root)
+
+    @classmethod
     def remove_switch(
             cls,
             switch: Union[str,
@@ -89,6 +155,14 @@ class OpamAPI:
         """
         Remove the indicated switch.
 
+        .. warning::
+            Some switches are used as mountpoints for their clones.
+            If the original is deleted, then an empty directory will be
+            created as a mountpoint for the clones, which will prevent
+            you from creating a new switch with the old name.
+            Therefore, one must ensure that originals are not deleted
+            independently of their clones.
+
         Parameters
         ----------
         switch_name : str
@@ -96,13 +170,23 @@ class OpamAPI:
 
         Raises
         ------
-        subprocess.CalledProcessError
-            If the `opam switch remove` command fails, e.g., if the
-            indicated switch does not exist.
+        ValueError
+            If the indicated switch does not exist.
         """
         if isinstance(switch, OpamSwitch):
             switch = switch.name
-        cls.run(f'opam switch remove {switch} -y', opam_root=opam_root)
+        # validate switch exists
+        switch = OpamSwitch(switch, opam_root)
+        opam_root = switch.root
+
+        if switch.is_clone:
+            # This is a clone, not a registered existing switch.
+            # Opam will refuse to remove it.
+            # Delete the associated directory, taking care not to delete
+            # (follow) any symlinks.
+            shutil.rmtree(switch.path)
+        else:
+            cls.run(f'opam switch remove {switch.name} -y', opam_root=opam_root)
 
     @classmethod
     def run(
@@ -138,9 +222,8 @@ class OpamAPI:
 
         Raises
         ------
-        subprocess.CalledProcessError
-            If the `opam env` comand fails, e.g., if the indicated
-            switch does not exist.
+        ValueError
+            If the indicated switch does not exist.
         """
         cls.active_switch = OpamSwitch(switch_name, opam_root)
 
