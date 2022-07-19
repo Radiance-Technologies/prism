@@ -10,6 +10,7 @@ import re
 import signal
 import sys
 from dataclasses import InitVar, dataclass, field
+from functools import cached_property
 from itertools import chain
 from typing import Dict, Iterable, List, Optional, Tuple, Union
 
@@ -24,6 +25,8 @@ from prism.language.sexp.list import SexpList
 from prism.language.sexp.parser import SexpParser
 from prism.language.sexp.string import SexpString
 from prism.util.logging import default_log_level
+from prism.util.opam import OpamSwitch
+from prism.util.opam.version import OpamVersion
 from prism.util.radpytools.dataclasses import default_field
 
 logger = logging.Logger(__file__, default_log_level())
@@ -115,6 +118,14 @@ class Goal:
 
 
 @dataclass
+class Goals:
+    foreground_goals: List[Goal]
+    background_goals: List[Goal]
+    shelved_goals: List[Goal]
+    abandoned_goals: List[Goal]
+
+
+@dataclass
 class SerAPI:
     """
     An interactive Coq session facilitated by SerAPI (namely `sertop`).
@@ -129,6 +140,12 @@ class SerAPI:
     timeout_: InitVar[int] = 30
     """
     The timeout for responses from the spawned SerAPI process.
+    """
+    switch_: InitVar[OpamSwitch] = None
+    """
+    The switch in which to invoke `sertop`, which implicitly controls
+    the version of Coq and SerAPI that are used.
+    Be default, the global "default" switch is selected.
     """
     frame_stack: List[List[int]] = default_field([])
     """
@@ -149,18 +166,31 @@ class SerAPI:
     The status of the connection to the `sertop` child process.
     """
     _proc: PopenSpawn = field(init=False)
+    """
+    The `sertop` child process.
+    """
+    _switch: OpamSwitch = field(init=False)
+    """
+    The switch in which `sertop` is being executed.
+    """
 
-    def __post_init__(self, timeout: int):
+    def __post_init__(self, timeout: int, switch: OpamSwitch):
         """
         Initialize the SerAPI subprocess.
         """
+        if switch is None:
+            switch = OpamSwitch()
+        self._switch = switch
         try:
+            cmd = "sertop --implicit --print0"
+            if not switch.is_clone:
+                cmd, _, _ = switch.as_clone_command(cmd)
             self._proc = PopenSpawn(
-                "sertop --implicit --print0",
+                cmd,
                 encoding="utf-8",
                 timeout=timeout,
                 maxread=10000000,
-            )
+                env=switch.environ)
         except FileNotFoundError:
             logger.log(
                 logging.ERROR,
@@ -227,6 +257,22 @@ class SerAPI:
             return False
         else:
             return self.has_open_goals()
+
+    @cached_property
+    def serapi_version(self) -> OpamVersion:
+        """
+        Get the version of SerAPI for this session.
+        """
+        version = self.switch.get_installed_version("coq-serapi")
+        assert version is not None
+        return OpamVersion.parse(version)
+
+    @property
+    def switch(self) -> OpamSwitch:
+        """
+        Get the switch in which this SerAPI session is being executed.
+        """
+        return self._switch
 
     @property
     def timeout(self) -> int:
@@ -341,44 +387,49 @@ class SerAPI:
             # re-initialize the stack
             self.push()
 
-    def print_constr(self, sexp_str: str) -> str:
+    def print_constr(self, sexp_str: str) -> Optional[str]:
         """
-        _summary_
-
-        _extended_summary_
+        Print a Coq kernel term in a human-readable format.
 
         Parameters
         ----------
         sexp_str : str
-            _description_
+            A serialized internal representation of a Coq kernel term.
 
         Returns
         -------
-        str
-            _description_
+        str | None
+            A human-readable representation of the kernel term.
 
         Raises
         ------
         CoqExn
-            _description_
-        TypeError
-            _description_
+            If an error is encountered when interpreting the command to
+            print the term, e.g., if `sexp_str` does not represent a
+            Coq kernel term.
         """
         if sexp_str not in self.constr_cache:
+            if OpamVersion.less_than(self.serapi_version, "8.10.0"):
+                pp_opts = "((pp_format PpStr))"
+            else:
+                pp_opts = "((pp ((pp_format PpStr))))"
             try:
                 responses, _, _ = self.send(
-                    f"(Print ((pp_format PpStr)) (CoqConstr {sexp_str}))"
+                    f"(Print {pp_opts} (CoqConstr {sexp_str}))"
                 )
-                self.constr_cache[sexp_str] = normalize_spaces(
-                    str(responses[1][2][1][0][1]))
             except CoqExn as ex:
                 if ex.err_msg == "Not_found":
                     return None
                 else:
                     raise ex
-            except TypeError:
-                self.constr_cache[sexp_str] = normalize_spaces(
-                    str(responses[0][2][1][0][1]))
+            else:
+                try:
+
+                    self.constr_cache[sexp_str] = normalize_spaces(
+                        str(responses[1][2][1][0][1]))
+                except TypeError:
+                    self.constr_cache[sexp_str] = normalize_spaces(
+                        str(responses[0][2][1][0][1]))
         return self.constr_cache[sexp_str]
 
     def pull(self, index: int = -1) -> int:
@@ -544,29 +595,19 @@ class SerAPI:
 
         return constants, inductives
 
-    def query_goals(
-            self) -> Tuple[List[Goal],
-                           List[Goal],
-                           List[Goal],
-                           List[Goal]]:
+    def query_goals(self) -> Goals:
         """
         Retrieve a list of open goals.
 
         Returns
         -------
-        fg_goals : List[Goal]
-            A list of foreground goals.
-        bg_goals : List[Goal]
-            A list of background goals.
-        shelved_goals : List[Goal]
-            A list of shelved goals.
-        abandoned_goals : List[Goal]
-            A list of abandoned goals.
+        Goals
+            A collection of open goals.
         """
         responses, _, _ = self.send("(Query () Goals)")
         assert responses[1][2][0] == SexpString("ObjList")
-        if responses[1][2][1] == []:  # no goals
-            return [], [], [], []
+        if responses[1][2][1] == SexpList():  # no goals
+            return Goals([], [], [], [])
         else:
             assert len(responses[1][2][1]) == 1
 
@@ -587,10 +628,10 @@ class SerAPI:
                                 sexp=h_sexp,
                             ))
 
-                    type_sexp = g[1][1].pretty_format()
+                    type_sexp = str(g[1][1])
                     goals.append(
                         Goal(
-                            id=int(g[0][1]),
+                            id=int(str(g[0][1][0][1][1])),
                             type=self.print_constr(type_sexp),
                             sexp=type_sexp,
                             hypotheses=hypotheses[::-1],
@@ -604,7 +645,7 @@ class SerAPI:
                         chain.from_iterable(responses[1][2][1][0][1][1][1]))))
             shelved_goals = store_goals(responses[1][2][1][0][1][2][1])
             abandoned_goals = store_goals(responses[1][2][1][0][1][3][1])
-            return fg_goals, bg_goals, shelved_goals, abandoned_goals
+            return Goals(fg_goals, bg_goals, shelved_goals, abandoned_goals)
 
     def query_library(self, lib: str) -> str:
         """

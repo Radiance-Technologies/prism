@@ -5,7 +5,7 @@ import unittest
 from typing import Dict, List
 
 from prism.interface.coq.exception import CoqExn
-from prism.interface.coq.serapi import SerAPI
+from prism.interface.coq.serapi import Goal, Goals, SerAPI
 from prism.interface.coq.util import normalize_spaces
 from prism.language.heuristic.parser import HeuristicParser
 from prism.language.sexp.parser import SexpParser
@@ -116,6 +116,40 @@ class TestSerAPI(unittest.TestCase):
         Verify that multiple SerAPI contexts can be managed at once.
         """
         pass
+
+    def test_query_goals(self):
+        """
+        Verify that goals can be obtained when in proof mode.
+
+        Likewise, verify that no goals are obtained when not in the
+        middle of a proof.
+        """
+        unit_kernel = (
+            '(Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) (Id Coq)))) '
+            '(Id unit)) 0) (Instance ())))')
+        expected_unit_goals = Goals(
+            [Goal(1,
+                  'unit',
+                  unit_kernel,
+                  [])],
+            [],
+            [],
+            [])
+        no_goals = Goals([], [], [], [])
+        with SerAPI() as serapi:
+            serapi.execute("Lemma foobar : unit.")
+            goals = serapi.query_goals()
+            self.assertEqual(goals, expected_unit_goals)
+            serapi.execute("Require Import Program.")
+            goals = serapi.query_goals()
+            self.assertEqual(goals, expected_unit_goals)
+            serapi.execute("apply (const tt tt).")
+            goals = serapi.query_goals()
+            self.assertEqual(goals, no_goals)
+            serapi.execute("Qed.")
+            goals = serapi.query_goals()
+            self.assertEqual(goals, no_goals)
+        # TODO: test with more complicated goals and nested proofs
 
     def test_query_vernac(self):
         """
