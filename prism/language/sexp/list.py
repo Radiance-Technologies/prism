@@ -6,7 +6,7 @@ at https://github.com/EngineeringSoftware/roosterize/.
 """
 
 import copy
-from typing import Callable, Iterable, List, Optional, Sequence, Tuple
+from typing import Callable, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -33,20 +33,12 @@ class SexpList(SexpNode):
         else:
             return other.is_list() and self.children == other.children
 
+    def __iter__(self) -> Iterator[SexpNode]:  # noqa: D105
+        yield from self.children
+
     def __str__(self) -> str:  # noqa: D105
         s = "("
-        last_is_str = False
-        for c in self.children:
-            # Put space only between SexpString
-            if c.is_string():
-                if last_is_str:
-                    s += " "
-                # end if
-                last_is_str = True
-            # end if
-
-            s += c.__str__()
-        # end for
+        s += " ".join([str(c) for c in self.children])
         s += ")"
         return s
 
