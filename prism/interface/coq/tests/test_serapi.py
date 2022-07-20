@@ -7,9 +7,40 @@ from typing import Dict, List
 from prism.interface.coq.exception import CoqExn
 from prism.interface.coq.serapi import Goal, Goals, SerAPI
 from prism.interface.coq.util import normalize_spaces
+from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.parser import HeuristicParser
+from prism.language.sexp.list import SexpList
+from prism.language.sexp.node import SexpNode
 from prism.language.sexp.parser import SexpParser
+from prism.language.sexp.string import SexpString
 from prism.tests import _COQ_EXAMPLES_PATH
+
+
+def omit_locs(sexp: SexpNode) -> SexpNode:
+    """
+    Replace `loc` terms in the AST with ``[LOC]``.
+
+    The result should match that expected from SerAPI commands when
+    ``--omit-loc`` is provided.
+
+    Parameters
+    ----------
+    sexp : SexpNode
+        A serialized AST.
+
+    Returns
+    -------
+    SexpNode
+        The given AST albeit with all `loc` subtrees replaced with a
+        ``[LOC]`` atom.
+    """
+    if sexp.is_list():
+        if sexp.head() == "loc":
+            return SexpString("[LOC]")
+        else:
+            return SexpList([omit_locs(c) for c in sexp.get_children()])
+    else:
+        return SexpString(sexp.get_content())
 
 
 class TestSerAPI(unittest.TestCase):
@@ -35,18 +66,7 @@ class TestSerAPI(unittest.TestCase):
         """
         expected_ast = SexpParser.parse(
             """
-            (CoqAst
-              (
-                (
-                  (
-                    (fname ToplevelInput)
-                    (line_nb 1)
-                    (bol_pos 0)
-                    (line_nb_last 1)
-                    (bol_pos_last 0)
-                    (bp 0)
-                    (ep 17)))
-                (VernacExpr ()
+            (VernacExpr ()
                   (VernacLocate
                     (LocateAny
                       (
@@ -62,7 +82,7 @@ class TestSerAPI(unittest.TestCase):
                               (line_nb_last 1)
                               (bol_pos_last 0)
                               (bp 7)
-                              (ep 16))))))))))
+                              (ep 16))))))))
             """)
         with SerAPI() as serapi:
             responses, _ = serapi.execute("Require Import Coq.Program.Basics.")
@@ -116,6 +136,27 @@ class TestSerAPI(unittest.TestCase):
         Verify that multiple SerAPI contexts can be managed at once.
         """
         pass
+
+    def test_query_ast(self):
+        """
+        Verify that queried ASTs match those obtained from `sercomp`.
+        """
+        expected_asts = CoqParser.parse_asts(_COQ_EXAMPLES_PATH / "simple.v")
+        actual_asts = []
+        with SerAPI() as serapi:
+            for sentence in self.sentences["simple"]:
+                # actually execute to ensure notations/imports exist
+                serapi.execute(sentence)
+                actual_asts.append(serapi.query_ast(sentence))
+        for actual, expected in zip(actual_asts, expected_asts):
+            # do not compare based on locations since those will
+            # definitely differ
+            actual = omit_locs(actual)
+            expected = omit_locs(expected)
+            # Also strip top-level location from expected since it is
+            # pre-stripped from queried AST
+            expected = expected[0][1]
+            self.assertEqual(actual, expected)
 
     def test_query_goals(self):
         """

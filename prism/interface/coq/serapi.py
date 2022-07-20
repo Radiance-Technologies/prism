@@ -486,7 +486,7 @@ class SerAPI:
         responses, _, _ = self.send(f'(Parse () "{escape(cmd)}")')
         ast = responses[1][2][1][0]
         assert ast[0] == SexpString("CoqAst")
-        return ast
+        return ast[1][1]
 
     def query_env(
             self,
