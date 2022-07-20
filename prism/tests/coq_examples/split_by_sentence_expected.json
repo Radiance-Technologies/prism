@@ -24,7 +24,9 @@
         "}",
         "}",
         "Qed.",
-        "Check length_corr."
+        "Check length_corr.",
+        "Notation \"n .+1\" := (S n)(at level 2, left associativity, format \"n .+1\"): nat_scope.",
+        "Coercion b2Prop (x : bool) := x = true."
     ],
     "simple_test_glom_list": [
         "Inductive seq : nat -> Set := | niln : seq 0 | consn : forall n : nat, nat -> seq n -> seq (S n).",
@@ -32,7 +34,9 @@
         "Theorem length_corr : forall (n : nat) (s : seq n), length n s = n.",
         "Let m := seq 0.",
         "About seq. intros n s. Check n. Proof. induction s... Print length. - trivial. - + { * { { simpl. rewrite IHs; reflexivity... } } } Qed.",
-        "Check length_corr."
+        "Check length_corr.",
+        "Notation \"n .+1\" := (S n)(at level 2, left associativity, format \"n .+1\"): nat_scope.",
+        "Coercion b2Prop (x : bool) := x = true."
     ],
     "nested_test_list": [
         "Definition idw (A : Type) := A.",
