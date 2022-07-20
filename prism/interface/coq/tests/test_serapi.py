@@ -18,7 +18,7 @@ from prism.tests import _COQ_EXAMPLES_PATH
 
 def omit_locs(sexp: SexpNode) -> SexpNode:
     """
-    Replace `loc` terms in the AST with ``[LOC]``.
+    Replace location terms in the AST with ``[LOC]``.
 
     The result should match that expected from SerAPI commands when
     ``--omit-loc`` is provided.
@@ -31,7 +31,7 @@ def omit_locs(sexp: SexpNode) -> SexpNode:
     Returns
     -------
     SexpNode
-        The given AST albeit with all `loc` subtrees replaced with a
+        The given AST albeit with all location subtrees replaced with a
         ``[LOC]`` atom.
     """
     if sexp.is_list():
