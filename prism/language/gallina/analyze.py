@@ -8,17 +8,7 @@ import collections
 import logging
 import re
 from dataclasses import dataclass
-from typing import (
-    Any,
-    Callable,
-    Counter,
-    Iterable,
-    List,
-    Optional,
-    Set,
-    Tuple,
-    Union,
-)
+from typing import Any, Callable, Counter, List, Optional, Set, Tuple, Union
 
 from deprecated.sphinx import deprecated
 
@@ -864,18 +854,14 @@ class SexpAnalyzer:
         """
 
         def check_and_parse(
-            child: SexpNode,
-            expected: str,
-            parser: Callable[[str],
-                             Any] = int,
-            indices: Iterable[int] = (1,
-                                      )
-        ) -> str:
+                child: SexpNode,
+                expected: str,
+                parser: Callable[[str],
+                                 Any] = int) -> str:
             if child[0].content != expected:
                 raise SexpAnalyzingException(sexp)
-            for index in indices:
-                child = child[index]
-            return parser(child.content)
+            child = child[1]
+            return parser(str(child))
 
         try:
             if len(sexp) != 2:
@@ -896,9 +882,8 @@ class SexpAnalyzer:
                     check_and_parse(
                         data_child[0],
                         'fname',
-                        indices=(1,
-                                 1),
-                        parser=str),
+                        parser=lambda f: f
+                        if not f.startswith("(InFile") else f[8 :]),
                 "lineno":
                     check_and_parse(data_child[1],
                                     "line_nb"),
