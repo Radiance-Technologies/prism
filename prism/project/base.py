@@ -160,13 +160,15 @@ class Project(ABC):
         pass
 
     @property
-    def serapi_options(self) -> str:
+    def serapi_options(self) -> Optional[str]:
         """
         Get the SerAPI options for parsing this project's files.
 
+        If None, then the SerAPI options have not yet been determined.
+
         Returns
         -------
-        str
+        Optional[str]
             The command-line options for invoking SerAPI tools, e.g.,
             ``f"sercomp {serapi_options} file.v"``.
         """
@@ -196,7 +198,9 @@ class Project(ABC):
             obj,
             'utf-8',
             glom_proofs,
-            self.sentence_extraction_method)
+            self.sentence_extraction_method,
+            serapi_options=self.serapi_options,
+            opam_switch=self.opam_switch)
         return sentences
 
     def _get_size_bytes(self) -> int:
@@ -477,7 +481,8 @@ class Project(ABC):
             document: CoqDocument,
             encoding: str = 'utf-8',
             glom_proofs: bool = True,
-            sentence_extraction_method: SEM = SEM.SERAPI) -> List[str]:
+            sentence_extraction_method: SEM = SEM.SERAPI,
+            **kwargs) -> List[str]:
         """
         Split the Coq file text by sentences.
 
@@ -505,6 +510,8 @@ class Project(ABC):
             flag.
         """
         return sentence_extraction_method.parser(
-        ).parse_sentences_from_document(document,
-                                        encoding,
-                                        glom_proofs)
+        ).parse_sentences_from_document(
+            document,
+            encoding,
+            glom_proofs,
+            **kwargs)
