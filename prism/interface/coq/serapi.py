@@ -102,6 +102,12 @@ class Inductive:
 
 
 @dataclass
+class Environment:
+    constants: List[Constant]
+    inductives: List[Inductive]
+
+
+@dataclass
 class Hypothesis:
     idents: List[str]
     term: List[Optional[str]]
@@ -488,10 +494,7 @@ class SerAPI:
         assert ast[0] == SexpString("CoqAst")
         return ast[1][1]
 
-    def query_env(
-            self,
-            current_file: os.PathLike) -> Tuple[List[Constant],
-                                                List[Inductive]]:
+    def query_env(self, current_file: os.PathLike) -> Environment:
         """
         Query the global environment.
         """
@@ -577,7 +580,8 @@ class SerAPI:
                     c_name = str(c_name[1])
                     c_type = self.print_constr(c_type.pretty_format())
                     # if c_type is not None:
-                    #    c_type = UNBOUND_REL_PATTERN.sub(short_ident, c_type)
+                    #    c_type = UNBOUND_REL_PATTERN.sub(short_ident,
+                    #                                     c_type)
                     constructors.append((c_name, c_type))
                 blocks.append(
                     Block(
@@ -593,7 +597,71 @@ class SerAPI:
                     sexp=induct.pretty_format(),
                 ))
 
-        return constants, inductives
+        return Environment(constants, inductives)
+
+    def query_full_qualid(self, qualid: str) -> str:
+        """
+        Get the fully qualified version of the given identifier.
+
+        The fully qualified version uniquely identifies the object
+        without any ambiguity and regardless of scope.
+
+        Parameters
+        ----------
+        qualid : str
+            An identifier, which may already be partially or fully
+            qualified.
+
+        Returns
+        -------
+        Optional[str]
+            The fully qualified identifier or None if `qualid` is not
+            valid in the current context.
+        """
+        qualids = self.query_full_qualids(qualid)
+        return qualids[0] if qualids else None
+
+    def query_full_qualids(self, qualid: str) -> List[str]:
+        """
+        Get possible fully qualified IDs for the given identifier.
+
+        Similar to `query_qualids` but ensures that the returned IDs are
+        unambiguous regardless of context.
+
+        Parameters
+        ----------
+        qualid : str
+            An identifier, which may already be partially or fully
+            qualified.
+
+        Returns
+        -------
+        List[str]
+            A list of fully qualified identifiers consistent with the
+            one given.
+
+        Examples
+        --------
+        >>> with SerAPI() as serapi:
+        ...     serapi.execute("Inductive nat : Type := "
+        ...                    "  O : nat "
+        ...                    "| S (n : nat) : nat.")
+        ...     serapi.query_full_qualids("nat")
+        ['Top.nat', 'Coq.Init.Datatypes.nat']
+        """
+        if qualid.startswith('"') or qualid.endswith('"'):
+            raise ValueError(f"Cannot qualify notation {qualid}.")
+        feedback = self.query_vernac(f"Locate {qualid}.")
+        assert feedback
+        feedback = feedback[0]
+        if feedback.startswith("No object of basename"):
+            return []
+        qualids = []
+        for line in feedback.splitlines():
+            line = line.strip()
+            if not line.startswith("("):
+                qualids.append(line.split()[1])
+        return qualids
 
     def query_goals(self) -> Goals:
         """
@@ -665,33 +733,67 @@ class SerAPI:
         physical_path = str(responses[1][2][1][0][3])
         return physical_path
 
-    def query_qualid(self, qualid: str) -> str:
+    def query_qualid(self, qualid: str) -> Optional[str]:
         """
-        _summary_
+        Get the shortest version of the given identifier.
 
-        _extended_summary_
+        The shortest version of the given identifier is the minimally
+        qualified identifier that unambiguously refers to the same
+        object.
 
         Parameters
         ----------
         qualid : str
-            _description_
+            An identifier, which may already be partially or fully
+            qualified.
 
         Returns
         -------
-        str
-            _description_
+        Optional[str]
+            The minimally qualified identifier or None if `qualid` is
+            not a valid identifier in the current context.
+        """
+        qualids = self.query_qualids(qualid)
+        return qualids[0] if qualids else None
+
+    def query_qualids(self, qualid: str) -> List[str]:
+        """
+        Get possible in-scope qualified IDs for the given identifier.
+
+        Parameters
+        ----------
+        qualid : str
+            An identifier, which may already be partially or fully
+            qualified.
+
+        Returns
+        -------
+        List[str]
+            A list of minimally qualified identifiers consistent with
+            the one given.
+
+        Examples
+        --------
+        >>> with SerAPI() as serapi:
+        ...     serapi.execute("Inductive nat : Type := "
+        ...                    "  O : nat "
+        ...                    "| S (n : nat) : nat.")
+        ...     serapi.query_qualids("nat")
+        ['nat', 'Datatypes.nat']
         """
         responses, _, _ = self.send(f'(Query () (Locate "{qualid}"))')
-        if responses[1][2][1] == [] and qualid.startswith("SerTop."):
+        if responses[1][2][1] == SexpList() and qualid.startswith("SerTop."):
             qualid = qualid[len("SerTop."):]
             responses, _, _ = self.send(f'(Query () (Locate "{qualid}"))')
-        assert len(responses[1][2][1]) == 1
-        short_responses = responses[1][2][1][0][1][0][1]
-        assert short_responses[1][0] == SexpString("DirPath")
-        short_ident = ".".join(
-            [str(x[1]) for x in short_responses[1][1][::-1]]
-            + [str(short_responses[2][1])])
-        return short_ident
+        qualids = []
+        for qid in responses[1][2][1]:
+            # strip coq_object (CoqQualId) and location (v)
+            qid = qid[1][0][1]
+            assert qid[1][0] == SexpString("DirPath")
+            short_ident = ".".join(
+                [str(x[1]) for x in qid[1][1][::-1]] + [str(qid[2][1])])
+            qualids.append(short_ident)
+        return qualids
 
     def query_type(self,
                    term_sexp: str,

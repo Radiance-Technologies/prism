@@ -192,6 +192,70 @@ class TestSerAPI(unittest.TestCase):
             self.assertEqual(goals, no_goals)
         # TODO: test with more complicated goals and nested proofs
 
+    def test_query_qualid(self):
+        """
+        Verify that minimally qualified identifiers can be retrieved.
+        """
+        with SerAPI() as serapi:
+            self.assertEqual(serapi.query_qualids("nat"), ["nat"])
+            serapi.execute(
+                "Inductive nat : Type := O : nat | S (n : nat) : nat.")
+            serapi.execute("Module test.")
+            serapi.execute("Lemma nat : unit.")
+            serapi.execute("Admitted.")
+            actual = serapi.query_qualids("nat")
+            expected = ["nat", "Datatypes.nat", "SerTop.nat"]
+            self.assertEqual(actual, expected)
+            serapi.execute("End test.")
+            actual = serapi.query_full_qualids("nat")
+            expected = ["nat", "Datatypes.nat", "test.nat."]
+            self.assertEqual(
+                serapi.query_qualid("Coq.Init.Datatypes.nat"),
+                "Datatypes.nat")
+            with self.subTest("idempotent"):
+                qualid = serapi.query_qualid("Init.Logic.or")
+                self.assertEqual(qualid, "or")
+                qualid = serapi.query_qualid(qualid)
+                self.assertEqual(qualid, "or")
+
+    def test_query_full_qualid(self):
+        """
+        Verify that fully qualified identifiers can be retrieved.
+        """
+        with SerAPI() as serapi:
+            self.assertEqual(
+                serapi.query_full_qualids("nat"),
+                ["Coq.Init.Datatypes.nat"])
+            serapi.execute(
+                "Inductive nat : Type := O : nat | S (n : nat) : nat.")
+            serapi.execute("Module test.")
+            serapi.execute("Lemma nat : unit.")
+            serapi.execute("Admitted.")
+            actual = serapi.query_full_qualids("nat")
+            expected = [
+                "SerTop.test.nat",
+                "Coq.Init.Datatypes.nat",
+                "SerTop.nat"
+            ]
+            self.assertEqual(actual, expected)
+            serapi.execute("End test.")
+            actual = serapi.query_full_qualids("nat")
+            expected = [
+                "SerTop.nat",
+                "Coq.Init.Datatypes.nat",
+                "SerTop.test.nat"
+            ]
+            self.assertEqual(actual, expected)
+            self.assertEqual(
+                serapi.query_full_qualid("Datatypes.nat"),
+                "Coq.Init.Datatypes.nat")
+            self.assertEqual(serapi.query_full_qualid("nat"), "SerTop.nat")
+            with self.subTest("idempotent"):
+                qualid = serapi.query_full_qualid("Logic.or")
+                self.assertEqual(qualid, "Coq.Init.Logic.or")
+                qualid = serapi.query_full_qualid(qualid)
+                self.assertEqual(qualid, "Coq.Init.Logic.or")
+
     def test_query_vernac(self):
         """
         Verify that queries generate feedback.
