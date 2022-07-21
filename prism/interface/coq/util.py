@@ -25,5 +25,7 @@ def escape(vernac_cmd: str) -> str:
 def normalize_spaces(s: str) -> str:
     """
     Replace each span of contiguous whitespace with a single space.
+
+    Also remove leading and trailing whitespace.
     """
-    return re.sub(r"\s+", " ", s, flags=re.DOTALL)
+    return re.sub(r"\s+", " ", s, flags=re.DOTALL).strip()

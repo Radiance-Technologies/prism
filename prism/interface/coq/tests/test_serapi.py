@@ -394,7 +394,7 @@ class TestSerAPI(unittest.TestCase):
                                     | D => C
                                     end
                  : forall _ : const, const
-            """).strip()
+            """)
             self.assertEqual(normalize_spaces(actual[0]), expected)
 
 
