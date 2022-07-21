@@ -12,6 +12,7 @@ import sys
 from dataclasses import InitVar, dataclass, field
 from functools import cached_property
 from itertools import chain
+from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple, Union
 
 import pexpect
@@ -19,7 +20,7 @@ from pexpect.popen_spawn import PopenSpawn
 
 from prism.interface.coq.exception import CoqExn, CoqTimeout
 from prism.interface.coq.re_patterns import ADDED_STATE_PATTERN
-from prism.interface.coq.util import normalize_spaces
+from prism.interface.coq.util import escape, normalize_spaces
 from prism.language.sexp import SexpNode
 from prism.language.sexp.list import SexpList
 from prism.language.sexp.parser import SexpParser
@@ -30,23 +31,6 @@ from prism.util.opam.version import OpamVersion
 from prism.util.radpytools.dataclasses import default_field
 
 logger = logging.Logger(__file__, default_log_level())
-
-
-def escape(vernac_cmd: str) -> str:
-    """
-    Sanitize the given command by escaping special characters.
-
-    Parameters
-    ----------
-    vernac_cmd : str
-        A command to be sent to SerAPI.
-
-    Returns
-    -------
-    str
-        The sanitized command.
-    """
-    return vernac_cmd.replace("\\", "\\\\").replace('"', '\\"')
 
 
 def print_mod_path(modpath: SexpNode) -> str:
@@ -715,7 +699,7 @@ class SerAPI:
             abandoned_goals = store_goals(responses[1][2][1][0][1][3][1])
             return Goals(fg_goals, bg_goals, shelved_goals, abandoned_goals)
 
-    def query_library(self, lib: str) -> str:
+    def query_library(self, lib: str) -> Path:
         """
         Retrieve the physical path of a specified library.
 
@@ -726,12 +710,27 @@ class SerAPI:
 
         Returns
         -------
-        str
+        physical_path : Path
             The physical path bound to `lib`.
+
+        Raises
+        ------
+        CoqExn
+            If `lib` is not the logical name of any library in the
+            current context.
         """
-        responses, _, _ = self.send(f'(Query () (LocateLibrary "{lib}"))')
-        physical_path = str(responses[1][2][1][0][3])
-        return physical_path
+        # SerAPI surprisingly does not appear to have a means to query
+        # the physical path of a library, and the CoqGym LocateLibrary
+        # query is not present.
+        feedback = self.query_vernac(f"Locate Library {lib}.")
+        assert feedback
+        feedback = feedback[0]
+        # The following two branches
+        try:
+            physical_path = feedback.split("has been loaded from file")[-1]
+        except IndexError:
+            physical_path = feedback.split("is bound to file")[-1]
+        return Path(physical_path.strip())
 
     def query_qualid(self, qualid: str) -> Optional[str]:
         """

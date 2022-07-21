@@ -158,66 +158,6 @@ class TestSerAPI(unittest.TestCase):
             expected = expected[0][1]
             self.assertEqual(actual, expected)
 
-    def test_query_goals(self):
-        """
-        Verify that goals can be obtained when in proof mode.
-
-        Likewise, verify that no goals are obtained when not in the
-        middle of a proof.
-        """
-        unit_kernel = (
-            '(Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) (Id Coq)))) '
-            '(Id unit)) 0) (Instance ())))')
-        expected_unit_goals = Goals(
-            [Goal(1,
-                  'unit',
-                  unit_kernel,
-                  [])],
-            [],
-            [],
-            [])
-        no_goals = Goals([], [], [], [])
-        with SerAPI() as serapi:
-            serapi.execute("Lemma foobar : unit.")
-            goals = serapi.query_goals()
-            self.assertEqual(goals, expected_unit_goals)
-            serapi.execute("Require Import Program.")
-            goals = serapi.query_goals()
-            self.assertEqual(goals, expected_unit_goals)
-            serapi.execute("apply (const tt tt).")
-            goals = serapi.query_goals()
-            self.assertEqual(goals, no_goals)
-            serapi.execute("Qed.")
-            goals = serapi.query_goals()
-            self.assertEqual(goals, no_goals)
-        # TODO: test with more complicated goals and nested proofs
-
-    def test_query_qualid(self):
-        """
-        Verify that minimally qualified identifiers can be retrieved.
-        """
-        with SerAPI() as serapi:
-            self.assertEqual(serapi.query_qualids("nat"), ["nat"])
-            serapi.execute(
-                "Inductive nat : Type := O : nat | S (n : nat) : nat.")
-            serapi.execute("Module test.")
-            serapi.execute("Lemma nat : unit.")
-            serapi.execute("Admitted.")
-            actual = serapi.query_qualids("nat")
-            expected = ["nat", "Datatypes.nat", "SerTop.nat"]
-            self.assertEqual(actual, expected)
-            serapi.execute("End test.")
-            actual = serapi.query_full_qualids("nat")
-            expected = ["nat", "Datatypes.nat", "test.nat."]
-            self.assertEqual(
-                serapi.query_qualid("Coq.Init.Datatypes.nat"),
-                "Datatypes.nat")
-            with self.subTest("idempotent"):
-                qualid = serapi.query_qualid("Init.Logic.or")
-                self.assertEqual(qualid, "or")
-                qualid = serapi.query_qualid(qualid)
-                self.assertEqual(qualid, "or")
-
     def test_query_full_qualid(self):
         """
         Verify that fully qualified identifiers can be retrieved.
@@ -255,6 +195,82 @@ class TestSerAPI(unittest.TestCase):
                 self.assertEqual(qualid, "Coq.Init.Logic.or")
                 qualid = serapi.query_full_qualid(qualid)
                 self.assertEqual(qualid, "Coq.Init.Logic.or")
+
+    def test_query_goals(self):
+        """
+        Verify that goals can be obtained when in proof mode.
+
+        Likewise, verify that no goals are obtained when not in the
+        middle of a proof.
+        """
+        unit_kernel = (
+            '(Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) (Id Coq)))) '
+            '(Id unit)) 0) (Instance ())))')
+        expected_unit_goals = Goals(
+            [Goal(1,
+                  'unit',
+                  unit_kernel,
+                  [])],
+            [],
+            [],
+            [])
+        no_goals = Goals([], [], [], [])
+        with SerAPI() as serapi:
+            serapi.execute("Lemma foobar : unit.")
+            goals = serapi.query_goals()
+            self.assertEqual(goals, expected_unit_goals)
+            serapi.execute("Require Import Program.")
+            goals = serapi.query_goals()
+            self.assertEqual(goals, expected_unit_goals)
+            serapi.execute("apply (const tt tt).")
+            goals = serapi.query_goals()
+            self.assertEqual(goals, no_goals)
+            serapi.execute("Qed.")
+            goals = serapi.query_goals()
+            self.assertEqual(goals, no_goals)
+        # TODO: test with more complicated goals and nested proofs
+
+    def test_query_library(self):
+        """
+        Verify that libraries' physical paths can be queried.
+        """
+        with SerAPI() as serapi:
+            actual = serapi.query_library("Datatypes")
+            expected = serapi.switch.path.joinpath(
+                "lib",
+                "coq",
+                "theories",
+                "Init",
+                "Datatypes.vo")
+            self.assertEqual(actual, expected)
+            with self.assertRaises(CoqExn):
+                serapi.query_library("nonexistent_library")
+
+    def test_query_qualid(self):
+        """
+        Verify that minimally qualified identifiers can be retrieved.
+        """
+        with SerAPI() as serapi:
+            self.assertEqual(serapi.query_qualids("nat"), ["nat"])
+            serapi.execute(
+                "Inductive nat : Type := O : nat | S (n : nat) : nat.")
+            serapi.execute("Module test.")
+            serapi.execute("Lemma nat : unit.")
+            serapi.execute("Admitted.")
+            actual = serapi.query_qualids("nat")
+            expected = ["nat", "Datatypes.nat", "SerTop.nat"]
+            self.assertEqual(actual, expected)
+            serapi.execute("End test.")
+            actual = serapi.query_full_qualids("nat")
+            expected = ["nat", "Datatypes.nat", "test.nat."]
+            self.assertEqual(
+                serapi.query_qualid("Coq.Init.Datatypes.nat"),
+                "Datatypes.nat")
+            with self.subTest("idempotent"):
+                qualid = serapi.query_qualid("Init.Logic.or")
+                self.assertEqual(qualid, "or")
+                qualid = serapi.query_qualid(qualid)
+                self.assertEqual(qualid, "or")
 
     def test_query_vernac(self):
         """
