@@ -90,7 +90,7 @@ class OpamSwitch:
             switch_root = bash.run("opam var root").stdout.strip()
         if self.is_external(switch_name):
             # ensure local switch name is unambiguous
-            switch_name = str(Path(switch_name).absolute())
+            switch_name = str(Path(switch_name).resolve())
         object.__setattr__(self, 'name', switch_name)
         object.__setattr__(self, 'root', switch_root)
         object.__setattr__(self, '_is_external', self.is_external(self.name))
@@ -488,10 +488,10 @@ class OpamSwitch:
         # based on `get_root` at src/format/opamSwitch.ml in Opam's
         # GitHub repository
         if cls.is_external(name):
-            path = Path(name).absolute() / cls._external_dirname
+            path = Path(name).resolve() / cls._external_dirname
         else:
             path = Path(root) / name
-        return path.absolute()
+        return path.resolve()
 
     @classmethod
     def is_external(cls, name: str) -> bool:
