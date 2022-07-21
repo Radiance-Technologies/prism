@@ -22,6 +22,7 @@ from prism.interface.coq.exception import CoqExn, CoqTimeout
 from prism.interface.coq.re_patterns import ADDED_STATE_PATTERN
 from prism.interface.coq.util import escape, normalize_spaces
 from prism.language.sexp import SexpNode
+from prism.language.sexp.exception import IllegalSexpOperationException
 from prism.language.sexp.list import SexpList
 from prism.language.sexp.parser import SexpParser
 from prism.language.sexp.string import SexpString
@@ -293,7 +294,8 @@ class SerAPI:
         self,
         cmd: str,
         return_ast: bool = False
-    ) -> Union[List[SexpNode],
+    ) -> Union[Tuple[List[SexpNode],
+                     List[str]],
                Tuple[List[SexpNode],
                      List[str],
                      Optional[str]]]:
@@ -412,14 +414,12 @@ class SerAPI:
                     return None
                 else:
                     raise ex
-            else:
-                try:
-
-                    self.constr_cache[sexp_str] = normalize_spaces(
-                        str(responses[1][2][1][0][1]))
-                except TypeError:
-                    self.constr_cache[sexp_str] = normalize_spaces(
-                        str(responses[0][2][1][0][1]))
+            try:
+                constr = responses[1][2][1][0][1]
+            except IllegalSexpOperationException:
+                constr = responses[0][2][1][0][1]
+            assert isinstance(constr, SexpString)
+            self.constr_cache[sexp_str] = normalize_spaces(constr.get_content())
         return self.constr_cache[sexp_str]
 
     def pull(self, index: int = -1) -> int:
@@ -519,7 +519,7 @@ class SerAPI:
                 term = None
             # type
             assert const[1][0][2][0] == SexpString("const_type")
-            type_sexp = const[1][0][2][1].pretty_format()
+            type_sexp = str(const[1][0][2][1])
             type = self.print_constr(type_sexp)
             sort = self.query_type(type_sexp, return_str=True)
             constants.append(
@@ -531,7 +531,7 @@ class SerAPI:
                     type=type,
                     sort=sort,
                     opaque=opaque,
-                    sexp=const[1][0][2][1].pretty_format(),
+                    sexp=str(const[1][0][2][1]),
                 ))
 
         # store the inductives
@@ -562,7 +562,7 @@ class SerAPI:
                 constructors = []
                 for c_name, c_type in zip(blk[3][1], blk[4][1]):
                     c_name = str(c_name[1])
-                    c_type = self.print_constr(c_type.pretty_format())
+                    c_type = self.print_constr(str(c_type))
                     # if c_type is not None:
                     #    c_type = UNBOUND_REL_PATTERN.sub(short_ident,
                     #                                     c_type)
@@ -578,7 +578,7 @@ class SerAPI:
                     physical_path=physical_path,
                     blocks=blocks,
                     is_record=induct[1][0][1][1] != SexpString("NotRecord"),
-                    sexp=induct.pretty_format(),
+                    sexp=str(induct),
                 ))
 
         return Environment(constants, inductives)
@@ -668,13 +668,13 @@ class SerAPI:
                 for g in goals_sexp:
                     hypotheses = []
                     for h in g[2][1]:
-                        h_sexp = h[2].pretty_format()
+                        h_sexp = str(h[2])
                         hypotheses.append(
                             Hypothesis(
                                 idents=[str(ident[1]) for ident in h[0][::-1]],
                                 term=[
-                                    None if t == [] else self.print_constr(
-                                        t.pretty_format()) for t in h[1]
+                                    None if t == SexpList() else
+                                    self.print_constr(str(t)) for t in h[1]
                                 ],
                                 type=self.print_constr(h_sexp),
                                 sexp=h_sexp,
@@ -821,14 +821,14 @@ class SerAPI:
         try:
             responses, _, _ = self.send(f"(Query () (Type {term_sexp}))")
         except CoqExn as ex:
-            if ex.err_msg == "Not_found":
+            if ex.msg == "Not_found":
                 return None
             else:
                 raise ex
         assert responses[1][2][1][0][0] == SexpString("CoqConstr")
         type_sexp = responses[1][2][1][0][1]
         if return_str:
-            return self.print_constr(type_sexp.pretty_format())
+            return self.print_constr(str(type_sexp))
         else:
             return type_sexp
 
@@ -919,8 +919,9 @@ class SerAPI:
             parsed_item = SexpParser.parse(item)
             if "CoqExn" in item:  # an error occured in Coq
                 assert parsed_item[2][0] == SexpString("CoqExn")
+                assert isinstance(parsed_item[2][1][5][1], SexpString)
                 raise CoqExn(
-                    parsed_item[2][1][5][1].pretty_format(),
+                    parsed_item[2][1][5][1].get_content(),
                     str(parsed_item[2]))
             if item.startswith("(Feedback"):
                 try:

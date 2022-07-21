@@ -2,10 +2,10 @@
 Test suite for `prism.interface.coq.serapi`.
 """
 import unittest
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from prism.interface.coq.exception import CoqExn
-from prism.interface.coq.serapi import Goal, Goals, SerAPI
+from prism.interface.coq.serapi import Goal, Goals, Hypothesis, SerAPI
 from prism.interface.coq.util import normalize_spaces
 from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.parser import HeuristicParser
@@ -206,29 +206,110 @@ class TestSerAPI(unittest.TestCase):
         unit_kernel = (
             '(Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) (Id Coq)))) '
             '(Id unit)) 0) (Instance ())))')
-        expected_unit_goals = Goals(
-            [Goal(1,
-                  'unit',
-                  unit_kernel,
+
+        def expected_unit_goals(
+                evar: int,
+                hypotheses: Optional[List[Hypothesis]] = None) -> Goals:
+            if hypotheses is None:
+                hypotheses = []
+            return Goals(
+                [Goal(evar,
+                      'unit',
+                      unit_kernel,
+                      hypotheses)],
+                [],
+                [],
+                [])
+
+        nested_kernel = (
+            '(Prod ((binder_name (Name (Id A))) (binder_relevance Relevant)) '
+            '(Sort (Type ((((hash 14398528522911) '
+            '(data (Level ((DirPath ((Id SerTop))) 1)))) 0)))) '
+            '(Prod ((binder_name Anonymous) (binder_relevance Relevant)) '
+            '(Rel 1) (Ind (((MutInd (MPfile (DirPath ((Id Datatypes) '
+            '(Id Init) (Id Coq)))) (Id unit)) 0) (Instance ())))))')
+        expected_nested_goals = Goals(
+            [Goal(3,
+                  'forall (A : Type) (_ : A), unit',
+                  nested_kernel,
                   [])],
             [],
             [],
             [])
+        expected_hypotheses = [
+            Hypothesis(
+                ['A'],
+                [],
+                'Type',
+                '(Sort (Type ((((hash 14398528522911) '
+                '(data (Level ((DirPath ((Id SerTop))) 1)))) 0))))'),
+            Hypothesis(['X'],
+                       [],
+                       'A',
+                       '(Var (Id A))')
+        ]
+        posed_hypothesis = Hypothesis(
+            ['foo'],
+            ['idw A'],
+            'Type',
+            '(Sort (Type ((((hash 14398528588510) '
+            '(data (Level ((DirPath ((Id SerTop))) 2)))) 0))))')
         no_goals = Goals([], [], [], [])
         with SerAPI() as serapi:
-            serapi.execute("Lemma foobar : unit.")
-            goals = serapi.query_goals()
-            self.assertEqual(goals, expected_unit_goals)
-            serapi.execute("Require Import Program.")
-            goals = serapi.query_goals()
-            self.assertEqual(goals, expected_unit_goals)
-            serapi.execute("apply (const tt tt).")
-            goals = serapi.query_goals()
-            self.assertEqual(goals, no_goals)
-            serapi.execute("Qed.")
-            goals = serapi.query_goals()
-            self.assertEqual(goals, no_goals)
-        # TODO: test with more complicated goals and nested proofs
+            with self.subTest("simple"):
+                serapi.execute("Lemma foobar : unit.")
+                goals = serapi.query_goals()
+                self.assertEqual(goals, expected_unit_goals(1))
+                serapi.execute("Require Import Program.")
+                goals = serapi.query_goals()
+                self.assertEqual(goals, expected_unit_goals(1))
+                serapi.execute("apply (const tt tt).")
+                goals = serapi.query_goals()
+                self.assertEqual(goals, no_goals)
+                serapi.execute("Qed.")
+                goals = serapi.query_goals()
+                self.assertEqual(goals, no_goals)
+            with self.subTest("nested"):
+                serapi.execute("Set Nested Proofs Allowed.")
+                serapi.execute("Lemma foobar' : unit.")
+                goals = serapi.query_goals()
+                self.assertEqual(goals, expected_unit_goals(2))
+                serapi.execute("Lemma aux : forall A : Type, A -> unit.")
+                goals = serapi.query_goals()
+                self.assertEqual(goals, expected_nested_goals)
+                serapi.execute("intros.")
+                goals = serapi.query_goals()
+                self.assertEqual(
+                    goals,
+                    expected_unit_goals(5,
+                                        expected_hypotheses))
+                serapi.execute("Definition idw (A : Type) := A.")
+                goals = serapi.query_goals()
+                self.assertEqual(
+                    goals,
+                    expected_unit_goals(5,
+                                        expected_hypotheses))
+                serapi.execute("pose (foo := idw A).")
+                goals = serapi.query_goals()
+                self.assertEqual(
+                    goals,
+                    expected_unit_goals(
+                        6,
+                        expected_hypotheses + [posed_hypothesis]))
+                serapi.execute("exact tt.")
+                goals = serapi.query_goals()
+                self.assertEqual(goals, no_goals)
+                serapi.execute("Qed.")
+                goals = serapi.query_goals()
+                self.assertEqual(goals, expected_unit_goals(2))
+                serapi.execute("apply (@aux unit tt).")
+                goals = serapi.query_goals()
+                self.assertEqual(goals, no_goals)
+                serapi.execute("Qed.")
+                goals = serapi.query_goals()
+                self.assertEqual(goals, no_goals)
+            # TODO: test a proof with multiple idents/terms in an
+            # hypothesis
 
     def test_query_library(self):
         """
