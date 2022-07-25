@@ -94,22 +94,83 @@ class Environment:
 
 @dataclass
 class Hypothesis:
+    """
+    An hypothesis.
+    """
+
+    # This class roughly corresponds to serapi_goals.mli::hyp.
     idents: List[str]
-    term: List[Optional[str]]
+    """
+    Identifiers within the hypothesis.
+    """
+    term: Optional[str]
+    """
+    The value assigned to each identifier, if any.
+    """
+    # QUESTION (AG): Is there a one-to-one mapping between terms and
+    # identifiers? I'm not sure how there can be multiple of these since
+    # the field arises from an `option` in serapi_goals.mli.
     type: str
+    """
+    The type of each identifier.
+    """
     sexp: str
+    """
+    The serialization of the identifier's Coq kernel type.
+    """
+
+    def __str__(self) -> str:
+        """
+        Pretty-print the hypothesis similar to its form in CoqIDE.
+        """
+        value = f':= {self.term}' if self.term is not None else ""
+        return f"{','.join(self.idents)} {value} : {self.type}"
 
 
 @dataclass
 class Goal:
+    """
+    A goal of a proof.
+    """
+
+    # This class roughly corresponds to serapi_goals.mli::reified_goal.
     id: int
+    """
+    A unique identifier of the goal.
+    """
     type: str
+    """
+    The type of the goal.
+
+    In essence, a statement of the goal itself.
+    """
     sexp: str
+    """
+    The serialization of the goal's Coq kernel type.
+    """
     hypotheses: List[Hypothesis]
+    """
+    A list of hypotheses pertaining to this goal.
+    """
+
+    def __str__(self) -> str:
+        """
+        Pretty-print the goal similar to its form in CoqIDE.
+        """
+        hypotheses = '\n'.join([str(h) for h in self.hypotheses])
+        return '\n'.join(
+            [hypotheses,
+             '______________________________________',
+             self.type])
 
 
 @dataclass
 class Goals:
+    """
+    The collection of unfinished goals within the current context.
+    """
+
+    # This class roughly corresponds to serapi_goals.mli::ser_goals.
     foreground_goals: List[Goal]
     background_goals: List[Goal]
     shelved_goals: List[Goal]
@@ -663,40 +724,73 @@ class SerAPI:
         else:
             assert len(responses[1][2][1]) == 1
 
-            def store_goals(goals_sexp: SexpNode) -> List[Goal]:
+            def deserialize_goals(goals_sexp: SexpNode) -> List[Goal]:
+                """
+                Deserialize each goal in a list into a Python object.
+                """
                 goals = []
                 for g in goals_sexp:
                     hypotheses = []
                     for h in g[2][1]:
                         h_sexp = str(h[2])
+                        assert len(h[1]) < 2
+                        if len(h[1]) == 0:
+                            term = None
+                        else:
+                            t = h[1][0]
+                            if t == SexpList():
+                                term = None
+                            else:
+                                term = self.print_constr(str(t))
                         hypotheses.append(
                             Hypothesis(
                                 idents=[str(ident[1]) for ident in h[0][::-1]],
-                                term=[
-                                    None if t == SexpList() else
-                                    self.print_constr(str(t)) for t in h[1]
-                                ],
+                                term=term,
                                 type=self.print_constr(h_sexp),
                                 sexp=h_sexp,
                             ))
 
                     type_sexp = str(g[1][1])
+
+                    if OpamVersion.less_than(self.serapi_version, "8.10.0"):
+                        # uid of Evar.t
+                        evar = int(str(g[0][1]))
+                    else:
+                        # name replaced with info field containing
+                        # unprocessed Evar.t
+                        evar = int(str(g[0][1][0][1][1]))
                     goals.append(
                         Goal(
-                            id=int(str(g[0][1][0][1][1])),
+                            id=evar,
                             type=self.print_constr(type_sexp),
                             sexp=type_sexp,
                             hypotheses=hypotheses[::-1],
                         ))
                 return goals
 
-            fg_goals = store_goals(responses[1][2][1][0][1][0][1])
-            bg_goals = store_goals(
-                list(
-                    chain.from_iterable(
-                        chain.from_iterable(responses[1][2][1][0][1][1][1]))))
-            shelved_goals = store_goals(responses[1][2][1][0][1][2][1])
-            abandoned_goals = store_goals(responses[1][2][1][0][1][3][1])
+            ser_goals = responses[1][2][1][0][1]
+
+            stack = list(
+                chain.from_iterable(chain.from_iterable(ser_goals[1][1])))
+            if OpamVersion.less_than(self.serapi_version, "8.10.0"):
+                # ser_goals type does not exist
+                # but nearly equivalent pre_goals type does, which hails
+                # from coq/proofs/proof.mli
+                shelved_goals = ser_goals[2][1]
+                abandoned_goals = ser_goals[3][1]
+            elif OpamVersion.less_than(self.serapi_version, "8.13.0"):
+                # pre_goals replaced by ser_goals
+                # bullets field introduced
+                shelved_goals = ser_goals[2][1]
+                abandoned_goals = ser_goals[3][1]
+            else:
+                # bullets field moved
+                shelved_goals = ser_goals[3][1]
+                abandoned_goals = ser_goals[4][1]
+            fg_goals = deserialize_goals(ser_goals[0][1])
+            bg_goals = deserialize_goals(stack)
+            shelved_goals = deserialize_goals(shelved_goals)
+            abandoned_goals = deserialize_goals(abandoned_goals)
             return Goals(fg_goals, bg_goals, shelved_goals, abandoned_goals)
 
     def query_library(self, lib: str) -> Path:

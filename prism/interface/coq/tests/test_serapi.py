@@ -239,22 +239,107 @@ class TestSerAPI(unittest.TestCase):
         expected_hypotheses = [
             Hypothesis(
                 ['A'],
-                [],
+                None,
                 'Type',
                 '(Sort (Type ((((hash 14398528522911) '
                 '(data (Level ((DirPath ((Id SerTop))) 1)))) 0))))'),
             Hypothesis(['X'],
-                       [],
+                       None,
                        'A',
                        '(Var (Id A))')
         ]
         posed_hypothesis = Hypothesis(
             ['foo'],
-            ['idw A'],
+            'idw A',
             'Type',
             '(Sort (Type ((((hash 14398528588510) '
             '(data (Level ((DirPath ((Id SerTop))) 2)))) 0))))')
         no_goals = Goals([], [], [], [])
+        expected_add0_base_goal = Goal(
+            10,
+            '@eq nat (Nat.add O O) O',
+            '(App (Ind (((MutInd (MPfile (DirPath ((Id Logic) (Id Init) (Id Coq)))) '
+            '(Id eq)) 0) (Instance ()))) '
+            '((Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) (Id Coq)))) '
+            '(Id nat)) 0) (Instance ()))) '
+            '(App (Const ((Constant (MPfile (DirPath ((Id Nat) (Id Init) (Id Coq)))) '
+            '(Id add)) (Instance ()))) '
+            '((Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
+            '(Id Coq)))) (Id nat)) 0) 1) (Instance ()))) '
+            '(Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
+            '(Id Coq)))) (Id nat)) 0) 1) (Instance ()))))) '
+            '(Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
+            '(Id Coq)))) (Id nat)) 0) 1) (Instance ())))))',
+            [])
+        expected_add0_ind_goal = Goal(
+            13,
+            '@eq nat (Nat.add (S a) O) (S a)',
+            '(App (Ind (((MutInd (MPfile (DirPath ((Id Logic) (Id Init) (Id Coq)))) '
+            '(Id eq)) 0) (Instance ()))) '
+            '((Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) (Id Coq)))) '
+            '(Id nat)) 0) (Instance ()))) '
+            '(App (Const ((Constant (MPfile (DirPath ((Id Nat) (Id Init) (Id Coq)))) '
+            '(Id add)) (Instance ()))) '
+            '((App (Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
+            '(Id Coq)))) (Id nat)) 0) 2) (Instance ()))) ((Var (Id a)))) '
+            '(Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
+            '(Id Coq)))) (Id nat)) 0) 1) (Instance ()))))) '
+            '(App (Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
+            '(Id Coq)))) (Id nat)) 0) 2) (Instance ()))) ((Var (Id a))))))',
+            [
+                Hypothesis(
+                    ['a'],
+                    None,
+                    'nat',
+                    '(Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
+                    '(Id Coq)))) (Id nat)) 0) (Instance ())))'),
+                Hypothesis(
+                    ['IH'],
+                    None,
+                    '@eq nat (Nat.add a O) a',
+                    '(App (Ind (((MutInd (MPfile (DirPath ((Id Logic) (Id Init) '
+                    '(Id Coq)))) (Id eq)) 0) (Instance ()))) '
+                    '((Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
+                    '(Id Coq)))) (Id nat)) 0) (Instance ()))) '
+                    '(App (Const ((Constant (MPfile (DirPath ((Id Nat) (Id Init) '
+                    '(Id Coq)))) (Id add)) (Instance ()))) ((Var (Id a)) '
+                    '(Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
+                    '(Id Coq)))) (Id nat)) 0) 1) (Instance ()))))) (Var (Id a))))'
+                )
+            ])
+        expected_add_assoc_goals = Goals(
+            [
+                Goal(
+                    11,
+                    '@eq nat (Nat.add n (Nat.add m p)) (Nat.add (Nat.add n m) p)',
+                    '(App (Ind (((MutInd (MPfile (DirPath ((Id Logic) (Id Init) '
+                    '(Id Coq)))) (Id eq)) 0) (Instance ()))) '
+                    '((Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
+                    '(Id Coq)))) (Id nat)) 0) (Instance ()))) '
+                    '(App (Const ((Constant (MPfile (DirPath ((Id Nat) (Id Init) '
+                    '(Id Coq)))) (Id add)) (Instance ()))) ((Var (Id n)) '
+                    '(App (Const ((Constant (MPfile (DirPath ((Id Nat) (Id Init) '
+                    '(Id Coq)))) (Id add)) (Instance ()))) ((Var (Id m)) '
+                    '(Var (Id p)))))) '
+                    '(App (Const ((Constant (MPfile (DirPath ((Id Nat) (Id Init) '
+                    '(Id Coq)))) (Id add)) (Instance ()))) '
+                    '((App (Const ((Constant (MPfile (DirPath ((Id Nat) (Id Init) '
+                    '(Id Coq)))) (Id add)) (Instance ()))) ((Var (Id n)) '
+                    '(Var (Id m)))) (Var (Id p))))))',
+                    [
+                        Hypothesis(
+                            ['p',
+                             'm',
+                             'n'],
+                            None,
+                            'nat',
+                            '(Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
+                            '(Id Coq)))) (Id nat)) 0) (Instance ())))')
+                    ])
+            ],
+            [],
+            [],
+            [])
         with SerAPI() as serapi:
             with self.subTest("simple"):
                 serapi.execute("Lemma foobar : unit.")
@@ -308,8 +393,56 @@ class TestSerAPI(unittest.TestCase):
                 serapi.execute("Qed.")
                 goals = serapi.query_goals()
                 self.assertEqual(goals, no_goals)
-            # TODO: test a proof with multiple idents/terms in an
-            # hypothesis
+            with self.subTest("multiple_goals"):
+                serapi.execute("Lemma add_0_r: forall (a : nat), a + 0 = a.")
+                serapi.execute("intros.")
+                goals = serapi.query_goals()
+                serapi.execute("induction a as [| a IH].")
+                goals = serapi.query_goals()
+                self.assertEqual(
+                    goals,
+                    Goals(
+                        [expected_add0_base_goal,
+                         expected_add0_ind_goal],
+                        [],
+                        [],
+                        []))
+                serapi.execute("-")
+                goals = serapi.query_goals()
+                self.assertEqual(
+                    goals,
+                    Goals(
+                        [expected_add0_base_goal],
+                        [expected_add0_ind_goal],
+                        [],
+                        []))
+                serapi.execute("reflexivity.")
+                goals = serapi.query_goals()
+                self.assertEqual(
+                    goals,
+                    Goals([],
+                          [expected_add0_ind_goal],
+                          [],
+                          []))
+                serapi.execute("-")
+                goals = serapi.query_goals()
+                self.assertEqual(
+                    goals,
+                    Goals([expected_add0_ind_goal],
+                          [],
+                          [],
+                          []))
+                serapi.execute("simpl. rewrite -> IH. reflexivity.")
+                goals = serapi.query_goals()
+                self.assertEqual(goals, no_goals)
+                serapi.execute("Qed.")
+            with self.subTest("multiple_idents"):
+                serapi.execute(
+                    "Theorem add_assoc : forall n m p : nat, "
+                    "n + (m + p) = (n + m) + p.")
+                serapi.execute("intros.")
+                goals = serapi.query_goals()
+                self.assertEqual(goals, expected_add_assoc_goals)
 
     def test_query_library(self):
         """
