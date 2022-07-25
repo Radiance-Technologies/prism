@@ -256,7 +256,7 @@ class CoqProjectBuildCache:
             self,
             project: str,
             commit: str,
-            coq_version: str) -> str:
+            coq_version: str) -> PosixPath:
         """
         Get the file path for identifying fields of a cache.
         """
