@@ -26,9 +26,8 @@ def extract_cache(
     OpamAPI.set_switch(metadata=project.metadata)
     if commit_sha not in build_cache:
         try:
+            project.git.checkout(commit_sha)
             project.build()
-            # Gather a list of Coq files, see
-            # test_build_cache.py
             command_data = {}
             for filename in project.get_file_list():
                 file_commands: Set[VernacCommandData] = command_data.setdefault(
