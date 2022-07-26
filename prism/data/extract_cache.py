@@ -36,10 +36,10 @@ def extract_vernac_commands(project: ProjectRepo):
         beg_char_idx = 0
         end_char_idx = 0
         for (sentence_idx,
-                sentence) in enumerate(project.extract_sentences(
-                    doc,
-                    sentence_extraction_method=project
-                    .sentence_extraction_method)):
+             sentence) in enumerate(project.extract_sentences(
+                 doc,
+                 sentence_extraction_method=project.sentence_extraction_method)
+                                    ):
             end_char_idx += len(sentence)
             command_type, identifier = ParserUtils.extract_identifier(sentence)
             file_commands.add(
