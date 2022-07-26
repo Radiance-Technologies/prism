@@ -1,7 +1,15 @@
 """
 Module for storing cache extraction functions.
 """
-from prism.data.build_cache import CoqProjectBuildCache, ProjectCommitData
+from typing import Set
+
+from prism.data.build_cache import (
+    CoqProjectBuildCache,
+    ProjectCommitData,
+    VernacCommandData,
+)
+from prism.language.gallina.analyze import SexpInfo
+from prism.language.heuristic.util import ParserUtils
 from prism.project.exception import ProjectBuildError
 from prism.project.repo import ProjectRepo
 from prism.util.opam import OpamAPI

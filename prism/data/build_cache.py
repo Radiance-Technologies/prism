@@ -5,6 +5,7 @@ import os
 import tempfile
 from dataclasses import InitVar, dataclass, field
 from multiprocessing.pool import Pool
+from os import PosixPath
 from pathlib import Path
 from typing import Dict, Iterable, Optional, Set, Tuple, Union
 
@@ -265,7 +266,7 @@ class CoqProjectBuildCache:
                                  "_"),
              self.fmt_ext])
 
-    def get_path_from_metadata(self, metadata: ProjectMetadata) -> str:
+    def get_path_from_metadata(self, metadata: ProjectMetadata) -> PosixPath:
         """
         Get the file path for a given metadata.
         """
