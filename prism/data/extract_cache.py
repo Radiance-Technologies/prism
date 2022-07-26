@@ -3,7 +3,6 @@ Module for storing cache extraction functions.
 """
 from typing import Callable, Set
 
-
 from prism.data.build_cache import (
     CoqProjectBuildCache,
     ProjectCommitData,
