@@ -1,22 +1,21 @@
 """
 Module for storing cache extraction functions.
 """
-from typing import Set, Callable
+from typing import Callable
 
 from prism.data.build_cache import (
     CoqProjectBuildCache,
     ProjectCommitData,
-    VernacCommandData,
 )
-from prism.language.gallina.analyze import SexpInfo
-from prism.language.heuristic.util import ParserUtils
 from prism.project.exception import ProjectBuildError
+from prism.project.metadata import ProjectMetadata
 from prism.project.repo import ProjectRepo
-from prism.util.opam import OpamAPI
+from prism.util.opam import OpamAPI, OpamSwitch
 
 
 def get_switch(metadata : ProjectMetadata) -> OpamSwitch:
     return OpamAPI.find_switch(metadata)
+
 
 def extract_cache(
         coq_version: str,
