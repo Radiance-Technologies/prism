@@ -20,6 +20,9 @@ def extract_cache(
         build_cache: CoqProjectBuildCache,
         project: ProjectRepo,
         commit_sha: str) -> None:
+    """
+    Extract cache from project commit and insert into build_cache.
+    """
     OpamAPI.set_switch(metadata=project.metadata)
     if commit_sha not in build_cache:
         try:
