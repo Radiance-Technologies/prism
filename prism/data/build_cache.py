@@ -5,7 +5,6 @@ import os
 import tempfile
 from dataclasses import InitVar, dataclass, field
 from multiprocessing.pool import Pool
-from os import PosixPath
 from pathlib import Path
 from typing import Dict, Iterable, Optional, Set, Tuple, Union
 
@@ -257,7 +256,7 @@ class CoqProjectBuildCache:
             self,
             project: str,
             commit: str,
-            coq_version: str) -> PosixPath:
+            coq_version: str) -> Path:
         """
         Get the file path for identifying fields of a cache.
         """
@@ -266,7 +265,7 @@ class CoqProjectBuildCache:
                                  "_"),
              self.fmt_ext])
 
-    def get_path_from_metadata(self, metadata: ProjectMetadata) -> PosixPath:
+    def get_path_from_metadata(self, metadata: ProjectMetadata) -> Path:
         """
         Get the file path for a given metadata.
         """
