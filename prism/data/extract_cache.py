@@ -1,10 +1,7 @@
 """
 Module for storing cache extraction functions.
 """
-from prism.data.build_cache import (
-    CoqProjectBuildCache,
-    ProjectCommitData
-)
+from prism.data.build_cache import CoqProjectBuildCache, ProjectCommitData
 from prism.project.exception import ProjectBuildError
 from prism.project.repo import ProjectRepo
 from prism.util.opam import OpamAPI
@@ -51,6 +48,6 @@ def extract_cache(
                             None))
                     beg_char_idx = end_char_idx
             data = ProjectCommitData(project.metadata, command_data)
-            build_cache.insert(data)            
+            build_cache.insert(data)
         except ProjectBuildError as pbe:
             print(pbe.args)
