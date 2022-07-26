@@ -14,6 +14,9 @@ from prism.util.opam import OpamAPI, OpamSwitch
 
 
 def get_switch(metadata : ProjectMetadata) -> OpamSwitch:
+    """
+    Pass args for use as a stub.
+    """
     return OpamAPI.find_switch(metadata)
 
 
