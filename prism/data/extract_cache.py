@@ -9,13 +9,12 @@ from prism.project.exception import ProjectBuildError
 from prism.project.repo import ProjectRepo
 from prism.util.opam import OpamAPI
 
-def extract_cache(coq_version: str, 
-                  build_cache: CoqProjectBuildCache, 
-                  project: ProjectRepo, 
-                  commit_sha: str) -> None:
-    """
-    Extract cache from project at commit and insert into build_cache.
-    """
+
+def extract_cache(
+        coq_version: str,
+        build_cache: CoqProjectBuildCache,
+        project: ProjectRepo,
+        commit_sha: str) -> None:
     OpamAPI.set_switch(metadata=project.metadata)
     if commit_sha not in build_cache:
         try:
@@ -55,7 +54,3 @@ def extract_cache(coq_version: str,
             build_cache.insert(data)            
         except ProjectBuildError as pbe:
             print(pbe.args)
-    
-
-    
-
