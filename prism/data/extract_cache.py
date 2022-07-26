@@ -3,10 +3,7 @@ Module for storing cache extraction functions.
 """
 from typing import Callable
 
-from prism.data.build_cache import (
-    CoqProjectBuildCache,
-    ProjectCommitData,
-)
+from prism.data.build_cache import CoqProjectBuildCache, ProjectCommitData
 from prism.project.exception import ProjectBuildError
 from prism.project.metadata import ProjectMetadata
 from prism.project.repo import ProjectRepo
