@@ -199,6 +199,11 @@ class SerAPI:
     the version of Coq and SerAPI that are used.
     Be default, the global "default" switch is selected.
     """
+    omit_loc: InitVar[bool] = False
+    """
+    Whether to shorten and replace locations with a filler token or to
+    yield full location information, by default False.
+    """
     frame_stack: List[List[int]] = default_field([])
     """
     A stack of frames capturing restorable checkpoints in execution.
@@ -226,7 +231,7 @@ class SerAPI:
     The switch in which `sertop` is being executed.
     """
 
-    def __post_init__(self, timeout: int, switch: OpamSwitch):
+    def __post_init__(self, timeout: int, switch: OpamSwitch, omit_loc: bool):
         """
         Initialize the SerAPI subprocess.
         """
@@ -235,6 +240,8 @@ class SerAPI:
         self._switch = switch
         try:
             cmd = "sertop --implicit --print0"
+            if omit_loc:
+                cmd = cmd + " --omit_loc"
             if not switch.is_clone:
                 cmd, _, _ = switch.as_clone_command(cmd)
             self._proc = PopenSpawn(
@@ -692,7 +699,7 @@ class SerAPI:
         ...                    "  O : nat "
         ...                    "| S (n : nat) : nat.")
         ...     serapi.query_full_qualids("nat")
-        ['Top.nat', 'Coq.Init.Datatypes.nat']
+        ['SerTop.nat', 'Coq.Init.Datatypes.nat']
         """
         if qualid.startswith('"') or qualid.endswith('"'):
             raise ValueError(f"Cannot qualify notation {qualid}.")
@@ -753,7 +760,9 @@ class SerAPI:
                     type_sexp = str(g[1][1])
 
                     if OpamVersion.less_than(self.serapi_version, "8.10.0"):
-                        # uid of Evar.t
+                        # access value of name field, which is simply
+                        # the uid of an Evar.t
+                        # Evar.t defined in coq/kernel/evar.mli
                         evar = int(str(g[0][1]))
                     else:
                         # name replaced with info field containing
@@ -1081,5 +1090,4 @@ class SerAPI:
         except ProcessLookupError:
             pass
         self._proc.wait()
-        self._dead = True
         self._dead = True

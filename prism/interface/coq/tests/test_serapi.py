@@ -36,7 +36,9 @@ def omit_locs(sexp: SexpNode) -> SexpNode:
     """
     if sexp.is_list():
         if sexp.head() == "loc":
-            return SexpString("[LOC]")
+            return SexpList(
+                [SexpString("loc"),
+                 SexpList([SexpString("[LOC]")])])
         else:
             return SexpList([omit_locs(c) for c in sexp.get_children()])
     else:
@@ -143,7 +145,7 @@ class TestSerAPI(unittest.TestCase):
         """
         expected_asts = CoqParser.parse_asts(_COQ_EXAMPLES_PATH / "simple.v")
         actual_asts = []
-        with SerAPI() as serapi:
+        with SerAPI(omit_loc=True) as serapi:
             for sentence in self.sentences["simple"]:
                 # actually execute to ensure notations/imports exist
                 serapi.execute(sentence)
@@ -151,7 +153,6 @@ class TestSerAPI(unittest.TestCase):
         for actual, expected in zip(actual_asts, expected_asts):
             # do not compare based on locations since those will
             # definitely differ
-            actual = omit_locs(actual)
             expected = omit_locs(expected)
             # Also strip top-level location from expected since it is
             # pre-stripped from queried AST
