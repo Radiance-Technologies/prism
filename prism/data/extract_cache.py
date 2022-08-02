@@ -1,7 +1,7 @@
 """
 Module for storing cache extraction functions.
 """
-from typing import Callable, Set
+from typing import Callable, Dict, Set
 
 from prism.data.build_cache import (
     CoqProjectBuildCache,
@@ -23,7 +23,9 @@ def get_switch(metadata: ProjectMetadata) -> OpamSwitch:
     return OpamAPI.active_switch
 
 
-def extract_vernac_commands(project: ProjectRepo):
+def extract_vernac_commands(
+        project: ProjectRepo) -> Dict[str,
+                                      Set[VernacCommandData]]:
     """
     Compile vernac commands from a project into a dict.
     """
@@ -35,11 +37,11 @@ def extract_vernac_commands(project: ProjectRepo):
         doc = project.get_file(filename)
         beg_char_idx = 0
         end_char_idx = 0
-        for (sentence_idx,
-             sentence) in enumerate(project.extract_sentences(
-                 doc,
-                 sentence_extraction_method=project.sentence_extraction_method)
-                                    ):
+        sentences_enumerated = enumerate(
+            project.extract_sentences(
+                doc,
+                sentence_extraction_method=project.sentence_extraction_method))
+        for (sentence_idx, sentence) in sentences_enumerated:
             end_char_idx += len(sentence)
             command_type, identifier = ParserUtils.extract_identifier(sentence)
             file_commands.add(
@@ -64,7 +66,8 @@ def extract_cache(
         build_cache: CoqProjectBuildCache,
         project: ProjectRepo,
         commit_sha: str,
-        process_project: Callable) -> None:
+        process_project: Callable[[ProjectRepo],
+                                  None]) -> None:
     """
     Extract cache from project commit and insert into build_cache.
     """
@@ -74,12 +77,10 @@ def extract_cache(
     if (project.name, commit_sha, coq_version) not in build_cache:
         try:
             project.build()
-
-            command_data = extract_vernac_commands(project)
-
-            data = ProjectCommitData(project.metadata, command_data)
-
-            build_cache.insert(data)
         except ProjectBuildError as pbe:
             print(pbe.args)
             process_project(project)
+        else:
+            command_data = extract_vernac_commands(project)
+            data = ProjectCommitData(project.metadata, command_data)
+            build_cache.insert(data)
