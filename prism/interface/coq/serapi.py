@@ -256,8 +256,14 @@ class SerAPI:
                 'Please make sure the "sertop" program is in the PATH.\n'
                 'You may have to run "eval $(opam env)".')
             sys.exit(1)
-        self._proc.expect_exact(
-            "(Feedback((doc_id 0)(span_id 1)(route 0)(contents Processed)))\0")
+        try:
+            self._proc.expect_exact(
+                "(Feedback((doc_id 0)(span_id 1)(route 0)(contents Processed)))\0"
+            )
+        except pexpect.EOF as e:
+            raise RuntimeError(
+                f"Unexpected EOF with switch={self._switch} "
+                f"and SerAPI version {self.serapi_version}") from e
         self.send("Noop")
 
         # global printing options
@@ -546,10 +552,33 @@ class SerAPI:
         assert ast[0] == SexpString("CoqAst")
         return ast[1][1]
 
-    def query_env(self, current_file: os.PathLike) -> Environment:
+    def query_env(
+            self,
+            current_file: Optional[os.PathLike] = None) -> Environment:
         """
         Query the global environment.
+
+        Parameters
+        ----------
+        current_file : os.PathLike
+            The file from which commands for the current SerAPI session
+            are drawn, by default None.
+
+        Returns
+        -------
+        Environment
+            The global environment.
+
+        Raises
+        ------
+        RuntimeError
+            If this operation is not supported by the current session's
+            version of SerAPI.
         """
+        if OpamVersion.less_than(self.serapi_version, "8.9.0"):
+            raise RuntimeError(
+                "Querying the environment is not supported in SerAPI "
+                f"version {self.serapi_version}.")
         responses, _, _ = self.send("(Query () Env)")
         env = responses[1][2][1][0]
 
