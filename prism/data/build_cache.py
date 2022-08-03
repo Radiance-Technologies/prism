@@ -176,7 +176,7 @@ class CoqProjectBuildCache:
     def _contains_metadata(self, metadata: ProjectMetadata) -> bool:
         return self.get_path_from_metadata(metadata).exists()
 
-    def _contains_fields(self, fields: Tuple[str]) -> bool:
+    def _contains_fields(self, *fields: Tuple[str]) -> bool:
         return self.get_path_from_fields(*fields).exists()
 
     def contains(
