@@ -7,7 +7,7 @@ at https://github.com/EngineeringSoftware/roosterize/.
 import collections
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import (
     Any,
     Callable,
@@ -115,6 +115,40 @@ class SexpInfo:
         bol_pos_last: int
         beg_charno: int
         end_charno: int
+
+        def __or__(
+            self,
+            other: 'SexpInfo.Loc',
+        ) -> 'SexpInfo.Loc':
+            """
+            Generate a location containing union of two locs.
+
+            Parameters
+            ----------
+            other: 'SexpInfo.Loc'
+                Another location from same file as instance Loc,
+                that will be used to generate a new `SexpInfo.Loc`
+                that is union of instance Loc and `other`.
+
+            Returns
+            -------
+            SexpInfo.Loc
+                A `Loc` object that spans both this instance
+                and the other instance.
+            """
+            if self.filename != other.filename:
+                raise ValueError(
+                    "Cannot combine locations from different files.")
+            if self.beg_charno < other.beg_charno:
+                kwargs = asdict(self)
+                if self.end_charno < other.end_charno:
+                    kwargs['lineno_last'] = other.lineno_last
+                    kwargs['bol_pos_last'] = other.bol_pos_last
+                    kwargs['end_charno'] = other.end_charno
+                loc = SexpInfo.Loc(**kwargs)
+            else:
+                loc = other | self
+            return loc
 
         def __contains__(
                 self,
@@ -263,6 +297,23 @@ class SexpInfo:
                                 ])
                         ])
                 ])
+
+        @classmethod
+        def span(cls, *locs: 'SexpInfo.Loc') -> 'SexpInfo.Loc':
+            """
+            Generate a `SexpInfo.Loc` that spans all input locs.
+
+            Parameters
+            ----------
+            locs: tuple of SexpInfo.Loc
+                SexpInfo.Loc objects that combined together
+                through an OR operation. All locations must
+                come from the same file.
+            """
+            loc = locs[0]
+            for other in locs[:-1]:
+                loc = loc | other
+            return loc
 
     @dataclass
     class SertokSentence:
