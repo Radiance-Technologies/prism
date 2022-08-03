@@ -219,6 +219,42 @@ class CommitIterator:
                 raise StopIteration
 
 
+class ChangedCoqCommitIterator(CommitIterator):
+    """
+    Subclass of CommitIterator only yielding changed .v files.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __iter__(self):
+        """
+        Yield each commit in the specified order.
+
+        Excludes commits that did not change a .v file.
+        """
+        last = None
+        super().__iter__()
+        # this is possibly the only way
+        # to iterate through a superclass
+        while True:
+            try:
+                commit = super().__next__()
+            except StopIteration:
+                return
+
+            if last is None:
+                yield commit
+            else:
+                changed_files = self._repo.git.diff(
+                    "--name-only",
+                    commit,
+                    last).split("\n")
+                if any(filename.endswith(".v") for filename in changed_files):
+                    yield commit
+            last = commit
+
+
 class ProjectRepo(Repo, Project):
     """
     Class for representing a Coq project.
