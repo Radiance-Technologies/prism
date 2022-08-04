@@ -242,7 +242,7 @@ class SerAPI:
             cmd = "sertop --implicit --print0"
             if omit_loc:
                 cmd = cmd + " --omit_loc"
-            if not switch.is_clone:
+            if switch.is_clone:
                 cmd, _, _ = switch.as_clone_command(cmd)
             self._proc = PopenSpawn(
                 cmd,
@@ -263,11 +263,12 @@ class SerAPI:
         except pexpect.EOF as e:
             logger.log(
                 logging.ERROR,
-                f"Unexpected EOF. Debug information: {self._proc}")
+                f"Unexpected EOF. Debug information: {self.debug_information()}"
+            )
             raise RuntimeError(
                 f"Unexpected EOF with switch={self._switch} "
                 f"and SerAPI version {self.serapi_version}.\n"
-                f"Debug information: {self._proc}") from e
+                f"Debug information: {self.debug_information()}") from e
         self.send("Noop")
 
         # global printing options
@@ -367,6 +368,53 @@ class SerAPI:
             The IDs of previously submitted commands.
         """
         self.send(f"(Cancel ({' '.join([str(s) for s in states])}))")
+
+    def debug_information(self, last_str_chars: int = 100) -> str:
+        """
+        Get a string containing useful debug information.
+
+        Parameters
+        ----------
+        last_str_chars : int, optional
+            The number of characters to print from the child process
+            buffer, by default 100.
+
+        Returns
+        -------
+        str1
+            Debug information for the child process.
+        """
+        # adapted from `pexpect.spawn.__str__`
+        s = []
+        s.append(repr(self._proc))
+        s.append('command: ' + str(self._proc.proc.args))
+        s.append(f'args: {self._proc.args}')
+        buffer = self._proc.buffer[-last_str_chars :]
+        s.append(f'buffer (last {last_str_chars} chars): {buffer}')
+        before = self._proc.before[
+            -last_str_chars :] if self._proc.before else ""
+        s.append(f'before (last {last_str_chars} chars): {before}')
+        s.append(f'after: {self._proc.after}')
+        s.append(f'match: {self._proc.match}')
+        s.append('match_index: ' + str(self._proc.match_index))
+        s.append('exitstatus: ' + str(self._proc.exitstatus))
+        if hasattr(self._proc, 'ptyproc'):
+            s.append('flag_eof: ' + str(self._proc.flag_eof))
+        s.append('pid: ' + str(self._proc.pid))
+        s.append('child_fd: ' + str(self._proc.child_fd))
+        s.append('closed: ' + str(self._proc.closed))
+        s.append('timeout: ' + str(self.timeout))
+        s.append('delimiter: ' + str(self._proc.delimiter))
+        s.append('logfile: ' + str(self._proc.logfile))
+        s.append('logfile_read: ' + str(self._proc.logfile_read))
+        s.append('logfile_send: ' + str(self._proc.logfile_send))
+        s.append('maxread: ' + str(self._proc.maxread))
+        s.append('ignorecase: ' + str(self._proc.ignorecase))
+        s.append('searchwindowsize: ' + str(self._proc.searchwindowsize))
+        s.append('delaybeforesend: ' + str(self._proc.delaybeforesend))
+        s.append('delayafterclose: ' + str(self._proc.delayafterclose))
+        s.append('delayafterterminate: ' + str(self._proc.delayafterterminate))
+        return '\n'.join(s)
 
     def execute(
         self,
