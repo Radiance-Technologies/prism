@@ -261,9 +261,13 @@ class SerAPI:
                 "(Feedback((doc_id 0)(span_id 1)(route 0)(contents Processed)))\0"
             )
         except pexpect.EOF as e:
+            logger.log(
+                logging.ERROR,
+                f"Unexpected EOF. Debug information: {self._proc}")
             raise RuntimeError(
                 f"Unexpected EOF with switch={self._switch} "
-                f"and SerAPI version {self.serapi_version}") from e
+                f"and SerAPI version {self.serapi_version}.\n"
+                f"Debug information: {self._proc}") from e
         self.send("Noop")
 
         # global printing options
