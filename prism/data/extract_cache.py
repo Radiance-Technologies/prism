@@ -1,7 +1,7 @@
 """
 Module for storing cache extraction functions.
 """
-from typing import Callable, Dict, Set
+from typing import Dict, Set
 
 from prism.data.build_cache import (
     CoqProjectBuildCache,
@@ -15,6 +15,29 @@ from prism.project.metadata import ProjectMetadata
 from prism.project.repo import ProjectRepo
 from prism.util.opam import OpamAPI, OpamSwitch
 
+VernacDict = Dict[str, Set[VernacCommandData]]
+
+
+def process_project(project: ProjectRepo) -> VernacDict:
+    """
+    Process a project if it fails to build.
+
+    This function serves as an alternative to `extract_vernac_commands`
+    and is used to extract those vernac commands if the project fails to
+    build.
+
+    Parameters
+    ----------
+    project : ProjectRepo
+        The project from which to extract vernac commands
+
+    Returns
+    -------
+    VernacDict
+        A dictionary of vernac command sets keyed by filename
+    """
+    pass
+
 
 def get_switch(metadata: ProjectMetadata) -> OpamSwitch:
     """
@@ -23,11 +46,14 @@ def get_switch(metadata: ProjectMetadata) -> OpamSwitch:
     return OpamAPI.active_switch
 
 
-def extract_vernac_commands(
-        project: ProjectRepo) -> Dict[str,
-                                      Set[VernacCommandData]]:
+def extract_vernac_commands(project: ProjectRepo) -> VernacDict:
     """
     Compile vernac commands from a project into a dict.
+
+    Parameters
+    ----------
+    project : ProjectRepo
+        The project from which to extract the vernac commands
     """
     command_data = {}
     for filename in project.get_file_list():
@@ -65,11 +91,23 @@ def extract_cache(
         coq_version: str,
         build_cache: CoqProjectBuildCache,
         project: ProjectRepo,
-        commit_sha: str,
-        process_project: Callable[[ProjectRepo],
-                                  None]) -> None:
+        commit_sha: str) -> None:
     """
     Extract cache from project commit and insert into build_cache.
+
+    This function does not return its results; instead, it potentially
+    modifies on-disk build cache.
+
+    Parameters
+    ----------
+    coq_version : str
+        The version of Coq to use
+    build_cache : CoqProjectBuildCache
+        The build cache to insert the result into
+    project : ProjectRepo
+        The project to extract cache from
+    commit_sha : str
+        The commit to extract cache from
     """
     project.git.checkout(commit_sha)
     project.opam_switch = get_switch(project.metadata)
@@ -79,8 +117,8 @@ def extract_cache(
             project.build()
         except ProjectBuildError as pbe:
             print(pbe.args)
-            process_project(project)
+            command_data = process_project(project)
         else:
             command_data = extract_vernac_commands(project)
-            data = ProjectCommitData(project.metadata, command_data)
-            build_cache.insert(data)
+        data = ProjectCommitData(project.metadata, command_data)
+        build_cache.insert(data)
