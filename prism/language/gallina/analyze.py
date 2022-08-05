@@ -329,7 +329,7 @@ class SexpInfo:
             return functools.reduce(lambda x, y: x | y, others, self)
 
         @classmethod
-        def unions(
+        def span(
                 cls,
                 loc: 'SexpInfo.Loc',
                 *others: Tuple['SexpInfo.Loc',
