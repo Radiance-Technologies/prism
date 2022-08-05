@@ -1,7 +1,7 @@
 """
 Module for storing cache extraction functions.
 """
-from typing import Dict, Set
+from typing import Callable, Dict, Optional, Set
 
 from prism.data.build_cache import (
     CoqProjectBuildCache,
@@ -18,28 +18,7 @@ from prism.util.opam import OpamAPI, OpamSwitch
 VernacDict = Dict[str, Set[VernacCommandData]]
 
 
-def process_project(project: ProjectRepo) -> VernacDict:
-    """
-    Process a project if it fails to build.
-
-    This function serves as an alternative to `extract_vernac_commands`
-    and is used to extract those vernac commands if the project fails to
-    build.
-
-    Parameters
-    ----------
-    project : ProjectRepo
-        The project from which to extract vernac commands
-
-    Returns
-    -------
-    VernacDict
-        A dictionary of vernac command sets keyed by filename
-    """
-    pass
-
-
-def get_switch(metadata: ProjectMetadata) -> OpamSwitch:
+def get_switch(metadata: ProjectMetadata, coq_version: str) -> OpamSwitch:
     """
     Pass args for use as a stub.
     """
@@ -88,10 +67,12 @@ def extract_vernac_commands(project: ProjectRepo) -> VernacDict:
 
 
 def extract_cache(
-        coq_version: str,
         build_cache: CoqProjectBuildCache,
         project: ProjectRepo,
-        commit_sha: str) -> None:
+        commit_sha: str,
+        process_project: Callable[[ProjectRepo],
+                                  VernacDict],
+        coq_version: Optional[str] = None) -> None:
     """
     Extract cache from project commit and insert into build_cache.
 
@@ -106,12 +87,16 @@ def extract_cache(
         The build cache to insert the result into
     project : ProjectRepo
         The project to extract cache from
+    process_project : Callable[[ProjectRepo], VernacDict]
+        Function that provides fallback vernacular command extraction
+        for projects that do not build
     commit_sha : str
         The commit to extract cache from
     """
     project.git.checkout(commit_sha)
-    project.opam_switch = get_switch(project.metadata)
-    coq_version = project.metadata.coq_version
+    if coq_version is None:
+        coq_version = project.metadata.coq_version
+    project.opam_switch = get_switch(project.metadata, coq_version)
     if (project.name, commit_sha, coq_version) not in build_cache:
         try:
             project.build()

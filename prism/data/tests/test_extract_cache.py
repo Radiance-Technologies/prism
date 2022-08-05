@@ -62,11 +62,10 @@ class TestExtractCache(unittest.TestCase):
         for project in self.dataset.projects.values():
             project: ProjectRepo
             extract_cache(
-                '8.10.2',
                 self.cache,
                 project,
                 project.reset_head,
-                lambda x: None)
+                lambda x: {})
 
 
 if __name__ == "__main__":
