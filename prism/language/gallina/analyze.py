@@ -146,6 +146,9 @@ class SexpInfo:
                     kwargs['bol_pos_last'] = other.bol_pos_last
                     kwargs['end_charno'] = other.end_charno
                 loc = SexpInfo.Loc(**kwargs)
+            elif self.end_charno == other.end_charno:
+                kwargs = asdict(other)
+                loc = SexpInfo.Loc(**kwargs)
             else:
                 loc = other | self
             return loc
