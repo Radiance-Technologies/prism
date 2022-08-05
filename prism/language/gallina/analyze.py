@@ -350,7 +350,7 @@ class SexpInfo:
             """
             # one required positional argument to let Python handle the
             # failure of trying to get the union of an empty list
-            return loc.union(others)
+            return loc.union(*others)
 
     @dataclass
     class SertokSentence:
