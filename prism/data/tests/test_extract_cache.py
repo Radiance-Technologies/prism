@@ -1,6 +1,8 @@
 """
 Module containing tests for the extract_cache module.
 """
+import logging
+import os
 import shutil
 import unittest
 from pathlib import Path
@@ -38,6 +40,15 @@ class TestExtractCache(unittest.TestCase):
             dir_list=cls.dir_list,
             metadata_storage=cls.storage,
             sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
+        if not os.path.exists("./test_logs"):
+            os.makedirs("./test_logs")
+        cls.logger = logging.Logger(
+            "test_extract_cache_logger",
+            level=logging.DEBUG)
+        cls.logger.addHandler(
+            logging.FileHandler(
+                "./test_logs/test_extract_cache_log.txt",
+                mode="w"))
 
     @classmethod
     def tearDownClass(cls):
@@ -60,12 +71,16 @@ class TestExtractCache(unittest.TestCase):
         Test the function to extract cache from a project.
         """
         for project_name, project in self.dataset.projects.items():
-            if project_name.lower() == "float":
+            if "float" in project_name.lower():
                 head = "a4b445bad8b8d0afb725d64472b194d234676ce0"
-            elif project_name.lower() == "lambda":
+            elif "lambda" in project_name.lower():
                 head = "f531eede1b2088eff15b856558ec40f177956b96"
             else:
-                head = 'master'
+                self.logger.debug(f"Project name: {project_name}")
+                self.logger.debug(f"Project remote: {project.remote_url}")
+                self.logger.debug(f"Project folder: {project.dir_abspath}")
+                raise RuntimeError(f"Unknown project {project_name}")
+            self.logger.debug("Success")
             project: ProjectRepo
             extract_cache(self.cache,
                           project,
