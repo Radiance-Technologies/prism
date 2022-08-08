@@ -37,10 +37,22 @@ class SexpList(SexpNode):
         yield from self.children
 
     def __str__(self) -> str:  # noqa: D105
-        s = "("
-        s += " ".join([str(c) for c in self.children])
-        s += ")"
-        return s
+        # perform in-order traversal
+        nodes = [self]
+        s = []
+        while nodes:
+            node = nodes.pop()
+            if node is None:
+                s.append(")")
+            elif node.is_list():
+                s.append("(")
+                nodes.append(None)
+                nodes.extend(reversed(node.children))
+            else:
+                if not s[-1] == "(":
+                    s.append(" ")
+                s.append(str(node))
+        return "".join(s)
 
     @property
     def height(self) -> int:  # noqa: D102
@@ -92,7 +104,7 @@ class SexpList(SexpNode):
             return core
         # end if
 
-    def get_children(self):  # noqa: D102
+    def get_children(self) -> List[SexpNode]:  # noqa: D102
         return self.children
 
     def head(self) -> str:  # noqa: D102
