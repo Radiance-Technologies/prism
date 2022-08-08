@@ -60,12 +60,17 @@ class TestExtractCache(unittest.TestCase):
         Test the function to extract cache from a project.
         """
         for project in self.dataset.projects.values():
+            if project.name.lower() == "float":
+                head = "a4b445bad8b8d0afb725d64472b194d234676ce0"
+            elif project.name.lower() == "lambda":
+                head = "f531eede1b2088eff15b856558ec40f177956b96"
+            else:
+                head = 'master'
             project: ProjectRepo
-            extract_cache(
-                self.cache,
-                project,
-                project.reset_head,
-                lambda x: {})
+            extract_cache(self.cache,
+                          project,
+                          head,
+                          lambda x: {})
 
 
 if __name__ == "__main__":
