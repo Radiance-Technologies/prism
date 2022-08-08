@@ -59,11 +59,14 @@ class TestHeuristicParser(unittest.TestCase):
                 3,
                 3,
                 3,
-                2
+                2,
+                2,
+                3
             ],
             theorem_indices={1,
                              2,
-                             3},
+                             3,
+                             26},
             starter_indices={7},
             tactic_indices={5,
                             8,
@@ -82,13 +85,14 @@ class TestHeuristicParser(unittest.TestCase):
                            11,
                            18,
                            19,
-                           23},
+                           23,
+                           26},
             query_indices=[4,
                            6,
                            9,
                            24],
             fail_indices={},
-            nesting_allowed=[False for _ in range(25)],
+            nesting_allowed=[False for _ in range(27)],
             requirements=set(),
             custom_tactics=set())
         sentences = HeuristicParser._get_sentences(self.test_contents["simple"])

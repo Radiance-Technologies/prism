@@ -12,7 +12,6 @@
 
 (** Here's another comment *)
 
-
 Inductive seq : nat -> Set :=
   | niln : seq 0
   | consn : forall n : nat, nat -> seq n -> seq (S n).
@@ -39,3 +38,7 @@ Let m := seq 0. (* Additional effort may identify length_corr as instigator of p
     } }}
 Qed.
 Check length_corr.
+
+Notation "n .+1" := (S n)(at level 2, left associativity, format "n .+1"): nat_scope.
+
+Coercion b2Prop (x : bool) := x = true.
