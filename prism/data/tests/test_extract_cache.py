@@ -77,9 +77,12 @@ class TestExtractCache(unittest.TestCase):
                 head = "f531eede1b2088eff15b856558ec40f177956b96"
             else:
                 self.logger.debug(f"Project name: {project_name}")
-                self.logger.debug(f"Project remote: {project.remote_url}")
+                try:
+                    self.logger.debug(f"Project remote: {project.remote_url}")
+                except Exception:
+                    pass
                 self.logger.debug(f"Project folder: {project.dir_abspath}")
-                raise RuntimeError(f"Unknown project {project_name}")
+                continue
             self.logger.debug("Success")
             project: ProjectRepo
             extract_cache(self.cache,
