@@ -28,32 +28,148 @@ from prism.language.sexp.parser import SexpParser
 from prism.language.sexp.string import SexpString
 from prism.util.logging import default_log_level
 from prism.util.opam import OpamSwitch
-from prism.util.opam.version import OpamVersion
+from prism.util.opam.version import OpamVersion, Version
 from prism.util.radpytools.dataclasses import default_field
 
-logger = logging.Logger(__file__, default_log_level())
+logger = logging.getLogger(__file__)
+logger.setLevel(default_log_level())
 
 
-def print_mod_path(modpath: SexpNode) -> str:
-    if modpath[0] == SexpString("MPdot"):
-        return print_mod_path(modpath[1]) + "." + str(modpath[2][1])
-    elif modpath[0] == SexpString("MPfile"):
-        return ".".join([str(x[1]) for x in modpath[1][1]][::-1])
+def print_dir_path(dir_path: SexpNode) -> str:
+    """
+    Pretty-print a serialized ``DirPath`` data type.
+
+    Parameters
+    ----------
+    dir_path : SexpNode
+        An s-expression denoting some logical library path.
+
+    Returns
+    -------
+    str
+        The period-delimited name of the library.
+
+    Notes
+    -----
+    ``DirPath`` is a seemingly stable data type defined in
+    ``coq/kernel/names.ml``.
+    """
+    return ".".join([str(x[1]) for x in dir_path[1]][::-1])
+
+
+def print_mod_path(mod_path: SexpNode) -> str:
+    """
+    Pretty print a serialized ``ModPath`` data type.
+
+    Parameters
+    ----------
+    mod_path : SexpNode
+        An s-expression denoting the path to some defined entity.
+
+    Returns
+    -------
+    str
+        The kernel name of the given entity.
+
+    Notes
+    -----
+    ``ModPath`` is a seemingly stable data type defined in
+    ``coq/kernel/names.ml``.
+    """
+    if mod_path[0].get_content() == "MPdot":
+        label_id = mod_path[2][1]
+        mod_path = mod_path[1]
+        return print_mod_path(mod_path) + "." + str(label_id)
+    elif mod_path[0].get_content() == "MPfile":
+        return print_dir_path(mod_path[1])
     else:
-        assert modpath[0] == SexpString("MPbound")
-        return ".".join(
-            [str(x[1])
-             for x in modpath[1][2][1]][::-1] + [str(modpath[1][1][1])])
+        assert mod_path[0].get_content() == "MPbound"
+        mb_id = mod_path[1]
+        mb_id_id = mb_id[1][1]
+        return ".".join(print_dir_path(mb_id[2]) + [str(mb_id_id)])
 
 
-def mod_path_file(modpath: SexpNode) -> str:
-    if modpath[0] == SexpString("MPdot"):
-        return mod_path_file(modpath[1])
-    elif modpath[0] == SexpString("MPfile"):
-        return ".".join([str(x[1]) for x in modpath[1][1]][::-1])
+def print_ker_name(
+        ker_name: SexpNode,
+        serapi_version: Version,
+        return_modpath: bool = True) -> Union[str,
+                                              Tuple[str,
+                                                    SexpNode]]:
+    """
+    Pretty print a serialized ``KerName`` data type.
+
+    Parameters
+    ----------
+    ker_name : SexpNode
+        An s-expression denoting a Coq kernel name.
+    serapi_version : Version
+        The version of SerAPI to be compared against Coq versions for
+        interpretation of the correct serialization.
+    return_modpath : bool, optional
+        Whether to return the s-expression node for the ``modpath``
+        attribute of the ``KerName`` data structure, by default True.
+
+    Returns
+    -------
+    str
+        The pretty-printed qualified identifier corresponding to the
+        given kernel name.
+    modpath : SexpNode, optional
+        The ``modpath`` attribute is also returned if `return_modpath`
+        is True.
+
+    Notes
+    -----
+    ``KerName`` is an unstable data type defined in
+    ``coq/kernel/names.ml`` that manifests as the ``Constant`` and
+    ``MutInd`` types.
+    """
+    # follow coq/kernel/names.ml::KerName.to_string_gen as guide
+    if OpamVersion.less_than(serapi_version, '8.9.0'):
+        modpath = ker_name[2]
+        dirpath = ker_name[3]
+        knlabel = ker_name[4]
+    elif OpamVersion.less_than(serapi_version, '8.10.0'):
+        # canary field removed
+        modpath = ker_name[1]
+        dirpath = ker_name[2]
+        knlabel = ker_name[3]
     else:
-        assert modpath[0] == SexpString("MPbound")
-        return ""
+        # dirpath field removed
+        modpath = ker_name[1]
+        dirpath = None
+        knlabel = ker_name[2]
+    qualid = f"#{print_dir_path(dirpath)}#" if dirpath is not None else "."
+    qualid = print_mod_path(modpath) + qualid + str(knlabel[1])
+    if return_modpath:
+        return qualid, modpath
+    else:
+        return qualid
+
+
+def mod_path_file(mod_path: SexpNode) -> Optional[str]:
+    """
+    Get the logical filename, if any, from a ``ModPath`` data type.
+
+    Parameters
+    ----------
+    modpath : SexpNode
+        An s-expression denoting the path to some defined entity.
+
+    Returns
+    -------
+    str
+        The period-delimited name of the library containing the given
+        entity.
+    """
+    if mod_path[0].get_content() == "MPdot":
+        return mod_path_file(mod_path[1])
+    elif mod_path[0].get_content() == "MPfile":
+        return print_dir_path(mod_path[1])
+    else:
+        assert mod_path[0].get_content() == "MPbound"
+        mb_id = mod_path[1]
+        return print_dir_path(mb_id[2])
 
 
 AbstractSyntaxTree = SexpNode
@@ -61,14 +177,44 @@ AbstractSyntaxTree = SexpNode
 
 @dataclass
 class Constant:
+    """
+    A constant definition.
+    """
+
     physical_path: os.PathLike
+    """
+    The physical path to the file in which the constant is defined.
+    """
     short_ident: str
+    """
+    The minimally qualified name of the constant within the current
+    context.
+    """
     qualid: str
+    """
+    The fully qualified name of the constant.
+    """
     term: Optional[str]
+    """
+    The value assigned to the constant.
+    """
     type: str
-    sort: Optional[str]
+    """
+    The type of the constant.
+    """
+    sort: str
+    """
+    The sort of the constant's type.
+    """
     opaque: Optional[bool]
+    """
+    Whether the definition is opaque (True), transparent (False), or a
+    primitive (None).
+    """
     sexp: str
+    """
+    The s-expression of the constant's type.
+    """
 
 
 @dataclass
@@ -281,6 +427,10 @@ class SerAPI:
         self.execute("Set Printing Implicit.")
         self.execute("Set Printing Depth 999999.")
         self.execute("Unset Printing Records.")
+        if not OpamVersion.less_than(self.serapi_version, '8.10.0'):
+            # required for query_env to get the types/sorts of all
+            # constants
+            self.execute("Set Allow StrictProp.")
 
         # initialize the stack
         self.push()
@@ -357,6 +507,33 @@ class SerAPI:
         Set the timeout for responses from the SerAPI process.
         """
         self._proc.timeout = timeout
+
+    def _query_type(self, term: str, mod: int = 0) -> str:
+        """
+        Get the type of the given expression.
+
+        Notes
+        -----
+        This method serves as a more robust fallback to the default
+        TypeOf query, which only works for known identifiers.
+        As a workaround for handling arbitrary expressions, a temporary
+        definition is assigned the value of the expression and queried
+        against instead.
+        """
+        tmpid = 'temp_term_' + str(mod)
+        self.push()
+        try:
+            self.execute(f"Definition {tmpid} := {term}.")
+        except CoqExn as e:
+            self.pop()
+            if e.msg.endswith("already exists."):
+                return self._query_type(term, mod + 1)
+            else:
+                raise e
+        else:
+            result = self.query_type(tmpid)
+            self.pop()
+        return result
 
     def cancel(self, states: Iterable[int]) -> None:
         """
@@ -632,45 +809,49 @@ class SerAPI:
                 "Querying the environment is not supported in SerAPI "
                 f"version {self.serapi_version}.")
         responses, _, _ = self.send("(Query () Env)")
-        env = responses[1][2][1][0]
+        # Refer to coq/kernel/environ.mli
+        env = responses[1][2][1][0][1]
+        env_globals = env[0][1]
+        env_constants = env_globals[0][1]
+        env_inductives = env_globals[1][1]
 
         # store the constants
         constants = []
-        for const in env[1][0][1][0][1]:
-            # identifier
-            qualid = (
-                print_mod_path(const[0][1]) + "." + ".".join(
-                    [str(x[1])
-                     for x in const[0][2][1][::-1]] + [str(const[0][3][1])]))
+        for const in env_constants:
+            ker_name = const[0]
+            qualid, modpath = print_ker_name(ker_name, self.serapi_version)
             if qualid.startswith("SerTop."):
                 logical_path = "SerTop"
                 physical_path = current_file
             else:
-                logical_path = mod_path_file(const[0][1])
+                logical_path = mod_path_file(modpath)
                 assert qualid.startswith(logical_path)
                 physical_path = os.path.relpath(
                     self.query_library(logical_path))
             physical_path += ":" + qualid[len(logical_path) + 1 :]
             short_ident = self.query_qualid(qualid)
-            # term
-            assert const[1][0][1][0] == SexpString("const_body")
-            if const[1][0][1][1][0] == SexpString("Undef"):  # delaration
-                opaque = None
-                term = None
-            elif const[1][0][1][1][0] == SexpString(
-                    "Def"):  # transparent definition
-                opaque = False
-                term = None
-            else:
-                assert const[1][0][1][1][0] == SexpString(
-                    "OpaqueDef")  # opaque definition
-                opaque = True
-                term = None
             # type
-            assert const[1][0][2][0] == SexpString("const_type")
+            assert const[1][0][2][0].get_content() == "const_type"
             type_sexp = str(const[1][0][2][1])
             type = self.print_constr(type_sexp)
-            sort = self.query_type(type_sexp, return_str=True)
+            sort = self.query_type(type)
+            # term
+            assert const[1][0][1][0] == SexpString("const_body")
+            const_body = const[1][0][1][1]
+            constant_def_variant = const_body[0].get_content()
+            term = None
+            if constant_def_variant == "Undef":  # declaration
+                opaque = None
+            elif constant_def_variant == "Def":  # transparent definition
+                opaque = False
+                if sort != "Prop":
+                    term = self.print_constr(str(const_body[1][0][1]))
+            elif constant_def_variant == "OpaqueDef":  # opaque definition
+                opaque = True
+            else:
+                # Primitive variant added in Coq 8.10.0
+                assert constant_def_variant == "Primitive"
+                opaque = None
             constants.append(
                 Constant(
                     physical_path=physical_path,
@@ -680,17 +861,14 @@ class SerAPI:
                     type=type,
                     sort=sort,
                     opaque=opaque,
-                    sexp=str(const[1][0][2][1]),
+                    sexp=type_sexp,
                 ))
 
         # store the inductives
         inductives = []
-        for induct in env[1][0][1][1][1]:
-            # identifier
-            qualid = (
-                print_mod_path(induct[0][1]) + "." + ".".join(
-                    [str(x[1])
-                     for x in induct[0][2][1][::-1]] + [str(induct[0][3][1])]))
+        for induct in env_inductives:
+            ker_name = induct[0]
+            qualid, modpath = print_ker_name(ker_name, self.serapi_version)
             short_ident = self.query_qualid(qualid)
             if qualid.startswith("SerTop."):
                 logical_path = "SerTop"
@@ -978,24 +1156,19 @@ class SerAPI:
             qualids.append(short_ident)
         return qualids
 
-    def query_type(self,
-                   term_sexp: str,
-                   return_str: bool = False) -> Optional[Union[str,
-                                                               SexpNode]]:
+    def query_type(self, term: str) -> str:
         """
         Get the type of the given expression.
 
         Parameters
         ----------
         term_sexp : str
-            A serialized Coq expression.
-        return_str : bool, optional
-            Whether to return the type as a str, by default False
+            A Coq identifier or Gallina expression.
 
         Returns
         -------
-        Optional[Union[str, SexpNode]]
-            The type of the given term or None if the term has no type.
+        str
+            The type of the given term/expression.
 
         Raises
         ------
@@ -1003,18 +1176,25 @@ class SerAPI:
             If an error is encountered when evaluating the given term.
         """
         try:
-            responses, _, _ = self.send(f"(Query () (Type {term_sexp}))")
-        except CoqExn as ex:
-            if ex.msg == "Not_found":
-                return None
-            else:
-                raise ex
-        assert responses[1][2][1][0][0] == SexpString("CoqConstr")
-        type_sexp = responses[1][2][1][0][1]
-        if return_str:
-            return self.print_constr(str(type_sexp))
+            responses, _, _ = self.send(f'(Query () (TypeOf {term}))')
+        except (RuntimeError, CoqTimeout):
+            result = self._query_type(term)
+        except CoqExn as e:
+            if e.msg.startswith("Invalid character"):
+                result = self._query_type(term)
         else:
-            return type_sexp
+            obj_list = responses[1][2][1]
+            if obj_list:
+                obj = obj_list[0]
+                assert obj[0].get_content() == "CoqConstr"
+                type_sexp = obj[1]
+                result = self.print_constr(str(type_sexp))
+            else:
+                raise CoqExn(
+                    f"The reference {term} was not found in the "
+                    "current environment.",
+                    str(responses[2]))
+        return result
 
     def query_vernac(self, cmd: str) -> List[str]:
         """
@@ -1077,14 +1257,18 @@ class SerAPI:
                 [
                     r"\(Answer \d+ Ack\)\x00.*\(Answer \d+ Completed\)\x00",
                     r"\(Answer \d+ Ack\)\x00.*\(Answer \d+\(CoqExn.*\)\x00",
+                    r"\(Of_sexp_error.*\)\x00"
                 ])
         except pexpect.TIMEOUT:
             print(self._proc.before)
             raise CoqTimeout
         raw_responses = self._proc.after
-        ack_num = int(
-            re.search(r"^\(Answer (?P<num>\d+)",
-                      raw_responses)["num"])
+        ack_num = re.search(r"^\(Answer (?P<num>\d+)", raw_responses)
+        if ack_num is not None:
+            ack_num = int(ack_num["num"])
+        else:
+            assert raw_responses.startswith("(Of_sexp_error")
+            raise RuntimeError(f"Invalid command: {cmd}\n{raw_responses}")
         for num in re.findall(r"(?<=\(Answer) \d+", raw_responses):
             assert int(num) == ack_num
         responses = []

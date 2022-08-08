@@ -88,11 +88,11 @@ class TestSerAPI(unittest.TestCase):
             """)
         with SerAPI() as serapi:
             responses, _ = serapi.execute("Require Import Coq.Program.Basics.")
-            self.assertEqual(str(responses[0]), '(Answer 20 Ack)')
-            self.assertEqual(str(responses[1]), '(Answer 20 Completed)')
+            self.assertEqual(str(responses[0]), '(Answer 22 Ack)')
+            self.assertEqual(str(responses[1]), '(Answer 22 Completed)')
             responses, _, ast = serapi.execute('Locate "_ ∘ _".', True)
-            self.assertEqual(str(responses[0]), '(Answer 23 Ack)')
-            self.assertEqual(str(responses[1]), '(Answer 23 Completed)')
+            self.assertEqual(str(responses[0]), '(Answer 25 Ack)')
+            self.assertEqual(str(responses[1]), '(Answer 25 Completed)')
             self.assertEqual(SexpParser.parse(ast), expected_ast)
 
     def test_has_open_goals(self):
@@ -158,6 +158,19 @@ class TestSerAPI(unittest.TestCase):
             # pre-stripped from queried AST
             expected = expected[0][1]
             self.assertEqual(actual, expected)
+
+    def test_query_env(self):
+        """
+        Verify that a global environment can be retrieved.
+
+        _extended_summary_
+        """
+        with SerAPI(timeout_=60) as serapi:
+            serapi.execute(
+                "Inductive nat : Type := O : nat | S (n : nat) : nat.")
+            serapi.execute("Lemma foo : unit.")
+            serapi.execute("Admitted.")
+            serapi.query_env()
 
     def test_query_full_qualid(self):
         """
@@ -486,6 +499,15 @@ class TestSerAPI(unittest.TestCase):
                 self.assertEqual(qualid, "or")
                 qualid = serapi.query_qualid(qualid)
                 self.assertEqual(qualid, "or")
+
+    def test_query_type(self):
+        """
+        Verify that types of expressions and identifiers can be queried.
+        """
+        with SerAPI() as serapi:
+            expected_type = 'forall (A : Type) (x : A), @eq A x x'
+            self.assertEqual(serapi.query_type("eq_refl"), expected_type)
+            self.assertEqual(serapi.query_type(expected_type), "Prop")
 
     def test_query_vernac(self):
         """
