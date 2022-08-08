@@ -438,11 +438,6 @@ class SerAPI:
     def __enter__(self) -> 'SerAPI':
         """
         Initialize a context encompassing a SerAPI session.
-
-        Returns
-        -------
-        _type_
-            _description_
         """
         return self
 
@@ -844,7 +839,7 @@ class SerAPI:
                 opaque = None
             elif constant_def_variant == "Def":  # transparent definition
                 opaque = False
-                if sort != "Prop":
+                if sort != "Prop" and sort != "SProp":
                     term = self.print_constr(str(const_body[1][0][1]))
             elif constant_def_variant == "OpaqueDef":  # opaque definition
                 opaque = True
