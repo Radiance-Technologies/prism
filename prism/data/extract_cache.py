@@ -10,6 +10,7 @@ from prism.data.build_cache import (
 )
 from prism.language.gallina.analyze import SexpInfo
 from prism.language.heuristic.util import ParserUtils
+from prism.project.base import Project
 from prism.project.exception import ProjectBuildError
 from prism.project.metadata import ProjectMetadata
 from prism.project.repo import ProjectRepo
@@ -70,34 +71,53 @@ def extract_cache(
         build_cache: CoqProjectBuildCache,
         project: ProjectRepo,
         commit_sha: str,
-        process_project: Callable[[ProjectRepo],
+        process_project: Callable[[Project],
                                   VernacDict],
         coq_version: Optional[str] = None) -> None:
     """
     Extract cache from project commit and insert into build_cache.
 
-    This function does not return its results; instead, it potentially
-    modifies on-disk build cache.
+    The cache is implemented as a file-and-directory-based repository
+    structure (`CoqProjectBuildCache`) that provides storage of
+    artifacts and concurrent access for parallel processes through the
+    operating system's own file system. Directories identify projects
+    and commits with a separate cache file per build environment (i.e.,
+    Coq version). The presence or absence of a cache file within the
+    structure indicates whether the commit has been cached yet. The
+    cache files themselves contain two key pieces of information
+    (reflected in `ProjectCommitData`): the metadata for the commit and
+    a map from Coq file paths in the project to sets of per-sentence
+    build artifacts (represented by `VernacCommandData`).
+
+    This function does not return any cache extracted. Instead, it
+    modifies on-disk build cache by inserting any previously unseen
+    cache artifacts.
 
     Parameters
     ----------
-    coq_version : str
-        The version of Coq to use
     build_cache : CoqProjectBuildCache
         The build cache to insert the result into
     project : ProjectRepo
         The project to extract cache from
-    process_project : Callable[[ProjectRepo], VernacDict]
-        Function that provides fallback vernacular command extraction
-        for projects that do not build
     commit_sha : str
         The commit to extract cache from
+    process_project : Callable[[Project], VernacDict]
+        Function that provides fallback vernacular command extraction
+        for projects that do not build
+    coq_version : str or None, optional
+        The version of Coq to use, by default None
+
+    See Also
+    --------
+    prism.data.build_cache.CoqProjectBuildCache
+    prism.data.build_cache.ProjectCommitData
+    prism.data.build_cache.VernacCommandData
     """
-    project.git.checkout(commit_sha)
     if coq_version is None:
         coq_version = project.metadata.coq_version
-    project.opam_switch = get_switch(project.metadata, coq_version)
     if (project.name, commit_sha, coq_version) not in build_cache:
+        project.git.checkout(commit_sha)
+        project.opam_switch = get_switch(project.metadata, coq_version)
         try:
             project.build()
         except ProjectBuildError as pbe:
