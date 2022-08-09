@@ -79,19 +79,3 @@ runTests:
     expose_as: 'test logs'
     paths: ['test_logs/']
     expire_in: 1 week
-
-# debugTests:
-#   stage: test
-#   script:
-#     - export OPAMROOT=${PWD}/.opam
-#     - |
-#       if [ ! -d ${OPAMROOT} ]; then
-#         opam init --disable-sandboxing --verbose
-#       fi
-#     - eval $(opam env)
-#     - source setup_coq.sh -n
-#     - pytest prism/data/tests/test_extract_cache.py
-#   artifacts:
-#     expose_as: 'test logs'
-#     paths: ['test_logs/']
-#     expire_in: 1 week
