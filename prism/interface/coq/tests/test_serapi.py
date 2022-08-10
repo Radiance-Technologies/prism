@@ -1,7 +1,10 @@
 """
 Test suite for `prism.interface.coq.serapi`.
 """
+import multiprocessing
+import os
 import unittest
+from dataclasses import asdict
 from typing import Dict, List, Optional
 
 from prism.interface.coq.exception import CoqExn
@@ -43,6 +46,15 @@ def omit_locs(sexp: SexpNode) -> SexpNode:
             return SexpList([omit_locs(c) for c in sexp.get_children()])
     else:
         return SexpString(sexp.get_content())
+
+
+def execute(sentences: List[str]) -> None:
+    """
+    Execute the given sentences in an interactive session.
+    """
+    with SerAPI() as serapi:
+        for sentence in sentences:
+            serapi.execute(sentence)
 
 
 class TestSerAPI(unittest.TestCase):
@@ -137,7 +149,8 @@ class TestSerAPI(unittest.TestCase):
         """
         Verify that multiple SerAPI contexts can be managed at once.
         """
-        pass
+        with multiprocessing.Pool(3) as p:
+            p.map(execute, self.sentences.values())
 
     def test_query_ast(self):
         """
@@ -163,14 +176,165 @@ class TestSerAPI(unittest.TestCase):
         """
         Verify that a global environment can be retrieved.
 
-        _extended_summary_
+        Also verify that the environment can be extended with local
+        definitions.
         """
+        mut_ind_example = """
+        Inductive tree : Set := node : A -> forest -> tree
+
+        with forest : Set :=
+        | leaf : B -> forest
+        | cons : tree -> forest -> forest.
+        """
+        expected_keys = {
+            'nat',
+            'SerTop.nat',
+            'Datatypes.nat',
+            'Init.Datatypes.nat',
+            'Coq.Init.Datatypes.nat',
+            'tree',
+            'SerTop.tree',
+            'foo',
+            'SerTop.foo',
+            'A',
+            'B',
+            'SerTop.A',
+            'SerTop.B'
+        }
+        expected_tree_ind = {
+            'physical_path': '<interactive>:tree',
+            'short_id': 'tree',
+            'full_id': 'SerTop.tree',
+            'blocks':
+                [
+                    {
+                        'short_id':
+                            'tree',
+                        'full_id':
+                            'SerTop.tree',
+                        'constructors':
+                            [('node',
+                              'forall (_ : A) (_ : forest), tree')]
+                    },
+                    {
+                        'short_id':
+                            'forest',
+                        'full_id':
+                            'SerTop.forest',
+                        'constructors':
+                            [
+                                ('leaf',
+                                 'forall _ : B, forest'),
+                                (
+                                    'cons',
+                                    'forall (_ : tree) (_ : forest), forest')
+                            ]
+                    }
+                ],
+            'is_record': False
+        }
+        expected_A_const = {
+            'physical_path': '<interactive>:A',
+            'short_id': 'A',
+            'full_id': 'SerTop.A',
+            'term': None,
+            'type': 'Set',
+            'sort': 'Type',
+            'opaque': None
+        }
+        expected_nat_ind = {
+            'physical_path':
+                '<interactive>:nat',
+            'short_id':
+                'nat',
+            'full_id':
+                'SerTop.nat',
+            'blocks':
+                [
+                    {
+                        'short_id':
+                            'nat',
+                        'full_id':
+                            'SerTop.nat',
+                        'constructors':
+                            [('O',
+                              'nat'),
+                             ('S',
+                              'forall _ : nat, nat')]
+                    }
+                ],
+        }
         with SerAPI(timeout_=60) as serapi:
             serapi.execute(
                 "Inductive nat : Type := O : nat | S (n : nat) : nat.")
             serapi.execute("Lemma foo : unit.")
             serapi.execute("Admitted.")
-            serapi.query_env()
+            serapi.execute("Parameters A B : Set.")
+            serapi.execute(normalize_spaces(mut_ind_example))
+            env = serapi.query_env().asdict()
+            for qualid in expected_keys:
+                self.assertIn(qualid, env)
+            actual_tree_ind = asdict(env['tree'])
+            self.assertDictEqual(
+                actual_tree_ind,
+                {
+                    **actual_tree_ind,
+                    **expected_tree_ind
+                })
+            actual_A_const = asdict(env['A'])
+            self.assertDictEqual(
+                actual_A_const,
+                {
+                    **actual_A_const,
+                    **expected_A_const
+                })
+            actual_nat_ind = asdict(env['nat'])
+            self.assertDictEqual(
+                actual_nat_ind,
+                {
+                    **actual_nat_ind,
+                    **expected_nat_ind
+                })
+            expected_coq_nat_ind = {
+                'physical_path':
+                    str(
+                        os.path.relpath(
+                            serapi.switch.path.joinpath(
+                                "lib",
+                                "coq",
+                                "theories",
+                                "Init",
+                                "Datatypes.vo"))) + ':nat',
+                'short_id':
+                    'Datatypes.nat',
+                'full_id':
+                    'Coq.Init.Datatypes.nat',
+                'blocks':
+                    [
+                        {
+                            'short_id':
+                                'Datatypes.nat',
+                            'full_id':
+                                'Coq.Init.Datatypes.nat',
+                            'constructors':
+                                [
+                                    ('O',
+                                     'Datatypes.nat'),
+                                    (
+                                        'S',
+                                        'forall _ : Datatypes.nat, Datatypes.nat'
+                                    )
+                                ]
+                        }
+                    ],
+            }
+            actual_coq_nat_ind = asdict(env['Datatypes.nat'])
+            self.assertDictEqual(
+                actual_coq_nat_ind,
+                {
+                    **actual_coq_nat_ind,
+                    **expected_coq_nat_ind
+                })
 
     def test_query_full_qualid(self):
         """

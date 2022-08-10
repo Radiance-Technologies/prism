@@ -35,6 +35,35 @@ logger = logging.getLogger(__file__)
 logger.setLevel(default_log_level())
 
 
+def interpolate_names(short_id: str, full_id: str) -> List[str]:
+    """
+    Interpolate between given minimally and fully qualified identifiers.
+
+    Parameters
+    ----------
+    short_id : str
+        The minimally qualified version of the identifier in some
+        context.
+    full_id : str
+        The fully qualified version of the identifier.
+
+    Returns
+    -------
+    List[str]
+        A sequence of equivalent identifiers from minimally to fully
+        qualified.
+    """
+    if not full_id.endswith(short_id):
+        raise ValueError(
+            f"The given identifiers are not related: {short_id}, {full_id}")
+    qualid = short_id
+    qualids = [qualid]
+    for component in reversed(full_id[:-(len(short_id) + 1)].split(".")):
+        qualid = '.'.join([component, qualid])
+        qualids.append(qualid)
+    return qualids
+
+
 def print_dir_path(dir_path: SexpNode) -> str:
     """
     Pretty-print a serialized ``DirPath`` data type.
@@ -185,12 +214,12 @@ class Constant:
     """
     The physical path to the file in which the constant is defined.
     """
-    short_ident: str
+    short_id: str
     """
     The minimally qualified name of the constant within the current
     context.
     """
-    qualid: str
+    full_id: str
     """
     The fully qualified name of the constant.
     """
@@ -208,34 +237,114 @@ class Constant:
     """
     opaque: Optional[bool]
     """
-    Whether the definition is opaque (True), transparent (False), or a
-    primitive (None).
+    Whether the definition is opaque (True), transparent (False), or
+    simply declared / a primitive (None).
     """
-    sexp: str
+    type_sexp: str
     """
     The s-expression of the constant's type.
     """
 
 
 @dataclass
-class Block:
-    short_ident: str
-    qualid: str
+class OneInductive:
+    """
+    A single inductive type of a block of mutually inductive types.
+    """
+
+    short_id: str
+    """
+    The minimally qualified name of the inductive type.
+    """
+    full_id: str
+    """
+    The fully qualified name of the inductive type.
+    """
     constructors: List[Tuple[str, str]]
+    """
+    A list of tuples pairing constructor names and types.
+    """
 
 
 @dataclass
-class Inductive:
+class MutualInductive:
+    """
+    A (mutually) inductive type declaration.
+
+    Note that a single inductive type is considered a special case in
+    the sense that it is mutually inductive with itself.
+
+    See https://coq.inria.fr/refman/language/core/inductive.html#inductive-types
+    for more information about inductive type declarations.
+    """  # noqa: W505
+
     physical_path: os.PathLike
-    blocks: List[Block]
+    """
+    The physical path to the file in which the mutually inductive type
+    is defined.
+    """
+    short_id: str
+    """
+    The minimally qualified name of the main (top-level) type in the
+    inductive declaration (i.e., the one following the ``Inductive``
+    Vernacular command).
+    """
+    full_id: str
+    """
+    The fully qualified version of `short_ident`.
+    """
+    blocks: List[OneInductive]
+    """
+    A sequence of mutually inductive blocks that together define the
+    inductive type.
+    """
     is_record: bool
+    """
+    Whether this is a record type or not.
+
+    See https://coq.inria.fr/refman/language/core/records.html for more
+    information about records.
+    """
     sexp: str
+    """
+    The s-expression of the mutually inductive type (i.e., of its
+    ``(MutInd, mutual_inductive_body)`` kernel representation).
+    """
 
 
 @dataclass
 class Environment:
+    """
+    A global environment that gives the context for an implicit state.
+
+    The environment only considers declarations made within the current
+    file and ``Require``d libraries.
+    """
+
     constants: List[Constant]
-    inductives: List[Inductive]
+    """
+    A list of constants (definitions, lemmas) in the global environment.
+    """
+    inductives: List[MutualInductive]
+    """
+    A list of inductive types in the global environment.
+    """
+
+    def asdict(self) -> Dict[str, Union[Constant, MutualInductive]]:
+        """
+        Represent the environment as a map from names to definitions.
+
+        Returns
+        -------
+        Dict[str, Union[Constant, MutualInductive]]
+            A dictionary mapping qualified names to their corresponding
+            `Constant` or `MutualInductive` definitions.
+        """
+        env = {}
+        for decl in chain(self.constants, self.inductives):
+            for qualid in interpolate_names(decl.short_id, decl.full_id):
+                env[qualid] = decl
+        return env
 
 
 @dataclass
@@ -669,10 +778,11 @@ class SerAPI:
         """
         if n > len(self.frame_stack):
             raise IndexError(f"Cannot pop {n} frames; exceeds stack size")
-        popped_frames = []
+        popped_states = []
         for _ in range(n):
-            popped_frames.append(self.frame_stack[-1].pop())
-        self.cancel(popped_frames)
+            popped_frame = self.frame_stack.pop()
+            popped_states.append(popped_frame.pop())
+        self.cancel(popped_states)
         if not self.frame_stack:
             # re-initialize the stack
             self.push()
@@ -784,7 +894,7 @@ class SerAPI:
 
         Parameters
         ----------
-        current_file : os.PathLike
+        current_file : Optional[os.PathLike], optional
             The file from which commands for the current SerAPI session
             are drawn, by default None.
 
@@ -803,6 +913,8 @@ class SerAPI:
             raise RuntimeError(
                 "Querying the environment is not supported in SerAPI "
                 f"version {self.serapi_version}.")
+        if current_file is None:
+            current_file = "<interactive>"
         responses, _, _ = self.send("(Query () Env)")
         # Refer to coq/kernel/environ.mli
         env = responses[1][2][1][0][1]
@@ -850,13 +962,13 @@ class SerAPI:
             constants.append(
                 Constant(
                     physical_path=physical_path,
-                    short_ident=short_ident,
-                    qualid=qualid,
+                    short_id=short_ident,
+                    full_id=qualid,
                     term=term,
                     type=type,
                     sort=sort,
                     opaque=opaque,
-                    sexp=type_sexp,
+                    type_sexp=type_sexp,
                 ))
 
         # store the inductives
@@ -869,37 +981,55 @@ class SerAPI:
                 logical_path = "SerTop"
                 physical_path = current_file
             else:
-                logical_path = mod_path_file(induct[0][1])
+                logical_path = mod_path_file(modpath)
                 physical_path = os.path.relpath(
                     self.query_library(logical_path))
             assert qualid.startswith(logical_path)
             physical_path += ":" + qualid[len(logical_path) + 1 :]
             # blocks
+            mutual_inductive_body = induct[1][0]
+            mind_packets = mutual_inductive_body[0][1]
             blocks = []
-            for blk in induct[1][0][0][1]:
-                blk_qualid = ".".join(
-                    qualid.split(".")[:-1] + [str(blk[0][1][1])])
+            for blk in mind_packets:
+                mind_typename = blk[0][1]
+                mind_consnames = blk[3][1]
+                mind_user_lc = blk[4][1]
+                blk_qualid = ".".join([logical_path, str(mind_typename[1])])
                 blk_short_ident = self.query_qualid(blk_qualid)
                 # constructors
                 constructors = []
-                for c_name, c_type in zip(blk[3][1], blk[4][1]):
+                assert len(mind_consnames) == len(mind_user_lc)
+                for c_name, c_type in zip(mind_consnames, mind_user_lc):
                     c_name = str(c_name[1])
-                    c_type = self.print_constr(str(c_type))
+                    # c_type = self.print_constr(str(c_type))
                     # if c_type is not None:
-                    #    c_type = UNBOUND_REL_PATTERN.sub(short_ident,
-                    #                                     c_type)
+                    #     c_type = UNBOUND_REL_PATTERN.sub(blk_short_ident,  # noqa: W505, B950
+                    #                                      c_type)
+                    # NOTE (AG): The above is commented from the
+                    # original CoqGym implementation.
+                    # I cannot find an accurate way to undo
+                    # the de Bruijn index substitution and retrieve
+                    # the mutually inductive type names in place of
+                    # the unbound rels.
+                    # However, we do have the constructor name, so we
+                    # can fallback on a query and let Coq figure it out
+                    # for us.
+                    c_type = self.query_type(".".join([logical_path, c_name]))
                     constructors.append((c_name, c_type))
                 blocks.append(
-                    Block(
-                        short_ident=blk_short_ident,
-                        qualid=blk_qualid,
+                    OneInductive(
+                        short_id=blk_short_ident,
+                        full_id=blk_qualid,
                         constructors=constructors,
                     ))
+            mind_record = mutual_inductive_body[1][1]
             inductives.append(
-                Inductive(
+                MutualInductive(
                     physical_path=physical_path,
+                    short_id=short_ident,
+                    full_id=qualid,
                     blocks=blocks,
-                    is_record=induct[1][0][1][1] != SexpString("NotRecord"),
+                    is_record=mind_record.get_content() != "NotRecord",
                     sexp=str(induct),
                 ))
 
@@ -1177,6 +1307,8 @@ class SerAPI:
         except CoqExn as e:
             if e.msg.startswith("Invalid character"):
                 result = self._query_type(term)
+            else:
+                raise e
         else:
             obj_list = responses[1][2][1]
             if obj_list:
@@ -1185,10 +1317,21 @@ class SerAPI:
                 type_sexp = obj[1]
                 result = self.print_constr(str(type_sexp))
             else:
-                raise CoqExn(
-                    f"The reference {term} was not found in the "
-                    "current environment.",
-                    str(responses[2]))
+                # fall back to vernacular query
+                try:
+                    # About query is easier to parse
+                    result = self.query_vernac(f"About {term}.")
+                except CoqExn as e:
+                    if e.msg.startswith("Syntax error: [smart_global]"):
+                        result = self.query_vernac(f"Check {term}.")
+                    else:
+                        raise e
+                assert len(result) == 1
+                result = result[0].split("\n\n")[0]
+                pattern = f"({term}" + r"\s+:)"
+                match = re.match(pattern, result)
+                assert match is not None
+                result = normalize_spaces(result[match.end():])
         return result
 
     def query_vernac(self, cmd: str) -> List[str]:
