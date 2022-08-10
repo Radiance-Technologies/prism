@@ -433,6 +433,7 @@ class TestSerAPI(unittest.TestCase):
             '(Sort (Type ((((hash 14398528588510) '
             '(data (Level ((DirPath ((Id SerTop))) 2)))) 0))))')
         no_goals = Goals([], [], [], [])
+        focused_no_goals = Goals([], [([], [])], [], [])
         expected_add0_base_goal = Goal(
             10,
             '@eq nat (Nat.add O O) O',
@@ -591,7 +592,8 @@ class TestSerAPI(unittest.TestCase):
                     goals,
                     Goals(
                         [expected_add0_base_goal],
-                        [expected_add0_ind_goal],
+                        [([],
+                          [expected_add0_ind_goal])],
                         [],
                         []))
                 serapi.execute("reflexivity.")
@@ -599,7 +601,8 @@ class TestSerAPI(unittest.TestCase):
                 self.assertEqual(
                     goals,
                     Goals([],
-                          [expected_add0_ind_goal],
+                          [([],
+                            [expected_add0_ind_goal])],
                           [],
                           []))
                 serapi.execute("-")
@@ -607,12 +610,13 @@ class TestSerAPI(unittest.TestCase):
                 self.assertEqual(
                     goals,
                     Goals([expected_add0_ind_goal],
-                          [],
+                          [([],
+                            [])],
                           [],
                           []))
                 serapi.execute("simpl. rewrite -> IH. reflexivity.")
                 goals = serapi.query_goals()
-                self.assertEqual(goals, no_goals)
+                self.assertEqual(goals, focused_no_goals)
                 serapi.execute("Qed.")
             with self.subTest("multiple_idents"):
                 serapi.execute(

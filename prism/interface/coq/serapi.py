@@ -11,7 +11,6 @@ import signal
 import sys
 from dataclasses import InitVar, dataclass, field
 from functools import cached_property
-from itertools import chain
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple, Union
 
@@ -776,8 +775,7 @@ class SerAPI:
 
             ser_goals = responses[1][2][1][0][1]
 
-            stack = list(
-                chain.from_iterable(chain.from_iterable(ser_goals[1][1])))
+            stack = ser_goals[1][1]
             if OpamVersion.less_than(self.serapi_version, "8.10.0"):
                 # ser_goals type does not exist
                 # but nearly equivalent pre_goals type does, which hails
@@ -794,7 +792,12 @@ class SerAPI:
                 shelved_goals = ser_goals[3][1]
                 abandoned_goals = ser_goals[4][1]
             fg_goals = deserialize_goals(ser_goals[0][1])
-            bg_goals = deserialize_goals(stack)
+            bg_goals = []
+            for frame in stack:
+                assert len(frame) == 2
+                bg_goals.append(
+                    (deserialize_goals(frame[0]),
+                     deserialize_goals(frame[1])))
             shelved_goals = deserialize_goals(shelved_goals)
             abandoned_goals = deserialize_goals(abandoned_goals)
             return Goals(fg_goals, bg_goals, shelved_goals, abandoned_goals)

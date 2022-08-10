@@ -2,7 +2,7 @@
 Abstractions of Coq goals and hypotheses.
 """
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 
 @dataclass
@@ -97,6 +97,7 @@ class Goals:
     """
 
     foreground_goals: List[Goal]
-    background_goals: List[Goal]
+    # TODO (AG): Figure out the meaning of the left versus right goals.
+    background_goals: List[Tuple[List[Goal], List[Goal]]]
     shelved_goals: List[Goal]
     abandoned_goals: List[Goal]
