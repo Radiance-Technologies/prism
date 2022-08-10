@@ -1,3 +1,10 @@
+"""
+Potentially useful regular expressions for parsing SerAPI input/output.
+
+Adapted from
+https://github.com/princeton-vl/CoqGym/blob/master/re_patterns.py
+"""
+
 import re
 
 PWD_PATTERN = re.compile(r"\(\*\*PWD\*\* (?P<pwd>.*?) \*\*\)")
@@ -13,7 +20,9 @@ LOAD_PATHS_PATTERN = re.compile(
     flags=re.DOTALL)
 
 LOAD_PATH_PATTERN = re.compile(
-    r"(?P<logical_path><>|([0-9A-Za-z_-]+(\.[0-9A-Za-z_-]+)*))\s+(?P<physical_path>(\/[0-9A-Za-z_-]+)+)\s+(?P<implicit>true|false)",
+    r"(?P<logical_path><>|([0-9A-Za-z_-]+(\.[0-9A-Za-z_-]+)*))\s+"
+    r"(?P<physical_path>(\/[0-9A-Za-z_-]+)+)\s+"
+    r"(?P<implicit>true|false)",
     re.DOTALL,
 )
 
