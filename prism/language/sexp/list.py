@@ -44,14 +44,15 @@ class SexpList(SexpNode):
             node = nodes.pop()
             if node is None:
                 s.append(")")
-            elif node.is_list():
-                s.append("(")
-                nodes.append(None)
-                nodes.extend(reversed(node.children))
             else:
-                if not s[-1] == "(":
+                if s and not s[-1] == "(":
                     s.append(" ")
-                s.append(str(node))
+                if node.is_list():
+                    s.append("(")
+                    nodes.append(None)
+                    nodes.extend(reversed(node.children))
+                else:
+                    s.append(str(node))
         return "".join(s)
 
     @property
