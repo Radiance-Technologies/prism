@@ -52,7 +52,7 @@ class Constant:
     """
     sexp: str
     """
-    The s-expression of the constant's `type` (i.e., of its
+    The s-expression of the constant's type (i.e., of its
     ``(Constant, constant_body)`` kernel representation).
     """
 
