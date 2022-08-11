@@ -3,13 +3,17 @@ Module for storing cache extraction functions.
 """
 from typing import Callable, Dict, Optional, Set
 
+from radpytools.os import pushd
+
 from prism.data.build_cache import (
     CoqProjectBuildCache,
     ProjectCommitData,
     VernacCommandData,
 )
 from prism.language.gallina.analyze import SexpInfo
+from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.util import ParserUtils
+from prism.language.id import LanguageId
 from prism.project.base import Project
 from prism.project.exception import ProjectBuildError
 from prism.project.metadata import ProjectMetadata
@@ -40,29 +44,35 @@ def extract_vernac_commands(project: ProjectRepo) -> VernacDict:
         file_commands: Set[VernacCommandData] = command_data.setdefault(
             filename,
             set())
-        doc = project.get_file(filename)
         beg_char_idx = 0
         end_char_idx = 0
-        sentences_enumerated = enumerate(
-            project.extract_sentences(
-                doc,
-                sentence_extraction_method=project.sentence_extraction_method))
-        for (sentence_idx, sentence) in sentences_enumerated:
+        with pushd(project.dir_abspath):
+            sentences_enumerated = enumerate(
+                CoqParser.parse_sentences(filename,
+                                          project.serapi_options))
+        for (sentence_idx, vernac_sentence) in sentences_enumerated:
+            sentence = str(vernac_sentence)
             end_char_idx += len(sentence)
-            command_type, identifier = ParserUtils.extract_identifier(sentence)
-            file_commands.add(
-                VernacCommandData(
-                    identifier,
-                    command_type,
-                    SexpInfo.Loc(
-                        filename,
-                        sentence_idx,
-                        0,
-                        sentence_idx,
-                        0,
-                        beg_char_idx,
-                        end_char_idx),
-                    None))
+            vs_lid = vernac_sentence.classify_lid()
+            if (vs_lid == LanguageId.Vernac
+                    or vs_lid == LanguageId.VernacMixedWithGallina):
+                command_type, identifier = ParserUtils.extract_identifier(sentence)
+                file_commands.add(
+                    VernacCommandData(
+                        identifier,
+                        command_type,
+                        SexpInfo.Loc(
+                            filename,
+                            sentence_idx,
+                            0,
+                            sentence_idx,
+                            0,
+                            beg_char_idx,
+                            end_char_idx),
+                        None))
+            else:
+                # This is where we would handle Ltac, aka proofs
+                pass
             beg_char_idx = end_char_idx
     return command_data
 
