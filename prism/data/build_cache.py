@@ -185,7 +185,7 @@ class CoqProjectBuildCache:
     def _contains_metadata(self, metadata: ProjectMetadata) -> bool:
         return self.get_path_from_metadata(metadata).exists()
 
-    def _contains_fields(self, fields: Tuple[str]) -> bool:
+    def _contains_fields(self, *fields: Tuple[str]) -> bool:
         return self.get_path_from_fields(*fields).exists()
 
     def contains(
@@ -265,7 +265,7 @@ class CoqProjectBuildCache:
             self,
             project: str,
             commit: str,
-            coq_version: str) -> str:
+            coq_version: str) -> Path:
         """
         Get the file path for identifying fields of a cache.
         """
@@ -274,7 +274,7 @@ class CoqProjectBuildCache:
                                  "_"),
              self.fmt_ext])
 
-    def get_path_from_metadata(self, metadata: ProjectMetadata) -> str:
+    def get_path_from_metadata(self, metadata: ProjectMetadata) -> Path:
         """
         Get the file path for a given metadata.
         """
