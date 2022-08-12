@@ -14,6 +14,8 @@ from prism.data.build_cache import (
 from prism.data.dataset import CoqProjectBaseDataset
 from prism.language.gallina.analyze import SexpInfo
 from prism.language.heuristic.util import ParserUtils
+from prism.language.sexp.list import SexpList
+from prism.language.sexp.string import SexpString
 from prism.project import ProjectRepo
 from prism.project.base import SentenceExtractionMethod
 from prism.project.metadata.storage import MetadataStorage
@@ -61,7 +63,10 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                                 0,
                                 beg_char_idx,
                                 end_char_idx),
-                            None))
+                            None,
+                            str(sentence),
+                            SexpList([SexpString("foo"),
+                                      SexpString("bar")])))
                     beg_char_idx = end_char_idx
                 break  # one file is enough to test
             data = ProjectCommitData(project.metadata, command_data)

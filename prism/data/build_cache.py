@@ -11,6 +11,7 @@ from typing import Dict, Iterable, Optional, Set, Tuple, Union
 import seutil as su
 
 from prism.language.gallina.analyze import SexpInfo
+from prism.language.sexp.node import SexpNode
 from prism.project.metadata import ProjectMetadata
 
 
@@ -39,6 +40,14 @@ class VernacCommandData:
     """
     The error, if any, that results when trying to execute the command
     (e.g., within the ``sertop``). If there is no error, then None.
+    """
+    sentence_text: str
+    """
+    The raw text of this sentence.
+    """
+    sexp: SexpNode
+    """
+    The serialized s-expression associated with this sentence.
     """
 
     def __hash__(self) -> int:  # noqa: D105
