@@ -969,7 +969,7 @@ class SexpAnalyzer:
                         data_child[0],
                         'fname',
                         parser=lambda f: f
-                        if not f.startswith("(InFile") else f[8 :]),
+                        if not f.startswith("(InFile") else f[8 :-1]),
                 "lineno":
                     check_and_parse(data_child[1],
                                     "line_nb"),
