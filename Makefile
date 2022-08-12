@@ -11,7 +11,7 @@ install: venv_check venv
 # test internal packages
 test: venv_check venv switch_check
 	echo "Running tests"
-	pytest --pyargs --cov=prism prism
+	pytest --durations=0 --durations-min=1.0 --pyargs --cov=prism prism
 
 .PHONY: dev
 dev: venv_check venv

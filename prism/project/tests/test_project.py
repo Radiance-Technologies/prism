@@ -236,6 +236,7 @@ class TestProject(unittest.TestCase):
         # ensure we are starting from clean slate so that strace can
         # work its magic
         self.test_iqr_project.clean()
+        original_metadata = self.test_iqr_project.metadata
         output, rcode, stdout, stderr = self.test_iqr_project.build_and_get_iqr()
         if not os.path.exists("./test_logs"):
             os.makedirs("./test_logs")
@@ -244,6 +245,7 @@ class TestProject(unittest.TestCase):
             print(f"\nstdout = \n {stdout}", file=f)
             print(f"\nstderr = \n {stderr}", file=f)
         self.assertEqual(output, self.test_iqr_project.serapi_options)
+        self.assertEqual(output, original_metadata.serapi_options)
         actual_result = set()
         for match in re.finditer(r"(-R|-Q|-I) [^\s]+", output):
             actual_result.add(match.group())

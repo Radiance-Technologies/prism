@@ -8,7 +8,7 @@ from typing import List
 
 from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
-from prism.project.base import Project
+from prism.project.base import MetadataArgs, Project
 from prism.project.exception import DirHasNoCoqFiles
 
 
@@ -28,6 +28,10 @@ class ProjectDir(Project):
         super().__init__(dir_abspath, *args, **kwargs)
         if not self._traverse_file_tree():
             raise DirHasNoCoqFiles(f"{dir_abspath} has no Coq files.")
+
+    @property
+    def metadata_args(self) -> MetadataArgs:  # noqa: D102
+        return MetadataArgs(None, None, self.coq_version, self.ocaml_version)
 
     @property
     def name(self) -> str:  # noqa: D102
