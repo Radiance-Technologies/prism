@@ -4,6 +4,8 @@ Provides methods for extracting Gallina terms from parsed s-expressions.
 Adapted from `roosterize.parser.SexpAnalyzer`
 at https://github.com/EngineeringSoftware/roosterize/.
 """
+from __future__ import annotations
+
 import collections
 import functools
 import logging
@@ -117,11 +119,7 @@ class SexpInfo:
         beg_charno: int
         end_charno: int
 
-        def __contains__(
-                self,
-                other: Union['SexpInfo.Loc',
-                             int,
-                             float]) -> bool:
+        def __contains__(self, other: Union[SexpInfo.Loc, int, float]) -> bool:
             """
             Return whether this location contains another.
 
@@ -137,7 +135,7 @@ class SexpInfo:
             else:
                 return NotImplemented
 
-        def __lt__(self, other: Union['SexpInfo.Loc', int, float]) -> bool:
+        def __lt__(self, other: Union[SexpInfo.Loc, int, float]) -> bool:
             """
             Return whether this location is less than another.
 
@@ -151,7 +149,7 @@ class SexpInfo:
             else:
                 return NotImplemented
 
-        def __gt__(self, other: Union['SexpInfo.Loc', int, float]) -> bool:
+        def __gt__(self, other: Union[SexpInfo.Loc, int, float]) -> bool:
             """
             Return whether this location is greater than another.
 
@@ -167,14 +165,14 @@ class SexpInfo:
 
         def __or__(
             self,
-            other: 'SexpInfo.Loc',
-        ) -> 'SexpInfo.Loc':
+            other: SexpInfo.Loc,
+        ) -> SexpInfo.Loc:
             """
             Generate a location containing union of two locs.
 
             Parameters
             ----------
-            other: 'SexpInfo.Loc'
+            other: SexpInfo.Loc
                 Another location from same file as instance Loc,
                 that will be used to generate a new `SexpInfo.Loc`
                 that is union of instance Loc and `other`.
@@ -188,7 +186,7 @@ class SexpInfo:
             if self.filename != other.filename:
                 raise ValueError(
                     "Cannot combine locations from different files.")
-            if self.beg_charno < other.beg_charno:
+            if self.beg_charno <= other.beg_charno:
                 kwargs = asdict(self)
                 if self.end_charno < other.end_charno:
                     kwargs['lineno_last'] = other.lineno_last
@@ -229,7 +227,7 @@ class SexpInfo:
             else:
                 return False
 
-        def shift(self, offset: int) -> 'SexpInfo.Loc':
+        def shift(self, offset: int) -> SexpInfo.Loc:
             """
             Shift the character positions of this location.
 
@@ -302,7 +300,7 @@ class SexpInfo:
                         ])
                 ])
 
-        def union(self, *others: Tuple['SexpInfo.Loc', ...]) -> 'SexpInfo.Loc':
+        def union(self, *others: Tuple[SexpInfo.Loc, ...]) -> SexpInfo.Loc:
             """
             Get the union of this location and another.
 
@@ -311,7 +309,7 @@ class SexpInfo:
 
             Parameters
             ----------
-            other: tuple of 'SexpInfo.Loc'
+            other: tuple of SexpInfo.Loc
                 Other locations from the same file as this location.
 
             Returns
@@ -331,9 +329,9 @@ class SexpInfo:
         @classmethod
         def span(
                 cls,
-                loc: 'SexpInfo.Loc',
-                *others: Tuple['SexpInfo.Loc',
-                               ...]) -> 'SexpInfo.Loc':
+                loc: SexpInfo.Loc,
+                *others: Tuple[SexpInfo.Loc,
+                               ...]) -> SexpInfo.Loc:
             """
             Get the union of all given locations.
 
