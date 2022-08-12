@@ -224,9 +224,6 @@ class ChangedCoqCommitIterator(CommitIterator):
     Subclass of CommitIterator only yielding changed .v files.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
     def __iter__(self):
         """
         Yield each commit in the specified order.
