@@ -43,11 +43,11 @@ class VernacCommandData:
     """
     sentence_text: str
     """
-    The raw text of this sentence.
+    The raw sentence text.
     """
     sexp: SexpNode
     """
-    The serialized s-expression associated with this sentence.
+    The serialized s-expression.
     """
 
     def __hash__(self) -> int:  # noqa: D105
