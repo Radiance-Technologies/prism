@@ -11,6 +11,7 @@ from importlib import import_module
 from typing import ClassVar, List, Optional, Tuple, Union
 
 from prism.util.compare import Bottom, Top
+from prism.util.radpytools import cachedmethod
 
 
 class VersionParseError(Exception):
@@ -216,6 +217,18 @@ class OpamVersion(Version):
             fields.append(field)
             nondigit = not nondigit
         return OpamVersion(fields)
+
+    @cachedmethod
+    @staticmethod
+    def less_than(x: Union['Version', str], y: Union['Version', str]) -> bool:
+        """
+        Return whether one version is less than another.
+        """
+        if isinstance(x, str):
+            x = OpamVersion.parse(x)
+        if isinstance(y, str):
+            y = OpamVersion.parse(y)
+        return x < y
 
 
 @dataclass(frozen=True)

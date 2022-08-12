@@ -6,7 +6,7 @@ at https://github.com/EngineeringSoftware/roosterize/.
 """
 
 import copy
-from typing import Callable, Iterable, List, Optional, Sequence, Tuple
+from typing import Callable, Iterable, Iterator, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -27,22 +27,33 @@ class SexpList(SexpNode):
     def __deepcopy__(self, memodict=None) -> 'SexpList':  # noqa: D105
         return SexpList([copy.deepcopy(c) for c in self.children])
 
-    def __str__(self) -> str:  # noqa: D105
-        s = "("
-        last_is_str = False
-        for c in self.children:
-            # Put space only between SexpString
-            if c.is_string():
-                if last_is_str:
-                    s += " "
-                # end if
-                last_is_str = True
-            # end if
+    def __eq__(self, other: SexpNode) -> bool:  # noqa: D105
+        if not isinstance(other, SexpNode):
+            return NotImplemented
+        else:
+            return other.is_list() and self.children == other.children
 
-            s += c.__str__()
-        # end for
-        s += ")"
-        return s
+    def __iter__(self) -> Iterator[SexpNode]:  # noqa: D105
+        yield from self.children
+
+    def __str__(self) -> str:  # noqa: D105
+        # perform in-order traversal
+        nodes = [self]
+        s = []
+        while nodes:
+            node = nodes.pop()
+            if node is None:
+                s.append(")")
+            else:
+                if s and not s[-1] == "(":
+                    s.append(" ")
+                if node.is_list():
+                    s.append("(")
+                    nodes.append(None)
+                    nodes.extend(reversed(node.children))
+                else:
+                    s.append(str(node))
+        return "".join(s)
 
     @property
     def height(self) -> int:  # noqa: D102
@@ -94,7 +105,7 @@ class SexpList(SexpNode):
             return core
         # end if
 
-    def get_children(self):  # noqa: D102
+    def get_children(self) -> List[SexpNode]:  # noqa: D102
         return self.children
 
     def head(self) -> str:  # noqa: D102

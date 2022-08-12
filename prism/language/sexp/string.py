@@ -16,10 +16,15 @@ class SexpString(SexpNode):
 
     def __init__(self, content: str = None) -> None:
         self._content = content if content is not None else ""
-        return
 
     def __deepcopy__(self, memodict=None) -> 'SexpString':  # noqa: D105
         return SexpString(self.content)
+
+    def __eq__(self, other: SexpNode) -> bool:  # noqa: D105
+        if not isinstance(other, SexpNode):
+            return NotImplemented
+        else:
+            return other.is_string() and other._content == self._content
 
     def __str__(self) -> str:  # noqa: D105
         content = self.content

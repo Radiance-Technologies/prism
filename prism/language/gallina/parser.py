@@ -7,8 +7,6 @@ at https://github.com/EngineeringSoftware/roosterize/.
 import logging
 from typing import List, Optional, Set, Tuple, Union
 
-from seutil import BashUtils
-
 from prism.data.document import CoqDocument, VernacularSentence
 from prism.language.gallina.analyze import SexpAnalyzer, SexpInfo
 from prism.language.gallina.util import ParserUtils
@@ -17,6 +15,7 @@ from prism.language.sexp import SexpNode, SexpParser
 from prism.language.token import Token, TokenConsts
 from prism.language.types import SourceCode
 from prism.util.debug import Debug
+from prism.util.opam.switch import OpamSwitch
 
 
 class CoqParserConsts:
@@ -878,7 +877,8 @@ class CoqParser:
         cls,
         file_path: str,
         source_code: SourceCode,
-        serapi_options: str = ""
+        serapi_options: str = "",
+        opam_switch: Optional[OpamSwitch] = None
     ) -> Tuple[List[VernacularSentence],
                List[SexpNode],
                List[SexpNode]]:
@@ -891,8 +891,8 @@ class CoqParser:
         """
         unicode_offsets = ParserUtils.get_unicode_offsets(source_code)
 
-        ast_sexp_list = cls.parse_asts(file_path, serapi_options)
-        tok_sexp_list = cls.parse_tokens(file_path, serapi_options)
+        ast_sexp_list = cls.parse_asts(file_path, serapi_options, opam_switch)
+        tok_sexp_list = cls.parse_tokens(file_path, serapi_options, opam_switch)
 
         sentences = cls.parse_sentences_from_sexps(
             source_code,
@@ -903,9 +903,11 @@ class CoqParser:
         return sentences, ast_sexp_list, tok_sexp_list
 
     @classmethod
-    def parse_asts(cls,
-                   file_path: str,
-                   sercomp_options: str = "") -> List[SexpNode]:
+    def parse_asts(
+            cls,
+            file_path: str,
+            sercomp_options: str = "",
+            opam_switch: Optional[OpamSwitch] = None) -> List[SexpNode]:
         """
         Parse the abstract syntax trees of sentences in the given file.
 
@@ -913,9 +915,12 @@ class CoqParser:
         ----------
         file_path : str
             The absolute or relative path of a Coq file.
-        sercomp_options : str
+        sercomp_options : str, optional
             Options to control the output of ``sercomp``, which is used
             to parse the document. By default the empty string.
+        opam_switch : Optional[OpamSwitch], optional
+            The switch in which to execute the `sercomp` SerAPI
+            executable, by default the global "default" switch.
 
         Returns
         -------
@@ -923,9 +928,10 @@ class CoqParser:
             A list of s-expression nodes representing the ASTs of
             sentences in the order of their definition in the document.
         """
-        ast_sexp_str: str = BashUtils.run(
-            f"sercomp {sercomp_options} --mode=sexp -- {file_path}",
-            expected_return_code=0).stdout
+        if opam_switch is None:
+            opam_switch = OpamSwitch()
+        ast_sexp_str: str = opam_switch.run(
+            f"sercomp {sercomp_options} --mode=sexp -- {file_path}").stdout
         ast_sexp_list: List[SexpNode] = SexpParser.parse_list(ast_sexp_str)
         return ast_sexp_list
 
@@ -933,7 +939,8 @@ class CoqParser:
     def parse_document(
             cls,
             file_path: str,
-            serapi_options: str = "") -> CoqDocument:
+            serapi_options: str = "",
+            opam_switch: Optional[OpamSwitch] = None) -> CoqDocument:
         """
         Parse the indicated Coq document.
 
@@ -941,9 +948,12 @@ class CoqParser:
         ----------
         file_name : str
             The absolute or relative path of a Coq file.
-        serapi_options : str
+        serapi_options : str, optional
             Options to control the output of SerAPI, which is used to
             parse the document. By default the empty string.
+        opam_switch : Optional[OpamSwitch], optional
+            The switch in which to execute the `sercomp` SerAPI
+            executable, by default the global "default" switch.
 
         Returns
         -------
@@ -954,9 +964,11 @@ class CoqParser:
 
         (sentences,
          ast_sexp_list,
-         tok_sexp_list) = cls.parse_all(file_path,
-                                        source_code,
-                                        serapi_options)
+         tok_sexp_list) = cls.parse_all(
+             file_path,
+             source_code,
+             serapi_options,
+             opam_switch)
 
         return CoqDocument(
             file_path,
@@ -967,9 +979,12 @@ class CoqParser:
         )
 
     @classmethod
-    def parse_sentences(cls,
-                        file_path: str,
-                        serapi_options: str = "") -> List[VernacularSentence]:
+    def parse_sentences(
+            cls,
+            file_path: str,
+            serapi_options: str = "",
+            opam_switch: Optional[OpamSwitch] = None
+    ) -> List[VernacularSentence]:
         """
         Parse the sentences of the indicated Coq document.
 
@@ -977,9 +992,12 @@ class CoqParser:
         ----------
         file_name : str
             The absolute or relative path of a Coq file.
-        serapi_options : str
+        serapi_options : str, optional
             Options to control the output of SerAPI, which is used to
             parse the document. By default the empty string.
+        opam_switch : Optional[OpamSwitch], optional
+            The switch in which to execute the `sercomp` SerAPI
+            executable, by default the global "default" switch.
 
         Returns
         -------
@@ -987,7 +1005,11 @@ class CoqParser:
             The parsed Coq sentences.
         """
         source_code = cls.parse_source(file_path)
-        return cls.parse_all(file_path, source_code, serapi_options)[0]
+        return cls.parse_all(
+            file_path,
+            source_code,
+            serapi_options,
+            opam_switch)[0]
 
     @classmethod
     def parse_sentences_from_sexps(  # noqa: C901
@@ -1192,9 +1214,11 @@ class CoqParser:
         return source_code
 
     @classmethod
-    def parse_tokens(cls,
-                     file_path: str,
-                     sertok_options: str = "") -> List[SexpNode]:
+    def parse_tokens(
+            cls,
+            file_path: str,
+            sertok_options: str = "",
+            opam_switch: Optional[OpamSwitch] = None) -> List[SexpNode]:
         """
         Parse the lexical tokens of sentences in the given file.
 
@@ -1202,9 +1226,12 @@ class CoqParser:
         ----------
         file_path : str
             The absolute or relative path of a Coq file.
-        sertok_options : str
+        sertok_options : str, optional
             Options to control the output of ``sertok``, which is used
             to parse the document. By default the empty string.
+        opam_switch : Optional[OpamSwitch], optional
+            The switch in which to execute the `sertok` SerAPI
+            executable, by default the global "default" switch.
 
         Returns
         -------
@@ -1213,8 +1240,9 @@ class CoqParser:
             lexical tokens in each sentence in the order of their
             definition in the document.
         """
-        tok_sexp_str: str = BashUtils.run(
-            f"sertok {sertok_options} -- {file_path}",
-            expected_return_code=0).stdout
+        if opam_switch is None:
+            opam_switch = OpamSwitch()
+        tok_sexp_str: str = opam_switch.run(
+            f"sertok {sertok_options} -- {file_path}").stdout
         tok_sexp_list: List[SexpNode] = SexpParser.parse_list(tok_sexp_str)
         return tok_sexp_list
