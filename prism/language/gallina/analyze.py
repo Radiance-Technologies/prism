@@ -4,10 +4,13 @@ Provides methods for extracting Gallina terms from parsed s-expressions.
 Adapted from `roosterize.parser.SexpAnalyzer`
 at https://github.com/EngineeringSoftware/roosterize/.
 """
+from __future__ import annotations
+
 import collections
+import functools
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any, Callable, Counter, List, Optional, Set, Tuple, Union
 
 from deprecated.sphinx import deprecated
@@ -106,11 +109,7 @@ class SexpInfo:
         beg_charno: int
         end_charno: int
 
-        def __contains__(
-                self,
-                other: Union['SexpInfo.Loc',
-                             int,
-                             float]) -> bool:
+        def __contains__(self, other: Union[SexpInfo.Loc, int, float]) -> bool:
             """
             Return whether this location contains another.
 
@@ -126,7 +125,7 @@ class SexpInfo:
             else:
                 return NotImplemented
 
-        def __lt__(self, other: Union['SexpInfo.Loc', int, float]) -> bool:
+        def __lt__(self, other: Union[SexpInfo.Loc, int, float]) -> bool:
             """
             Return whether this location is less than another.
 
@@ -140,7 +139,7 @@ class SexpInfo:
             else:
                 return NotImplemented
 
-        def __gt__(self, other: Union['SexpInfo.Loc', int, float]) -> bool:
+        def __gt__(self, other: Union[SexpInfo.Loc, int, float]) -> bool:
             """
             Return whether this location is greater than another.
 
@@ -153,6 +152,43 @@ class SexpInfo:
                 return self.beg_charno >= other
             else:
                 return NotImplemented
+
+        def __or__(
+            self,
+            other: SexpInfo.Loc,
+        ) -> SexpInfo.Loc:
+            """
+            Generate a location containing union of two locs.
+
+            Parameters
+            ----------
+            other: SexpInfo.Loc
+                Another location from same file as instance Loc,
+                that will be used to generate a new `SexpInfo.Loc`
+                that is union of instance Loc and `other`.
+
+            Returns
+            -------
+            SexpInfo.Loc
+                A `Loc` object that spans both this instance
+                and the other instance.
+            """
+            if self.filename != other.filename:
+                raise ValueError(
+                    "Cannot combine locations from different files.")
+            if self.beg_charno <= other.beg_charno:
+                kwargs = asdict(self)
+                if self.end_charno < other.end_charno:
+                    kwargs['lineno_last'] = other.lineno_last
+                    kwargs['bol_pos_last'] = other.bol_pos_last
+                    kwargs['end_charno'] = other.end_charno
+                loc = SexpInfo.Loc(**kwargs)
+            elif self.end_charno == other.end_charno:
+                kwargs = asdict(other)
+                loc = SexpInfo.Loc(**kwargs)
+            else:
+                loc = other | self
+            return loc
 
         def contains_charno_range(
                 self,
@@ -181,7 +217,7 @@ class SexpInfo:
             else:
                 return False
 
-        def shift(self, offset: int) -> 'SexpInfo.Loc':
+        def shift(self, offset: int) -> SexpInfo.Loc:
             """
             Shift the character positions of this location.
 
@@ -253,6 +289,56 @@ class SexpInfo:
                                 ])
                         ])
                 ])
+
+        def union(self, *others: Tuple[SexpInfo.Loc, ...]) -> SexpInfo.Loc:
+            """
+            Get the union of this location and another.
+
+            The union of two locations is defined as the minimal-span
+            location that contains each of the two locations.
+
+            Parameters
+            ----------
+            other: tuple of SexpInfo.Loc
+                Other locations from the same file as this location.
+
+            Returns
+            -------
+            SexpInfo.Loc
+                A `Loc` object that spans both this instance and the
+                other instances.
+
+            Raises
+            ------
+            ValueError
+                If any other location does not point to the same file as
+                `self`.
+            """
+            return functools.reduce(lambda x, y: x | y, others, self)
+
+        @classmethod
+        def span(
+                cls,
+                loc: SexpInfo.Loc,
+                *others: Tuple[SexpInfo.Loc,
+                               ...]) -> SexpInfo.Loc:
+            """
+            Get the union of all given locations.
+
+            Parameters
+            ----------
+            locs: tuple of SexpInfo.Loc
+                A set of locations, each presumed to come from the same
+                file.
+
+            Raises
+            ------
+            ValueError
+                If any two given locations point to different files.
+            """
+            # one required positional argument to let Python handle the
+            # failure of trying to get the union of an empty list
+            return loc.union(*others)
 
     @dataclass
     class SertokSentence:

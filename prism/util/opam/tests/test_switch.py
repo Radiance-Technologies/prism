@@ -2,10 +2,14 @@
 Test suite for prism.util.opam.
 """
 import re
+import tempfile
 import unittest
+from pathlib import Path
 from typing import Dict
 
 from prism.util.opam import OCamlVersion, OpamAPI, Version, VersionConstraint
+
+TEST_DIR = Path(__file__).parent
 
 
 class TestOpamSwitch(unittest.TestCase):
@@ -15,6 +19,28 @@ class TestOpamSwitch(unittest.TestCase):
 
     test_switch_name = "test_switch"
     ocaml_version = "4.07.1"
+
+    def test_export(self):
+        """
+        Verify that exported switch configurations match file exports.
+        """
+        config = self.test_switch.export()
+        self.assertEqual(config.switch_name, self.test_switch_name)
+        self.assertEqual(config.opam_root, self.test_switch.root)
+        self.assertFalse(config.is_clone)
+        # Compare against actual export file
+        with tempfile.NamedTemporaryFile('r', dir=TEST_DIR) as f:
+            self.test_switch.run(f"opam switch export {f.name}")
+            actual = f.read()
+        # remove optional fields to eliminate them from the comparison
+        config.switch_name = None
+        config.opam_root = None
+        config.is_clone = None
+        # normalize whitespace
+        actual = actual.replace("[", "[ ").replace("]", " ]")
+        actual = ' '.join(actual.split())
+        expected = ' '.join(str(config).split())
+        self.assertEqual(expected, actual)
 
     def test_get_available_versions(self):
         """

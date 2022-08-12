@@ -294,6 +294,22 @@ class SexpNode(abc.ABC):
         """
         ...
 
+    def flatten(self) -> List["SexpNode"]:
+        """
+        Flatten the s-expression tree according to a preorder traversal.
+
+        Returns
+        -------
+        list of SexpNode
+            The nodes contained in this s-expression tree in preorder
+            (each node appears before any children).
+        """
+        node_list = [self]
+        if self.is_list():
+            for c in self.get_children():
+                node_list.extend(c.flatten())
+        return node_list
+
     def get_children(self) -> Optional[List["SexpNode"]]:
         """
         Get the children of this (list) node.

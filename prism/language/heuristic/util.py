@@ -368,7 +368,8 @@ class ParserUtils:
         {"Time",
          "Redirect",
          "Fail",
-         "Succeed"},
+         "Succeed",
+         "Timeout"},
         True,
         False)
     """

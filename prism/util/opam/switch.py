@@ -1,11 +1,14 @@
 """
 Provides an object-oriented abstraction of OPAM switches.
 """
+from __future__ import annotations
+
 import logging
 import os
 import re
+import tempfile
 import warnings
-from dataclasses import InitVar, dataclass, field
+from dataclasses import InitVar, dataclass, field, fields
 from functools import cached_property
 from os import PathLike
 from pathlib import Path
@@ -27,6 +30,8 @@ _allow_unsafe_clone = []
 # that cannot invoke bwrap in an unprivileged container (e.g., a docker
 # container runner within Gitlab CI)
 # Very hacky and ugly.
+
+Package = Tuple[str, Optional[Version]]
 
 
 @dataclass(frozen=True)
@@ -246,6 +251,76 @@ class OpamSwitch:
             dest.mkdir()
         command = f'bwrap --dev-bind / / --bind {src} {dest} -- {command}'
         return command, src, dest
+
+    def export(self, include_id: bool = True) -> OpamSwitch.Configuration:
+        """
+        Export the switch configuration.
+
+        The switch configuration details installed and pinned package
+        versions for replication of the environment.
+
+        Parameters
+        ----------
+        include_id : bool, optional
+            Whether to include the switch root, name, and if it is a
+            clone alongside the usual output of ``opam switch export``,
+            by default True.
+
+        Returns
+        -------
+        OpamSwitch.Configuration
+            The switch configuration.
+        """
+        with tempfile.NamedTemporaryFile('r', dir=self.path) as f:
+            self.run(f"opam switch export {f.name}")
+            # Contents are so close but not quite yaml or json.
+            # Custom parsing is required.
+            contents: str = f.read()
+        # strip package strings of quotes before tokenizing
+        tokens = contents.replace('"', ' ').split()
+        kwargs = {}
+        field = None
+        # identify fields and their raw values
+        for token in tokens:
+            if token.endswith(":"):
+                assert field is None
+                field = token[:-1].replace("-", "_")
+            else:
+                assert field is not None
+                if token.startswith("["):
+                    kwargs[field] = []
+                    token = token[1 :]
+                    if token:
+                        kwargs[field].append(token)
+                elif field in kwargs:
+                    if token.endswith("]"):
+                        token = token[:-1]
+                        if token:
+                            kwargs[field].append(token)
+                        field = None
+                    else:
+                        kwargs[field].append(token)
+                else:
+                    kwargs[field] = token
+                    field = None
+        # process fields
+        for field, value in kwargs.items():
+            # safe to modify dict since keys are not added or removed
+            if field == "opam_version":
+                kwargs[field] = OpamVersion.parse(value)
+            else:
+                packages = []
+                for package in value:
+                    package: str
+                    name, version = package.split(".", maxsplit=1)
+                    version = OpamVersion.parse(version)
+                    packages.append((name, version))
+                kwargs[field] = packages
+        if include_id:
+            kwargs['opam_root'] = self.root
+            kwargs['switch_name'] = self.name
+            kwargs['is_clone'] = self.is_clone
+        return OpamSwitch.Configuration(**kwargs)
 
     def get_available_versions(self, pkg: str) -> List[Version]:
         """
@@ -521,3 +596,49 @@ class OpamSwitch:
                 logging.CRITICAL,
                 f"'{command}' returned {r.returncode}: {r.stdout} {r.stderr}")
             raise
+
+    @dataclass
+    class Configuration:
+        """
+        A configuration of an Opam switch that enables reproducibility.
+
+        A handful of optional fields are added to identify the existing
+        switch from which the configuration was created.
+
+        Notes
+        -----
+        See ``opam/src/format/opamFile.ml:SwitchSelectionsSyntax`` for
+        derived fields.
+        """
+
+        opam_version: OpamVersion
+        compiler: Optional[List[Package]] = None
+        roots: Optional[List[Package]] = None
+        installed: Optional[List[Package]] = None
+        pinned: Optional[List[Package]] = None
+        opam_root: Optional[str] = None
+        switch_name: Optional[str] = None
+        is_clone: Optional[str] = None
+
+        def __str__(self) -> str:
+            """
+            Pretty-print the configuration in the Opam file format.
+            """
+            s = []
+            for f in fields(self):
+                field_name = f.name
+                field_value = getattr(self, field_name)
+                if field_value is None:
+                    continue
+                s.append(field_name.replace("_", "-"))
+                s.append(": ")
+                if isinstance(field_value, list):
+                    packages = ["["]
+                    for name, version in field_value:
+                        packages.append(f'"{name}.{version}"')
+                    s.append("\n  ".join(packages))
+                    s.append("\n]")
+                else:
+                    s.append(f'"{field_value}"')
+                s.append("\n")
+            return ''.join(s)
