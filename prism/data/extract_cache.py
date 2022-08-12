@@ -3,8 +3,6 @@ Module for storing cache extraction functions.
 """
 from typing import Callable, Dict, Optional, Set
 
-from radpytools.os import pushd
-
 from prism.data.build_cache import (
     CoqProjectBuildCache,
     ProjectCommitData,
@@ -19,6 +17,7 @@ from prism.project.exception import ProjectBuildError
 from prism.project.metadata import ProjectMetadata
 from prism.project.repo import ProjectRepo
 from prism.util.opam import OpamAPI, OpamSwitch
+from prism.util.radpytools.os import pushd
 
 VernacDict = Dict[str, Set[VernacCommandData]]
 
