@@ -166,6 +166,7 @@ class TestSerAPI(unittest.TestCase):
         for actual, expected in zip(actual_asts, expected_asts):
             # do not compare based on locations since those will
             # definitely differ
+            actual = omit_locs(actual)
             expected = omit_locs(expected)
             # Also strip top-level location from expected since it is
             # pre-stripped from queried AST
