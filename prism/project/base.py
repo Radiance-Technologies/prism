@@ -8,7 +8,7 @@ import random
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from functools import partialmethod, reduce
-from typing import List, Optional, Tuple, Union
+from typing import List, NamedTuple, Optional, Tuple, Union
 
 from seutil import bash
 
@@ -56,6 +56,17 @@ class SentenceExtractionMethod(Enum):
 
 
 SEM = SentenceExtractionMethod
+
+
+class MetadataArgs(NamedTuple):
+    """
+    Arguments that identify metadata for an implicit project.
+    """
+
+    project_url: Optional[str]
+    commit_sha: Optional[str]
+    coq_version: Optional[str]
+    ocaml_version: Optional[str]
 
 
 class Project(ABC):
@@ -107,6 +118,8 @@ class Project(ABC):
         else:
             self.opam_switch = OpamSwitch()
         self.num_cores = num_cores
+        self._last_metadata_args: MetadataArgs = None
+        self._metadata: ProjectMetadata = None
 
     @property
     def build_cmd(self) -> List[str]:
@@ -127,6 +140,13 @@ class Project(ABC):
         return self.metadata.clean_cmd
 
     @property
+    def coq_version(self) -> str:
+        """
+        Get the version of OCaml installed in the project's switch.
+        """
+        return self._coq_version
+
+    @property
     def install_cmd(self) -> List[str]:
         """
         Return the list of commands that install the project.
@@ -134,14 +154,28 @@ class Project(ABC):
         return self.metadata.install_cmd
 
     @property
+    def is_metadata_stale(self) -> bool:
+        """
+        Return whether the current metadata needs to be updated.
+        """
+        return self.metadata_args != self._last_metadata_args
+
+    @property
     def metadata(self) -> ProjectMetadata:
         """
         Get up-to-date metadata for the project.
         """
-        return self.metadata_storage.get(
-            self.name,
-            self.opam_switch.get_installed_version("coq"),
-            self.opam_switch.get_installed_version("ocaml"))
+        if self.is_metadata_stale:
+            self._metadata = self._get_fresh_metadata()
+        return self._metadata
+
+    @property
+    @abstractmethod
+    def metadata_args(self) -> MetadataArgs:
+        """
+        Get arguments that can retrieve the metadata from storage.
+        """
+        ...
 
     @property
     @abstractmethod
@@ -150,6 +184,29 @@ class Project(ABC):
         Return the name of the project.
         """
         ...
+
+    @property
+    def ocaml_version(self) -> str:
+        """
+        Get the version of OCaml installed in the project's switch.
+        """
+        return self._ocaml_version
+
+    @property
+    def opam_switch(self) -> OpamSwitch:
+        """
+        Get the project's switch, which entails the build environment.
+        """
+        return self._opam_switch
+
+    @opam_switch.setter
+    def opam_switch(self, switch: OpamSwitch) -> None:
+        """
+        Set the project's switch and update cached version data.
+        """
+        self._opam_switch = switch
+        self._coq_version = switch.get_installed_version("coq")
+        self._ocaml_version = switch.get_installed_version("ocaml")
 
     @property
     @abstractmethod
@@ -184,6 +241,14 @@ class Project(ABC):
         Project.get_file : For public API.
         """
         pass
+
+    def _get_fresh_metadata(self) -> ProjectMetadata:
+        """
+        Get refreshed metadata from the storage.
+        """
+        metadata_args = self.metadata_args
+        self._last_metadata_args = metadata_args
+        return self.metadata_storage.get(self.name, *metadata_args)
 
     def _get_random_sentence_internal(
             self,
@@ -269,6 +334,15 @@ class Project(ABC):
         """
         pass
 
+    def _update_metadata(self, **kwargs) -> None:
+        """
+        Update fields of the current metadata.
+        """
+        self.metadata_storage.update(self.metadata, **kwargs)
+        # update local copy separately to avoid redundant retrieval
+        for name, value in kwargs.items():
+            setattr(self.metadata, name, value)
+
     @abstractmethod
     def _traverse_file_tree(self) -> List[CoqDocument]:
         """
@@ -340,9 +414,7 @@ class Project(ABC):
                     set(),
                     set(),
                     self.path)))
-        self.metadata_storage.update(
-            self.metadata,
-            serapi_options=serapi_options)
+        self._update_metadata(serapi_options=serapi_options)
         return serapi_options, rcode_out, stdout_out, stderr_out
 
     clean = partialmethod(_make, "clean", "Cleaning")

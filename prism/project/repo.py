@@ -14,8 +14,7 @@ from git import Commit, Repo
 
 from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
-from prism.project.base import Project
-from prism.project.metadata.dataclass import ProjectMetadata
+from prism.project.base import MetadataArgs, Project
 from prism.project.metadata.storage import MetadataStorage
 
 
@@ -279,7 +278,7 @@ class ProjectRepo(Repo, Project):
 
         storage = self.metadata_storage
 
-        self.reset_head = self.commit().hexsha
+        self.reset_head = self.commit_sha
         """
         The SHA for a commit that serves as a restore point.
 
@@ -290,18 +289,19 @@ class ProjectRepo(Repo, Project):
         if commit_sha is not None:
             self.git.checkout(commit_sha)
 
+        self._last_metadata_commit: str = ""
+
     @property
     def commit_sha(self) -> str:  # noqa: D102
         return self.commit().hexsha
 
     @property
-    def metadata(self) -> ProjectMetadata:  # noqa: D102
-        return self.metadata_storage.get(
-            self.name,
+    def metadata_args(self) -> MetadataArgs:  # noqa: D102
+        return MetadataArgs(
             self.remote_url,
             self.commit_sha,
-            self.opam_switch.get_installed_version("coq"),
-            self.opam_switch.get_installed_version("ocaml"))
+            self.coq_version,
+            self.ocaml_version)
 
     @property
     def name(self) -> str:  # noqa: D102
