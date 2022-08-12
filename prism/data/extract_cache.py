@@ -22,7 +22,9 @@ from prism.util.radpytools.os import pushd
 VernacDict = Dict[str, Set[VernacCommandData]]
 
 
-def get_switch(metadata: ProjectMetadata, coq_version: str) -> OpamSwitch:
+def get_active_switch(
+        metadata: ProjectMetadata,
+        coq_version: str) -> OpamSwitch:
     """
     Pass args for use as a stub.
     """
@@ -89,6 +91,9 @@ def extract_cache(
     process_project: Callable[[Project],
                               VernacDict],
     coq_version: Optional[str] = None,
+    get_switch: Callable[[ProjectMetadata,
+                          str],
+                         OpamSwitch] = get_active_switch,
     recache: Optional[Callable[[CoqProjectBuildCache,
                                 ProjectRepo,
                                 str,
@@ -128,6 +133,9 @@ def extract_cache(
     coq_version : str or None, optional
         The version of Coq in which to build the project, by default
         None.
+    get_switch : Callable[[ProjectMetadata, str], OpamSwitch]
+        A function that retrieves a switch in which to build an
+        indicated project commit with a specified Coq version.
     recache : Callable[[CoqProjectBuildCache, ProjectRepo, str, str], \
                        bool]
               or None, optional
@@ -154,7 +162,8 @@ def extract_cache(
             project,
             commit_sha,
             process_project,
-            coq_version)
+            coq_version,
+            get_switch)
 
 
 def extract_cache_new(
@@ -163,7 +172,10 @@ def extract_cache_new(
         commit_sha: str,
         process_project: Callable[[Project],
                                   VernacDict],
-        coq_version: str):
+        coq_version: str,
+        get_switch: Callable[[ProjectMetadata,
+                              str],
+                             OpamSwitch]):
     """
     Extract a new cache and insert it into the build cache.
 
@@ -181,6 +193,9 @@ def extract_cache_new(
     coq_version : str or None, optional
         The version of Coq in which to build the project, by default
         None.
+    get_switch : Callable[[ProjectMetadata, str], OpamSwitch]
+        A function that retrieves a switch in which to build an
+        indicated project commit with a specified Coq version.
     """
     project.git.checkout(commit_sha)
     metadata = project.metadata
