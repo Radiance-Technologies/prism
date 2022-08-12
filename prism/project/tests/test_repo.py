@@ -13,7 +13,11 @@ import git
 from prism.project import ProjectRepo, SentenceExtractionMethod
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
-from prism.project.repo import CommitIterator, CommitTraversalStrategy
+from prism.project.repo import (
+    ChangedCoqCommitIterator,
+    CommitIterator,
+    CommitTraversalStrategy,
+)
 from prism.tests import _MINIMAL_METADATA, _MINIMAL_METASTORAGE
 
 TEST_DIR = os.path.dirname(__file__)
@@ -160,6 +164,25 @@ class TestCommitIter(unittest.TestCase):
         hashes_test = list(itertools.islice(commit_iter, 5))
         hashes_test = [x.hexsha for x in hashes_test]
         self.assertEqual(hashes, hashes_test)
+
+    def test_iterator_skipping_unchanged_coq(self):
+        """
+        Test skipping consecutive commits with the same Coq source code.
+        """
+        repo = self.projects['GeoCoq']
+        hashes = [
+            GEOCOQ_COMMIT_134,
+            GEOCOQ_COMMIT_135,
+        ]
+        commit_iter = ChangedCoqCommitIterator(repo, GEOCOQ_COMMIT_134)
+        hashes_test = list(itertools.islice(commit_iter, 5))
+        hashes_test = [x.hexsha for x in hashes_test]
+        # these hashes are included
+        self.assertEqual(hashes, hashes_test[: 2])
+        # these hashes are not
+        self.assertFalse(GEOCOQ_COMMIT_136 in hashes_test)
+        self.assertFalse(GEOCOQ_COMMIT_137 in hashes_test)
+        self.assertFalse(GEOCOQ_COMMIT_138 in hashes_test)
 
     @classmethod
     def tearDownClass(cls):
