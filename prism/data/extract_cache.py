@@ -125,14 +125,50 @@ def extract_cache(
     if coq_version is None:
         coq_version = project.metadata.coq_version
     if (project.name, commit_sha, coq_version) not in build_cache:
-        project.git.checkout(commit_sha)
-        project.opam_switch = get_switch(project.metadata, coq_version)
-        try:
-            project.build()
-        except ProjectBuildError as pbe:
-            print(pbe.args)
-            command_data = process_project(project)
-        else:
-            command_data = extract_vernac_commands(project)
-        data = ProjectCommitData(project.metadata, command_data)
-        build_cache.insert(data)
+        extract_cache_new(
+            build_cache,
+            project,
+            commit_sha,
+            process_project,
+            coq_version)
+    else:
+        # Implement a function to handle modifying existing cache
+        pass
+
+
+def extract_cache_new(
+        build_cache: CoqProjectBuildCache,
+        project: ProjectRepo,
+        commit_sha: str,
+        process_project: Callable[[Project],
+                                  VernacDict],
+        coq_version: str):
+    """
+    Extract new cache, and insert it into the build cache.
+
+    Parameters
+    ----------
+    build_cache : CoqProjectBuildCache
+        The build cache to insert the result into
+    project : ProjectRepo
+        The project to extract cache from
+    commit_sha : str
+        The commit to extract cache from
+    process_project : Callable[[Project], VernacDict]
+        Function that provides fallback vernacular command extraction
+        for projects that do not build
+    coq_version : str or None, optional
+        The version of Coq to use, by default None
+    """
+    project.git.checkout(commit_sha)
+    metadata = project.metadata
+    project.opam_switch = get_switch(metadata, coq_version)
+    try:
+        project.build()
+    except ProjectBuildError as pbe:
+        print(pbe.args)
+        command_data = process_project(project)
+    else:
+        command_data = extract_vernac_commands(project)
+    data = ProjectCommitData(metadata, command_data)
+    build_cache.insert(data)
