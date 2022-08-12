@@ -61,8 +61,8 @@ class IQR:
     def __or__(self, other: 'IQR') -> 'IQR':  # noqa: D105
         if not isinstance(other, IQR):
             return NotImplemented
-        self_pwd = pathlib.Path(self.pwd).absolute()
-        other_pwd = pathlib.Path(other.pwd).absolute()
+        self_pwd = pathlib.Path(self.pwd).resolve()
+        other_pwd = pathlib.Path(other.pwd).resolve()
         if self_pwd != other_pwd:
             pwd = os.path.commonpath([self_pwd, other_pwd])
             return self.relocate(pwd) | other.relocate(pwd)

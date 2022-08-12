@@ -1,6 +1,7 @@
 bidict
 GitPython
 numpy
+pexpect
 prettytable
 pytest
 pytest-cov

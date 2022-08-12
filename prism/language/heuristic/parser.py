@@ -664,12 +664,13 @@ class HeuristicParser:
             "Heuristic proof extraction not yet implemented")
 
     @classmethod
-    def parse_sentences(
+    def parse_sentences_from_file(
             cls,
             file_path: str,
             encoding: str = 'utf-8',
             glom_proofs: bool = True,
-            project_path: str = "") -> List[str]:
+            project_path: str = "",
+            **kwargs) -> List[str]:
         """
         Split the Coq file text by sentences.
 
@@ -681,12 +682,15 @@ class HeuristicParser:
             The path to a Coq source file.
         encoding : str, optional
             The encoding to use for decoding if a bytestring is
-            provided, by default 'utf-8'
+            provided, by default 'utf-8'.
         glom_proofs : bool, optional
             A flag indicating whether or not proofs should be re-glommed
-            after sentences are split, by default `True`
+            after sentences are split, by default `True`.
         project_path : str, optional
-            Path to the project this file is from, by default ""
+            Path to the project this file is from, by default "".
+        kwargs : Dict[str, Any]
+            Optional keyword arguments to
+            `parse_sentences_from_document`.
 
         Returns
         -------
@@ -699,14 +703,19 @@ class HeuristicParser:
             file_path,
             CoqParser.parse_source(file_path),
             project_path=project_path)
-        return cls.parse_sentences_from_source(document, encoding, glom_proofs)
+        return cls.parse_sentences_from_document(
+            document,
+            encoding,
+            glom_proofs,
+            **kwargs)
 
     @classmethod
-    def parse_sentences_from_source(
+    def parse_sentences_from_document(
             cls,
             document: CoqDocument,
             encoding: str = 'utf-8',
-            glom_proofs: bool = True) -> List[str]:
+            glom_proofs: bool = True,
+            **kwargs) -> List[str]:
         """
         Split the Coq file text by sentences.
 
@@ -716,13 +725,15 @@ class HeuristicParser:
         Parameters
         ----------
         document : str
-            CoqDocument to be parsed
+            CoqDocument to be parsed.
         encoding : str, optional
             The encoding to use for decoding if a bytestring is
-            provided, by default 'utf-8'
+            provided, by default 'utf-8'.
         glom_proofs : bool, optional
             A flag indicating whether or not proofs should be re-glommed
-            after sentences are split, by default `True`
+            after sentences are split, by default `True`.
+        kwargs : Dict[str, Any]
+            Optional keyword arguments for subclass implementations.
 
         Returns
         -------
@@ -732,10 +743,6 @@ class HeuristicParser:
             flag.
         """
         file_contents = document.source_code
-        if isinstance(document.source_code, bytes):
-            file_contents = CoqParser.decode_byte_string(
-                file_contents,
-                encoding)
         sentences = cls._get_sentences(file_contents)
         stats = cls._compute_sentence_statistics(sentences)
         if glom_proofs:
@@ -750,12 +757,15 @@ class SerAPIParser(HeuristicParser):
     SerAPI-based sentence extracter/parser.
     """
 
+    RE_SERAPI_OPTIONS = re.compile(r"-R (?P<src>\S+) (?P<tgt>\S+)")
+
     @classmethod
-    def parse_sentences_from_source(
+    def parse_sentences_from_document(
             cls,
             document: CoqDocument,
             _encoding: str = "utf-8",
-            glom_proofs: bool = True) -> List[str]:
+            glom_proofs: bool = True,
+            **kwargs) -> List[str]:
         """
         Extract sentences from a Coq document using SerAPI.
 
@@ -764,53 +774,49 @@ class SerAPIParser(HeuristicParser):
         document : CoqDocument
             The document from which to extract sentences.
         _encoding : str, optional
-            Ignore, by default "utf-8"
+            Ignore, by default "utf-8".
         glom_proofs : bool, optional
             A flag indicating whether or not proofs should be re-glommed
-            after sentences are split, by default `True`
+            after sentences are split, by default `True`.
+        kwargs : Dict[str, Any]
+            Optional keyword arguments to `CoqParser.parse_all`, such as
+            `opam_switch` or `serapi_options`.
 
         Returns
         -------
         List[str]
             The resulting sentences from the document.
-
-        Notes
-        -----
-        This function is stitched together from at least two methods
-        originally found in roosterize:
-        * prism.interface.command_line.CommandLineInterface.
-            infer_serapi_options
-        * prism.data.miner.DataMiner.extract_data_project
         """
-        # Constants
-        RE_SERAPI_OPTIONS = re.compile(r"-R (?P<src>\S+) (?P<tgt>\S+)")
         source_code = document.source_code
         coq_file = document.abspath
-        # Try to infer from _CoqProject
-        coq_project_files = [
-            pathlib.Path(document.project_path) / "_CoqProject",
-            pathlib.Path(document.project_path) / "Make"
-        ]
-        possible_serapi_options = []
-        for coq_project_file in coq_project_files:
-            if coq_project_file.exists():
-                coq_project = io.load(coq_project_file, io.Fmt.txt)
-                for line in coq_project.splitlines():
-                    match = RE_SERAPI_OPTIONS.fullmatch(line.strip())
-                    if match is not None:
-                        possible_serapi_options.append(
-                            f"-R {match.group('src')},{match.group('tgt')}")
-                break
+        serapi_options = kwargs.pop('serapi_options', None)
+        if serapi_options is None:
+            # Try to infer from _CoqProject
+            coq_project_files = [
+                pathlib.Path(document.project_path) / "_CoqProject",
+                pathlib.Path(document.project_path) / "Make"
+            ]
+            possible_serapi_options = []
+            for coq_project_file in coq_project_files:
+                if coq_project_file.exists():
+                    coq_project = io.load(coq_project_file, io.Fmt.txt)
+                    for line in coq_project.splitlines():
+                        match = cls.RE_SERAPI_OPTIONS.fullmatch(line.strip())
+                        if match is not None:
+                            possible_serapi_options.append(
+                                f"-R {match.group('src')},{match.group('tgt')}")
+                    break
 
-        if len(possible_serapi_options) > 0:
-            serapi_options = " ".join(possible_serapi_options)
-        else:
-            serapi_options = ""
+            if len(possible_serapi_options) > 0:
+                serapi_options = " ".join(possible_serapi_options)
+            else:
+                serapi_options = ""
         with pushd(document.project_path):
             vernac_sentences, _, _ = CoqParser.parse_all(
                 coq_file,
                 source_code,
-                serapi_options)
+                serapi_options,
+                **kwargs)
         sentences = [str(vs) for vs in vernac_sentences]
         if glom_proofs:
             stats = cls._compute_sentence_statistics(sentences)
