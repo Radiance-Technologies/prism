@@ -56,6 +56,11 @@ class SerAPI:
     ...     serapi.execute('Locate "_ ∘ _".')
     """
 
+    sertop_options: InitVar[str] = ""
+    """
+    Optional command-line options to `sertop`, especially IQR flags for
+    linking logical and physical library paths.
+    """
     timeout_: InitVar[int] = 30
     """
     The timeout for responses from the spawned SerAPI process.
@@ -102,7 +107,12 @@ class SerAPI:
     The switch in which `sertop` is being executed.
     """
 
-    def __post_init__(self, timeout: int, switch: OpamSwitch, omit_loc: bool):
+    def __post_init__(
+            self,
+            sertop_options: str,
+            timeout: int,
+            switch: OpamSwitch,
+            omit_loc: bool):
         """
         Initialize the SerAPI subprocess.
         """
@@ -110,7 +120,7 @@ class SerAPI:
             switch = OpamSwitch()
         self._switch = switch
         try:
-            cmd = "sertop --implicit --print0"
+            cmd = f"sertop --implicit --print0 {sertop_options}"
             if omit_loc:
                 cmd = cmd + " --omit_loc"
             if switch.is_clone:
