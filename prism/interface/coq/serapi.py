@@ -64,7 +64,7 @@ class SerAPI:
     """
     The switch in which to invoke `sertop`, which implicitly controls
     the version of Coq and SerAPI that are used.
-    Be default, the global "default" switch is selected.
+    By default, the global "default" switch is selected.
     """
     omit_loc: InitVar[bool] = False
     """
@@ -79,11 +79,15 @@ class SerAPI:
                     AbstractSyntaxTree] = default_field({})
     """
     A cache of retrieved ASTs that avoids repeated `sertop` queries.
+    The cache maps human-readable commands to their corresponding ASTs.
     """
     constr_cache: Dict[str,
                        str] = default_field({})
     """
-    A cache of TBD that avoids repeated `sertop` queries.
+    A cache of retrieved kernel terms that avoids repeated `sertop`
+    queries.
+    The cache maps s-expressions of type
+    ``coq/kernel/constr.mli:constr`` to human-readable representations.
     """
     _dead: bool = field(default=False, init=False)
     """
@@ -493,10 +497,15 @@ class SerAPI:
         AbstractSyntaxTree
             The AST for the given command.
         """
-        responses, _, _ = self.send(f'(Parse () "{escape(cmd)}")')
-        ast = responses[1][2][1][0]
-        assert ast[0] == SexpString("CoqAst")
-        return ast[1][1]
+        try:
+            ast = self.ast_cache[cmd]
+        except KeyError:
+            responses, _, _ = self.send(f'(Parse () "{escape(cmd)}")')
+            ast = responses[1][2][1][0]
+            assert ast[0] == SexpString("CoqAst")
+            ast = ast[1][1]
+            self.ast_cache[cmd] = ast
+        return ast
 
     def query_env(
             self,
@@ -624,7 +633,7 @@ class SerAPI:
                     # the mutually inductive type names in place of
                     # the unbound rels.
                     # However, we do have the constructor name, so we
-                    # can fallback on a query and let Coq figure it out
+                    # can fall back on a query and let Coq figure it out
                     # for us.
                     c_type = self.query_type(".".join([logical_path, c_name]))
                     constructors.append((c_name, c_type))
@@ -1088,9 +1097,7 @@ class SerAPI:
         if self.frame_stack != []:
             self.frame_stack[-1].append(state_id)
         if return_ast:
-            if cmd not in self.ast_cache:
-                self.ast_cache[cmd] = self.query_ast(cmd)
-            ast = self.ast_cache[cmd]
+            ast = self.query_ast(cmd)
         else:
             ast = None
         return state_id, ast
