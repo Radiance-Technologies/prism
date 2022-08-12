@@ -95,7 +95,7 @@ class OpamSwitch:
             switch_root = bash.run("opam var root").stdout.strip()
         if self.is_external(switch_name):
             # ensure local switch name is unambiguous
-            switch_name = str(Path(switch_name).absolute())
+            switch_name = str(Path(switch_name).resolve())
         object.__setattr__(self, 'name', switch_name)
         object.__setattr__(self, 'root', switch_root)
         object.__setattr__(self, '_is_external', self.is_external(self.name))
@@ -216,6 +216,41 @@ class OpamSwitch:
         if repo_addr is not None:
             repo_name = f"{repo_name} {repo_addr}"
         self.run(f"opam repo add {repo_name}")
+
+    def as_clone_command(self, command: str) -> Tuple[str, Path, Path]:
+        """
+        Get the equivalent command for execution in a cloned switch.
+
+        This does not need to be used in normal circumstances.
+
+        Parameters
+        ----------
+        command : str
+            A command to run in the switch, which is presumed to be a
+            clone of some other switch.
+
+        Returns
+        -------
+        str
+            A transformation of `command` that runs in the switch.
+        src : str
+        """
+        # this is a clone and it needs to be mounted
+        # at the location it thinks it is at
+        # for the duration of the command
+        src = self.path
+        # by limitations of `OpamAPI.clone_switch`, a clone must
+        # share the root of its origin
+        if self.origin is None:
+            dest = src
+        else:
+            dest = self.get_root(self.root, self.origin)
+        if not dest.exists():
+            # we need a mountpoint.
+            # maybe the original clone was deleted?
+            dest.mkdir()
+        command = f'bwrap --dev-bind / / --bind {src} {dest} -- {command}'
+        return command, src, dest
 
     def export(self, include_id: bool = True) -> OpamSwitch.Configuration:
         """
@@ -471,18 +506,7 @@ class OpamSwitch:
         if env is None:
             env = self.environ
         if self.is_clone:
-            # this is a clone and it needs to be mounted
-            # at the location it thinks it is at
-            # for the duration of the command
-            src = self.path
-            # by limitations of `OpamAPI.clone_switch`, a clone must
-            # share the root of its origin
-            dest = self.get_root(self.root, self.origin)
-            if not dest.exists():
-                # we need a mountpoint.
-                # maybe the original clone was deleted?
-                dest.mkdir()
-            command = f'bwrap --dev-bind / / --bind {src} {dest} -- {command}'
+            command, src, dest = self.as_clone_command(command)
         r = bash.run(command, env=env, **kwargs)
         if check:
             try:
@@ -539,10 +563,10 @@ class OpamSwitch:
         # based on `get_root` at src/format/opamSwitch.ml in Opam's
         # GitHub repository
         if cls.is_external(name):
-            path = Path(name).absolute() / cls._external_dirname
+            path = Path(name).resolve() / cls._external_dirname
         else:
             path = Path(root) / name
-        return path.absolute()
+        return path.resolve()
 
     @classmethod
     def is_external(cls, name: str) -> bool:

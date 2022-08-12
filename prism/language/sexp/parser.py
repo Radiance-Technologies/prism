@@ -5,8 +5,7 @@ Adapted from `roosterize.sexp.SexpParser`
 at https://github.com/EngineeringSoftware/roosterize/.
 """
 import logging
-import string
-from typing import Iterable, List, Tuple, Union
+from typing import Iterable, List, Union
 
 from prism.language.sexp.list import SexpList
 from prism.language.sexp.node import SexpNode
@@ -58,7 +57,7 @@ class SexpParser:
     @classmethod
     def parse(cls, sexp_str: str) -> SexpNode:
         """
-        Parse a string of s-expression to structured s-expression.
+        Parse a string of s-expression to a structured s-expression.
 
         Parameters
         ----------
@@ -69,20 +68,25 @@ class SexpParser:
         -------
         SexpNode
             The deserialized representation of the given s-expression.
-        """
-        sexp, end_pos = cls.parse_recur(sexp_str, 0)
-        if end_pos != len(sexp_str):
-            cls.logger.warning(
-                "Parsing did not terminate at the last character! "
-                f"({end_pos}/{len(sexp_str)})")
-        # end if
 
-        return sexp
+        Raises
+        ------
+        ValueError
+            If the given s-expression string yields more than one node
+            or is malformed.
+        """
+        sexps = cls.parse_list(sexp_str)
+        if len(sexps) > 1:
+            raise ValueError(
+                f"Expected one s-expression node, got {len(sexps)}")
+        return sexps[0]
 
     @classmethod
-    def parse_list(cls, sexp_list_str: str) -> List[SexpNode]:
+    def parse_list(cls, sexp_str: str) -> List[SexpNode]:
         """
         Parse a string of a list of s-expressions into `SexpNode`s.
+
+        A single s-expression yields a singleton list.
 
         Parameters
         ----------
@@ -93,37 +97,6 @@ class SexpParser:
         -------
         list of SexpNode
             The list of deserialized subterms.
-        """
-        sexp_list: List[SexpNode] = list()
-        sexp_list_str = sexp_list_str.strip()
-        cur_pos = 0
-        while cur_pos < len(sexp_list_str):
-            sexp, cur_pos = cls.parse_recur(sexp_list_str, cur_pos)
-            sexp_list.append(sexp)
-        # end while
-
-        return sexp_list
-
-    @classmethod
-    def parse_recur(cls, sexp_str: str, cur_pos: int) -> Tuple[SexpNode, int]:
-        """
-        Recursively parse an s-expression, maintaining current progress.
-
-        More precisely, parses the next s-expression term in the string.
-
-        Parameters
-        ----------
-        sexp_str : str
-            The s-expression to parse.
-        cur_pos : int
-            The current position of the parser.
-
-        Returns
-        -------
-        SexpNode
-            The deserialized representation of the next term.
-        int
-            The position of the parser after parsing the next term.
 
         Raises
         ------
@@ -131,80 +104,63 @@ class SexpParser:
             If the s-expression cannot be parsed, e.g., due to a syntax
             error.
         """
-        try:
-            cur_char = None
+        return_stack = [[]]
+        quoted = None
+        escaped = False
+        terminal = None
 
-            # Find the next non-whitespace char
-            def parse_ws():
-                nonlocal cur_char, sexp_str, cur_pos
-                cur_char = sexp_str[cur_pos]
-                while cur_char in string.whitespace:
-                    cur_pos += 1
-                    cur_char = sexp_str[cur_pos]
-                # end while
-                return
-
-            # end def
-
-            parse_ws()
-
-            if cur_char == cls.c_lpar:
+        for cur_char in sexp_str:
+            if terminal is not None:
+                assert quoted is None
+                assert not escaped
+                if (cur_char == cls.c_lpar or cur_char == cls.c_rpar
+                        or cur_char == cls.c_quote or cur_char.isspace()):
+                    # conclude terminal
+                    return_stack[-1].append(SexpString(''.join(terminal)))
+                    terminal = None
+                else:
+                    terminal.append(cur_char)
+                    continue
+            if quoted is not None:
+                # extend or conclude string literal
+                if escaped:
+                    # escape the character
+                    cur_char = ("\\"
+                                + cur_char).encode().decode("unicode-escape")
+                    quoted.append(cur_char)
+                    escaped = False
+                elif cur_char == cls.c_quote:
+                    # End string literal
+                    # Consume the ending quote
+                    return_stack[-1].append(SexpString(''.join(quoted)))
+                    quoted = None
+                elif cur_char == cls.c_escape:
+                    # Escape the next character
+                    escaped = True
+                else:
+                    quoted.append(cur_char)
+            elif cur_char.isspace():
+                # consume whitespace
+                continue
+            elif cur_char == cls.c_lpar:
+                # consume the left paren
                 # Start SexpList
-                child_sexps: List[SexpNode] = list()
-                cur_pos += 1
-
-                while True:
-                    parse_ws()
-                    cur_char = sexp_str[cur_pos]
-                    if cur_char == cls.c_rpar:
-                        break
-                    else:
-                        child_sexp, cur_pos = cls.parse_recur(sexp_str, cur_pos)
-                        child_sexps.append(child_sexp)
-                    # end if
-                # end while
-
-                # Consume the ending par
-                return SexpList(child_sexps), cur_pos + 1
+                return_stack.append([])
+            elif cur_char == cls.c_rpar:
+                # Consume the right paren
+                # End SexpList
+                children = return_stack.pop()
+                return_stack[-1].append(SexpList(children))
             elif cur_char == cls.c_quote:
+                # consume the open quote
                 # Start string literal
-                cur_token = cur_char
-                cur_pos += 1
-                while True:
-                    cur_char = sexp_str[cur_pos]
-                    if cur_char == cls.c_quote:
-                        # End string literal
-                        cur_token += cur_char
-                        break
-                    elif cur_char == cls.c_escape:
-                        # Goto and escape the next char
-                        cur_pos += 1
-                        cur_char = ("\\" + sexp_str[cur_pos]
-                                    ).encode().decode("unicode-escape")
-                    # end if
-                    cur_token += cur_char
-                    cur_pos += 1
-                # end while
-
-                # Consume the ending quote
-                return SexpString(cur_token[1 :-1]), cur_pos + 1
+                quoted = []
             else:
                 # Start a normal token
-                cur_token = cur_char
-                cur_pos += 1
-                while True:
-                    cur_char = sexp_str[cur_pos]
-                    if (cur_char == cls.c_lpar or cur_char == cls.c_rpar
-                            or cur_char == cls.c_quote
-                            or cur_char in string.whitespace):
-                        break
-                    # end if
-                    cur_token += cur_char
-                    cur_pos += 1
-                # end while
-
-                # Does not consume the stopping char
-                return SexpString(cur_token), cur_pos
+                terminal = [cur_char]
             # end if
-        except IndexError as e:
-            raise ValueError("Malformed sexp") from e
+        if len(return_stack) > 1 or len(return_stack[0]) == 0:
+            if len(sexp_str) > 100:
+                sexp_str = sexp_str[: 72] + "..."
+            raise ValueError(f"Malformed sexp: {sexp_str}")
+        return return_stack[0]
