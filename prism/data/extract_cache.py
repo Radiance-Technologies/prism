@@ -29,7 +29,9 @@ def get_switch(metadata: ProjectMetadata, coq_version: str) -> OpamSwitch:
     return OpamAPI.active_switch
 
 
-def extract_vernac_commands(project: ProjectRepo) -> VernacDict:
+def extract_vernac_commands(
+        project: ProjectRepo,
+        serapi_options: Optional[str] = None) -> VernacDict:
     """
     Compile vernac commands from a project into a dict.
 
@@ -38,6 +40,8 @@ def extract_vernac_commands(project: ProjectRepo) -> VernacDict:
     project : ProjectRepo
         The project from which to extract the vernac commands
     """
+    if serapi_options is None:
+        serapi_options = project.serapi_options
     command_data = {}
     for filename in project.get_file_list():
         file_commands: Set[VernacCommandData] = command_data.setdefault(
@@ -47,8 +51,10 @@ def extract_vernac_commands(project: ProjectRepo) -> VernacDict:
         end_char_idx = 0
         with pushd(project.dir_abspath):
             sentences_enumerated = enumerate(
-                CoqParser.parse_sentences(filename,
-                                          project.serapi_options))
+                CoqParser.parse_sentences(
+                    filename,
+                    project.serapi_options,
+                    project.opam_switch))
         for (sentence_idx, vernac_sentence) in sentences_enumerated:
             sentence = str(vernac_sentence)
             end_char_idx += len(sentence)
@@ -77,14 +83,20 @@ def extract_vernac_commands(project: ProjectRepo) -> VernacDict:
 
 
 def extract_cache(
-        build_cache: CoqProjectBuildCache,
-        project: ProjectRepo,
-        commit_sha: str,
-        process_project: Callable[[Project],
-                                  VernacDict],
-        coq_version: Optional[str] = None) -> None:
-    """
-    Extract cache from project commit and insert into build_cache.
+    build_cache: CoqProjectBuildCache,
+    project: ProjectRepo,
+    commit_sha: str,
+    process_project: Callable[[Project],
+                              VernacDict],
+    coq_version: Optional[str] = None,
+    recache: Optional[Callable[[CoqProjectBuildCache,
+                                ProjectRepo,
+                                str,
+                                str],
+                               bool]] = None
+) -> None:
+    r"""
+    Extract data from a project commit and insert it into `build_cache`.
 
     The cache is implemented as a file-and-directory-based repository
     structure (`CoqProjectBuildCache`) that provides storage of
@@ -105,16 +117,22 @@ def extract_cache(
     Parameters
     ----------
     build_cache : CoqProjectBuildCache
-        The build cache to insert the result into
+        The build cache in which to insert the build artifacts.
     project : ProjectRepo
-        The project to extract cache from
+        The project from which to extract data.
     commit_sha : str
-        The commit to extract cache from
+        The commit whose data should be extracted.
     process_project : Callable[[Project], VernacDict]
         Function that provides fallback vernacular command extraction
-        for projects that do not build
+        for projects that do not build.
     coq_version : str or None, optional
-        The version of Coq to use, by default None
+        The version of Coq in which to build the project, by default
+        None.
+    recache : Callable[[CoqProjectBuildCache, ProjectRepo, str, str], \
+                       bool]
+              or None, optional
+        A function that for an existing entry in the cache returns
+        whether it should be reprocessed or not.
 
     See Also
     --------
@@ -124,16 +142,19 @@ def extract_cache(
     """
     if coq_version is None:
         coq_version = project.metadata.coq_version
-    if (project.name, commit_sha, coq_version) not in build_cache:
+    if ((project.name,
+         commit_sha,
+         coq_version) not in build_cache
+            or (recache is not None and recache(build_cache,
+                                                project,
+                                                commit_sha,
+                                                coq_version))):
         extract_cache_new(
             build_cache,
             project,
             commit_sha,
             process_project,
             coq_version)
-    else:
-        # Implement a function to handle modifying existing cache
-        pass
 
 
 def extract_cache_new(
@@ -144,21 +165,22 @@ def extract_cache_new(
                                   VernacDict],
         coq_version: str):
     """
-    Extract new cache, and insert it into the build cache.
+    Extract a new cache and insert it into the build cache.
 
     Parameters
     ----------
     build_cache : CoqProjectBuildCache
-        The build cache to insert the result into
+        The build cache in which to insert the build artifacts.
     project : ProjectRepo
-        The project to extract cache from
+        The project from which to extract data.
     commit_sha : str
-        The commit to extract cache from
+        The commit whose data should be extracted.
     process_project : Callable[[Project], VernacDict]
         Function that provides fallback vernacular command extraction
-        for projects that do not build
+        for projects that do not build.
     coq_version : str or None, optional
-        The version of Coq to use, by default None
+        The version of Coq in which to build the project, by default
+        None.
     """
     project.git.checkout(commit_sha)
     metadata = project.metadata
@@ -169,6 +191,6 @@ def extract_cache_new(
         print(pbe.args)
         command_data = process_project(project)
     else:
-        command_data = extract_vernac_commands(project)
+        command_data = extract_vernac_commands(project, metadata.serapi_options)
     data = ProjectCommitData(metadata, command_data)
     build_cache.insert(data)
