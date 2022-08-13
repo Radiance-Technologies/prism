@@ -8,11 +8,11 @@ from prism.data.build_cache import (
     ProjectCommitData,
     VernacCommandData,
 )
+from prism.interface.coq.serapi import SerAPI
 from prism.language.gallina.analyze import SexpInfo
-from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.util import ParserUtils
-from prism.language.id import LanguageId
-from prism.project.base import Project
+from prism.language.sexp.node import SexpNode
+from prism.project.base import SEM, Project
 from prism.project.exception import ProjectBuildError
 from prism.project.metadata import ProjectMetadata
 from prism.project.repo import ProjectRepo
@@ -53,34 +53,37 @@ def extract_vernac_commands(
         end_char_idx = 0
         with pushd(project.dir_abspath):
             sentences_enumerated = enumerate(
-                CoqParser.parse_sentences(
-                    filename,
-                    project.serapi_options,
-                    project.opam_switch))
-        for (sentence_idx, vernac_sentence) in sentences_enumerated:
-            sentence = str(vernac_sentence)
-            end_char_idx += len(sentence)
-            vs_lid = vernac_sentence.classify_lid()
-            if (vs_lid == LanguageId.Vernac
-                    or vs_lid == LanguageId.VernacMixedWithGallina):
-                command_type, identifier = ParserUtils.extract_identifier(sentence)
-                file_commands.add(
-                    VernacCommandData(
-                        identifier,
-                        command_type,
-                        SexpInfo.Loc(
-                            filename,
-                            sentence_idx,
-                            0,
-                            sentence_idx,
-                            0,
-                            beg_char_idx,
-                            end_char_idx),
-                        None))
-            else:
-                # This is where we would handle Ltac, aka proofs
-                pass
-            beg_char_idx = end_char_idx
+                # Add proof goal field to VernacCommandData
+                project.extract_sentences(
+                    project.get_file(filename),
+                    sentence_extraction_method=SEM.HEURISTIC))
+            with SerAPI(project.serapi_options) as serapi:
+                for (sentence_idx, sentence) in sentences_enumerated:
+                    end_char_idx += len(sentence)
+                    serapi_output = serapi.execute(sentence)
+                    sexp: SexpNode = serapi_output[0][0]
+                    if (serapi.has_open_goals()):
+                        command_type, identifier = \
+                            ParserUtils.extract_identifier(sentence)
+                        file_commands.add(
+                            VernacCommandData(
+                                identifier,
+                                command_type,
+                                SexpInfo.Loc(
+                                    filename,
+                                    sentence_idx,
+                                    0,
+                                    sentence_idx,
+                                    0,
+                                    beg_char_idx,
+                                    end_char_idx),
+                                None,
+                                sentence,
+                                sexp))
+                    else:
+                        # This is where we would handle proofs
+                        pass
+                    beg_char_idx = end_char_idx
     return command_data
 
 

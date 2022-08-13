@@ -6,13 +6,14 @@ import tempfile
 from dataclasses import InitVar, dataclass, field
 from multiprocessing.pool import Pool
 from pathlib import Path
-from typing import Dict, Iterable, Optional, Set, Tuple, Union
+from typing import Dict, Iterable, List, Optional, Set, Tuple, Union
 
 import seutil as su
 
 from prism.language.gallina.analyze import SexpInfo
 from prism.language.sexp.node import SexpNode
 from prism.project.metadata import ProjectMetadata
+from prism.util.radpytools.dataclasses import default_field
 
 
 @dataclass
@@ -48,6 +49,14 @@ class VernacCommandData:
     sexp: SexpNode
     """
     The serialized s-expression.
+    """
+    proofs: List[str] = default_field(list())
+    """
+    Associated proofs, if any.
+    """
+    open_proof_goals: List[str] = default_field(list())
+    """
+    Open goals when this command was processed, if any.
     """
 
     def __hash__(self) -> int:  # noqa: D105
