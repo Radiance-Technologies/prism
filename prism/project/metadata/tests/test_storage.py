@@ -264,6 +264,23 @@ class TestMetadataStorage(unittest.TestCase):
             self.assertEqual(expected, storage.populate(override))
             self.assertEqual(base_metadata, storage.populate(base_metadata))
 
+    def test_union(self):
+        """
+        Verify that repositories can be merged.
+        """
+        expected_records = set(self.metadata)
+        storages = []
+        for metadata in self.metadata:
+            storage = MetadataStorage()
+            storage.insert(metadata)
+            storages.append(storage)
+        merged_storage = MetadataStorage.unions(*storages)
+        self.assertEqual(expected_records, set(merged_storage))
+        # reduction to identity
+        self.assertEqual(MetadataStorage(), MetadataStorage.unions())
+        # idempotent
+        self.assertEqual(merged_storage, merged_storage.union(merged_storage))
+
     def test_update(self):
         """
         Verify that records can be updated.
