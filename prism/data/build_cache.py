@@ -15,6 +15,30 @@ from prism.language.sexp.node import SexpNode
 from prism.project.metadata import ProjectMetadata
 from prism.util.radpytools.dataclasses import default_field
 
+from ..interface.coq.goals import Goals
+
+ProofSentence = str
+Proof = List[ProofSentence]
+
+
+@dataclass
+class ProofSentenceGoals:
+    """
+    Type associating proof sentences to open goals.
+    """
+
+    sentence: ProofSentence
+    """
+    A sentence from a proof.
+    """
+    goals: Optional[Goals] = None
+    """
+    Open goals, if any, associated with this proof sentence.
+    """
+
+
+ProofGoals = List[ProofSentenceGoals]
+
 
 @dataclass
 class VernacCommandData:
@@ -50,13 +74,17 @@ class VernacCommandData:
     """
     The serialized s-expression.
     """
-    proofs: List[str] = default_field(list())
+    proofs: List[Proof] = default_field(list())
     """
-    Associated proofs, if any.
+    Associated proofs, if any. Proofs are considered to be a list of
+    strings.
     """
-    open_proof_goals: List[str] = default_field(list())
+    proof_goals: List[ProofGoals] = default_field(list())
     """
-    Open goals when this command was processed, if any.
+    A list of open goals per proof. Each index in this list corresponds
+    to an index in `proofs`. Each item in the `proof_goals` list is a
+    list of `ProofSentenceGoals` objects. Each of these objects maps a
+    proof sentence to the proof goal context associated with it.
     """
 
     def __hash__(self) -> int:  # noqa: D105
