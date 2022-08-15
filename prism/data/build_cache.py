@@ -11,26 +11,26 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple, Union
 import seutil as su
 
 from prism.language.gallina.analyze import SexpInfo
-from prism.language.sexp.node import SexpNode
 from prism.project.metadata import ProjectMetadata
 from prism.util.radpytools.dataclasses import default_field
 
 from ..interface.coq.goals import Goals
 from ..interface.coq.serapi import AbstractSyntaxTree
 
-ProofSentence = Tuple[str, AbstractSyntaxTree]
-Proof = List[ProofSentence]
-
 
 @dataclass
-class ProofSentenceGoals:
+class ProofSentence:
     """
-    Type associating proof sentences to open goals.
+    Type associating individual proof sentences to ASTs and open goals.
     """
 
-    sentence: ProofSentence
+    sentence: str
     """
-    A sentence from a proof.
+    Text of a sentence from a proof.
+    """
+    ast: AbstractSyntaxTree
+    """
+    The AST derived from the proof sentence.
     """
     goals: Optional[Goals] = None
     """
@@ -38,7 +38,7 @@ class ProofSentenceGoals:
     """
 
 
-ProofGoals = List[ProofSentenceGoals]
+Proof = List[ProofSentence]
 
 
 @dataclass
@@ -71,21 +71,16 @@ class VernacCommandData:
     """
     The whitespace-normalized sentence text.
     """
-    sexp: SexpNode
+    sexp: AbstractSyntaxTree
     """
     The serialized s-expression of this sentence.
     """
     proofs: List[Proof] = default_field(list())
     """
     Associated proofs, if any. Proofs are considered to be a list of
-    strings.
-    """
-    proof_goals: List[ProofGoals] = default_field(list())
-    """
-    A list of open goals per proof. Each index in this list corresponds
-    to an index in `proofs`. Each item in the `proof_goals` list is a
-    list of `ProofSentenceGoals` objects. Each of these objects maps a
-    proof sentence to the proof goal context associated with it.
+    strings. Each contained `ProofSentence` object contains a proof
+    sentence, a proof sentence AST, and any open goals associated with
+    the proof.
     """
 
     def __hash__(self) -> int:  # noqa: D105
