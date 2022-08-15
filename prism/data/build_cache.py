@@ -16,8 +16,9 @@ from prism.project.metadata import ProjectMetadata
 from prism.util.radpytools.dataclasses import default_field
 
 from ..interface.coq.goals import Goals
+from ..interface.coq.serapi import AbstractSyntaxTree
 
-ProofSentence = str
+ProofSentence = Tuple[str, AbstractSyntaxTree]
 Proof = List[ProofSentence]
 
 
@@ -66,13 +67,13 @@ class VernacCommandData:
     The error, if any, that results when trying to execute the command
     (e.g., within the ``sertop``). If there is no error, then None.
     """
-    sentence_text: str
+    sentence: str
     """
-    The raw sentence text.
+    The whitespace-normalized sentence text.
     """
     sexp: SexpNode
     """
-    The serialized s-expression.
+    The serialized s-expression of this sentence.
     """
     proofs: List[Proof] = default_field(list())
     """
