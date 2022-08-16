@@ -1198,6 +1198,52 @@ class SexpAnalyzer:
             raise SexpAnalyzingException(sexp)
 
     @classmethod
+    def is_vernac(cls, sexp: SexpNode) -> bool:
+        """
+        Determine if an s-expression represents a Vernacular command.
+
+        We're looking for the following two cases:
+
+        ( v (VernacExpr()  (   <TYPE>  ... )) )
+          0 1  1,0     1,1 1,2 1,2,0
+        ( v (VernacExpr()  <TYPE> ) )
+                           1,2
+
+        or
+
+        v_child
+        ( v (VernacFail ( ( v (VernacExpr () ( ...
+          0 1  1,0
+
+        Parameters
+        ----------
+        sexp : SexpNode
+            A parsed s-expression node representing a Vernacular command
+            term.
+            The structure should conform to the following format:
+            <sexp_vernac> = ( ( v (VernacExpr (...) ( <TYPE>  ... )) )
+                                ^----------vernac_sexp-----------^
+                            <sexp_loc> )
+
+        Returns
+        -------
+        bool
+            True if `sexp` represents a Vernacular command
+        """
+        try:
+            if len(sexp) != 2:
+                return False
+            v_child = sexp[0]
+            if v_child[0].content == "v" and (
+                    v_child[1][0].content == "VernacExpr"
+                    or v_child[1][0].content == "VernacFail"):
+                return True
+            else:
+                return False
+        except IllegalSexpOperationException:
+            return False
+
+    @classmethod
     @deprecated(reason="This is not used anywhere.", version="0.1.0")
     def find_i_pat_ids(cls, sexp: SexpNode) -> Counter[str]:
         """

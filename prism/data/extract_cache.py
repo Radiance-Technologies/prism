@@ -1,15 +1,15 @@
 """
 Module for storing cache extraction functions.
 """
-from typing import Callable, Dict, Optional, Set
+from typing import Callable, List, Optional
 
 from prism.data.build_cache import (
     CoqProjectBuildCache,
     ProjectCommitData,
     VernacCommandData,
+    VernacDict,
 )
 from prism.interface.coq.serapi import SerAPI
-from prism.language.gallina.analyze import SexpInfo
 from prism.language.heuristic.util import ParserUtils
 from prism.language.sexp.node import SexpNode
 from prism.project.base import SEM, Project
@@ -19,7 +19,7 @@ from prism.project.repo import ProjectRepo
 from prism.util.opam import OpamAPI, OpamSwitch
 from prism.util.radpytools.os import pushd
 
-VernacDict = Dict[str, Set[VernacCommandData]]
+from ..language.gallina.analyze import SexpAnalyzer
 
 
 def get_active_switch(
@@ -46,44 +46,29 @@ def extract_vernac_commands(
         serapi_options = project.serapi_options
     command_data = {}
     for filename in project.get_file_list():
-        file_commands: Set[VernacCommandData] = command_data.setdefault(
+        file_commands: List[VernacCommandData] = command_data.setdefault(
             filename,
-            set())
-        beg_char_idx = 0
-        end_char_idx = 0
+            list())
         with pushd(project.dir_abspath):
-            sentences_enumerated = enumerate(
-                # Add proof goal field to VernacCommandData
-                project.extract_sentences(
-                    project.get_file(filename),
-                    sentence_extraction_method=SEM.HEURISTIC))
             with SerAPI(project.serapi_options) as serapi:
-                for (sentence_idx, sentence) in sentences_enumerated:
-                    end_char_idx += len(sentence)
+                for sentence in project.extract_sentences(
+                        project.get_file(filename),
+                        sentence_extraction_method=SEM.HEURISTIC):
                     serapi_output = serapi.execute(sentence)
                     sexp: SexpNode = serapi_output[0][0]
-                    if (serapi.has_open_goals()):
+                    if SexpAnalyzer.is_vernac(sexp):
                         command_type, identifier = \
                             ParserUtils.extract_identifier(sentence)
-                        file_commands.add(
+                        file_commands.append(
                             VernacCommandData(
                                 identifier,
                                 command_type,
-                                SexpInfo.Loc(
-                                    filename,
-                                    sentence_idx,
-                                    0,
-                                    sentence_idx,
-                                    0,
-                                    beg_char_idx,
-                                    end_char_idx),
                                 None,
                                 sentence,
                                 sexp))
                     else:
                         # This is where we would handle proofs
-                        pass
-                    beg_char_idx = end_char_idx
+                        ...
     return command_data
 
 

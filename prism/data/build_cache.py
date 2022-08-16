@@ -6,11 +6,11 @@ import tempfile
 from dataclasses import InitVar, dataclass, field
 from multiprocessing.pool import Pool
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Set, Tuple, Union
+from typing import Dict, Iterable, List, Optional, Tuple, Union
 
 import seutil as su
 
-from prism.language.gallina.analyze import SexpInfo
+from prism.language.gallina.analyze import SexpAnalyzer, SexpInfo
 from prism.project.metadata import ProjectMetadata
 from prism.util.radpytools.dataclasses import default_field
 
@@ -58,10 +58,6 @@ class VernacCommandData:
     """
     The type of command, e.g., Theorem, Inductive, etc.
     """
-    location: SexpInfo.Loc
-    """
-    The location of the command within a project.
-    """
     command_error: Optional[str]
     """
     The error, if any, that results when trying to execute the command
@@ -87,6 +83,16 @@ class VernacCommandData:
         # do not include the error
         return hash((self.identifier, self.command_type, self.location))
 
+    @property
+    def location(self) -> SexpInfo.Loc:
+        """
+        Return the location of the command within a project.
+        """
+        return SexpAnalyzer.analyze_loc(self.sexp)
+
+
+VernacDict = Dict[str, List[VernacCommandData]]
+
 
 @dataclass
 class ProjectCommitData:
@@ -99,7 +105,7 @@ class ProjectCommitData:
     Metadata that identifies the project name, commit, Coq version, and
     other relevant data for reproduction and of the cache.
     """
-    command_data: Dict[str, Set[VernacCommandData]]
+    command_data: VernacDict
     """
     A map from file names relative to the root of the project to the set
     of command results.

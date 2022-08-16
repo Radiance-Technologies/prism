@@ -4,7 +4,7 @@ Test suite for `prism.data.build_cache`.
 import shutil
 import unittest
 from pathlib import Path
-from typing import Set
+from typing import List
 
 from prism.data.build_cache import (
     CoqProjectBuildCache,
@@ -12,7 +12,6 @@ from prism.data.build_cache import (
     VernacCommandData,
 )
 from prism.data.dataset import CoqProjectBaseDataset
-from prism.language.gallina.analyze import SexpInfo
 from prism.language.heuristic.util import ParserUtils
 from prism.language.sexp.list import SexpList
 from prism.language.sexp.string import SexpString
@@ -38,36 +37,24 @@ class TestCoqProjectBuildCache(unittest.TestCase):
         for project in self.dataset.projects.values():
             command_data = {}
             for filename in project.get_file_list():
-                file_commands: Set[VernacCommandData] = command_data.setdefault(
-                    filename,
-                    set())
+                file_commands: List[
+                    VernacCommandData] = command_data.setdefault(
+                        filename,
+                        list())
                 doc = project.get_file(filename)
-                beg_char_idx = 0
-                end_char_idx = 0
-                for (sentence_idx,
-                     sentence) in enumerate(project.extract_sentences(
-                         doc,
-                         sentence_extraction_method=project
-                         .sentence_extraction_method)):
-                    end_char_idx += len(sentence)
+                for sentence in project.extract_sentences(
+                        doc,
+                        sentence_extraction_method=project
+                        .sentence_extraction_method):
                     command_type, identifier = ParserUtils.extract_identifier(sentence)
-                    file_commands.add(
+                    file_commands.append(
                         VernacCommandData(
                             identifier,
                             command_type,
-                            SexpInfo.Loc(
-                                filename,
-                                sentence_idx,
-                                0,
-                                sentence_idx,
-                                0,
-                                beg_char_idx,
-                                end_char_idx),
                             None,
                             str(sentence),
                             SexpList([SexpString("foo"),
                                       SexpString("bar")])))
-                    beg_char_idx = end_char_idx
                 break  # one file is enough to test
             data = ProjectCommitData(project.metadata, command_data)
             expected_path = (
