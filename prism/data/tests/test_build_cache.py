@@ -8,6 +8,8 @@ from typing import Set
 
 from prism.data.build_cache import (
     CoqProjectBuildCache,
+    ProjectBuildEnvironment,
+    ProjectBuildResult,
     ProjectCommitData,
     VernacCommandData,
 )
@@ -18,6 +20,7 @@ from prism.project import ProjectRepo
 from prism.project.base import SentenceExtractionMethod
 from prism.project.metadata.storage import MetadataStorage
 from prism.tests import _PROJECT_EXAMPLES_PATH
+from prism.util.opam import OpamAPI
 
 TEST_DIR = Path(__file__).parent
 
@@ -33,6 +36,8 @@ class TestCoqProjectBuildCache(unittest.TestCase):
         """
         Test all aspects of the cache with subtests.
         """
+        uneventful_result = ProjectBuildResult(0, "", "")
+        environment = ProjectBuildEnvironment(OpamAPI.active_switch.export())
         for project in self.dataset.projects.values():
             command_data = {}
             for filename in project.get_file_list():
@@ -64,7 +69,11 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                             None))
                     beg_char_idx = end_char_idx
                 break  # one file is enough to test
-            data = ProjectCommitData(project.metadata, command_data)
+            data = ProjectCommitData(
+                project.metadata,
+                command_data,
+                environment,
+                uneventful_result)
             expected_path = (
                 self.cache_dir / project.name / data.project_metadata.commit_sha
                 / '.'.join(

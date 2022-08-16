@@ -8,10 +8,12 @@ from multiprocessing.pool import Pool
 from pathlib import Path
 from typing import Dict, Iterable, Optional, Set, Tuple, Union
 
+import setuptools_scm
 import seutil as su
 
 from prism.language.gallina.analyze import SexpInfo
 from prism.project.metadata import ProjectMetadata
+from prism.util.opam.switch import OpamSwitch
 
 
 @dataclass
@@ -47,9 +49,60 @@ class VernacCommandData:
 
 
 @dataclass
+class ProjectBuildResult:
+    """
+    The result of building a project commit.
+
+    The project environment and metadata are implicit.
+    """
+
+    exit_code: int
+    """
+    The exit code of the project's build command with
+    `project_metadata`.
+    """
+    stdout: str
+    """
+    The standard output of the commit's build command with
+    `project_metadata`.
+    """
+    stderr: str
+    """
+    The standard error of the commit's build command with
+    `project_metadata`.
+    """
+
+
+@dataclass
+class ProjectBuildEnvironment:
+    """
+    The environment in which a project's commit data was captured.
+    """
+
+    switch_config: OpamSwitch.Configuration
+    """
+    The configuration of the switch in which the commit's build command
+    was invoked.
+    """
+    current_version: str = field(init=False)
+    """
+    The current version of this package.
+    """
+
+    def __post_init__(self):
+        """
+        Cache the commit of the coq-pearls repository.
+        """
+        self.current_version = setuptools_scm.get_version()
+
+
+@dataclass
 class ProjectCommitData:
     """
-    Object that reflects the contents of a repair mining cache file.
+    Data associated with a project commit.
+
+    The data is expected to be precomputed and cached to assist with
+    subsequent repair mining.
     """
 
     project_metadata: ProjectMetadata
@@ -61,6 +114,15 @@ class ProjectCommitData:
     """
     A map from file names relative to the root of the project to the set
     of command results.
+    """
+    environment: ProjectBuildEnvironment
+    """
+    The environment in which the commit was processed.
+    """
+    build_result: Optional[ProjectBuildResult] = None
+    """
+    The result of building the project commit in the `opam_switch` or
+    None if building was not required to process the commit.
     """
 
     def dump(
