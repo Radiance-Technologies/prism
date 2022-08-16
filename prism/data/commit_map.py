@@ -1,6 +1,7 @@
 """
 Module for looping over dataset and extracting caches.
 """
+import logging
 import os
 import signal
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -10,6 +11,7 @@ from typing import (
     Dict,
     Generic,
     Iterable,
+    Iterator,
     List,
     Optional,
     TypeVar,
@@ -20,6 +22,10 @@ import tqdm
 
 from prism.data.dataset import CoqProjectBaseDataset
 from prism.project.repo import ProjectRepo
+from prism.util.logging import default_log_level
+
+logger = logging.getLogger(__file__)
+logger.setLevel(default_log_level())
 
 T = TypeVar('T')
 
@@ -30,8 +36,18 @@ class Except(Generic[T]):
     A (return) value paired with an exception for delayed handling.
     """
 
-    value: T
+    value: Optional[T]
+    """
+    A return value preempted by an exception.
+
+    If None, then the exception was likely raised before any return
+    value was computed.
+    If not None, then the value may or may not be complete.
+    """
     exception: Exception
+    """
+    An exception raised during the computation of `value`.
+    """
 
 
 def project_commit_fmap(
@@ -42,7 +58,7 @@ def project_commit_fmap(
                               str,
                               Optional[T]],
                              T]
-) -> Union[T,
+) -> Union[Optional[T],
            Except[T]]:
     """
     Perform a given action on a project with a given iterator generator.
@@ -96,13 +112,15 @@ class ProjectCommitMapper(Generic[T]):
             self,
             dataset: CoqProjectBaseDataset,
             get_commit_iterator: Callable[[ProjectRepo],
-                                          Iterable[str]],
+                                          Iterator[str]],
             process_commit: Callable[[ProjectRepo,
-                                      str],
+                                      str,
+                                      Optional[T]],
                                      T],
-            task_description: Optional[str] = None):
+            task_description: Optional[str] = None,
+            wait_on_interrupt: bool = True):
         """
-        Initialize ProjectLooper object.
+        Initialize ProjectCommitMapper object.
 
         Parameters
         ----------
@@ -110,26 +128,40 @@ class ProjectCommitMapper(Generic[T]):
             Dataset object used to loop through all
             commits in all projects, building each
             commit and extracting the build cache.
-        get_commit_iterator : Callable[[ProjectRepo], Iterable[str]]
+        get_commit_iterator : Callable[[ProjectRepo], Iterator[str]]
             Function for deriving an iterable of commit SHAs
-            from a ProjectRepo. Must be declared at the
-            top-level of a module, and cannot be a lambda.
-        process_commit : Callable[[ProjectRepo, str], None]
-            Function for performing an operation on or with a
-            project at a given commit. Must be declared at the
-            top-level of a module, and cannot be a lambda.
+            from a ProjectRepo.
+            Must be declared at the top-level of a module, and cannot be
+            a lambda due to Python multiprocessing limitations.
+        process_commit : Callable[[ProjectRepo, str, Optional[T]], T]
+            The function that will be mapped over each project commit
+            yielded from `get_commit_iterator`.
+            Must be declared at the top-level of a module and cannot be
+            a lambda due to Python multiprocessing limitations.
         task_description : Optional[str], optional
             A short description of the mapping operation yielded from
             `get_commit_iterator` and `process_commit`.
+        wait_on_interrupt : bool, optional
+            In the event of a user interrupt, whether to wait for
+            subprocesses to finish processing their current commit or
+            to kill them immediately (with a non-blockable SIGKILL).
+            By default True.
         """
         self.dataset = dataset
         self.get_commit_iterator = get_commit_iterator
         self.process_commit = process_commit
         self._task_description = task_description
+        self._wait = wait_on_interrupt
+        # By default True so that an arbitrary process_commit is allowed
+        # to clean up any artifacts or state prior to termination
 
-    def __call__(self, num_workers: int = 1) -> Dict[str, T]:
+    def __call__(self, max_workers: int = 1) -> Dict[str, T]:
         """
-        Run looping functionality.
+        Map over project commits.
+
+        See Also
+        --------
+        map : For the public API.
         """
         projects = list(self.dataset.projects.values())
         job_list = [
@@ -137,36 +169,89 @@ class ProjectCommitMapper(Generic[T]):
              self.get_commit_iterator,
              self.process_commit) for p in projects
         ]
-        # BUG: This may cause an OSError on program exit in Python 3.8
-        # or earlier.
+        # BUG: Multiprocessing pools may cause an OSError on program
+        # exit in Python 3.8 or earlier.
         is_terminated = False
+        # ignore SIGINT and SIGTERM so that child processes will ignore
+        # each by default
+        logger.debug("Temporarily ignoring SIGTERM and SIGINT")
         original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
         original_sigterm_handler = signal.signal(signal.SIGTERM, signal.SIG_IGN)
-        with ProcessPoolExecutor(max_workers=num_workers) as ex:
-            results = {p: None for p in projects}
+        logger.debug(f"Initializing pool of {max_workers} workers")
+        with ProcessPoolExecutor(max_workers=max_workers) as ex:
+            results = {p.name: None for p in projects}
             with tqdm.tqdm(total=len(job_list),
                            desc=self.task_description) as progress_bar:
                 futures = {}
                 for job in job_list:
-                    project_name = job[0]
+                    project_name = job[0].name
                     future = ex.submit(pass_func, job)
                     futures[future] = project_name
+                    logger.debug(f"Job submitted for {project_name}")
                 signal.signal(signal.SIGINT, original_sigint_handler)
                 signal.signal(signal.SIGTERM, original_sigterm_handler)
-                for future in as_completed(futures):
-                    project_name = futures[future]
-                    result = future.result()
-                    results[project_name] = result
-                    if isinstance(result, Except):
-                        is_terminated = True
-                    if is_terminated:
-                        # keep doing this until pool is empty and exits
-                        # naturally
+                logger.debug("Default signal handlers restored.")
+                try:
+                    for future in as_completed(futures):
+                        project_name = futures[future]
+                        result = future.result()
+                        logger.debug(f"Job {project_name} completed.")
+                        results[project_name] = result
+                        if isinstance(result, Except):
+                            logger.critical(
+                                f"Job {project_name} failed. Terminating process pool.",
+                                exc_info=result.exception)
+                            is_terminated = True
+                        if is_terminated:
+                            # keep doing this until pool is empty and
+                            # exits naturally
+                            for _pid, p in ex._processes.items():
+                                # send SIGTERM to each process in pool
+                                p.terminate()
+                        progress_bar.update(1)
+                except KeyboardInterrupt:
+                    logger.info(
+                        "Terminating process pool due to user interrupt.")
+                    if not self._wait:
                         for _pid, p in ex._processes.items():
-                            # send SIGTERM to each process in pool
-                            p.terminate()
-                    progress_bar.update(1)
+                            # Do not wait for any jobs to finish.
+                            # Terminate them immediately.
+                            # However, since each child is set to ignore
+                            # a SIGTERM until it finishes its current
+                            # commit, we send SIGKILL instead.
+                            p.kill()
+                    ex.shutdown(wait=True)
+                    raise
         return results
+
+    def map(self, max_workers: int = 1) -> Dict[str, T]:
+        """
+        Map over the project commits.
+
+        Mapping occurs in an asynchronous manner by employing a pool of
+        subprocesses, one per project at a time.
+
+        Parameters
+        ----------
+        max_workers : int, optional
+            The maximum number of subprocesses, by default 1, which
+            will result in a sequential map over the projects.
+
+        Returns
+        -------
+        Dict[str, T]
+            The results of the map as applied to each iterated project
+            commit.
+            If an unhandled exception is encountered during the
+            operation, then the map is terminated.
+            Partial results will be returned corresponding to the
+            accumulation of results for commits iterated prior to the
+            error.
+            The results of the project(s) that raised the unhandled
+            exception will be wrapped in an `Except` object for
+            subsequent handling or re-raising by the caller.
+        """
+        return self(max_workers)
 
     @property
     def task_description(self) -> str:
