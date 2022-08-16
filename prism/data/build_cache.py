@@ -2,11 +2,13 @@
 Tools for handling repair mining cache.
 """
 import os
+import re
+import subprocess
 import tempfile
 from dataclasses import InitVar, dataclass, field
 from multiprocessing.pool import Pool
 from pathlib import Path
-from typing import Dict, Iterable, Optional, Set, Tuple, Union
+from typing import ClassVar, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 import setuptools_scm
 import seutil as su
@@ -88,12 +90,33 @@ class ProjectBuildEnvironment:
     """
     The current version of this package.
     """
+    SHA_regex: ClassVar[re.Pattern] = re.compile(r"\+g[0-9a-f]{5,40}")
+    """
+    A regular expression that matches git commit SHAs.
+    """
+    describe_cmd: ClassVar[List[
+        str]] = "git describe --match=" " --dirty --always --abbrev=40".split()
+    """
+    A command that can retrieve the hash of the checked out commit.
+    """
 
     def __post_init__(self):
         """
         Cache the commit of the coq-pearls repository.
         """
         self.current_version = setuptools_scm.get_version()
+        match = self.SHA_regex.search(self.current_version)
+        if match is not None:
+            # replace abbreviated hash with full hash to guarantee
+            # the hash remains unambiguous in the future
+            current_commit = subprocess.check_output(
+                self.describe_cmd).strip().decode("utf-8")
+            self.current_version = ''.join(
+                [
+                    self.current_version[: match.start()],
+                    current_commit,
+                    self.current_version[match.end():]
+                ])
 
 
 @dataclass
