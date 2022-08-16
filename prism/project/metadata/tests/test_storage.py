@@ -279,7 +279,9 @@ class TestMetadataStorage(unittest.TestCase):
         # reduction to identity
         self.assertEqual(MetadataStorage(), MetadataStorage.unions())
         # idempotent
-        self.assertEqual(merged_storage, merged_storage.union(merged_storage))
+        self.assertEqual(
+            set(merged_storage),
+            set(merged_storage.union(merged_storage)))
 
     def test_update(self):
         """

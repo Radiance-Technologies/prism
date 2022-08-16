@@ -914,7 +914,7 @@ class MetadataStorage:
         MetadataStorage
             The union of this and each given repository.
         """
-        # take the lazy way of iterating each repos data and inserting
+        # take the lazy way of iterating each repo's data and inserting
         # into a new storage versus tediously merging each internal data
         # structure
         result = MetadataStorage()
