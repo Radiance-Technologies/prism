@@ -17,12 +17,10 @@ from typing import ClassVar, Dict, List, Optional, Tuple
 
 from seutil import bash
 
-
 __all__ = ['OpamSwitch']
 
 logger = logging.getLogger(__file__)
 logger.setLevel(logging.DEBUG)
-
 
 
 @dataclass
@@ -34,21 +32,20 @@ class CoqDepAPI:
     class.
     """
 
-    def order_dependencies(self, 
-                          files: List[str],
-                          switch: OpamSwitch,
-                          i: Optional[str] = '',
-                          q: Optional[str] = '',
-                          r: Optional[str] = ''):
+    def order_dependencies(
+            self,
+            files: List[str],
+            switch: OpamSwitch,
+            i: Optional[str] = '',
+            q: Optional[str] = '',
+            r: Optional[str] = ''):
         results = []
         dep_graph = nx.DiGraph()
-        regex = re.compile("((?:.*\.(?:vo|v|glob|v.beautified))*):((?:\s.*\.(?:vo|v))*)")
+        regex = re.compile(
+            "((?:.*\.(?:vo|v|glob|v.beautified))*):((?:\s.*\.(?:vo|v))*)")
         for file in files:
             dep_graph.add_node(file)
-            command = "coqdep {0} -I {1} -Q {2} -R {3}".format(file,
-                                                               i,
-                                                               q,
-                                                               r)
+            command = "coqdep {0} -I {1} -Q {2} -R {3}".format(file, i, q, r)
             file_deps = switch.run(command)
 
             for line in file_deps:
@@ -62,5 +59,3 @@ class CoqDepAPI:
                     dep_graph.add_edges_from(dep_edges)
 
         return dep_graph.topological_sort()
-        
-

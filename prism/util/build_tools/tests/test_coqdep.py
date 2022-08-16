@@ -2,10 +2,10 @@
 Test suite for prism.util.opam.
 """
 import os
+import unittest
 
 import git
 import networkx as nx
-import unittest
 
 from prism.util.build_tools.coqdep import CoqDepAPI
 from prism.util.opam import OpamAPI, OpamSwitch
@@ -21,14 +21,15 @@ class TestOpamAPI(unittest.TestCase):
     ocaml_version = "4.07.1"
     clone = None
 
-
     def test_create_switch(self):
         """
         Verify that switches can be created and not overwritten.
         """
         coqdep = CoqDepAPI()
-        coqdep.order_dependencies(["./Test.v", "./Residuals.v"], self.test_switch)
-
+        coqdep.order_dependencies(
+            ["./Test.v",
+             "./Residuals.v"],
+            self.test_switch)
 
     @classmethod
     def setUpClass(cls):
@@ -57,11 +58,10 @@ class TestOpamAPI(unittest.TestCase):
                     project_path)
             except git.GitCommandError:
                 repo = git.Repo(project_path)
-        
+
         cls.test_switch = OpamAPI.create_switch(
             cls.test_switch_name,
             cls.ocaml_version)
-        
 
     @classmethod
     def tearDownClass(cls) -> None:
