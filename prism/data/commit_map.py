@@ -12,7 +12,6 @@ from typing import (
     Generic,
     Iterable,
     Iterator,
-    List,
     Optional,
     TypeVar,
     Union,
@@ -23,6 +22,8 @@ import tqdm
 from prism.data.dataset import CoqProjectBaseDataset
 from prism.project.repo import ProjectRepo
 from prism.util.logging import default_log_level
+
+__all__ = ['Except', 'ProjectCommitMapper']
 
 logger = logging.getLogger(__file__)
 logger.setLevel(default_log_level())
@@ -50,7 +51,7 @@ class Except(Generic[T]):
     """
 
 
-def project_commit_fmap(
+def _project_commit_fmap(
     project: ProjectRepo,
     get_commit_iterator: Callable[[ProjectRepo],
                                   Iterable[str]],
@@ -96,11 +97,11 @@ def project_commit_fmap(
     return result
 
 
-def pass_func(args) -> List[T]:
+def _project_commit_fmap_(args) -> Union[Optional[T], Except[T]]:
     """
     Unpack arguments for `project_commit_fmap`.
     """
-    return project_commit_fmap(*args)
+    return _project_commit_fmap(*args)
 
 
 class ProjectCommitMapper(Generic[T]):
@@ -185,7 +186,7 @@ class ProjectCommitMapper(Generic[T]):
                 futures = {}
                 for job in job_list:
                     project_name = job[0].name
-                    future = ex.submit(pass_func, job)
+                    future = ex.submit(_project_commit_fmap_, job)
                     futures[future] = project_name
                     logger.debug(f"Job submitted for {project_name}")
                 signal.signal(signal.SIGINT, original_sigint_handler)
