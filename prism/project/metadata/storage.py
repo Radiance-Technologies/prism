@@ -5,6 +5,7 @@ Defines central storage/retrieval mechanisms for project metadata.
 import os
 from dataclasses import dataclass, fields
 from functools import partialmethod
+from itertools import chain
 from typing import (
     Any,
     Callable,
@@ -892,6 +893,38 @@ class MetadataStorage:
             result[f] = io.serialize(list(getattr(self, f).items()))
         return result
 
+    def union(
+            self,
+            *others: Tuple['MetadataStorage',
+                           ...]) -> 'MetadataStorage':
+        """
+        Get the union of this and one or more other repositories.
+
+        If two repositories share the same metadata record, the one that
+        appears first takes precedence (where `self` takes precedence
+        over all `others`).
+
+        Parameters
+        ----------
+        others : tuple of MetadataStorage
+            One or more other metadata repositories.
+
+        Returns
+        -------
+        MetadataStorage
+            The union of this and each given repository.
+        """
+        # take the lazy way of iterating each repo's data and inserting
+        # into a new storage versus tediously merging each internal data
+        # structure
+        result = MetadataStorage()
+        for metadata in chain(self, *others):
+            try:
+                result.insert(metadata)
+            except KeyError:
+                continue
+        return result
+
     def update(
             self,
             project_name: Union[str,
@@ -1056,3 +1089,26 @@ class MetadataStorage:
             A metadata storage instance.
         """
         return io.load(filepath, fmt, serialization=True, clz=MetadataStorage)
+
+    @classmethod
+    def unions(cls, *repos: Tuple['MetadataStorage', ...]) -> 'MetadataStorage':
+        """
+        Get the union of the given metadata repositories.
+
+        If two repositories share the same metadata record, the one that
+        appears first takes precedence.
+
+        Parameters
+        ----------
+        repos : tuple of MetadataStorage
+            A sequence of metadata repositories.
+
+        Returns
+        -------
+        MetadataStorage
+            The union of the given repositories.
+        """
+        if repos:
+            return repos[0].union(*repos[1 :])
+        else:
+            return MetadataStorage()
