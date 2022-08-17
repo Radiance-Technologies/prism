@@ -11,7 +11,6 @@ from prism.data.build_cache import (
 )
 from prism.interface.coq.serapi import SerAPI
 from prism.language.heuristic.util import ParserUtils
-from prism.language.sexp.node import SexpNode
 from prism.project.base import SEM, Project
 from prism.project.exception import ProjectBuildError
 from prism.project.metadata import ProjectMetadata
@@ -54,8 +53,7 @@ def extract_vernac_commands(
                 for sentence in project.extract_sentences(
                         project.get_file(filename),
                         sentence_extraction_method=SEM.HEURISTIC):
-                    serapi_output = serapi.execute(sentence)
-                    sexp: SexpNode = serapi_output[0][0]
+                    sexp = serapi.query_ast(sentence)
                     if SexpAnalyzer.is_vernac(sexp):
                         command_type, identifier = \
                             ParserUtils.extract_identifier(sentence)

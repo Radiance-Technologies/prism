@@ -1233,11 +1233,14 @@ class SexpAnalyzer:
         try:
             if len(sexp) != 2:
                 return False
-            v_child = sexp[0]
-            if v_child[0].content == "v" and (
-                    v_child[1][0].content == "VernacExpr"
-                    or v_child[1][0].content == "VernacFail"):
+            v_present = sexp[0][0].content == "v"
+            if v_present and (sexp[0][1][0].content == "VernacExpr"
+                              or sexp[0][1][0].content == "VernacFail"):
                 return True
+            elif sexp[
+                    0].content == "VernacExpr" and sexp[1][0] != "VernacExtend":
+                return True
+            # elif sexp[0].content == "VernacFail" and sexp[1]
             else:
                 return False
         except IllegalSexpOperationException:
