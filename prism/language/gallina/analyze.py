@@ -1234,7 +1234,7 @@ class SexpAnalyzer:
                 "VernacExtend"
             ]
             cls._ltac_regex = re.compile("|".join(ltac_keyword_list))
-        return cls._ltac_regex.search(sexp) is not None
+        return cls._ltac_regex.search(str(sexp)) is not None
 
     @classmethod
     @deprecated(reason="This is not used anywhere.", version="0.1.0")
