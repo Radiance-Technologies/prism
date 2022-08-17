@@ -462,7 +462,26 @@ class SexpAnalyzer:
     logger: logging.Logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
 
-    _ltac_regex: Optional[re.Pattern] = None
+    _ltac_regex: re.Pattern[str] = re.compile(
+        "|".join(
+            [
+                "VernacAbort",
+                "VernacAbortAll",
+                "VernacRestart",
+                "VernacUndo",
+                "VernacUndoTo",
+                "VernacFocus",
+                "VernacUnfocus",
+                "VernacUnfocused",
+                "VernacBullet",
+                "VernacSubproof",
+                "VernacEndSubproof",
+                "VernacShow",
+                "VernacCheckGuard",
+                "VernacProof",
+                "VernacProofMode",
+                "VernacExtend"
+            ]))
 
     @classmethod
     def analyze_vernac(cls, sexp: SexpNode) -> SexpInfo.Vernac:
@@ -1214,26 +1233,6 @@ class SexpAnalyzer:
         bool
             True if the s-expression contains ltac
         """
-        if cls._ltac_regex is None:
-            ltac_keyword_list = [
-                "VernacAbort",
-                "VernacAbortAll",
-                "VernacRestart",
-                "VernacUndo",
-                "VernacUndoTo",
-                "VernacFocus",
-                "VernacUnfocus",
-                "VernacUnfocused",
-                "VernacBullet",
-                "VernacSubproof",
-                "VernacEndSubproof",
-                "VernacShow",
-                "VernacCheckGuard",
-                "VernacProof",
-                "VernacProofMode",
-                "VernacExtend"
-            ]
-            cls._ltac_regex = re.compile("|".join(ltac_keyword_list))
         return cls._ltac_regex.search(str(sexp)) is not None
 
     @classmethod
