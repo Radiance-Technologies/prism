@@ -1,6 +1,7 @@
 """
 Module for looping over dataset and extracting caches.
 """
+import functools
 import logging
 import os
 import signal
@@ -13,6 +14,7 @@ from typing import (
     Iterable,
     Iterator,
     Optional,
+    Tuple,
     TypeVar,
     Union,
 )
@@ -22,7 +24,9 @@ import tqdm
 from prism.project.repo import ProjectRepo
 from prism.util.logging import default_log_level
 
-__all__ = ['Except', 'ProjectCommitMapper']
+from ..project.metadata.storage import MetadataStorage
+
+__all__ = ['Except', 'ProjectCommitMapper', 'ProjectCommitUpdateMapper']
 
 logger = logging.getLogger(__file__)
 logger.setLevel(default_log_level())
@@ -53,11 +57,11 @@ class Except(Generic[T]):
 def _project_commit_fmap(
     project: ProjectRepo,
     get_commit_iterator: Callable[[ProjectRepo],
-                                  Iterable[str]],
-    process_commit: Callable[[ProjectRepo,
-                              str,
-                              Optional[T]],
-                             T]
+                                  Iterator[str]],
+    commit_fmap: Callable[[ProjectRepo,
+                           str,
+                           Optional[T]],
+                          T]
 ) -> Union[Optional[T],
            Except[T]]:
     """
@@ -67,10 +71,10 @@ def _project_commit_fmap(
     ----------
     project : ProjectRepo
         Project to be operated on.
-    get_commit_iterator : Callable[[ProjectRepo], Iterable[str]]
+    get_commit_iterator : Callable[[ProjectRepo], Iterator[str]]
         Function for obtaining an iterator of commits for
         the given project.
-    process_commit : Callable[[ProjectRepo,str], None]
+    commit_fmap : Callable[[ProjectRepo, str, Optional[T]], T]
         Function for performing some action on or
         with the project at a given commit.
     """
@@ -89,7 +93,7 @@ def _project_commit_fmap(
         if is_terminated:
             break
         try:
-            result = process_commit(project, commit, result)
+            result = commit_fmap(project, commit, result)
         except Exception as e:
             is_terminated = True
             result = Except(result, e)
@@ -105,7 +109,7 @@ def _project_commit_fmap_(args) -> Union[Optional[T], Except[T]]:
 
 class ProjectCommitMapper(Generic[T]):
     """
-    Map a function over commits in all projects of a dataset.
+    Map a function over commits of all projects in a given collection.
     """
 
     def __init__(
@@ -113,10 +117,10 @@ class ProjectCommitMapper(Generic[T]):
             projects: Iterable[ProjectRepo],
             get_commit_iterator: Callable[[ProjectRepo],
                                           Iterator[str]],
-            process_commit: Callable[[ProjectRepo,
-                                      str,
-                                      Optional[T]],
-                                     T],
+            commit_fmap: Callable[[ProjectRepo,
+                                   str,
+                                   Optional[T]],
+                                  T],
             task_description: Optional[str] = None,
             wait_on_interrupt: bool = True):
         """
@@ -131,14 +135,14 @@ class ProjectCommitMapper(Generic[T]):
             from a ProjectRepo.
             Must be declared at the top-level of a module, and cannot be
             a lambda due to Python multiprocessing limitations.
-        process_commit : Callable[[ProjectRepo, str, Optional[T]], T]
+        commit_fmap : Callable[[ProjectRepo, str, Optional[T]], T]
             The function that will be mapped over each project commit
             yielded from `get_commit_iterator`.
             Must be declared at the top-level of a module and cannot be
             a lambda due to Python multiprocessing limitations.
         task_description : Optional[str], optional
             A short description of the mapping operation yielded from
-            `get_commit_iterator` and `process_commit`.
+            `get_commit_iterator` and `commit_fmap`.
         wait_on_interrupt : bool, optional
             In the event of a user interrupt, whether to wait for
             subprocesses to finish processing their current commit or
@@ -147,10 +151,10 @@ class ProjectCommitMapper(Generic[T]):
         """
         self.projects = list(projects)
         self.get_commit_iterator = get_commit_iterator
-        self.process_commit = process_commit
+        self.commit_fmap = commit_fmap
         self._task_description = task_description
         self._wait = wait_on_interrupt
-        # By default True so that an arbitrary process_commit is allowed
+        # By default True so that an arbitrary commit_fmap is allowed
         # to clean up any artifacts or state prior to termination
 
     def __call__(self, max_workers: int = 1) -> Dict[str, T]:
@@ -164,7 +168,7 @@ class ProjectCommitMapper(Generic[T]):
         job_list = [
             (p,
              self.get_commit_iterator,
-             self.process_commit) for p in self.projects
+             self.commit_fmap) for p in self.projects
         ]
         # BUG: Multiprocessing pools may cause an OSError on program
         # exit in Python 3.8 or earlier.
@@ -258,3 +262,83 @@ class ProjectCommitMapper(Generic[T]):
         if self._task_description is None:
             return "Map over project commits"
         return self._task_description
+
+
+def _commit_fmap_and_update(
+        commit_fmap: Callable[[ProjectRepo,
+                               str,
+                               Optional[T]],
+                              T],
+        project: ProjectRepo,
+        commit_sha: str,
+        result: Optional[Tuple[T,
+                               MetadataStorage]]) -> Tuple[T,
+                                                           MetadataStorage]:
+    """
+    Return an updated `MetadataStorage` alongside a map result.
+    """
+    if result is not None:
+        result = result[0]
+    result = commit_fmap(project, commit_sha, result)
+    return result, project.metadata_storage
+
+
+class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
+    """
+    Map a function over commits of all projects in a given collection.
+
+    In addition, update the MetadataStorage of each project according to
+    any changes incurred due to the provided map function.
+    """
+
+    def __init__(
+            self,
+            projects: Iterable[ProjectRepo],
+            get_commit_iterator: Callable[[ProjectRepo],
+                                          Iterator[str]],
+            commit_fmap: Callable[[ProjectRepo,
+                                   str,
+                                   Optional[T]],
+                                  T],
+            task_description: Optional[str] = None,
+            wait_on_interrupt: bool = True):
+        super().__init__(
+            projects,
+            get_commit_iterator,
+            functools.partial(_commit_fmap_and_update,
+                              commit_fmap),
+            task_description,
+            wait_on_interrupt)
+
+    def __call__(self, max_workers: int = 1) -> Dict[str, T]:  # noqa: D102
+        results = super().__call__(max_workers)
+        storage = MetadataStorage.unions(*[s for _, s in results.values()])
+        for p in self.projects:
+            p.metadata_storage = storage
+        return {k: r for k,
+                (r,
+                 _) in results.items()}
+
+    def update_map(self,
+                   max_workers: int = 1) -> Tuple[Dict[str,
+                                                       T],
+                                                  MetadataStorage]:
+        """
+        Map over the project commits and get updated metadata.
+
+        Parameters
+        ----------
+        max_workers : int, optional
+            The maximum number of subprocesses, by default 1, which
+            will result in a sequential map over the projects.
+
+        Returns
+        -------
+        Dict[str, T]
+            The output of `map`.
+        MetadataStorage
+            The updated `MetadataStorage` for each mapped project.
+        """
+        result = self.map(max_workers)
+        storage = self.projects[0].metadata_storage
+        return result, storage

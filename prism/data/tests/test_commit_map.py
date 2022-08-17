@@ -3,9 +3,14 @@ Test module for `prism.data.commit_map` module.
 """
 import time
 import unittest
+from copy import copy, deepcopy
 from typing import List, Optional
 
-from prism.data.commit_map import Except, ProjectCommitMapper
+from prism.data.commit_map import (
+    Except,
+    ProjectCommitMapper,
+    ProjectCommitUpdateMapper,
+)
 from prism.project.repo import ProjectRepo
 from prism.tests.factories import DatasetFactory
 
@@ -58,6 +63,15 @@ def sleepy_process_commit(p: ProjectRepo,
     else:
         time.sleep(0.25)
         raise Exception(f"Failure: {p.name}")
+
+
+def volatile_process_commit(p: ProjectRepo, c: str, results: None) -> None:
+    """
+    Introduce fake metadata for each project.
+    """
+    metadata = copy(p.metadata)
+    metadata.commit_sha = f"fake_{p.name}_commit"
+    p.metadata_storage.insert(metadata)
 
 
 class TestProjectCommitMapper(unittest.TestCase):
@@ -123,6 +137,45 @@ class TestProjectCommitMapper(unittest.TestCase):
         self.assertEqual(
             result[failed_project].exception.args,
             expected_result[failed_project].exception.args)
+
+    def test_ProjectCommitUpdateMapper(self):
+        """
+        Verify that the metadata repository can be changed with maps.
+
+        Also verify that `ProjectCommitMapper` is incapable of updating
+        the metadata repo.
+        """
+        initial_metadata = list(
+            self.tester.dataset.projects.values())[0].metadata_storage
+        with self.subTest("without_update"):
+            project_looper = ProjectCommitMapper(
+                self.tester.dataset.projects.values(),
+                get_commit_iterator,
+                volatile_process_commit,
+                "Test mapping without updating")
+            result = project_looper(2)
+            self.assertEqual(result,
+                             {p: None for p in self.project_names})
+            for p in project_looper.projects:
+                self.assertEqual(p.metadata_storage, initial_metadata)
+        expected_metadata = deepcopy(initial_metadata)
+        for p in project_looper.projects:
+            metadata = copy(p.metadata)
+            metadata.commit_sha = f"fake_{p.name}_commit"
+            expected_metadata.insert(metadata)
+        expected_metadata = set(expected_metadata)
+        with self.subTest("with_update"):
+            project_looper = ProjectCommitUpdateMapper(
+                self.tester.dataset.projects.values(),
+                get_commit_iterator,
+                volatile_process_commit,
+                "Test mapping with updating")
+            result = project_looper(2)
+            self.assertEqual(result,
+                             {p: None for p in self.project_names})
+            for p in project_looper.projects:
+                self.assertNotEqual(p.metadata_storage, initial_metadata)
+                self.assertEqual(set(p.metadata_storage), expected_metadata)
 
 
 if __name__ == "__main__":
