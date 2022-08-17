@@ -462,6 +462,8 @@ class SexpAnalyzer:
     logger: logging.Logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
 
+    _ltac_regex: Optional[re.Pattern] = None
+
     @classmethod
     def analyze_vernac(cls, sexp: SexpNode) -> SexpInfo.Vernac:
         """
@@ -1196,6 +1198,43 @@ class SexpAnalyzer:
             return SexpInfo.SertokToken(kind, content, loc)
         except IllegalSexpOperationException:
             raise SexpAnalyzingException(sexp)
+
+    @classmethod
+    def is_ltac(cls, sexp: SexpNode) -> bool:
+        """
+        Determine whether the given sexp contains ltac.
+
+        Parameters
+        ----------
+        sexp : SexpNode
+            S-expression to be tested
+
+        Returns
+        -------
+        bool
+            True if the s-expression contains ltac
+        """
+        if cls._ltac_regex is None:
+            ltac_keyword_list = [
+                "VernacAbort",
+                "VernacAbortAll",
+                "VernacRestart",
+                "VernacUndo",
+                "VernacUndoTo",
+                "VernacFocus",
+                "VernacUnfocus",
+                "VernacUnfocused",
+                "VernacBullet",
+                "VernacSubproof",
+                "VernacEndSubproof",
+                "VernacShow",
+                "VernacCheckGuard",
+                "VernacProof",
+                "VernacProofMode",
+                "VernacExtend"
+            ]
+            cls._ltac_regex = re.compile("|".join(ltac_keyword_list))
+        return cls._ltac_regex.search(sexp) is not None
 
     @classmethod
     @deprecated(reason="This is not used anywhere.", version="0.1.0")
