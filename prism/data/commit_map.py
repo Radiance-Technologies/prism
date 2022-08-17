@@ -157,7 +157,7 @@ class ProjectCommitMapper(Generic[T]):
         # By default True so that an arbitrary commit_fmap is allowed
         # to clean up any artifacts or state prior to termination
 
-    def __call__(self, max_workers: int = 1) -> Dict[str, T]:
+    def __call__(self, max_workers: int = 1) -> Dict[str, Except[T]]:
         """
         Map over project commits.
 
@@ -225,7 +225,7 @@ class ProjectCommitMapper(Generic[T]):
                     raise
         return results
 
-    def map(self, max_workers: int = 1) -> Dict[str, T]:
+    def map(self, max_workers: int = 1) -> Dict[str, Except[T]]:
         """
         Map over the project commits.
 
@@ -240,7 +240,7 @@ class ProjectCommitMapper(Generic[T]):
 
         Returns
         -------
-        Dict[str, T]
+        Dict[str, Except[T]]
             The results of the map as applied to each iterated project
             commit.
             If an unhandled exception is encountered during the
@@ -310,7 +310,9 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
             task_description,
             wait_on_interrupt)
 
-    def __call__(self, max_workers: int = 1) -> Dict[str, T]:  # noqa: D102
+    def __call__(self,
+                 max_workers: int = 1) -> Dict[str,
+                                               Except[T]]:  # noqa: D102
         results = super().__call__(max_workers)
         storage = MetadataStorage.unions(*[s for _, s in results.values()])
         for p in self.projects:
@@ -319,10 +321,11 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
                 (r,
                  _) in results.items()}
 
-    def update_map(self,
-                   max_workers: int = 1) -> Tuple[Dict[str,
-                                                       T],
-                                                  MetadataStorage]:
+    def update_map(
+            self,
+            max_workers: int = 1) -> Tuple[Dict[str,
+                                                Except[T]],
+                                           MetadataStorage]:
         """
         Map over the project commits and get updated metadata.
 
