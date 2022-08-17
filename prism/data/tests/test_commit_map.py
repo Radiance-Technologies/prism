@@ -85,7 +85,7 @@ class TestProjectCommitMapper(unittest.TestCase):
         Test instantiation with `ProjectRepo`.
         """
         project_looper = ProjectCommitMapper(
-            self.tester.dataset,
+            self.tester.dataset.projects.values(),
             get_commit_iterator,
             process_commit,
             "Test mapping")
@@ -98,7 +98,7 @@ class TestProjectCommitMapper(unittest.TestCase):
         Test that processes can be concluded gracefully if one fails.
         """
         project_looper = ProjectCommitMapper(
-            self.tester.dataset,
+            self.tester.dataset.projects.values(),
             get_multi_commit_iterator,
             sleepy_process_commit,
             "Test graceful exits")

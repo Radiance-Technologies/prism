@@ -19,7 +19,6 @@ from typing import (
 
 import tqdm
 
-from prism.data.dataset import CoqProjectBaseDataset
 from prism.project.repo import ProjectRepo
 from prism.util.logging import default_log_level
 
@@ -111,7 +110,7 @@ class ProjectCommitMapper(Generic[T]):
 
     def __init__(
             self,
-            dataset: CoqProjectBaseDataset,
+            projects: Iterable[ProjectRepo],
             get_commit_iterator: Callable[[ProjectRepo],
                                           Iterator[str]],
             process_commit: Callable[[ProjectRepo,
@@ -125,10 +124,8 @@ class ProjectCommitMapper(Generic[T]):
 
         Parameters
         ----------
-        dataset : CoqProjectBaseDataset
-            Dataset object used to loop through all
-            commits in all projects, building each
-            commit and extracting the build cache.
+        projects : Set[ProjectRepo]
+            A set of projects over which to map a function.
         get_commit_iterator : Callable[[ProjectRepo], Iterator[str]]
             Function for deriving an iterable of commit SHAs
             from a ProjectRepo.
@@ -148,7 +145,7 @@ class ProjectCommitMapper(Generic[T]):
             to kill them immediately (with a non-blockable SIGKILL).
             By default True.
         """
-        self.dataset = dataset
+        self.projects = list(projects)
         self.get_commit_iterator = get_commit_iterator
         self.process_commit = process_commit
         self._task_description = task_description
@@ -164,11 +161,10 @@ class ProjectCommitMapper(Generic[T]):
         --------
         map : For the public API.
         """
-        projects = list(self.dataset.projects.values())
         job_list = [
             (p,
              self.get_commit_iterator,
-             self.process_commit) for p in projects
+             self.process_commit) for p in self.projects
         ]
         # BUG: Multiprocessing pools may cause an OSError on program
         # exit in Python 3.8 or earlier.
@@ -180,7 +176,7 @@ class ProjectCommitMapper(Generic[T]):
         original_sigterm_handler = signal.signal(signal.SIGTERM, signal.SIG_IGN)
         logger.debug(f"Initializing pool of {max_workers} workers")
         with ProcessPoolExecutor(max_workers=max_workers) as ex:
-            results = {p.name: None for p in projects}
+            results = {p.name: None for p in self.projects}
             with tqdm.tqdm(total=len(job_list),
                            desc=self.task_description) as progress_bar:
                 futures = {}
