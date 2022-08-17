@@ -338,6 +338,10 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
             The output of `map`.
         MetadataStorage
             The updated `MetadataStorage` for each mapped project.
+
+        See Also
+        --------
+        map : For more details on the return value.
         """
         result = self.map(max_workers)
         storage = self.projects[0].metadata_storage
