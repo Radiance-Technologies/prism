@@ -26,10 +26,25 @@ class TestOpamAPI(unittest.TestCase):
         Verify that switches can be created and not overwritten.
         """
         coqdep = CoqDepAPI()
-        coqdep.order_dependencies(
-            ["./Test.v",
-             "./Residuals.v"],
-            self.test_switch)
+        os.chdir("./lambda")
+        files = os.listdir("./")
+        files = [x for x in files if x[-2:] == '.v']
+        ordered = coqdep.order_dependencies(files,
+                                            self.test_switch)
+        print("Ordered: ", ordered)
+        expected = ['Lambda.v',
+                    'Conversion.v',
+                    'Confluence.v',
+                    'Simulation.v',
+                    'Cube.v',
+                    'Marks.v',
+                    'Residuals.v',
+                    'Substitution.v',
+                    'Redexes.v',
+                    'Reduction.v',
+                    'Terms.v',
+                    'Test.v']
+        self.assertTrue(ordered == expected)
 
     @classmethod
     def setUpClass(cls):
@@ -70,15 +85,15 @@ class TestOpamAPI(unittest.TestCase):
 
         Doubles as test for switch removal.
         """
-        OpamAPI.remove_switch(cls.test_switch)
-        with cls.assertRaises(TestOpamAPI(), ValueError):
-            OpamAPI.remove_switch(cls.test_switch)
-        with cls.assertRaises(TestOpamAPI(), ValueError):
-            OpamAPI.remove_switch(cls.test_switch_name)
-        OpamAPI.remove_switch("test_cloned_switch")
-        for project_name, repo in cls.repos.items():
-            del repo
-            shutil.rmtree(os.path.join(cls.repo_paths[project_name]))
+        #OpamAPI.remove_switch(cls.test_switch)
+        #with cls.assertRaises(TestOpamAPI(), ValueError):
+        #    OpamAPI.remove_switch(cls.test_switch)
+        #with cls.assertRaises(TestOpamAPI(), ValueError):
+        #    OpamAPI.remove_switch(cls.test_switch_name)
+        #OpamAPI.remove_switch("test_cloned_switch")
+        #for project_name, repo in cls.repos.items():
+        #    del repo
+        #    shutil.rmtree(os.path.join(cls.repo_paths[project_name]))
 
 
 if __name__ == '__main__':
