@@ -79,7 +79,6 @@ class TestExtractCache(unittest.TestCase):
         coq_float = self.dataset.projects['float']
         coq_float.git.checkout(self.float_head)
         coq_version = coq_float.coq_version
-        # don't test stdout and stderr
         dummy_float_data = ProjectCommitData(
             coq_float.metadata,
             {},
