@@ -2,7 +2,7 @@
 Provides an object-oriented abstraction of OPAM switches.
 """
 from os import PathLike
-from typing import List, Optional
+from typing import List
 
 from prism.util.opam.switch import OpamSwitch
 
