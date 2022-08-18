@@ -7,6 +7,8 @@ import unittest
 
 import git
 
+import prism.util.radpytools.os
+
 from prism.util.build_tools.coqdep import order_dependencies
 from prism.util.opam import OpamAPI
 
@@ -20,29 +22,29 @@ class TestOpamCoqDepAPI(unittest.TestCase):
     ocaml_version = "4.07.1"
     clone = None
 
-    def test_create_switch(self):
+    def test_order_dependencies(self):
         """
-        Verify that switches can be created and not overwritten.
+        Verify that dependencies can be sorted.
         """
-        os.chdir("./lambda")
-        files = os.listdir("./")
-        files = [x for x in files if x[-2 :] == '.v']
-        ordered = order_dependencies(files, OpamAPI.active_switch)
-        expected = [
-            'Test.vo',
-            'Terms.vo',
-            'Reduction.vo',
-            'Redexes.vo',
-            'Marks.vo',
-            'Substitution.vo',
-            'Residuals.vo',
-            'Simulation.vo',
-            'Cube.vo',
-            'Confluence.vo',
-            'Conversion.vo',
-            'Lambda.vo'
-        ]
-        self.assertTrue(ordered == expected)
+        with prism.util.radpytools.os.pushd("./lambda"):
+            files = os.listdir("./")
+            files = [x for x in files if x[-2 :] == '.v']
+            ordered = order_dependencies(files, OpamAPI.active_switch)
+            expected = [
+                'Test.vo',
+                'Terms.vo',
+                'Reduction.vo',
+                'Redexes.vo',
+                'Marks.vo',
+                'Substitution.vo',
+                'Residuals.vo',
+                'Simulation.vo',
+                'Cube.vo',
+                'Confluence.vo',
+                'Conversion.vo',
+                'Lambda.vo'
+            ]
+            self.assertEqual(ordered, expected)
 
     @classmethod
     def setUpClass(cls):
