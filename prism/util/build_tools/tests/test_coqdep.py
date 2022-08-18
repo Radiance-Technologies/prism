@@ -8,7 +8,6 @@ import unittest
 import git
 
 import prism.util.radpytools.os
-
 from prism.util.build_tools.coqdep import order_dependencies
 from prism.util.opam import OpamAPI
 
