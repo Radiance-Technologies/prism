@@ -95,7 +95,7 @@ class ProjectBuildEnvironment:
     A regular expression that matches git commit SHAs.
     """
     describe_cmd: ClassVar[List[
-        str]] = "git describe --match=" " --dirty --always --abbrev=40".split()
+        str]] = 'git describe --match="" --dirty --always --abbrev=40'.split()
     """
     A command that can retrieve the hash of the checked out commit.
     """
