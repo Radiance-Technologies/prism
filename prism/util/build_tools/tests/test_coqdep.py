@@ -17,10 +17,6 @@ class TestOpamCoqDepAPI(unittest.TestCase):
     Test suite for `CoqDepAPI`.
     """
 
-    test_switch_name = "test_switch"
-    ocaml_version = "4.07.1"
-    clone = None
-
     def test_order_dependencies(self):
         """
         Verify that dependencies can be sorted.
@@ -48,7 +44,7 @@ class TestOpamCoqDepAPI(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """
-        Set up a test switch and download Lambda.
+        Download Lambda.
         """
         cls.test_path = os.path.dirname(__file__)
         # HEAD commits as of August 16, 2022

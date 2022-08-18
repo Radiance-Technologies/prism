@@ -10,7 +10,7 @@ from prism.util.opam.switch import OpamSwitch
 def order_dependencies(
         files: List[PathLike],
         switch: OpamSwitch,
-        IQR: str = ''):
+        IQR: str, optional):
     """
     Return sorted dependencies for supplied files.
 
