@@ -25,7 +25,7 @@ class TestOpamCoqDepAPI(unittest.TestCase):
         """
         Verify that dependencies can be sorted.
         """
-        with prism.util.radpytools.os.pushd("./lambda"):
+        with prism.util.radpytools.os.pushd(self.repo_paths["lambda"]):
             files = os.listdir("./")
             files = [x for x in files if x[-2 :] == '.v']
             ordered = order_dependencies(files, OpamAPI.active_switch)
