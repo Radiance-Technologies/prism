@@ -2,8 +2,8 @@
 Test suite for prism.util.opam.
 """
 import os
-import unittest
 import shutil
+import unittest
 
 import git
 
@@ -27,21 +27,22 @@ class TestOpamCoqDepAPI(unittest.TestCase):
         coqdep = CoqDepAPI()
         os.chdir("./lambda")
         files = os.listdir("./")
-        files = [x for x in files if x[-2:] == '.v']
-        ordered = coqdep.order_dependencies(files,
-                                            self.test_switch)
-        expected = ['Test.vo',
-                    'Terms.vo',
-                    'Reduction.vo',
-                    'Redexes.vo',
-                    'Marks.vo',
-                    'Substitution.vo',
-                    'Residuals.vo',
-                    'Simulation.vo',
-                    'Cube.vo',
-                    'Confluence.vo',
-                    'Conversion.vo',
-                    'Lambda.vo']
+        files = [x for x in files if x[-2 :] == '.v']
+        ordered = coqdep.order_dependencies(files, self.test_switch)
+        expected = [
+            'Test.vo',
+            'Terms.vo',
+            'Reduction.vo',
+            'Redexes.vo',
+            'Marks.vo',
+            'Substitution.vo',
+            'Residuals.vo',
+            'Simulation.vo',
+            'Cube.vo',
+            'Confluence.vo',
+            'Conversion.vo',
+            'Lambda.vo'
+        ]
         self.assertTrue(ordered == expected)
 
     @classmethod

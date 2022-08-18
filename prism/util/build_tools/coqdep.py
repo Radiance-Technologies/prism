@@ -14,6 +14,7 @@ class CoqDepAPI:
     Note that Coq must be installed to use all of the features of this
     class.
     """
+
     def __init__(self):
         self.test_val = ""
 
