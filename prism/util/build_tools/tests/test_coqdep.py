@@ -74,7 +74,6 @@ class TestOpamCoqDepAPI(unittest.TestCase):
             except git.GitCommandError:
                 repo = git.Repo(project_path)
             cls.repos[project_name] = repo
-        cls.current_dir = os.getcwd()
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -86,7 +85,6 @@ class TestOpamCoqDepAPI(unittest.TestCase):
         for project_name, repo in cls.repos.items():
             del repo
             shutil.rmtree(os.path.join(cls.repo_paths[project_name]))
-        os.chdir(cls.current_dir)
 
 
 if __name__ == '__main__':
