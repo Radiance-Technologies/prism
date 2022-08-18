@@ -18,10 +18,8 @@ def order_dependencies(
     ----------
     files : List[PathLike]
         List of files to be submitted to coqdep
-
     switch : OpamSwitch
         Used for execution of coqdep in the proper environment
-
     IQR : Optional[str]
         IQR flags for coqdep
 
