@@ -7,7 +7,7 @@ import unittest
 
 import git
 
-from prism.util.build_tools.coqdep import CoqDepAPI
+from prism.util.build_tools.coqdep import order_dependencies
 from prism.util.opam import OpamAPI
 
 
@@ -24,11 +24,10 @@ class TestOpamCoqDepAPI(unittest.TestCase):
         """
         Verify that switches can be created and not overwritten.
         """
-        coqdep = CoqDepAPI()
         os.chdir("./lambda")
         files = os.listdir("./")
         files = [x for x in files if x[-2 :] == '.v']
-        ordered = coqdep.order_dependencies(files, self.test_switch)
+        ordered = order_dependencies(files, OpamAPI.active_switch)
         expected = [
             'Test.vo',
             'Terms.vo',
@@ -73,10 +72,6 @@ class TestOpamCoqDepAPI(unittest.TestCase):
             except git.GitCommandError:
                 repo = git.Repo(project_path)
             cls.repos[project_name] = repo
-
-        cls.test_switch = OpamAPI.create_switch(
-            cls.test_switch_name,
-            cls.ocaml_version)
         cls.current_dir = os.getcwd()
 
     @classmethod
@@ -86,11 +81,6 @@ class TestOpamCoqDepAPI(unittest.TestCase):
 
         Doubles as test for switch removal.
         """
-        OpamAPI.remove_switch(cls.test_switch)
-        with cls.assertRaises(TestOpamCoqDepAPI(), ValueError):
-            OpamAPI.remove_switch(cls.test_switch)
-        with cls.assertRaises(TestOpamCoqDepAPI(), ValueError):
-            OpamAPI.remove_switch(cls.test_switch_name)
         for project_name, repo in cls.repos.items():
             del repo
             shutil.rmtree(os.path.join(cls.repo_paths[project_name]))
