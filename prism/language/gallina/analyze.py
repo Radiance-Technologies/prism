@@ -480,7 +480,8 @@ class SexpAnalyzer:
                 "VernacCheckGuard",
                 "VernacProof",
                 "VernacProofMode",
-                "VernacExtend"
+                "VernacExtend",
+                "VernacEndProof"
             ]))
 
     @classmethod

@@ -37,7 +37,8 @@ class TestSexpAnalyzer(unittest.TestCase):
             "rewrite IHs; reflexivity...",
             "}",
             "}",
-            "}"
+            "}",
+            "Qed."
         ]
         for vernac_sentence, ast in zip(doc.sentences, doc.ast_sexp_list):
             if SexpAnalyzer.is_ltac(ast):
