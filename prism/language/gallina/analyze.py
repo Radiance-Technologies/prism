@@ -1222,17 +1222,24 @@ class SexpAnalyzer:
     @classmethod
     def is_ltac(cls, sexp: SexpNode) -> bool:
         """
-        Determine whether the given sexp contains ltac.
+        Determine whether the given sexp contains Ltac (see below).
 
         Parameters
         ----------
         sexp : SexpNode
-            S-expression to be tested
+            An s-expression, presumed to be correspond to a valid AST.
 
         Returns
         -------
         bool
-            True if the s-expression contains ltac
+            True if the s-expression contains Ltac, False otherwise.
+
+        Notes
+        -----
+        This function does not simply detect Ltac in a strict sense but
+        also determines whether the given input corresponds to a
+        sentence that would occur while in proof mode (such as
+        ``Proof.``, ``Qed.``, or a brace/bullet).
         """
         return cls._ltac_regex.search(str(sexp)) is not None
 
