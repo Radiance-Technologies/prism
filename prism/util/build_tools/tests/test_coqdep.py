@@ -3,18 +3,17 @@ Test suite for prism.util.opam.
 """
 import os
 import unittest
+import shutil
 
 import git
-import networkx as nx
 
 from prism.util.build_tools.coqdep import CoqDepAPI
-from prism.util.opam import OpamAPI, OpamSwitch
-from prism.util.opam.switch import _allow_unsafe_clone
+from prism.util.opam import OpamAPI
 
 
-class TestOpamAPI(unittest.TestCase):
+class TestOpamCoqDepAPI(unittest.TestCase):
     """
-    Test suite for `OpamAPI`.
+    Test suite for `CoqDepAPI`.
     """
 
     test_switch_name = "test_switch"
@@ -31,19 +30,18 @@ class TestOpamAPI(unittest.TestCase):
         files = [x for x in files if x[-2:] == '.v']
         ordered = coqdep.order_dependencies(files,
                                             self.test_switch)
-        print("Ordered: ", ordered)
-        expected = ['Lambda.v',
-                    'Conversion.v',
-                    'Confluence.v',
-                    'Simulation.v',
-                    'Cube.v',
-                    'Marks.v',
-                    'Residuals.v',
-                    'Substitution.v',
-                    'Redexes.v',
-                    'Reduction.v',
-                    'Terms.v',
-                    'Test.v']
+        expected = ['Test.vo',
+                    'Terms.vo',
+                    'Reduction.vo',
+                    'Redexes.vo',
+                    'Marks.vo',
+                    'Substitution.vo',
+                    'Residuals.vo',
+                    'Simulation.vo',
+                    'Cube.vo',
+                    'Confluence.vo',
+                    'Conversion.vo',
+                    'Lambda.vo']
         self.assertTrue(ordered == expected)
 
     @classmethod
@@ -73,10 +71,12 @@ class TestOpamAPI(unittest.TestCase):
                     project_path)
             except git.GitCommandError:
                 repo = git.Repo(project_path)
+            cls.repos[project_name] = repo
 
         cls.test_switch = OpamAPI.create_switch(
             cls.test_switch_name,
             cls.ocaml_version)
+        cls.current_dir = os.getcwd()
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -85,15 +85,15 @@ class TestOpamAPI(unittest.TestCase):
 
         Doubles as test for switch removal.
         """
-        #OpamAPI.remove_switch(cls.test_switch)
-        #with cls.assertRaises(TestOpamAPI(), ValueError):
-        #    OpamAPI.remove_switch(cls.test_switch)
-        #with cls.assertRaises(TestOpamAPI(), ValueError):
-        #    OpamAPI.remove_switch(cls.test_switch_name)
-        #OpamAPI.remove_switch("test_cloned_switch")
-        #for project_name, repo in cls.repos.items():
-        #    del repo
-        #    shutil.rmtree(os.path.join(cls.repo_paths[project_name]))
+        OpamAPI.remove_switch(cls.test_switch)
+        with cls.assertRaises(TestOpamCoqDepAPI(), ValueError):
+            OpamAPI.remove_switch(cls.test_switch)
+        with cls.assertRaises(TestOpamCoqDepAPI(), ValueError):
+            OpamAPI.remove_switch(cls.test_switch_name)
+        for project_name, repo in cls.repos.items():
+            del repo
+            shutil.rmtree(os.path.join(cls.repo_paths[project_name]))
+        os.chdir(cls.current_dir)
 
 
 if __name__ == '__main__':

@@ -1,28 +1,12 @@
 """
 Provides an object-oriented abstraction of OPAM switches.
 """
-from __future__ import annotations
-
-import logging
-import os
-import re
-import tempfile
-import warnings
-
-import networkx as nx
-
-from dataclasses import InitVar, dataclass, field, fields
-from functools import cached_property
 from os import PathLike
-from pathlib import Path
-from subprocess import CalledProcessError, CompletedProcess
-from typing import ClassVar, Dict, List, Optional, Tuple
+from typing import List, Optional
 
-from seutil import bash
+from prism.util.opam.switch import OpamSwitch
 
 
-
-@dataclass
 class CoqDepAPI:
     """
     Wrapper for the Coq build utility `coqdep`.
@@ -35,41 +19,30 @@ class CoqDepAPI:
 
     def order_dependencies(
             self,
-            files: List[str],
+            files: List[PathLike],
             switch: OpamSwitch,
             IQR: Optional[str] = ''):
-        results = []
-        dep_graph = nx.DiGraph()
-        regex = re.compile(
-            "((?:.*\.(?:vo|v|glob|v.beautified|required_vo))*):((?:\s.*\.(?:vo|v))*)")
-        for file in files:
-            file = file.strip("./")
-            dep_graph.add_node(file)
-            command = "coqdep {0} {1}".format(file, IQR)
-            file_deps = switch.run(command)
-            file_deps = file_deps.stdout
+        """
+        Return sorted dependencies for supplied files.
 
-            print("File deps: ", file_deps)
+        Parameters
+        ----------
+        files : List[PathLike]
+        List of files to be submitted to coqdep
 
-            lines = file_deps.split("\n")
+        switch : OpamSwitch
+        Used for execution of coqdep in the proper environment
 
-            for line in lines:
-                print(line)
-                matchObj = regex.match(line)
-                if matchObj:
-                    depends = matchObj.groups()[1]
-                    print("Depends: ", depends)
-                    dep_files = depends.split(' ')
-                    dep_files = [x.strip().strip("./") for x in dep_files]
-                    dep_files = [x.replace(".vo", ".v") for x in dep_files]
-                    print("Dep files: ", dep_files)
-                    dep_edges = []
-                    for x in dep_files:
-                        if x is not '' and file != x:
-                            dep_edges.append((file, x))
-                    print("Edges: ", dep_edges)
-                    dep_graph.add_edges_from(dep_edges)
+        IQR : Optional[str]
+        IQR flags for coqdep
 
-        print(nx.to_dict_of_dicts(dep_graph))
-
-        return list(nx.topological_sort(dep_graph))
+        Returns
+        -------
+        file_deps : List[str]
+        List of '.vo' files in order of least to most dependent
+        """
+        files = ' '.join(files)
+        command = "coqdep {0} -sort {1}".format(files, IQR)
+        file_deps = switch.run(command)
+        file_deps = file_deps.stdout.strip().split(" ")
+        return file_deps
