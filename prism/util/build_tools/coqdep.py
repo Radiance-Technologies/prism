@@ -29,18 +29,18 @@ class CoqDepAPI:
         Parameters
         ----------
         files : List[PathLike]
-        List of files to be submitted to coqdep
+            List of files to be submitted to coqdep
 
         switch : OpamSwitch
-        Used for execution of coqdep in the proper environment
+            Used for execution of coqdep in the proper environment
 
         IQR : Optional[str]
-        IQR flags for coqdep
+            IQR flags for coqdep
 
         Returns
         -------
         file_deps : List[str]
-        List of '.vo' files in order of least to most dependent
+            List of '.vo' files in order of least to most dependent
         """
         files = ' '.join(files)
         command = "coqdep {0} -sort {1}".format(files, IQR)
