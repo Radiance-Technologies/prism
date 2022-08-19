@@ -3,10 +3,13 @@ Provides internal utilities for heuristic parsing of Coq source files.
 """
 
 import re
+from dataclasses import dataclass
 from functools import partialmethod
 from typing import Iterable, List, Optional, Set, Tuple
 
 from prism.util.re import regex_from_options
+
+from ..gallina.analyze import SexpInfo
 
 
 class ParserUtils:
@@ -783,3 +786,18 @@ class ParserUtils:
             return bullet_re[1], bullet_re[2]
         else:
             return "", sentence
+
+    @dataclass
+    class StrWithLocation:
+        """
+        Class that ties strings to their original in-file locations.
+
+        Strings stored in objects of this class should only be those
+        that have been loaded from files. The location data is only
+        meaningful in that context.
+        """
+
+        string: str
+        """The string itself."""
+        loc: SexpInfo.Loc
+        """The string's original location."""
