@@ -8,6 +8,6 @@ from .switch import OpamSwitch  # noqa: F401
 from .version import (  # noqa: F401
     OCamlVersion,
     OpamVersion,
+    ParseError,
     Version,
-    VersionParseError,
 )

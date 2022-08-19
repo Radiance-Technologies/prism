@@ -3,12 +3,7 @@ Test suite for prism.util.opam.
 """
 import unittest
 
-from prism.util.opam import (
-    OCamlVersion,
-    OpamVersion,
-    Version,
-    VersionParseError,
-)
+from prism.util.opam import OCamlVersion, OpamVersion, ParseError, Version
 
 
 class TestVersion(unittest.TestCase):
@@ -206,9 +201,9 @@ class TestVersion(unittest.TestCase):
                          4,
                          'pl',
                          1]))
-        with self.assertRaises(VersionParseError):
+        with self.assertRaises(ParseError):
             OCamlVersion.parse("dev^9")
-        with self.assertRaises(VersionParseError):
+        with self.assertRaises(ParseError):
             OpamVersion.parse("#build")
 
     def test_serialization(self):

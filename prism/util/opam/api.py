@@ -68,7 +68,7 @@ class OpamAPI:
         ------
         subprocess.CalledProcessError
             If the ``opam switch create`` command fails.
-        VersionParseError
+        ParseError
             If `compiler` is not a valid version identifier.
 
         Warns

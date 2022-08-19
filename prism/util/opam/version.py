@@ -11,15 +11,8 @@ from importlib import import_module
 from typing import ClassVar, List, Optional, Tuple, Union
 
 from prism.util.compare import Bottom, Top
+from prism.util.parse import Parseable, ParseError
 from prism.util.radpytools import cachedmethod
-
-
-class VersionParseError(Exception):
-    """
-    Represents an error encountered during Ocaml version parsing.
-    """
-
-    pass
 
 
 class VersionString(str):
@@ -56,10 +49,12 @@ class VersionString(str):
 
 
 @total_ordering
-class Version(abc.ABC):
+class Version(Parseable, abc.ABC):
     """
     An abstract base class for OCaml package versions.
     """
+
+    _version_chars: re.Pattern = re.compile(r"[a-zA-Z0-9\-_\+\.~]+")
 
     def __hash__(self) -> int:  # noqa: D105
         # cannot make abstract and also have dataclass auto-derive it
@@ -97,15 +92,37 @@ class Version(abc.ABC):
              str(self)])
 
     @classmethod
-    @abstractmethod
-    def parse(cls, version: str) -> 'Version':
-        """
-        Parse the version from a string.
+    def _chain_parse(cls,
+                     input: str,
+                     pos: int,
+                     ignore_quotes: bool = False) -> Tuple['Version',
+                                                           int]:
+        if cls == Version:
+            cls = OCamlVersion
+        begpos = pos
+        version = input
+        pos = cls._consume(version, pos, '"')
+        has_open_quote = pos > begpos
+        version = version[pos :]
+        match = cls._version_chars.search(version)
+        if match is not None:
+            version = version[match.start(): match.end()]
+            pos_ = pos + len(version)
+            pos = cls._consume(input, pos_, '"')
+            has_close_quote = pos > pos_
+            if not ignore_quotes and (has_open_quote != has_close_quote):
+                raise ParseError(Version, input[begpos :])
+            parsed = cls._exhaustive_parse(version)
+            pos = cls._lstrip(input, pos)
+        else:
+            raise ParseError(Version, input[begpos :])
+        return parsed, pos
 
-        Raises
-        ------
-        VersionParseError
-            If a version cannot be parsed from the given string.
+    @classmethod
+    @abstractmethod
+    def _exhaustive_parse(cls, input: str) -> 'Version':
+        """
+        Consume the entire input when parsing the version.
         """
         ...
 
@@ -141,7 +158,7 @@ class Version(abc.ABC):
 
 
 @dataclass(frozen=True)
-class OpamVersion(Version):
+class OpamVersion(Version, Parseable):
     """
     Version specifiers according to the OCaml package manager.
 
@@ -201,9 +218,9 @@ class OpamVersion(Version):
                             VersionString) else int(f) for f in self.fields)
 
     @classmethod
-    def parse(cls, version: str) -> Version:  # noqa: D102
+    def _exhaustive_parse(cls, version: str) -> Version:  # noqa: D102
         if cls._version_syntax.match(version) is None:
-            raise VersionParseError(f"Failed to parse version from {version}")
+            raise ParseError(cls, version)
 
         sequence = [f for f in cls._sequence_syntax.split(version) if f]
         fields = []
@@ -315,7 +332,7 @@ class OCamlVersion(Version):
         return OpamVersion.parse(str(self)).key
 
     @classmethod
-    def parse(cls, version: str) -> Version:  # noqa: D102
+    def _exhaustive_parse(cls, version: str) -> Version:  # noqa: D102
         prerelease = None
         try:
             (major,
@@ -325,7 +342,7 @@ class OCamlVersion(Version):
              sep,
              extra) = cls._version_syntax.match(version).groups()
         except (TypeError, AttributeError):
-            return OpamVersion.parse(version)
+            return OpamVersion._exhaustive_parse(version)
         if sep == "~":
             if extra is None:
                 prerelease = ""
