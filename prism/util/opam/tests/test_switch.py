@@ -5,9 +5,18 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
-from typing import Dict
 
-from prism.util.opam import OCamlVersion, OpamAPI, Version, VersionConstraint
+from prism.util.opam import OCamlVersion, OpamAPI, PackageFormula, Version
+from prism.util.opam.formula import (
+    Filter,
+    LogicalPF,
+    LogicalVF,
+    LogOp,
+    PackageConstraint,
+    RelOp,
+    Variable,
+    VersionConstraint,
+)
 
 TEST_DIR = Path(__file__).parent
 
@@ -62,24 +71,30 @@ class TestOpamSwitch(unittest.TestCase):
         Test retrieval of dependencies for a single package.
         """
         actual = self.test_switch.get_dependencies("coq", "8.10.2")
-        expected: Dict[str, VersionConstraint]
-        expected = {
-            "ocaml":
-                VersionConstraint(
-                    OCamlVersion(4,
-                                 '05',
-                                 0),
-                    OCamlVersion(4,
-                                 10),
-                    True,
-                    False),
-            "ocamlfind":
-                VersionConstraint(),
-            "num":
-                VersionConstraint(),
-            "conf-findutils":
-                VersionConstraint()
-        }
+        expected = PackageFormula(
+            LogicalPF(
+                PackageConstraint(
+                    "ocaml",
+                    LogicalVF(
+                        VersionConstraint(RelOp.GEQ,
+                                          OCamlVersion(4,
+                                                       '05',
+                                                       0)),
+                        LogOp.AND,
+                        VersionConstraint(RelOp.LT,
+                                          OCamlVersion(4,
+                                                       10)))),
+                LogOp.AND,
+                LogicalPF(
+                    PackageConstraint("ocamlfind",
+                                      Filter(Variable("build"))),
+                    LogOp.AND,
+                    LogicalPF(
+                        PackageConstraint("num"),
+                        LogOp.AND,
+                        PackageConstraint(
+                            "conf-findutils",
+                            Filter(Variable("build")))))))
         self.assertEqual(actual, expected)
 
     def test_get_installed_version(self):

@@ -7,7 +7,8 @@ from typing import Dict, List, Optional, Set, Tuple, Union
 
 import seutil.io as io
 
-from prism.util.opam import OCamlVersion, OpamAPI, Version, VersionConstraint
+from prism.util.opam import OCamlVersion, OpamAPI, Version
+from prism.util.opam.formula import VersionFormula
 from prism.util.radpytools import cachedmethod
 from prism.util.radpytools.dataclasses import default_field
 
@@ -20,9 +21,9 @@ class VersionInfo:
     Encapsulates version/dependency metadata.
     """
 
-    coq_versions: InitVar[Union[VersionConstraint, Set[Version]]] = None
-    serapi_versions: InitVar[Union[VersionConstraint, Set[Version]]] = None
-    ocaml_versions: InitVar[Union[VersionConstraint, Set[Version]]] = None
+    coq_versions: InitVar[Union[VersionFormula, Set[Version]]] = None
+    serapi_versions: InitVar[Union[VersionFormula, Set[Version]]] = None
+    ocaml_versions: InitVar[Union[VersionFormula, Set[Version]]] = None
     available_coq_versions: Set[str] = default_field(set())
     available_serapi_versions: Set[str] = default_field(set())
     available_ocaml_versions: Set[str] = default_field(set())
@@ -40,11 +41,11 @@ class VersionInfo:
 
         def _init_versions(
                 pkg: str,
-                versions: Union[VersionConstraint,
-                                Set[Version]],
+                versions: Optional[Union[VersionFormula,
+                                         Set[Version]]],
                 attr: Set[str]) -> Tuple[List[str],
                                          List[Version]]:
-            if versions is None or isinstance(versions, VersionConstraint):
+            if versions is None or isinstance(versions, VersionFormula):
                 available_versions = OpamAPI.active_switch.get_available_versions(
                     pkg)
                 if versions is None:
@@ -56,7 +57,7 @@ class VersionInfo:
             attr.update(versions)
             return (
                 sorted([str(v) for v in versions]),
-                sorted([OCamlVersion.parse(v) for v in attr]))
+                sorted([Version.parse(v) for v in attr]))
 
         new_coq_versions, sorted_coq_versions = _init_versions(
             'coq',

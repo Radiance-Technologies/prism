@@ -17,7 +17,7 @@ from typing import ClassVar, Dict, List, Optional, Tuple
 
 from seutil import bash
 
-from .constraint import VersionConstraint
+from .formula import PackageFormula
 from .version import OCamlVersion, OpamVersion, Version
 
 __all__ = ['OpamSwitch']
@@ -349,8 +349,7 @@ class OpamSwitch:
     def get_dependencies(
             self,
             pkg: str,
-            version: Optional[str] = None) -> Dict[str,
-                                                   VersionConstraint]:
+            version: Optional[str] = None) -> PackageFormula:
         """
         Get the dependencies of the indicated package.
 
@@ -365,9 +364,8 @@ class OpamSwitch:
 
         Returns
         -------
-        Dict[str, VersionConstraint]
-            Dependencies as a map from package names to version
-            constraints.
+        PackageFormula
+            A formula expressing the package's dependencies.
 
         Raises
         ------
@@ -377,19 +375,8 @@ class OpamSwitch:
         if version is not None:
             pkg = f"{pkg}={version}"
         r = self.run(f"opam show -f depends: {pkg}")
-        # exploit fact that each dependency is on its own line in output
-        dependencies: List[List[str]]
-        dependencies = [
-            self._whitespace_regex.split(dep,
-                                         maxsplit=1)
-            for dep in self._newline_regex.split(r.stdout)
-        ]
-        dependencies.pop()
-        return {
-            dep[0][1 :-1]:
-            VersionConstraint.parse(dep[1] if len(dep) > 1 else "")
-            for dep in dependencies
-        }
+        # replace newlines with AND operators
+        return PackageFormula.parse('&'.join(r.stdout.splitlines()))
 
     def get_installed_version(self, package_name: str) -> Optional[str]:
         """
