@@ -1,5 +1,5 @@
 """
-Test suite for prism.util.opam.
+Test suite for `prism.util.opam.formula`.
 """
 import unittest
 
@@ -8,6 +8,7 @@ from prism.util.opam.formula import (
     LogicalVF,
     LogOp,
     Not,
+    PackageFormula,
     ParensVF,
     RelOp,
     VersionConstraint,
@@ -16,9 +17,13 @@ from prism.util.opam.formula import (
 from prism.util.parse import ParseError
 
 
+def normalize_spaces(string: str) -> str:  # noqa: D103
+    return ' '.join(string.split())
+
+
 class TestVersionFormula(unittest.TestCase):
     """
-    Test suite for 'VersionConstraint'.
+    Test suite for 'VersionFormula'.
     """
 
     def test_contains(self):
@@ -96,7 +101,7 @@ class TestVersionFormula(unittest.TestCase):
                                                        10,
                                                        2))))))
         complex_formula = VersionFormula.parse(
-            '!= "2.0.pre" & !(<= "3") & <= 3.9.0 | =4.0+dev')
+            '!= "2.0.pre" & !(<= "3") & <= "3.9.0" | ="4.0+dev"')
         self.assertIn(OCamlVersion(3, 2, 0), complex_formula)
         self.assertNotIn(Version.parse("2.0.pre"), complex_formula)
         self.assertNotIn(Version.parse("3"), complex_formula)
@@ -177,7 +182,7 @@ class TestVersionFormula(unittest.TestCase):
                 versions[versions.index(OCamlVersion(4,
                                                      2)):])
         with self.subTest("unsatisfiable"):
-            unsatisfiable = VersionFormula.parse("< 2.0 & > 2.0")
+            unsatisfiable = VersionFormula.parse('< "2.0" & > "2.0"')
             self.assertEqual(unsatisfiable.filter(versions), [])
 
     def test_parse(self):
@@ -188,7 +193,7 @@ class TestVersionFormula(unittest.TestCase):
             # TODO: Remove build; it is supposed to be a variable, not a
             # version. If we do encounter variables, other machinery
             # must be added.
-            VersionFormula.parse(">= 0.7.1 & < 1.0.0"),
+            VersionFormula.parse('>= "0.7.1" & < "1.0.0"'),
             LogicalVF(
                 VersionConstraint(RelOp.GEQ,
                                   OCamlVersion(0,
@@ -200,7 +205,7 @@ class TestVersionFormula(unittest.TestCase):
                                                0,
                                                0))))
         self.assertEqual(
-            VersionFormula.parse("<= 1.0.0 | !> 0.7.1+extra"),
+            VersionFormula.parse('<= "1.0.0" | !> "0.7.1+extra"'),
             LogicalVF(
                 VersionConstraint(RelOp.LEQ,
                                   OCamlVersion(1,
@@ -215,13 +220,13 @@ class TestVersionFormula(unittest.TestCase):
                                      1,
                                      extra="extra")))))
         self.assertEqual(
-            VersionFormula.parse("> 0.7.1"),
+            VersionFormula.parse('> "0.7.1"'),
             VersionConstraint(RelOp.GT,
                               OCamlVersion(0,
                                            7,
                                            1)))
         self.assertEqual(
-            VersionFormula.parse("< 1.7.1~pre"),
+            VersionFormula.parse('< "1.7.1~pre"'),
             VersionConstraint(RelOp.LT,
                               OCamlVersion(1,
                                            7,
@@ -230,7 +235,7 @@ class TestVersionFormula(unittest.TestCase):
         with self.subTest("operator_precedence"):
             self.assertEqual(
                 VersionFormula.parse(
-                    '!= "2.0.pre" | !(< "3") & <= 3.9.0 | =4.0+dev'),
+                    '!= "2.0.pre" | !(< "3") & <= "3.9.0" | ="4.0+dev"'),
                 LogicalVF(
                     VersionConstraint(RelOp.NEQ,
                                       OpamVersion.parse("2.0.pre")),
@@ -253,7 +258,7 @@ class TestVersionFormula(unittest.TestCase):
                             OpamVersion.parse("4.0+dev")))))
             self.assertEqual(
                 VersionFormula.parse(
-                    '(!= "2.0.pre" | !(< "3")) & <= 3.9.0 | =4.0+dev'),
+                    '(!= "2.0.pre" | !(< "3")) & <= "3.9.0" | ="4.0+dev"'),
                 LogicalVF(
                     LogicalVF(
                         ParensVF(
@@ -277,28 +282,31 @@ class TestVersionFormula(unittest.TestCase):
                                       OpamVersion.parse("4.0+dev"))))
         with self.assertRaises(ParseError):
             VersionFormula.parse(
-                '!= ("2.0.pre") | !(< "3") & <= 3.9.0 | =4.0+dev')
+                '!= ("2.0.pre") | !(< "3") & <= "3.9.0" | ="4.0+dev"')
         # assert not raises
-        VersionFormula.parse('(!= "2.0.pre") | !(< "3") & <= 3.9.0 | =4.0+dev')
+        VersionFormula.parse(
+            '(!= "2.0.pre") | !(< "3") & <= "3.9.0" | ="4.0+dev"')
         with self.assertRaises(ParseError):
             VersionFormula.parse(
-                '(!= "2.0.pre" | !(< "3") & <= 3.9.0 | =4.0+dev')
+                '(!= "2.0.pre" | !(< "3") & <= "3.9.0" | ="4.0+dev"')
         with self.assertRaises(ParseError):
-            VersionFormula.parse('!= "2.0.pre" | !(< 3") & <= 3.9.0 | =4.0+dev')
+            VersionFormula.parse(
+                '!= "2.0.pre" | !(< 3") & <= "3.9.0" | ="4.0+dev"')
         with self.assertRaises(ParseError):
-            VersionFormula.parse('!= "2.0.pre | !(< "3") & <= 3.9.0 | =4.0+dev')
+            VersionFormula.parse(
+                '!= "2.0.pre | !(< "3") & <= "3.9.0" | ="4.0+dev"')
 
     def test_str(self):
         """
         Verify pretty-printing matches the expected format.
         """
         formulae = [
-            "(= 8.10.2)",
-            '!= "2.0.pre" | !(<"3") & <= 3.9.0 | =4.0+dev',
-            "> 8.10.2 & <= 8.10.2",
-            "!> 8.10.2 & < 8.10.2",
-            ">= 8.10.2",
-            "!=8.10.2"
+            '(= "8.10.2")',
+            '!= "2.0.pre" \n| !(<"3") & <= "3.9.0" \n  | ="4.0+dev"',
+            '> "8.10.2" & <= "8.10.2"',
+            '!> "8.10.2" & < "8.10.2"',
+            '>=    \n"8.10.2"',
+            '!="8.10.2"'
         ]
         expected_formulae = [
             '(= "8.10.2")',
@@ -310,6 +318,171 @@ class TestVersionFormula(unittest.TestCase):
         ]
         for formula, expected in zip(formulae, expected_formulae):
             self.assertEqual(str(VersionFormula.parse(formula)), expected)
+
+
+class TestPackageFormula(unittest.TestCase):
+    """
+    Test suite for `PackageFormula`.
+    """
+
+    def test_str(self):
+        """
+        Verify pretty-printing matches the expected format.
+        """
+        formulae = [
+            """
+            "ocaml" {>= "4.05.0" & < "4.10"} &
+            "ocamlfind" {build} &
+            "num" &
+            "conf-findutils" {build}
+            """,
+            """
+            "ocaml-config" &
+            "ocaml-base-compiler" {= "4.08.1"} |
+            "ocaml-variants" {>= "4.08.1" & < "4.08.2~"} |
+            "ocaml-system" {>= "4.08.1" & < "4.08.2~"}
+            """,
+            """
+            "ocaml" {>= "4.05.0"} &
+            "dune" {>= "1.4"} &
+            "menhir" {>= "20181113"} &
+            "ANSITerminal" &
+            "fmt" &
+            "logs" &
+            "mtime" {>= "1.0.0"} &
+            "cmdliner" {>= "1.0.0" & < "1.1.0"} &
+            "conf-freetype" &
+            "conf-pkg-config" &
+            "conf-cairo" &
+            "cairo2" &
+            "yojson" {>= "1.6.0"} &
+            "easy-format"
+            """,
+            """
+            ("ocaml" {>= "4.08" & < "5.0"} |
+             ("ocaml" {< "4.08~~"} & "ocamlfind-secondary")) &
+            "base-unix" &
+            "base-threads"
+            """,
+            """
+            "odoc-parser" {>= "0.9.0" & < "2.0.0"} &
+            "astring" &
+            "cmdliner" {>= "1.0.0"} &
+            "cppo" {build & >= "1.1.0"} &
+            "dune" {>= "2.9.1"} &
+            "fpath" &
+            "ocaml" {>= "4.02.0"} &
+            "result" &
+            "tyxml" {>= "4.3.0"} &
+            "fmt" &
+            "ocamlfind" {with-test} &
+            "yojson" {< "2.0.0" & with-test} &
+            ("ocaml" {< "4.04.1" & with-test} | "sexplib0" {with-test}) &
+            "conf-jq" {with-test} &
+            "ppx_expect" {with-test} &
+            "bos" {with-test} &
+            "bisect_ppx" {dev & > "2.5.0"} &
+            ("ocaml" {< "4.03.0" & dev} | "mdx" {dev})
+            """
+
+            # TODO: Fully support filters and uncomment these formulas
+            # """
+            # "ocaml" {= "5.0.0" & post} &
+            # "base-unix" {post} &
+            # "base-bigarray" {post} &
+            # "base-threads" {post} &
+            # "base-domains" {post} &
+            # "base-nnp" {post} &
+            # "ocaml-options-vanilla" {post} &
+            # "ocaml-beta" {opam-version < "2.1.0"}
+            # """,
+            # """
+            # "ocaml" {>= "4.03.0"} &
+            # "dune" {>= "2.8.0"} &
+            # "menhirLib" {= version} &
+            # "menhirSdk" {= version}
+            # """
+        ]
+        expected_formulae = [
+            normalize_spaces(
+                """
+            "ocaml" { >= "4.05.0" & < "4.10" } &
+            "ocamlfind" { build } &
+            "num" &
+            "conf-findutils" { build }
+            """),
+            normalize_spaces(
+                """
+            "ocaml-config" &
+            "ocaml-base-compiler" { = "4.08.1" } |
+            "ocaml-variants" { >= "4.08.1" & < "4.08.2~" } |
+            "ocaml-system" { >= "4.08.1" & < "4.08.2~" }
+            """),
+            normalize_spaces(
+                """
+            "ocaml" { >= "4.05.0" } &
+            "dune" { >= "1.4" } &
+            "menhir" { >= "20181113" } &
+            "ANSITerminal" &
+            "fmt" &
+            "logs" &
+            "mtime" { >= "1.0.0" } &
+            "cmdliner" { >= "1.0.0" & < "1.1.0" } &
+            "conf-freetype" &
+            "conf-pkg-config" &
+            "conf-cairo" &
+            "cairo2" &
+            "yojson" { >= "1.6.0" } &
+            "easy-format"
+            """),
+            normalize_spaces(
+                """
+            ("ocaml" { >= "4.08" & < "5.0" } |
+             ("ocaml" { < "4.08~~" } & "ocamlfind-secondary")) &
+            "base-unix" &
+            "base-threads"
+            """),
+            normalize_spaces(
+                """
+            "odoc-parser" { >= "0.9.0" & < "2.0.0" } &
+            "astring" &
+            "cmdliner" { >= "1.0.0" } &
+            "cppo" { build & >= "1.1.0" } &
+            "dune" { >= "2.9.1" } &
+            "fpath" &
+            "ocaml" { >= "4.02.0" } &
+            "result" &
+            "tyxml" { >= "4.3.0" } &
+            "fmt" &
+            "ocamlfind" { with-test } &
+            "yojson" { < "2.0.0" & with-test } &
+            ("ocaml" { < "4.04.1" & with-test } | "sexplib0" { with-test }) &
+            "conf-jq" { with-test } &
+            "ppx_expect" { with-test } &
+            "bos" { with-test } &
+            "bisect_ppx" { dev & > "2.5.0" } &
+            ("ocaml" { < "4.03.0" & dev } | "mdx" { dev })
+            """),
+            # TODO: Fully support filters and uncomment these formulas
+            # normalize_spaces("""
+            # "ocaml" { = "5.0.0" & post } &
+            # "base-unix" { post } &
+            # "base-bigarray" { post } &
+            # "base-threads" { post } &
+            # "base-domains" { post } &
+            # "base-nnp" { post } &
+            # "ocaml-options-vanilla" { post } &
+            # "ocaml-beta" { opam-version < "2.1.0" }
+            # """),
+            # normalize_spaces("""
+            # "ocaml" { >= "4.03.0" } &
+            # "dune" { >= "2.8.0" } &
+            # "menhirLib" { = version } &
+            # "menhirSdk" { = version }
+            # """)
+        ]
+        for formula, expected in zip(formulae, expected_formulae):
+            self.assertEqual(str(PackageFormula.parse(formula)), expected)
 
 
 if __name__ == '__main__':

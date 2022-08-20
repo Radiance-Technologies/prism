@@ -3,13 +3,11 @@ Provides utilities for working with OCaml package constraints.
 """
 
 import enum
-import functools
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import (
     Any,
-    ClassVar,
     Generic,
     Iterable,
     List,
@@ -34,7 +32,7 @@ _int_syntax: re.Pattern = re.compile(rf"\-?{_digit_syntax.pattern}+")
 _bool_syntax: re.Pattern = re.compile("true|false")
 _string_syntax: re.Pattern = re.compile('"(.*)"|"""(.*)"""')
 _identchar_syntax: re.Pattern = re.compile(
-    f"({_letter_syntax.pattern}|{_digit_syntax.pattern})")
+    rf"({_letter_syntax.pattern}|{_digit_syntax.pattern}|\-|_)")
 _ident_syntax: re.Pattern = re.compile(
     f"{_identchar_syntax.pattern}*[a-zA-Z]{_identchar_syntax.pattern}*")
 _varident_syntax: re.Pattern = re.compile(
@@ -150,7 +148,7 @@ class Formula(Protocol):
     A protocol for satisfiable Boolean formulas.
     """
 
-    def satisfies(self, objects: Any) -> bool:
+    def satisfies(self, *objects: Tuple[Any, ...]) -> bool:
         """
         Test whether the objects satisfy the constraints of the formula.
         """
@@ -197,7 +195,7 @@ class VersionFormula(Parseable, ABC):
     def _chain_parse(cls, input: str, pos: int) -> Tuple['VersionFormula', int]:
         begpos = pos
         try:
-            formula, pos = Filter._chain_parse(input, pos)
+            formula, pos = FilterAtom._chain_parse(input, pos)
         except ParseError:
             try:
                 formula, pos = VersionConstraint._chain_parse(input, pos)
@@ -355,7 +353,7 @@ class Parens(Parseable, Generic[FormulaT], ABC):
 
 
 @dataclass(frozen=True)
-class Filter(VersionFormula):
+class FilterAtom(VersionFormula):
     """
     Placeholder for full filter functionality.
 
@@ -364,6 +362,12 @@ class Filter(VersionFormula):
     """
 
     term: Union[Variable, str, int, bool]
+
+    def __str__(self) -> str:
+        """
+        Print the atom.
+        """
+        return str(self.term)
 
     def satisfies(self, version: Version) -> bool:
         """
@@ -374,7 +378,7 @@ class Filter(VersionFormula):
         return False
 
     @classmethod
-    def _chain_parse(cls, input: str, pos: int) -> Tuple['Parseable', int]:
+    def _chain_parse(cls, input: str, pos: int) -> Tuple['FilterAtom', int]:
         term = input[pos :]
         match = _bool_syntax.match(term)
         for (regex,
@@ -390,11 +394,12 @@ class Filter(VersionFormula):
             if match is not None:
                 parser = p
         if match is None:
-            raise ParseError(Filter, term)
+            raise ParseError(FilterAtom, term)
         else:
             term = parser(term[: match.end()])
             pos += match.end()
-        return Filter(term), pos
+        pos = cls._lstrip(input, pos)
+        return FilterAtom(term), pos
 
 
 @dataclass(frozen=True)
@@ -489,7 +494,7 @@ class VersionConstraint(VersionFormula):
         """
         relop, pos = RelOp._chain_parse(input, pos)
         pos = cls._lstrip(input, pos)
-        version, pos = Version._chain_parse(input, pos)
+        version, pos = Version._chain_parse(input, pos, require_quotes=True)
         pos = cls._lstrip(input, pos)
         return VersionConstraint(relop, version), pos
 
@@ -582,7 +587,6 @@ class PackageConstraint(PackageFormula):
 
     package_name: str
     version_constraint: Optional[Union[Version, VersionFormula]] = None
-    ident_regex: ClassVar[re.Pattern] = re.compile(r'\w')
 
     def __str__(self) -> str:  # noqa: D105
         version_constraint = self.version_constraint
@@ -642,24 +646,19 @@ class PackageConstraint(PackageFormula):
             <package>           ::= (") <ident> "." <Version> (")
         """
         begpos = pos
-        pos = cls._consume(input, pos, '"', begpos)
-        has_open_quote = pos > begpos
+        pos = cls._expect(input, pos, '"', begpos)
         p = []
         while pos < len(input):
             char = input[pos]
-            if cls.ident_regex.match(char) is None:
+            if _identchar_syntax.match(char) is None:
                 break
             else:
                 p.append(char)
-                p += 1
+                pos += 1
         try:
             pos = cls._expect(input, pos, '.', begpos)
         except ParseError:
-            if has_open_quote:
-                parse_quote = functools.partial(cls._expect, begpos=begpos)
-            else:
-                parse_quote = cls._consume
-            pos = parse_quote(input, pos, '"')
+            pos = cls._expect(input, pos, '"', begpos)
             pos = cls._lstrip(input, pos)
             try:
                 pos = cls._expect(input, pos, '{', begpos)
@@ -675,9 +674,7 @@ class PackageConstraint(PackageFormula):
              pos) = Version._chain_parse(
                  input,
                  pos,
-                 ignore_quotes=True)
-            if has_open_quote:
-                pos -= 1
-                pos = cls._expect(input, pos, '"', begpos)
+                 require_quotes=False)
+            pos = cls._expect(input, pos, '"', begpos)
         pos = cls._lstrip(input, pos)
         return PackageConstraint(''.join(p), version_constraint), pos
