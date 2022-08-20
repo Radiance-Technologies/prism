@@ -3,7 +3,7 @@ A common interface for text-parseable classes.
 """
 import abc
 import warnings
-from typing import Tuple
+from typing import Any, Dict, Tuple
 
 
 class ParseError(Exception):
@@ -26,7 +26,8 @@ class Parseable(abc.ABC):
 
     The chief method that must be implemented by any subclass is
     `_chain_parse`. In essence, this form of parsing is intended to
-    perform a single scan across the input with minimal backtracks.
+    perform a single scan across the input with minimal backtracks or
+    buffering.
     """
 
     @classmethod
@@ -111,7 +112,9 @@ class Parseable(abc.ABC):
             cls,
             input: str,
             exhaustive: bool = True,
-            lstrip: bool = False) -> 'Parseable':
+            lstrip: bool = True,
+            **kwargs: Dict[str,
+                           Any]) -> 'Parseable':
         """
         Parse an instance of `cls`.
 
@@ -128,6 +131,8 @@ class Parseable(abc.ABC):
         lstrip : bool, optional
             Whether to strip leading whitespace before parsing, by
             default False.
+        kwargs : Dict[str, Any], optional
+            Optional keyword arguments to customize parsing.
 
         Returns
         -------
@@ -144,7 +149,7 @@ class Parseable(abc.ABC):
         pos = 0
         if lstrip:
             pos = cls._lstrip(input, pos)
-        parsed, pos = cls._chain_parse(input, pos)
+        parsed, pos = cls._chain_parse(input, pos, **kwargs)
         if exhaustive and pos < len(input):
             raise ParseError(cls, input)
         elif pos < len(input):

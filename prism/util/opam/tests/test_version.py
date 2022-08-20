@@ -205,6 +205,11 @@ class TestVersion(unittest.TestCase):
             OCamlVersion.parse("dev^9")
         with self.assertRaises(ParseError):
             OpamVersion.parse("#build")
+        self.assertEqual(OCamlVersion.parse("3"), OpamVersion(['', '3']))
+        self.assertEqual(
+            OCamlVersion.parse("20181113"),
+            OpamVersion(['',
+                         '20181113']))
 
     def test_serialization(self):
         """

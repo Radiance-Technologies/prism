@@ -95,23 +95,21 @@ class Version(Parseable, abc.ABC):
     def _chain_parse(cls,
                      input: str,
                      pos: int,
-                     ignore_quotes: bool = False) -> Tuple['Version',
-                                                           int]:
+                     require_quotes: bool = False) -> Tuple['Version',
+                                                            int]:
         if cls == Version:
             cls = OCamlVersion
         begpos = pos
         version = input
-        pos = cls._consume(version, pos, '"')
-        has_open_quote = pos > begpos
+        if require_quotes:
+            pos = cls._expect(version, pos, '"', begpos)
         version = version[pos :]
-        match = cls._version_chars.search(version)
+        match = cls._version_chars.match(version)
         if match is not None:
             version = version[match.start(): match.end()]
-            pos_ = pos + len(version)
-            pos = cls._consume(input, pos_, '"')
-            has_close_quote = pos > pos_
-            if not ignore_quotes and (has_open_quote != has_close_quote):
-                raise ParseError(Version, input[begpos :])
+            pos = pos + len(version)
+            if require_quotes:
+                pos = cls._expect(input, pos, '"', begpos)
             parsed = cls._exhaustive_parse(version)
             pos = cls._lstrip(input, pos)
         else:
@@ -155,6 +153,22 @@ class Version(Parseable, abc.ABC):
             module = import_module(module_name)
             clz = getattr(module, class_name)
             return clz.parse(version)
+
+    @classmethod
+    def parse(
+            cls,
+            input: str,
+            exhaustive: bool = True,
+            lstrip: bool = False,
+            require_quotes: bool = False) -> 'Version':
+        """
+        Parse a version string with or without enclosing quotes.
+        """
+        return super().parse(
+            input,
+            exhaustive,
+            lstrip,
+            require_quotes=require_quotes)
 
 
 @dataclass(frozen=True)
@@ -263,7 +277,7 @@ class OCamlVersion(Version):
     prerelease: Optional[str] = None
     extra: Optional[str] = None
     _version_syntax: ClassVar[re.Pattern] = re.compile(
-        r"^(\d+).(\d+)(\.\d+)?(([+~])(.*))?$")
+        r"^(\d+)\.(\d+)(\.\d+)?(([+~])(.*))?$")
 
     def __post_init__(self):
         """
