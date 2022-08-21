@@ -6,6 +6,7 @@ import enum
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from functools import partialmethod
 from typing import (
     Any,
     Generic,
@@ -148,7 +149,7 @@ class Formula(Protocol):
     A protocol for satisfiable Boolean formulas.
     """
 
-    def satisfies(self, *objects: Tuple[Any, ...]) -> bool:
+    def is_satisfied(self, *objects: Tuple[Any, ...]) -> bool:
         """
         Test whether the objects satisfy the constraints of the formula.
         """
@@ -173,12 +174,12 @@ class VersionFormula(Parseable, ABC):
     """
 
     def __contains__(self, version: Version) -> bool:  # noqa: D105
-        return self.satisfies(version)
+        return self.is_satisfied(version)
 
     @abstractmethod
-    def satisfies(self, version: Version) -> bool:
+    def is_satisfied(self, version: Version) -> bool:
         """
-        Return whether the given version satisfies this formula.
+        Return whether the given version is_satisfied this formula.
         """
         ...
 
@@ -189,7 +190,7 @@ class VersionFormula(Parseable, ABC):
         Returns only those versions that satisfied the constraint in the
         order of their iteration.
         """
-        return list(filter(self.satisfies, versions))
+        return list(filter(self.is_satisfied, versions))
 
     @classmethod
     def _chain_parse(cls, input: str, pos: int) -> Tuple['VersionFormula', int]:
@@ -243,11 +244,16 @@ class Logical(Parseable, Generic[FormulaT], ABC):
         left = self.left
         logop = self.logop
         right = self.right
-        if isinstance(left, Logical) and logop == LogOp.AND:
+        if isinstance(left,
+                      Logical) and (logop == LogOp.AND or logop == LogOp.OR
+                                    and left.logop == LogOp.OR):
             # A | B & C incorrectly represented as (A | B) & C
             # or
             # A & B & C inefficiently represented as (A & B) & C
+            # or
+            # A | B | C inefficiently represented as (A | B) | C
             # (less efficient short-circuiting during evaluations)
+            # Pivot!
             object.__setattr__(self, 'left', left.left)
             object.__setattr__(self, 'logop', left.logop)
             object.__setattr__(self, 'right', cls(left.right, logop, right))
@@ -257,6 +263,7 @@ class Logical(Parseable, Generic[FormulaT], ABC):
                 Logical
         ) and self.logop == LogOp.AND and self.right.logop == LogOp.OR:
             # A & B | C incorrectly represented as A & (B | C)
+            # Pivot!
             object.__setattr__(self, 'left', cls(left, logop, right.left))
             object.__setattr__(self, 'logop', right.logop)
             object.__setattr__(self, 'right', right.right)
@@ -265,14 +272,72 @@ class Logical(Parseable, Generic[FormulaT], ABC):
     def __str__(self) -> str:  # noqa: D105
         return f"{self.left} {self.logop} {self.right}"
 
-    def satisfies(self, objects: Any) -> bool:
+    def _to_list(
+        self,
+        op: LogOp,
+        preceding: Optional[List['Logical[FormulaT]']] = None
+    ) -> List['Logical[FormulaT]']:
+        """
+        Return an equivalent list implicitly joined by `LogOp`s.
+
+        See Also
+        --------
+        to_conjunctive_list, to_disjunctive_list : For public APIs.
+        """
+        if preceding is None:
+            preceding = []
+        if self.logop == op:
+            # by construction, there will not be any AND clauses to the
+            # left
+            preceding.append(self.left)
+            if isinstance(self.right, Logical):
+                self.right._to_list(op, preceding)
+            else:
+                preceding.append(self.right)
+        return preceding
+
+    def is_satisfied(self, objects: Any) -> bool:
         """
         Perform logical conjunction/disjunction on the paired formulae.
         """
-        if self.left.satisfies(objects):
-            return self.logop == LogOp.OR or self.right.satisfies(objects)
+        if self.left.is_satisfied(objects):
+            return self.logop == LogOp.OR or self.right.is_satisfied(objects)
         else:
-            return self.logop == LogOp.OR and self.right.satisfies(objects)
+            return self.logop == LogOp.OR and self.right.is_satisfied(objects)
+
+    to_conjunctive_list = partialmethod(_to_list, op=LogOp.AND)
+    """
+    Return an equivalent list implicitly joined by AND operators.
+
+    Parameters
+    ----------
+    conjunctives : Optional[List['Logical[FormulaT]']], optional
+        A preceding list of formulas, by default None.
+        The list is modified in-place.
+
+    Returns
+    -------
+    List['Logical[FormulaT]']
+        The list of implicitly joined formulas.
+        If `conjunctives` was provided, then it is returned.
+    """
+
+    to_disjunctive_list = partialmethod(_to_list, op=LogOp.OR)
+    """
+    Return an equivalent list implicitly joined by OR operators.
+
+    Parameters
+    ----------
+    disjunctives : Optional[List['Logical[FormulaT]']], optional
+        A preceding list of formulas, by default None.
+        The list is modified in-place.
+
+    Returns
+    -------
+    List['Logical[FormulaT]']
+        The list of implicitly joined formulas.
+        If `disjunctives` was provided, then it is returned.
+    """
 
     @classmethod
     def _chain_parse(cls,
@@ -313,11 +378,11 @@ class Parens(Parseable, Generic[FormulaT], ABC):
     def __str__(self) -> str:  # noqa: D105
         return f"({self.formula})"
 
-    def satisfies(self, objects: Any) -> bool:
+    def is_satisfied(self, objects: Any) -> bool:
         """
         Test whether the objects satisfy the internal formula.
         """
-        return self.formula.satisfies(objects)
+        return self.formula.is_satisfied(objects)
 
     @classmethod
     def _chain_parse(cls,
@@ -369,7 +434,7 @@ class FilterAtom(VersionFormula):
         """
         return str(self.term)
 
-    def satisfies(self, version: Version) -> bool:
+    def is_satisfied(self, version: Version) -> bool:
         """
         Return False.
 
@@ -424,11 +489,11 @@ class Not(VersionFormula):
     def __str__(self) -> str:  # noqa: D105
         return f"!{self.formula}"
 
-    def satisfies(self, version: Version) -> bool:
+    def is_satisfied(self, version: Version) -> bool:
         """
         Test whether the version does not satisfy the internal formula.
         """
-        return not self.formula.satisfies(version)
+        return not self.formula.is_satisfied(version)
 
     @classmethod
     def _chain_parse(cls, input: str, pos: int) -> Tuple['Not', int]:
@@ -462,9 +527,9 @@ class VersionConstraint(VersionFormula):
     def __str__(self) -> str:  # noqa: D105
         return f'{self.relop} "{self.version}"'
 
-    def satisfies(self, version: Version) -> bool:
+    def is_satisfied(self, version: Version) -> bool:
         """
-        Test whether the version satisfies the binary relation.
+        Test whether the version is_satisfied the binary relation.
         """
         if self.relop == RelOp.EQ:
             result = version == self.version
@@ -508,7 +573,7 @@ class PackageFormula(Parseable, ABC):
     """
 
     @abstractmethod
-    def satisfies(self, packages: Mapping[str, Version]) -> bool:
+    def is_satisfied(self, packages: Mapping[str, Version]) -> bool:
         """
         Test whether the given versioned packages satisfy the formula.
 
@@ -602,7 +667,7 @@ class PackageConstraint(PackageFormula):
                  "}"])
         return result
 
-    def satisfies(self, packages: Mapping[str, Version]) -> bool:
+    def is_satisfied(self, packages: Mapping[str, Version]) -> bool:
         """
         Return whether the package constraint is satisfied.
 
@@ -614,7 +679,7 @@ class PackageConstraint(PackageFormula):
         Returns
         -------
         bool
-            If one of the given packages satisfies the constraint.
+            If one of the given packages is_satisfied the constraint.
         """
         try:
             version = packages[self.package_name]
@@ -627,7 +692,7 @@ class PackageConstraint(PackageFormula):
             elif isinstance(constraint, Version):
                 return version == constraint
             else:
-                return constraint.satisfies(version)
+                return constraint.is_satisfied(version)
 
     @classmethod
     def _chain_parse(cls,
