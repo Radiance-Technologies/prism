@@ -414,11 +414,7 @@ class OpamSwitch:
         else:
             return None
 
-    def install(
-            self,
-            pkg: str,
-            version: Optional[str] = None,
-            yes: Optional[bool] = False) -> None:
+    def install(self, pkg: str, version: Optional[str] = None) -> None:
         """
         Install the indicated package.
 
@@ -429,8 +425,6 @@ class OpamSwitch:
         version : Optional[str], optional
             A specific version of the package, by default None.
             If not given, then the default version will be installed.
-        yes : Optional[bool], optional
-            Whether to include the --yes flag for installation.
 
         Exceptions
         ----------
@@ -440,9 +434,7 @@ class OpamSwitch:
         """
         if version is not None:
             pkg = f"{pkg}.{version}"
-        cmd = f"opam install {pkg}"
-        if yes:
-            cmd = cmd + " -y"
+        cmd = f"opam install {pkg} -y"
         self.run(cmd)
 
     def remove_pkg(
