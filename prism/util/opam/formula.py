@@ -6,11 +6,13 @@ import enum
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from functools import partialmethod
+from functools import partial, partialmethod
 from typing import (
     Any,
+    Dict,
     Generic,
     Iterable,
+    Iterator,
     List,
     Mapping,
     Optional,
@@ -149,9 +151,37 @@ class Formula(Protocol):
     A protocol for satisfiable Boolean formulas.
     """
 
-    def is_satisfied(self, *objects: Tuple[Any, ...]) -> bool:
+    def is_satisfied(
+            self,
+            *objects: Tuple[Any,
+                            ...],
+            **kwargs: Dict[str,
+                           Any]) -> bool:
         """
         Test whether the objects satisfy the constraints of the formula.
+
+        Returns
+        -------
+        bool
+            True if the formula is satisfied (i.e., it simplifies to a
+            True value after substituting the given objects), False
+            otherwise.
+        """
+        ...
+
+    def simplify(self,
+                 *objects: Tuple[Any,
+                                 ...],
+                 **kwargs: Dict[str,
+                                Any]) -> Union[bool,
+                                               'Formula']:
+        """
+        Substitute the given objects into the formula and simplify it.
+
+        Returns
+        -------
+        Union[bool, Formula]
+            The simplified formula.
         """
         ...
 
@@ -177,20 +207,56 @@ class VersionFormula(Parseable, ABC):
         return self.is_satisfied(version)
 
     @abstractmethod
-    def is_satisfied(self, version: Version) -> bool:
+    def is_satisfied(
+        self,
+        version: Version,
+        variables: Optional[Mapping[str,
+                                    Union[bool,
+                                          int,
+                                          str]]] = None) -> bool:
         """
-        Return whether the given version is_satisfied this formula.
+        Return whether the given version/variables satisfy this formula.
         """
         ...
 
-    def filter(self, versions: Iterable[Version]) -> List[Version]:
+    def filter(
+        self,
+        versions: Iterable[Version],
+        variables: Optional[Mapping[str,
+                                    Union[bool,
+                                          int,
+                                          str]]] = None
+    ) -> List[Version]:
         """
         Filter the given versions according to the constraint.
 
         Returns only those versions that satisfied the constraint in the
         order of their iteration.
         """
-        return list(filter(self.is_satisfied, versions))
+        if variables is None:
+            variables = {}
+        return list(
+            filter(partial(self.is_satisfied,
+                           variables=variables),
+                   versions))
+
+    @abstractmethod
+    def simplify(
+        self,
+        version: Optional[Version],
+        variables: Optional[Mapping[str,
+                                    Union[bool,
+                                          int,
+                                          str]]] = None
+    ) -> Union[bool,
+               'Formula']:
+        """
+        Substitute the given version and variables into the formula.
+
+        If the version is None, the formula may still be simplified and
+        even evaluate to True or False through variable substitutions.
+        """
+        ...
 
     @classmethod
     def _chain_parse(cls, input: str, pos: int) -> Tuple['VersionFormula', int]:
@@ -269,6 +335,12 @@ class Logical(Parseable, Generic[FormulaT], ABC):
             object.__setattr__(self, 'right', right.right)
             self.__post_init__()
 
+    def __iter__(self) -> Iterator['FormulaT']:
+        """
+        Iterate over the clauses of the conjunctive phrase.
+        """
+        yield from self.to_conjunctive_list()
+
     def __str__(self) -> str:  # noqa: D105
         return f"{self.left} {self.logop} {self.right}"
 
@@ -296,14 +368,54 @@ class Logical(Parseable, Generic[FormulaT], ABC):
                 preceding.append(self.right)
         return preceding
 
-    def is_satisfied(self, objects: Any) -> bool:
+    def is_satisfied(
+            self,
+            *objects: Tuple[Any,
+                            ...],
+            **kwargs: Dict[str,
+                           Any]) -> bool:
         """
         Perform logical conjunction/disjunction on the paired formulae.
         """
-        if self.left.is_satisfied(objects):
-            return self.logop == LogOp.OR or self.right.is_satisfied(objects)
+        if self.left.is_satisfied(*objects, **kwargs):
+            return self.logop == LogOp.OR or self.right.is_satisfied(
+                *objects,
+                **kwargs)
         else:
-            return self.logop == LogOp.OR and self.right.is_satisfied(objects)
+            return self.logop == LogOp.OR and self.right.is_satisfied(
+                *objects,
+                **kwargs)
+
+    def simplify(
+            self,
+            *objects: Tuple[Any,
+                            ...],
+            **kwargs: Dict[str,
+                           Any]) -> Union[bool,
+                                          'Logical[FormulaT]',
+                                          FormulaT]:
+        """
+        Simplify the logical conjunction/disjunction.
+        """
+        left_simplified = self.left.simplify(*objects, **kwargs)
+        if isinstance(left_simplified, bool):
+            if left_simplified:
+                return self.logop == LogOp.OR or self.right.simplify(
+                    *objects,
+                    **kwargs)
+            else:
+                return self.logop == LogOp.OR and self.right.simplify(
+                    *objects,
+                    **kwargs)
+        else:
+            right_simplified = self.right.simplify(*objects, **kwargs)
+            if isinstance(right_simplified, bool):
+                if right_simplified:
+                    return self.logop == LogOp.OR or left_simplified
+                else:
+                    return self.logop == LogOp.OR and left_simplified
+            else:
+                return type(self)(left_simplified, self.logop, right_simplified)
 
     to_conjunctive_list = partialmethod(_to_list, op=LogOp.AND)
     """
@@ -378,11 +490,33 @@ class Parens(Parseable, Generic[FormulaT], ABC):
     def __str__(self) -> str:  # noqa: D105
         return f"({self.formula})"
 
-    def is_satisfied(self, objects: Any) -> bool:
+    def is_satisfied(
+            self,
+            *objects: Tuple[Any,
+                            ...],
+            **kwargs: Dict[str,
+                           Any]) -> bool:
         """
         Test whether the objects satisfy the internal formula.
         """
-        return self.formula.is_satisfied(objects)
+        return self.formula.is_satisfied(*objects, **kwargs)
+
+    def simplify(
+            self,
+            *objects: Tuple[Any,
+                            ...],
+            **kwargs: Dict[str,
+                           Any]) -> Union[bool,
+                                          'Parens[FormulaT]',
+                                          FormulaT]:
+        """
+        Simplify the internal formula.
+        """
+        formula_simplified = self.formula.simplify(*objects, **kwargs)
+        if isinstance(formula_simplified, bool):
+            return formula_simplified
+        else:
+            return type(self)(formula_simplified)
 
     @classmethod
     def _chain_parse(cls,
@@ -434,13 +568,67 @@ class FilterAtom(VersionFormula):
         """
         return str(self.term)
 
-    def is_satisfied(self, version: Version) -> bool:
+    def is_satisfied(
+        self,
+        version: Version,
+        variables: Optional[Mapping[str,
+                                    Union[bool,
+                                          int,
+                                          str]]] = None) -> bool:
         """
-        Return False.
+        Evaluate Boolean filters as-is, others as True.
 
-        Placeholder, equivalent to treating all filters as undefined.
+        If the filter is an undefined variable, return False. In normal
+        circumstances, this function is not expected to be called since
+        only Boolean variables are truth-values.
         """
-        return False
+        if isinstance(self.term, Variable):
+            if variables is None:
+                return False
+            try:
+                value = variables[self.term]
+            except KeyError:
+                return False
+            else:
+                if isinstance(value, bool):
+                    return value
+                else:
+                    # nothing to satisfy
+                    return True
+        elif isinstance(self.term, bool):
+            return self.term
+        else:
+            # nothing to satisfy
+            return True
+
+    def simplify(
+        self,
+        version: Optional[Version],
+        variables: Optional[Mapping[str,
+                                    Union[bool,
+                                          int,
+                                          str]]] = None
+    ) -> Union[bool,
+               'FilterAtom']:
+        """
+        Return a copy of this atom with variable substituted if given.
+        """
+        if isinstance(self.term, Variable):
+            if variables is None:
+                return self
+            try:
+                value = variables[self.term]
+            except KeyError:
+                return self
+            else:
+                if isinstance(value, bool):
+                    return value
+                else:
+                    return type(self)(value)
+        elif isinstance(self.term, bool):
+            return self.term
+        else:
+            return self
 
     @classmethod
     def _chain_parse(cls, input: str, pos: int) -> Tuple['FilterAtom', int]:
@@ -464,7 +652,7 @@ class FilterAtom(VersionFormula):
             term = parser(term[: match.end()])
             pos += match.end()
         pos = cls._lstrip(input, pos)
-        return FilterAtom(term), pos
+        return cls(term), pos
 
 
 @dataclass(frozen=True)
@@ -489,11 +677,35 @@ class Not(VersionFormula):
     def __str__(self) -> str:  # noqa: D105
         return f"!{self.formula}"
 
-    def is_satisfied(self, version: Version) -> bool:
+    def is_satisfied(
+        self,
+        version: Version,
+        variables: Optional[Mapping[str,
+                                    Union[bool,
+                                          int,
+                                          str]]] = None) -> bool:
         """
         Test whether the version does not satisfy the internal formula.
         """
-        return not self.formula.is_satisfied(version)
+        return not self.formula.is_satisfied(version, variables)
+
+    def simplify(
+        self,
+        version: Optional[Version],
+        variables: Optional[Mapping[str,
+                                    Union[bool,
+                                          int,
+                                          str]]] = None
+    ) -> Union[bool,
+               'Not']:
+        """
+        Substitute the given version and variables and simplify.
+        """
+        formula_simplified = self.formula.simplify(version, variables)
+        if isinstance(formula_simplified, bool):
+            return not formula_simplified
+        else:
+            return type(self)(formula_simplified)
 
     @classmethod
     def _chain_parse(cls, input: str, pos: int) -> Tuple['Not', int]:
@@ -501,7 +713,7 @@ class Not(VersionFormula):
         pos = cls._expect(input, pos, "!", begpos)
         pos = cls._lstrip(input, pos)
         formula, pos = VersionFormula._chain_parse(input, pos)
-        return Not(formula), pos
+        return cls(formula), pos
 
 
 @dataclass(frozen=True)
@@ -527,9 +739,15 @@ class VersionConstraint(VersionFormula):
     def __str__(self) -> str:  # noqa: D105
         return f'{self.relop} "{self.version}"'
 
-    def is_satisfied(self, version: Version) -> bool:
+    def is_satisfied(
+        self,
+        version: Version,
+        variables: Optional[Mapping[str,
+                                    Union[bool,
+                                          int,
+                                          str]]] = None) -> bool:
         """
-        Test whether the version is_satisfied the binary relation.
+        Test whether the version satisfies the binary relation.
         """
         if self.relop == RelOp.EQ:
             result = version == self.version
@@ -544,6 +762,26 @@ class VersionConstraint(VersionFormula):
         elif self.relop == RelOp.GEQ:
             result = version >= self.version
         return result
+
+    def simplify(
+        self,
+        version: Optional[Version],
+        variables: Optional[Mapping[str,
+                                    Union[bool,
+                                          int,
+                                          str]]] = None
+    ) -> Union[bool,
+               'VersionConstraint']:
+        """
+        Test whether the version satisfies the binary relation.
+
+        If the version is not None, a Boolean will be returned.
+        Otherwise, this instance is returned.
+        """
+        if version is not None:
+            return self.is_satisfied(version)
+        else:
+            return self
 
     @classmethod
     def _chain_parse(cls,
@@ -561,7 +799,7 @@ class VersionConstraint(VersionFormula):
         pos = cls._lstrip(input, pos)
         version, pos = Version._chain_parse(input, pos, require_quotes=True)
         pos = cls._lstrip(input, pos)
-        return VersionConstraint(relop, version), pos
+        return cls(relop, version), pos
 
 
 class PackageFormula(Parseable, ABC):
@@ -572,8 +810,26 @@ class PackageFormula(Parseable, ABC):
     https://opam.ocaml.org/doc/Manual.html#Filtered-package-formulas.
     """
 
+    @property
     @abstractmethod
-    def is_satisfied(self, packages: Mapping[str, Version]) -> bool:
+    def size(self) -> int:
+        """
+        Get the number of package constraints that must be satisfied.
+
+        More precisely, get the minimum number of package constraints in
+        this formula that must be satisfied for it to simplify to True.
+        """
+        ...
+
+    @abstractmethod
+    def is_satisfied(
+        self,
+        packages: Mapping[str,
+                          Version],
+        variables: Optional[Mapping[str,
+                                    Union[bool,
+                                          int,
+                                          str]]] = None) -> bool:
         """
         Test whether the given versioned packages satisfy the formula.
 
@@ -581,12 +837,44 @@ class PackageFormula(Parseable, ABC):
         ----------
         packages : Mapping[str, Version]
             A map from package names to versions.
+        variables : Mapping[str, Union[bool, int, str]]
+            A map from formula variable names to their values.
 
         Returns
         -------
         bool
             Whether the given packages satisfy the constraints of the
             formula.
+        """
+        ...
+
+    @abstractmethod
+    def simplify(
+        self,
+        packages: Mapping[str,
+                          Version],
+        variables: Optional[Mapping[str,
+                                    Union[bool,
+                                          int,
+                                          str]]] = None
+    ) -> Union[bool,
+               'PackageFormula']:
+        """
+        Substitute the packagse into the formula and simplify it.
+
+        Parameters
+        ----------
+        packages : Mapping[str, Version]
+            A map from package names to versions.
+        variables : Mapping[str, Union[bool, int, str]]
+            A map from formula variable names to their values.
+
+        Returns
+        -------
+        Union[bool, PackageFormula]
+            True if the given packages satisfy the constraints of the
+            formula, False if any constraints are violated, or the
+            remaining formula for any parts left unevaluated.
         """
         ...
 
@@ -628,16 +916,27 @@ class LogicalPF(Logical[PackageFormula], PackageFormula):
     A logical combination of two version formulae.
     """
 
+    @property
+    def size(self) -> int:  # noqa: D102
+        if self.logop == LogOp.AND:
+            return self.left.size + self.right.size
+        else:
+            return min(self.left.size, self.right.size)
+
     @classmethod
     def formula_type(cls) -> Type[PackageFormula]:  # noqa: D102
         return PackageFormula
 
 
 @dataclass(frozen=True)
-class ParensPF(Parens[PackageFormula]):
+class ParensPF(Parens[PackageFormula], PackageFormula):
     """
     A parenthetical around a package formula.
     """
+
+    @property
+    def size(self) -> int:  # noqa: D102
+        return self.formula.size
 
     @classmethod
     def formula_type(cls) -> Type[PackageFormula]:  # noqa: D102
@@ -667,7 +966,18 @@ class PackageConstraint(PackageFormula):
                  "}"])
         return result
 
-    def is_satisfied(self, packages: Mapping[str, Version]) -> bool:
+    @property
+    def size(self) -> int:  # noqa: D102
+        return 1
+
+    def is_satisfied(
+        self,
+        packages: Mapping[str,
+                          Version],
+        variables: Optional[Mapping[str,
+                                    Union[bool,
+                                          int,
+                                          str]]] = None) -> bool:
         """
         Return whether the package constraint is satisfied.
 
@@ -675,11 +985,13 @@ class PackageConstraint(PackageFormula):
         ----------
         packages : Mapping[str, Version]
             A map from package names to versions.
+        variables : Mapping[str, Union[bool, int, str]]
+            A map from formula variable names to their values.
 
         Returns
         -------
         bool
-            If one of the given packages is_satisfied the constraint.
+            If one of the given packages satisfies the constraint.
         """
         try:
             version = packages[self.package_name]
@@ -692,7 +1004,67 @@ class PackageConstraint(PackageFormula):
             elif isinstance(constraint, Version):
                 return version == constraint
             else:
-                return constraint.is_satisfied(version)
+                return constraint.is_satisfied(version, variables)
+
+    def simplify(
+        self,
+        packages: Mapping[str,
+                          Version],
+        variables: Optional[Mapping[str,
+                                    Union[bool,
+                                          int,
+                                          str]]] = None
+    ) -> Union[bool,
+               'PackageFormula']:
+        """
+        Substitute the given package versions into the formula.
+
+        Parameters
+        ----------
+        packages : Mapping[str, Version]
+            A map from package names to versions.
+        variables : Mapping[str, Union[bool, int, str]]
+            A map from formula variable names to their values.
+
+        Returns
+        -------
+        Union[bool, PackageFormula]
+            This formula if its package is not in the mapping.
+            Otherwise, the simplification of the version formula.
+        """
+        constraint = self.version_constraint
+        result = None
+        try:
+            version = packages[self.package_name]
+        except KeyError:
+            if isinstance(constraint, VersionFormula):
+                constraint_simplified = constraint.simplify(None, variables)
+                if isinstance(constraint_simplified, bool):
+                    if constraint_simplified:
+                        result = type(self)(self.package_name, None)
+                    else:
+                        result = False
+                else:
+                    result = type(self)(
+                        self.package_name,
+                        constraint_simplified)
+            else:
+                result = self
+        else:
+            if constraint is None:
+                result = True
+            elif isinstance(constraint, Version):
+                result = version == constraint
+            else:
+                constraint_simplified = constraint.simplify(version, variables)
+                if isinstance(constraint_simplified, bool):
+                    result = constraint_simplified
+                else:
+                    result = type(self)(
+                        self.package_name,
+                        constraint_simplified)
+        assert result is not None
+        return result
 
     @classmethod
     def _chain_parse(cls,
@@ -742,4 +1114,4 @@ class PackageConstraint(PackageFormula):
                  require_quotes=False)
             pos = cls._expect(input, pos, '"', begpos)
         pos = cls._lstrip(input, pos)
-        return PackageConstraint(''.join(p), version_constraint), pos
+        return cls(''.join(p), version_constraint), pos
