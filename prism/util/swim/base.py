@@ -86,8 +86,10 @@ class SwitchManager(abc.ABC):
             If no switch managed by this instance can satisfy the
             constraints.
         """
+        if variables is None:
+            variables = {}
         for switch in self.switches:
-            if self.satisfies(switch, formula, variables):
+            if self.satisfies(switch, formula, **variables):
                 return switch
         raise UnsatisfiableConstraints(formula)
 
@@ -108,7 +110,7 @@ class SwitchManager(abc.ABC):
             self,
             switch: OpamSwitch,
             formula: PackageFormula,
-            variables: Optional[AssignedVariables] = None) -> bool:
+            **variables: AssignedVariables) -> bool:
         """
         Return whether the given switch satisfies the given constraints.
 
@@ -119,7 +121,7 @@ class SwitchManager(abc.ABC):
         formula : Iterable[Tuple[str, VersionConstraint]]
             A formula expressing required packages and their version
             constraints.
-        variables : Optional[AssignedVariables], optional
+        variables : AssignedVariables
             Optional variables that may impact the interpretation of the
             formula and override the manager's preset variables.
 
@@ -128,8 +130,6 @@ class SwitchManager(abc.ABC):
         bool
             Whether the `switch` satisfies the given constraints.
         """
-        if variables is not None:
-            variables = {}
         active_variables = dict(self.variables)
         active_variables.update(variables)
         config: OpamSwitch.Configuration = self._get_switch_config(switch)
@@ -137,12 +137,11 @@ class SwitchManager(abc.ABC):
 
     @cachedmethod
     def simplify(
-        self,
-        switch: OpamSwitch,
-        formula: PackageFormula,
-        variables: Optional[AssignedVariables] = None
-    ) -> Union[bool,
-               PackageFormula]:
+            self,
+            switch: OpamSwitch,
+            formula: PackageFormula,
+            **variables: AssignedVariables) -> Union[bool,
+                                                     PackageFormula]:
         """
         Simplify a formula using a switch's installed packages.
 
@@ -153,7 +152,7 @@ class SwitchManager(abc.ABC):
         formula : PackageFormula
             A formula expressing required packages and their version
             constraints.
-        variables : Optional[AssignedVariables], optional
+        variables : AssignedVariables
             Optional variables that may impact the interpretation of the
             formula and override the manager's preset variables.
 
@@ -166,8 +165,6 @@ class SwitchManager(abc.ABC):
         --------
         PackageFormula.simplify : For more details on simplification.
         """
-        if variables is not None:
-            variables = {}
         active_variables = dict(self.variables)
         active_variables.update(variables)
         config: OpamSwitch.Configuration = self._get_switch_config(switch)
