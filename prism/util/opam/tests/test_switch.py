@@ -133,6 +133,27 @@ class TestOpamSwitch(unittest.TestCase):
         returned = r.stderr
         self.assertTrue("No matches found" in returned)
 
+    def test_install_formula(self):
+        """
+        Test installation of just a package's dependencies from formula.
+        """
+        formula = self.test_switch.get_dependencies("coq", "8.10.2")
+        self.test_switch.install_formula(formula)
+        deps = formula.packages
+        installed_deps = {
+            dep: self.test_switch.get_installed_version(dep) for dep in deps
+        }
+        installed_deps = {
+            k: Version.parse(v) for k,
+            v in installed_deps.items() if v is not None
+        }
+        self.assertTrue(installed_deps)
+        self.assertIn((installed_deps,
+                       {
+                           'build': True
+                       }),
+                      formula)
+
     def test_repo_add_remove(self):
         """
         Test the addition and removal of an opam repository.

@@ -203,8 +203,21 @@ class VersionFormula(Parseable, ABC):
     except for basic atomic filters.
     """
 
-    def __contains__(self, version: Version) -> bool:  # noqa: D105
-        return self.is_satisfied(version)
+    def __contains__(
+        self,
+        version: Union[Version,
+                       Tuple[Version,
+                             Mapping[str,
+                                     Union[bool,
+                                           int,
+                                           str]]]]
+    ) -> bool:  # noqa: D105
+        if isinstance(version, tuple):
+            variables = version[1]
+            version = version[0]
+        else:
+            variables = None
+        return self.is_satisfied(version, variables)
 
     @abstractmethod
     def is_satisfied(
@@ -810,6 +823,35 @@ class PackageFormula(Parseable, ABC):
     https://opam.ocaml.org/doc/Manual.html#Filtered-package-formulas.
     """
 
+    def __contains__(
+        self,
+        packages: Union[Mapping[str,
+                                Version],
+                        Tuple[Mapping[str,
+                                      Version],
+                              Mapping[str,
+                                      Union[bool,
+                                            int,
+                                            str]]]]
+    ) -> bool:
+        """
+        Return whether the given packages/variables satisfy the formula.
+        """
+        if isinstance(packages, tuple):
+            variables = packages[1]
+            packages = packages[0]
+        else:
+            variables = None
+        return self.is_satisfied(packages, variables)
+
+    @property
+    @abstractmethod
+    def packages(self) -> List[str]:
+        """
+        Get a list of the names of packages contained in the formula.
+        """
+        ...
+
     @property
     @abstractmethod
     def size(self) -> int:
@@ -917,6 +959,13 @@ class LogicalPF(Logical[PackageFormula], PackageFormula):
     """
 
     @property
+    def packages(self) -> List[str]:  # noqa: D102
+        packages = []
+        packages.extend(self.left.packages)
+        packages.extend(self.right.packages)
+        return packages
+
+    @property
     def size(self) -> int:  # noqa: D102
         if self.logop == LogOp.AND:
             return self.left.size + self.right.size
@@ -933,6 +982,10 @@ class ParensPF(Parens[PackageFormula], PackageFormula):
     """
     A parenthetical around a package formula.
     """
+
+    @property
+    def packages(self) -> List[str]:  # noqa: D102
+        return self.formula.packages
 
     @property
     def size(self) -> int:  # noqa: D102
@@ -965,6 +1018,10 @@ class PackageConstraint(PackageFormula):
                  str(version_constraint),
                  "}"])
         return result
+
+    @property
+    def packages(self) -> List[str]:  # noqa: D102
+        return [self.package_name]
 
     @property
     def size(self) -> int:  # noqa: D102

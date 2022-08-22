@@ -13,10 +13,11 @@ from functools import cached_property
 from os import PathLike
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess
-from typing import ClassVar, Dict, List, Optional, Tuple
+from typing import ClassVar, Dict, List, Optional, Tuple, Union
 
 from seutil import bash
 
+from .file import OpamFile
 from .formula import PackageFormula
 from .version import OCamlVersion, OpamVersion, Version
 
@@ -348,15 +349,17 @@ class OpamSwitch:
 
     def get_dependencies(
             self,
-            pkg: str,
+            pkg: Union[str,
+                       PathLike],
             version: Optional[str] = None) -> PackageFormula:
         """
         Get the dependencies of the indicated package.
 
         Parameters
         ----------
-        pkg : str
-            The name of an OCaml package.
+        pkg : Union[str, PathLike]
+            The name of an OCaml package or path to an OPAM file /
+            directory containing an OPAM file.
         version : Optional[str], optional
             A specific version of the package, by default None.
             If not given, then either the latest or the installed
@@ -371,12 +374,32 @@ class OpamSwitch:
         ------
         CalledProcessError
             If the ``opam show`` command fails.
+        ValueError
+            If both a path and version are given.
         """
+        is_path = Path(pkg).exists()
         if version is not None:
+            if is_path:
+                raise ValueError(
+                    "Version cannot be specified for installation from file. "
+                    f"Expected None, but got {version} for package {pkg}.")
             pkg = f"{pkg}={version}"
         r = self.run(f"opam show -f depends: {pkg}")
-        # replace newlines with AND operators
-        return PackageFormula.parse('&'.join(r.stdout.splitlines()))
+        # replace newlines with AND operators,
+        # but not inside parentheses
+        s = []
+        parens_depth = 0
+        for char in r.stdout.strip():
+            if char == "(":
+                parens_depth += 1
+            elif char == ")":
+                parens_depth -= 1
+            else:
+                assert parens_depth == 0
+                if char == "\r" or (char == '\n' and s and s[-1] != '\r'):
+                    char = ' & '
+                s.append(char)
+        return PackageFormula.parse(''.join(s))
 
     def get_installed_version(self, package_name: str) -> Optional[str]:
         """
@@ -414,28 +437,72 @@ class OpamSwitch:
         else:
             return None
 
-    def install(self, pkg: str, version: Optional[str] = None) -> None:
+    def install(
+            self,
+            pkg: Union[str,
+                       PathLike],
+            version: Optional[str] = None,
+            deps_only: bool = False) -> None:
         """
         Install the indicated package.
 
         Parameters
         ----------
-        pkg : str
-            The name of an OCaml package.
+        pkg : Union[str, PathLike]
+            The name of an OCaml package or the path to a file
+            containing a package description or a directory containing
+            such a file.
         version : Optional[str], optional
             A specific version of the package, by default None.
             If not given, then the default version will be installed.
+        deps_only : bool, optional
+            If True, then install all of the packages dependencies, but
+            do not actually install it.
 
         Exceptions
         ----------
         CalledProcessError
             If the installation fails (due to bad version usually)
             it will raise this exception
+        ValueError
+            If a path and version are both given.
         """
+        is_path = Path(pkg).exists()
         if version is not None:
+            if is_path:
+                raise ValueError(
+                    "Version cannot be specified for installation from file. "
+                    f"Expected None, but got {version} for package {pkg}.")
             pkg = f"{pkg}.{version}"
-        cmd = f"opam install {pkg} -y"
+        cmd = f"opam install {pkg} -y {'--deps-only' if deps_only else ''}"
         self.run(cmd)
+
+    def install_formula(self, formula: PackageFormula) -> None:
+        """
+        Install packages satisfying the given formula in this switch.
+
+        Parameters
+        ----------
+        formula : PackageFormula
+            A formula describing package constraints.
+
+        Exceptions
+        ----------
+        CalledProcessError
+            If the installation fails for any reason.
+        """
+        with tempfile.NamedTemporaryFile('w', delete=False, dir=self.path) as f:
+            f.write(
+                str(
+                    OpamFile(
+                        Path(f.name).stem,
+                        "0.0",
+                        "temp@example.com",
+                        depends=formula)))
+            # close to ensure contents are flushed
+        self.install(f.name, deps_only=True)
+        # delete the temp file
+        os.remove(f.name)
 
     def remove_pkg(
         self,
