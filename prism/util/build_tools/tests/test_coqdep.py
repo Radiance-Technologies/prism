@@ -58,17 +58,26 @@ class TestOpamCoqDepAPI(unittest.TestCase):
         Check that a dependency graph can be made from a list of files.
         """
         edges = {
-            'Redexes.vo': [],
-            'Reduction.vo': ['Redexes.vo'],
+            'Substitution.vo': [],
+            'Marks.vo': [],
+            'Redexes.vo': ['Substitution.vo', 
+                           'Marks.vo'],
+            'Reduction.vo': ['Redexes.vo',
+                             'Marks.vo',
+                             'Substitution.vo'],
             'Terms.vo': ['Reduction.vo',
-                         'Redexes.vo'],
+                         'Redexes.vo',
+                         'Marks.vo',
+                         'Substitution.vo'],
             'Test.vo': ['Terms.vo',
                         'Reduction.vo',
-                        'Redexes.vo']
+                        'Redexes.vo',
+                        'Substitution.vo',
+                        'Marks.vo']
         }
-        expected = nx.DiGraph(edges).reverse()
+        expected = nx.DiGraph(edges)
 
-        files = ['Test.v', 'Terms.v', 'Reduction.v', 'Redexes.v']
+        files = ['Test.v', 'Terms.v', 'Reduction.v', 'Redexes.v', 'Marks.v', 'Substitution.v']
         with prism.util.radpytools.os.pushd(self.repo_paths["lambda"]):
             dg = make_dependency_graph(files, OpamAPI.active_switch)
         self.assertTrue(nx.utils.misc.edges_equal(dg.edges, expected.edges))
@@ -81,21 +90,8 @@ class TestOpamCoqDepAPI(unittest.TestCase):
             files = os.listdir("./")
             files = [x for x in files if x[-2 :] == '.v']
             ordered = order_dependencies(files, OpamAPI.active_switch)
-            expected = [
-                'Test.vo',
-                'Terms.vo',
-                'Reduction.vo',
-                'Redexes.vo',
-                'Marks.vo',
-                'Substitution.vo',
-                'Residuals.vo',
-                'Simulation.vo',
-                'Cube.vo',
-                'Confluence.vo',
-                'Conversion.vo',
-                'Lambda.vo'
-            ]
-            self.assertEqual(ordered, expected)
+            graph = make_dependency_graph(files, OpamAPI.active_switch)
+            self.assertTrue(check_valid_topological_sort(graph, ordered))
 
     @classmethod
     def setUpClass(cls):

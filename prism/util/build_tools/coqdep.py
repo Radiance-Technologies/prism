@@ -57,7 +57,7 @@ def make_dependency_graph(
     for file in files:
         dep_graph_dict[file + "o"] = get_dependencies(file, switch, IQR, boot)
     dep_graph = nx.DiGraph(dep_graph_dict)
-    return dep_graph
+    return dep_graph.reverse()
 
 
 def get_dependencies(
@@ -129,5 +129,4 @@ def order_dependencies(
     command = "coqdep {0} -sort {1} {2}".format(files, IQR, boot)
     file_deps = switch.run(command)
     file_deps = file_deps.stdout.strip().split(" ")
-    print(file_deps)
     return file_deps
