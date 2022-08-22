@@ -1,8 +1,6 @@
 """
 Provides an object-oriented abstraction of OPAM switches.
 """
-from __future__ import annotations
-
 import logging
 import os
 import re
@@ -253,7 +251,7 @@ class OpamSwitch:
         command = f'bwrap --dev-bind / / --bind {src} {dest} -- {command}'
         return command, src, dest
 
-    def export(self, include_id: bool = True) -> OpamSwitch.Configuration:
+    def export(self, include_id: bool = True) -> 'OpamSwitch.Configuration':
         """
         Export the switch configuration.
 

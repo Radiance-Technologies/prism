@@ -2,16 +2,21 @@
 Tools for handling repair mining cache.
 """
 import os
+import re
+import subprocess
 import tempfile
+import warnings
 from dataclasses import InitVar, dataclass, field
 from multiprocessing.pool import Pool
 from pathlib import Path
-from typing import Dict, Iterable, Optional, Set, Tuple, Union
+from typing import ClassVar, Dict, Iterable, List, Optional, Set, Tuple, Union
 
+import setuptools_scm
 import seutil as su
 
 from prism.language.gallina.analyze import SexpInfo
 from prism.project.metadata import ProjectMetadata
+from prism.util.opam.switch import OpamSwitch
 
 
 @dataclass
@@ -47,9 +52,88 @@ class VernacCommandData:
 
 
 @dataclass
+class ProjectBuildResult:
+    """
+    The result of building a project commit.
+
+    The project environment and metadata are implicit.
+    """
+
+    exit_code: int
+    """
+    The exit code of the project's build command with
+    implicit project metadata.
+    """
+    stdout: str
+    """
+    The standard output of the commit's build command with
+    implicit project metadata.
+    """
+    stderr: str
+    """
+    The standard error of the commit's build command with
+    implicit project metadata.
+    """
+
+
+@dataclass
+class ProjectBuildEnvironment:
+    """
+    The environment in which a project's commit data was captured.
+    """
+
+    switch_config: OpamSwitch.Configuration
+    """
+    The configuration of the switch in which the commit's build command
+    was invoked.
+    """
+    current_version: str = field(init=False)
+    """
+    The current version of this package.
+    """
+    SHA_regex: ClassVar[re.Pattern] = re.compile(r"\+g[0-9a-f]{5,40}")
+    """
+    A regular expression that matches Git commit SHAs.
+    """
+    describe_cmd: ClassVar[
+        List[str]] = 'git describe --match="" --always --abbrev=40'.split()
+    """
+    A command that can retrieve the hash of the checked out commit.
+
+    Note that this will fail if the package is installed.
+    """
+
+    def __post_init__(self):
+        """
+        Cache the commit of the coq-pearls repository.
+        """
+        self.current_version = setuptools_scm.get_version()
+        match = self.SHA_regex.search(self.current_version)
+        if match is not None:
+            # replace abbreviated hash with full hash to guarantee
+            # the hash remains unambiguous in the future
+            try:
+                current_commit = subprocess.check_output(
+                    self.describe_cmd).strip().decode("utf-8")
+                self.current_version = ''.join(
+                    [
+                        self.current_version[: match.start()],
+                        current_commit,
+                        self.current_version[match.end():]
+                    ])
+            except subprocess.CalledProcessError:
+                warnings.warn(
+                    "Unable to expand Git hash in version string. "
+                    "Try installing `coq-pearls` in editable mode.")
+
+
+@dataclass
 class ProjectCommitData:
     """
-    Object that reflects the contents of a repair mining cache file.
+    Data associated with a project commit.
+
+    The data is expected to be precomputed and cached to assist with
+    subsequent repair mining.
     """
 
     project_metadata: ProjectMetadata
@@ -61,6 +145,15 @@ class ProjectCommitData:
     """
     A map from file names relative to the root of the project to the set
     of command results.
+    """
+    environment: ProjectBuildEnvironment
+    """
+    The environment in which the commit was processed.
+    """
+    build_result: Optional[ProjectBuildResult] = None
+    """
+    The result of building the project commit in the `opam_switch` or
+    None if building was not required to process the commit.
     """
 
     def dump(
