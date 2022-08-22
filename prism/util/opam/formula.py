@@ -194,6 +194,9 @@ class Variable(str):
     pass
 
 
+AssignedVariables = Mapping[str, Union[bool, int, str]]
+
+
 class VersionFormula(Parseable, ABC):
     """
     A formula expressing constraints on a package version.
@@ -207,10 +210,7 @@ class VersionFormula(Parseable, ABC):
         self,
         version: Union[Version,
                        Tuple[Version,
-                             Mapping[str,
-                                     Union[bool,
-                                           int,
-                                           str]]]]
+                             AssignedVariables]]
     ) -> bool:  # noqa: D105
         if isinstance(version, tuple):
             variables = version[1]
@@ -219,27 +219,28 @@ class VersionFormula(Parseable, ABC):
             variables = None
         return self.is_satisfied(version, variables)
 
+    @property
+    @abstractmethod
+    def variables(self) -> List[str]:
+        """
+        Get a list of the variable names that appear in this formula.
+        """
+        ...
+
     @abstractmethod
     def is_satisfied(
-        self,
-        version: Version,
-        variables: Optional[Mapping[str,
-                                    Union[bool,
-                                          int,
-                                          str]]] = None) -> bool:
+            self,
+            version: Version,
+            variables: Optional[AssignedVariables] = None) -> bool:
         """
         Return whether the given version/variables satisfy this formula.
         """
         ...
 
     def filter(
-        self,
-        versions: Iterable[Version],
-        variables: Optional[Mapping[str,
-                                    Union[bool,
-                                          int,
-                                          str]]] = None
-    ) -> List[Version]:
+            self,
+            versions: Iterable[Version],
+            variables: Optional[AssignedVariables] = None) -> List[Version]:
         """
         Filter the given versions according to the constraint.
 
@@ -257,12 +258,8 @@ class VersionFormula(Parseable, ABC):
     def simplify(
         self,
         version: Optional[Version],
-        variables: Optional[Mapping[str,
-                                    Union[bool,
-                                          int,
-                                          str]]] = None
-    ) -> Union[bool,
-               'Formula']:
+        variables: Optional[AssignedVariables] = None) -> Union[bool,
+                                                                'Formula']:
         """
         Substitute the given version and variables into the formula.
 
@@ -581,13 +578,17 @@ class FilterAtom(VersionFormula):
         """
         return str(self.term)
 
+    @property
+    def variables(self) -> List[str]:  # noqa: D102
+        if isinstance(self.term, Variable):
+            return [self.term]
+        else:
+            return []
+
     def is_satisfied(
-        self,
-        version: Version,
-        variables: Optional[Mapping[str,
-                                    Union[bool,
-                                          int,
-                                          str]]] = None) -> bool:
+            self,
+            version: Version,
+            variables: Optional[AssignedVariables] = None) -> bool:
         """
         Evaluate Boolean filters as-is, others as True.
 
@@ -617,12 +618,8 @@ class FilterAtom(VersionFormula):
     def simplify(
         self,
         version: Optional[Version],
-        variables: Optional[Mapping[str,
-                                    Union[bool,
-                                          int,
-                                          str]]] = None
-    ) -> Union[bool,
-               'FilterAtom']:
+        variables: Optional[AssignedVariables] = None) -> Union[bool,
+                                                                'FilterAtom']:
         """
         Return a copy of this atom with variable substituted if given.
         """
@@ -674,6 +671,13 @@ class LogicalVF(Logical[VersionFormula], VersionFormula):
     A logical combination of two version formulae.
     """
 
+    @property
+    def variables(self) -> List[str]:  # noqa: D102
+        variables = []
+        variables.extend(self.left.variables)
+        variables.extend(self.right.variables)
+        return variables
+
     @classmethod
     def formula_type(cls) -> Type[VersionFormula]:  # noqa: D102
         return VersionFormula
@@ -690,27 +694,24 @@ class Not(VersionFormula):
     def __str__(self) -> str:  # noqa: D105
         return f"!{self.formula}"
 
+    @property
+    def variables(self) -> List[str]:  # noqa: D102
+        return self.formula.variables
+
     def is_satisfied(
-        self,
-        version: Version,
-        variables: Optional[Mapping[str,
-                                    Union[bool,
-                                          int,
-                                          str]]] = None) -> bool:
+            self,
+            version: Version,
+            variables: Optional[AssignedVariables] = None) -> bool:
         """
         Test whether the version does not satisfy the internal formula.
         """
         return not self.formula.is_satisfied(version, variables)
 
     def simplify(
-        self,
-        version: Optional[Version],
-        variables: Optional[Mapping[str,
-                                    Union[bool,
-                                          int,
-                                          str]]] = None
-    ) -> Union[bool,
-               'Not']:
+            self,
+            version: Optional[Version],
+            variables: Optional[AssignedVariables] = None) -> Union[bool,
+                                                                    'Not']:
         """
         Substitute the given version and variables and simplify.
         """
@@ -735,6 +736,10 @@ class ParensVF(Parens[VersionFormula]):
     A parenthetical around a package formula.
     """
 
+    @property
+    def variables(self) -> List[str]:  # noqa: D102
+        return self.formula.variables
+
     @classmethod
     def formula_type(cls) -> Type[VersionFormula]:  # noqa: D102
         return VersionFormula
@@ -752,13 +757,14 @@ class VersionConstraint(VersionFormula):
     def __str__(self) -> str:  # noqa: D105
         return f'{self.relop} "{self.version}"'
 
+    @property
+    def variables(self) -> List[str]:  # noqa: D102
+        return []
+
     def is_satisfied(
-        self,
-        version: Version,
-        variables: Optional[Mapping[str,
-                                    Union[bool,
-                                          int,
-                                          str]]] = None) -> bool:
+            self,
+            version: Version,
+            variables: Optional[AssignedVariables] = None) -> bool:
         """
         Test whether the version satisfies the binary relation.
         """
@@ -779,10 +785,7 @@ class VersionConstraint(VersionFormula):
     def simplify(
         self,
         version: Optional[Version],
-        variables: Optional[Mapping[str,
-                                    Union[bool,
-                                          int,
-                                          str]]] = None
+        variables: Optional[AssignedVariables] = None
     ) -> Union[bool,
                'VersionConstraint']:
         """
@@ -829,10 +832,7 @@ class PackageFormula(Parseable, ABC):
                                 Version],
                         Tuple[Mapping[str,
                                       Version],
-                              Mapping[str,
-                                      Union[bool,
-                                            int,
-                                            str]]]]
+                              AssignedVariables]]
     ) -> bool:
         """
         Return whether the given packages/variables satisfy the formula.
@@ -863,15 +863,20 @@ class PackageFormula(Parseable, ABC):
         """
         ...
 
+    @property
+    @abstractmethod
+    def variables(self) -> List[str]:
+        """
+        Get a list of the variable names that appear in this formula.
+        """
+        ...
+
     @abstractmethod
     def is_satisfied(
-        self,
-        packages: Mapping[str,
-                          Version],
-        variables: Optional[Mapping[str,
-                                    Union[bool,
-                                          int,
-                                          str]]] = None) -> bool:
+            self,
+            packages: Mapping[str,
+                              Version],
+            variables: Optional[AssignedVariables] = None) -> bool:
         """
         Test whether the given versioned packages satisfy the formula.
 
@@ -879,7 +884,7 @@ class PackageFormula(Parseable, ABC):
         ----------
         packages : Mapping[str, Version]
             A map from package names to versions.
-        variables : Mapping[str, Union[bool, int, str]]
+        variables : AssignedVariables
             A map from formula variable names to their values.
 
         Returns
@@ -895,10 +900,7 @@ class PackageFormula(Parseable, ABC):
         self,
         packages: Mapping[str,
                           Version],
-        variables: Optional[Mapping[str,
-                                    Union[bool,
-                                          int,
-                                          str]]] = None
+        variables: Optional[AssignedVariables] = None
     ) -> Union[bool,
                'PackageFormula']:
         """
@@ -908,7 +910,7 @@ class PackageFormula(Parseable, ABC):
         ----------
         packages : Mapping[str, Version]
             A map from package names to versions.
-        variables : Mapping[str, Union[bool, int, str]]
+        variables : AssignedVariables
             A map from formula variable names to their values.
 
         Returns
@@ -972,6 +974,13 @@ class LogicalPF(Logical[PackageFormula], PackageFormula):
         else:
             return min(self.left.size, self.right.size)
 
+    @property
+    def variables(self) -> List[str]:  # noqa: D102
+        variables = []
+        variables.extend(self.left.variables)
+        variables.extend(self.right.variables)
+        return variables
+
     @classmethod
     def formula_type(cls) -> Type[PackageFormula]:  # noqa: D102
         return PackageFormula
@@ -990,6 +999,10 @@ class ParensPF(Parens[PackageFormula], PackageFormula):
     @property
     def size(self) -> int:  # noqa: D102
         return self.formula.size
+
+    @property
+    def variables(self) -> List[str]:  # noqa: D102
+        return self.formula.variables
 
     @classmethod
     def formula_type(cls) -> Type[PackageFormula]:  # noqa: D102
@@ -1027,14 +1040,18 @@ class PackageConstraint(PackageFormula):
     def size(self) -> int:  # noqa: D102
         return 1
 
+    @property
+    def variables(self) -> List[str]:  # noqa: D102
+        if isinstance(self.version_constraint, VersionFormula):
+            return self.version_constraint.variables
+        else:
+            return []
+
     def is_satisfied(
-        self,
-        packages: Mapping[str,
-                          Version],
-        variables: Optional[Mapping[str,
-                                    Union[bool,
-                                          int,
-                                          str]]] = None) -> bool:
+            self,
+            packages: Mapping[str,
+                              Version],
+            variables: Optional[AssignedVariables] = None) -> bool:
         """
         Return whether the package constraint is satisfied.
 
@@ -1042,7 +1059,7 @@ class PackageConstraint(PackageFormula):
         ----------
         packages : Mapping[str, Version]
             A map from package names to versions.
-        variables : Mapping[str, Union[bool, int, str]]
+        variables : AssignedVariables
             A map from formula variable names to their values.
 
         Returns
@@ -1067,10 +1084,7 @@ class PackageConstraint(PackageFormula):
         self,
         packages: Mapping[str,
                           Version],
-        variables: Optional[Mapping[str,
-                                    Union[bool,
-                                          int,
-                                          str]]] = None
+        variables: Optional[AssignedVariables] = None
     ) -> Union[bool,
                'PackageFormula']:
         """
@@ -1080,7 +1094,7 @@ class PackageConstraint(PackageFormula):
         ----------
         packages : Mapping[str, Version]
             A map from package names to versions.
-        variables : Mapping[str, Union[bool, int, str]]
+        variables : AssignedVariables
             A map from formula variable names to their values.
 
         Returns
