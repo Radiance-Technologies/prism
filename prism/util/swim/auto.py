@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Iterable, List, Optional
 
 from prism.util.opam import AssignedVariables, OpamSwitch
+from prism.util.opam.api import OpamAPI
 
 from .adaptive import AdaptiveSwitchManager
 
@@ -35,7 +36,7 @@ class AutoSwitchManager(AdaptiveSwitchManager):
             opam_roots: Optional[Iterable[PathLike]] = None,
             variables: Optional[AssignedVariables] = None) -> None:
         if opam_roots is None:
-            opam_roots = []
+            opam_roots = [OpamAPI.show_root()]
         switches = []
         for root in opam_roots:
             switches.extend(self.find_switches(root))
