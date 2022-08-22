@@ -9,6 +9,7 @@ from dataclasses import InitVar, dataclass, field
 from multiprocessing.pool import Pool
 from pathlib import Path
 from typing import ClassVar, Dict, Iterable, List, Optional, Set, Tuple, Union
+import warnings
 
 import setuptools_scm
 import seutil as su
@@ -61,17 +62,17 @@ class ProjectBuildResult:
     exit_code: int
     """
     The exit code of the project's build command with
-    `project_metadata`.
+    implicit project metadata.
     """
     stdout: str
     """
     The standard output of the commit's build command with
-    `project_metadata`.
+    implicit project metadata.
     """
     stderr: str
     """
     The standard error of the commit's build command with
-    `project_metadata`.
+    implicit project metadata.
     """
 
 
@@ -92,12 +93,14 @@ class ProjectBuildEnvironment:
     """
     SHA_regex: ClassVar[re.Pattern] = re.compile(r"\+g[0-9a-f]{5,40}")
     """
-    A regular expression that matches git commit SHAs.
+    A regular expression that matches Git commit SHAs.
     """
     describe_cmd: ClassVar[List[
-        str]] = 'git describe --match="" --dirty --always --abbrev=40'.split()
+        str]] = 'git describe --match="" --always --abbrev=40'.split()
     """
     A command that can retrieve the hash of the checked out commit.
+
+    Note that this will fail if the package is installed.
     """
 
     def __post_init__(self):
@@ -109,14 +112,19 @@ class ProjectBuildEnvironment:
         if match is not None:
             # replace abbreviated hash with full hash to guarantee
             # the hash remains unambiguous in the future
-            current_commit = subprocess.check_output(
-                self.describe_cmd).strip().decode("utf-8")
-            self.current_version = ''.join(
-                [
-                    self.current_version[: match.start()],
-                    current_commit,
-                    self.current_version[match.end():]
-                ])
+            try:
+                current_commit = subprocess.check_output(
+                    self.describe_cmd).strip().decode("utf-8")
+                self.current_version = ''.join(
+                    [
+                        self.current_version[: match.start()],
+                        current_commit,
+                        self.current_version[match.end():]
+                    ])
+            except subprocess.CalledProcessError:
+                warnings.warn(
+                    "Unable to expand Git hash in version string. "
+                    "Try installing `coq-pearls` in editable mode.")
 
 
 @dataclass
