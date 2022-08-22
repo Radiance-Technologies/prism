@@ -20,6 +20,7 @@ from .parens import Parens  # noqa: F401
 from .version import (  # noqa: F401
     FilterAtom,
     LogicalVF,
+    Not,
     ParensVF,
     VersionConstraint,
     VersionFormula,
