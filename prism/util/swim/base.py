@@ -2,9 +2,9 @@
 Defines the base class and interface for all switch managers.
 """
 import abc
-from typing import Dict, Iterable, Mapping, Optional, Set, Tuple, Union
+from typing import Dict, Iterable, Optional, Set, Tuple, Union
 
-from prism.util.opam import OpamSwitch, VersionConstraint
+from prism.util.opam import AssignedVariables, OpamSwitch, VersionConstraint
 from prism.util.opam.formula import PackageFormula
 from prism.util.radpytools import cachedmethod
 
@@ -16,15 +16,25 @@ PackageConstraint = Tuple[str, Optional[VersionConstraint]]
 class SwitchManager(abc.ABC):
     """
     A basic manager that keeps a constant set of switches.
+
+    The switches are assumed to be managed exclusively by the
+    `SwitchManager` for the duration of execution so that it can cache
+    repeated queries for faster operation.
+
+    Parameters
+    ----------
+    initial_switches : Optional[Iterable[OpamSwitch]], optional
+        Zero or more preconstructed switches with which to initialize
+        the manager.
+    variables : Optional[AssignedVariables], optional
+        Optional variables that may impact the interpretation of any
+        formula evaluated by the switch.
     """
 
     def __init__(
-        self,
-        initial_switches: Optional[Iterable[OpamSwitch]] = None,
-        variables: Optional[Mapping[str,
-                                    Union[bool,
-                                          int,
-                                          str]]] = None) -> None:
+            self,
+            initial_switches: Optional[Iterable[OpamSwitch]] = None,
+            variables: Optional[AssignedVariables] = None) -> None:
         if initial_switches is None:
             initial_switches = []
         if variables is None:
@@ -53,21 +63,18 @@ class SwitchManager(abc.ABC):
         return self._variables
 
     def get_switch(
-        self,
-        formula: PackageFormula,
-        variables: Optional[Mapping[str,
-                                    Union[bool,
-                                          int,
-                                          str]]] = None
-    ) -> OpamSwitch:
+            self,
+            formula: PackageFormula,
+            variables: Optional[AssignedVariables] = None) -> OpamSwitch:
         """
-        Get a switch that satifies the current constraints.
+        Get a switch that satifies the given constraints.
 
         Parameters
         ----------
-        required_packages : Iterable[PackageConstraint]
-            A set of required packages and their version constraints.
-        variables : Mapping[str, Union[bool, int, str]] | None, optional
+        formula : PackageFormula
+            A formula expressing required packages and their version
+            constraints.
+        variables : Optional[AssignedVariables], optional
             Optional variables that may impact the interpretation of the
             formula and override the manager's preset variables.
 
@@ -85,7 +92,7 @@ class SwitchManager(abc.ABC):
         for switch in self.switches:
             if self.satisfies(switch, formula, variables):
                 return switch
-        raise UnsatisfiableConstraints()
+        raise UnsatisfiableConstraints(formula)
 
     def release_switch(self, switch: OpamSwitch) -> None:
         """
@@ -101,24 +108,21 @@ class SwitchManager(abc.ABC):
 
     @cachedmethod
     def satisfies(
-        self,
-        switch: OpamSwitch,
-        formula: PackageFormula,
-        variables: Optional[Mapping[str,
-                                    Union[bool,
-                                          int,
-                                          str]]] = None) -> bool:
+            self,
+            switch: OpamSwitch,
+            formula: PackageFormula,
+            variables: Optional[AssignedVariables] = None) -> bool:
         """
-        Return whether the given switch satisifes the given constraints.
+        Return whether the given switch satisfies the given constraints.
 
         Parameters
         ----------
         switch : OpamSwitch
             An existing switch.
         formula : Iterable[Tuple[str, VersionConstraint]]
-            A formula expressing the required packages and their
-            version constraints.
-        variables : Mapping[str, Union[bool, int, str]] | None, optional
+            A formula expressing required packages and their version
+            constraints.
+        variables : Optional[AssignedVariables], optional
             Optional variables that may impact the interpretation of the
             formula and override the manager's preset variables.
 
@@ -133,3 +137,41 @@ class SwitchManager(abc.ABC):
         active_variables.update(variables)
         config: OpamSwitch.Configuration = self._get_switch_config(switch)
         return formula.is_satisfied(dict(config.installed), active_variables)
+
+    @cachedmethod
+    def simplify(
+        self,
+        switch: OpamSwitch,
+        formula: PackageFormula,
+        variables: Optional[AssignedVariables] = None
+    ) -> Union[bool,
+               PackageFormula]:
+        """
+        Simplify a formula using a switch's installed packages.
+
+        Parameters
+        ----------
+        switch : OpamSwitch
+            An existing switch.
+        formula : PackageFormula
+            A formula expressing required packages and their version
+            constraints.
+        variables : Optional[AssignedVariables], optional
+            Optional variables that may impact the interpretation of the
+            formula and override the manager's preset variables.
+
+        Returns
+        -------
+        Union[bool, PackageFormula]
+            The simplified formula.
+
+        See Also
+        --------
+        PackageFormula.simplify : For more details on simplification.
+        """
+        if variables is not None:
+            variables = {}
+        active_variables = dict(self.variables)
+        active_variables.update(variables)
+        config: OpamSwitch.Configuration = self._get_switch_config(switch)
+        return formula.simplify(dict(config.installed), active_variables)
