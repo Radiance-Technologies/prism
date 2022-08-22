@@ -5,11 +5,11 @@ import os
 import re
 import subprocess
 import tempfile
+import warnings
 from dataclasses import InitVar, dataclass, field
 from multiprocessing.pool import Pool
 from pathlib import Path
 from typing import ClassVar, Dict, Iterable, List, Optional, Set, Tuple, Union
-import warnings
 
 import setuptools_scm
 import seutil as su
@@ -95,8 +95,8 @@ class ProjectBuildEnvironment:
     """
     A regular expression that matches Git commit SHAs.
     """
-    describe_cmd: ClassVar[List[
-        str]] = 'git describe --match="" --always --abbrev=40'.split()
+    describe_cmd: ClassVar[
+        List[str]] = 'git describe --match="" --always --abbrev=40'.split()
     """
     A command that can retrieve the hash of the checked out commit.
 
