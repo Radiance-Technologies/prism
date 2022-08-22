@@ -19,7 +19,6 @@ from prism.language.id import LanguageId
 from prism.project.base import Project
 from prism.project.exception import ProjectBuildError
 from prism.project.metadata import ProjectMetadata
-from prism.project.metadata.version_info import version_info
 from prism.project.repo import ProjectRepo
 from prism.util.opam import PackageFormula
 from prism.util.opam.formula import LogicalPF, LogOp
@@ -39,8 +38,7 @@ def get_formula_from_metadata(
     """
     formula = []
     formula.append(PackageFormula.parse(f'"coq.{coq_version}"'))
-    formula.append(
-        PackageFormula.parse(f'"coq-serapi.{version_info.get_serapi_version}"'))
+    formula.append(PackageFormula.parse('"coq-serapi"'))
     if metadata.ocaml_version is not None:
         formula.append(
             PackageFormula.parse(f'"ocaml.{metadata.ocaml_version}"'))
@@ -52,8 +50,8 @@ def get_formula_from_metadata(
         r: LogicalPF(l,
                      LogOp.AND,
                      r),
-        formula[1 :,
-                formula[0]])
+        formula[1 :],
+        formula[0])
     return formula
 
 
