@@ -9,7 +9,7 @@ import re
 import tempfile
 import warnings
 from dataclasses import InitVar, dataclass, field, fields
-from functools import cached_property
+from functools import cached_property, reduce
 from os import PathLike
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess
@@ -18,7 +18,7 @@ from typing import ClassVar, Dict, List, Optional, Tuple, Union
 from seutil import bash
 
 from .file import OpamFile
-from .formula import PackageFormula
+from .formula import LogicalPF, LogOp, PackageFormula
 from .version import OCamlVersion, OpamVersion, Version
 
 __all__ = ['OpamSwitch']
@@ -385,21 +385,24 @@ class OpamSwitch:
                     f"Expected None, but got {version} for package {pkg}.")
             pkg = f"{pkg}={version}"
         r = self.run(f"opam show -f depends: {pkg}")
-        # replace newlines with AND operators,
-        # but not inside parentheses
-        s = []
-        parens_depth = 0
-        for char in r.stdout.strip():
-            if char == "(":
-                parens_depth += 1
-            elif char == ")":
-                parens_depth -= 1
-            else:
-                assert parens_depth == 0
-                if char == "\r" or (char == '\n' and s and s[-1] != '\r'):
-                    char = ' & '
-                s.append(char)
-        return PackageFormula.parse(''.join(s))
+        # Dependencies returned as list of AND-conjoined formulas, but
+        # the AND operator is missing.
+        # Must parse piecemeal since otherwise there is no known
+        # reliable way to infer where AND operators should be inserted
+        dep_text = r.stdout.strip()
+        pos = 0
+        formulas = []
+        while pos < len(dep_text):
+            formula, pos = PackageFormula.parse(dep_text, exhaustive=False, pos=pos)
+            formulas.append(formula)
+        formula = reduce(
+            lambda l,
+            r: LogicalPF(l,
+                         LogOp.AND,
+                         r),
+            formulas[1 :],
+            formulas[0])
+        return formula
 
     def get_installed_version(self, package_name: str) -> Optional[str]:
         """

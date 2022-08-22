@@ -2,8 +2,7 @@
 A common interface for text-parseable classes.
 """
 import abc
-import warnings
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Union
 
 
 class ParseError(Exception):
@@ -109,12 +108,15 @@ class Parseable(abc.ABC):
 
     @classmethod
     def parse(
-            cls,
-            input: str,
-            exhaustive: bool = True,
-            lstrip: bool = True,
-            **kwargs: Dict[str,
-                           Any]) -> 'Parseable':
+        cls,
+        input: str,
+        exhaustive: bool = True,
+        lstrip: bool = True,
+        pos: int = 0,
+        **kwargs: Dict[str,
+                       Any]) -> Union['Parseable',
+                                      Tuple['Parseable',
+                                            int]]:
         """
         Parse an instance of `cls`.
 
@@ -128,9 +130,13 @@ class Parseable(abc.ABC):
         exhaustive : bool, optional
             Whether to require parsing to the end of the entire `input`,
             by default True.
+            If False, the position reached is returned.
         lstrip : bool, optional
             Whether to strip leading whitespace before parsing, by
             default False.
+        pos : int, optional
+            The character index at which to start parsing, by default
+            zero.
         kwargs : Dict[str, Any], optional
             Optional keyword arguments to customize parsing.
 
@@ -138,6 +144,9 @@ class Parseable(abc.ABC):
         -------
         Parseable
             An instance of `cls` corresponding to the `input`.
+        int, optional
+            The position reached at the end of parsing if `exhaustive`
+            is False.
 
         Raises
         ------
@@ -146,13 +155,12 @@ class Parseable(abc.ABC):
             `exhaustive` is True and there is extra trailing input after
             any valid string representation of `cls`.
         """
-        pos = 0
         if lstrip:
             pos = cls._lstrip(input, pos)
         parsed, pos = cls._chain_parse(input, pos, **kwargs)
-        if exhaustive and pos < len(input):
-            raise ParseError(cls, input)
-        elif pos < len(input):
-            warnings.warn(
-                f"Trailing content detected when parsing instance of {cls}")
-        return parsed
+        if exhaustive:
+            if pos < len(input):
+                raise ParseError(cls, input)
+            return parsed
+        else:
+            return parsed, pos
