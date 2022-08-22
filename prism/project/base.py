@@ -321,11 +321,12 @@ class Project(ABC):
         msg = (
             f"{action} {status}! Return code is {r.returncode}! "
             f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
+        result = (r.returncode, r.stdout, r.stderr)
         if r.returncode != 0:
-            raise ProjectBuildError(msg)
+            raise ProjectBuildError(msg, *result)
         else:
             logger.debug(msg)
-        return (r.returncode, r.stdout, r.stderr)
+        return result
 
     @abstractmethod
     def _pre_get_random(self, **kwargs):

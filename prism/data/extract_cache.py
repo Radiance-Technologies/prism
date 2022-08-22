@@ -5,6 +5,8 @@ from typing import Callable, Dict, Optional, Set
 
 from prism.data.build_cache import (
     CoqProjectBuildCache,
+    ProjectBuildEnvironment,
+    ProjectBuildResult,
     ProjectCommitData,
     VernacCommandData,
 )
@@ -201,11 +203,15 @@ def extract_cache_new(
     metadata = project.metadata
     project.opam_switch = get_switch(metadata, coq_version)
     try:
-        project.build()
+        build_result = project.build()
     except ProjectBuildError as pbe:
-        print(pbe.args)
+        build_result = (pbe.return_code, pbe.stdout, pbe.stderr)
         command_data = process_project(project)
     else:
         command_data = extract_vernac_commands(project, metadata.serapi_options)
-    data = ProjectCommitData(metadata, command_data)
+    data = ProjectCommitData(
+        metadata,
+        command_data,
+        ProjectBuildEnvironment(project.opam_switch.export()),
+        ProjectBuildResult(*build_result))
     build_cache.insert(data)
