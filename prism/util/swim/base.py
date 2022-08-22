@@ -2,9 +2,10 @@
 Defines the base class and interface for all switch managers.
 """
 import abc
-from typing import Iterable, Optional, Set, Tuple
+from typing import Dict, Iterable, Mapping, Optional, Set, Tuple, Union
 
 from prism.util.opam import OpamSwitch, VersionConstraint
+from prism.util.opam.formula import PackageFormula
 from prism.util.radpytools import cachedmethod
 
 from .exception import UnsatisfiableConstraints
@@ -18,11 +19,18 @@ class SwitchManager(abc.ABC):
     """
 
     def __init__(
-            self,
-            initial_switches: Optional[Iterable[OpamSwitch]] = None) -> None:
+        self,
+        initial_switches: Optional[Iterable[OpamSwitch]] = None,
+        variables: Optional[Mapping[str,
+                                    Union[bool,
+                                          int,
+                                          str]]] = None) -> None:
         if initial_switches is None:
             initial_switches = []
+        if variables is None:
+            variables = {}
         self._switches = set(initial_switches)
+        self._variables = dict(variables)
 
     @cachedmethod
     def _get_switch_config(
@@ -37,9 +45,21 @@ class SwitchManager(abc.ABC):
         """
         return self._switches
 
+    @property
+    def variables(self) -> Dict[str, Union[bool, int, str]]:
+        """
+        Get the set of package variables used to evaluate dependencies.
+        """
+        return self._variables
+
     def get_switch(
-            self,
-            required_packages: Iterable[PackageConstraint]) -> OpamSwitch:
+        self,
+        formula: PackageFormula,
+        variables: Optional[Mapping[str,
+                                    Union[bool,
+                                          int,
+                                          str]]] = None
+    ) -> OpamSwitch:
         """
         Get a switch that satifies the current constraints.
 
@@ -47,6 +67,9 @@ class SwitchManager(abc.ABC):
         ----------
         required_packages : Iterable[PackageConstraint]
             A set of required packages and their version constraints.
+        variables : Mapping[str, Union[bool, int, str]] | None, optional
+            Optional variables that may impact the interpretation of the
+            formula and override the manager's preset variables.
 
         Returns
         -------
@@ -60,7 +83,7 @@ class SwitchManager(abc.ABC):
             constraints.
         """
         for switch in self.switches:
-            if self.satisfies(switch, required_packages):
+            if self.satisfies(switch, formula, variables):
                 return switch
         raise UnsatisfiableConstraints()
 
@@ -78,9 +101,13 @@ class SwitchManager(abc.ABC):
 
     @cachedmethod
     def satisfies(
-            self,
-            switch: OpamSwitch,
-            required_packages: Iterable[PackageConstraint]) -> bool:
+        self,
+        switch: OpamSwitch,
+        formula: PackageFormula,
+        variables: Optional[Mapping[str,
+                                    Union[bool,
+                                          int,
+                                          str]]] = None) -> bool:
         """
         Return whether the given switch satisifes the given constraints.
 
@@ -88,22 +115,21 @@ class SwitchManager(abc.ABC):
         ----------
         switch : OpamSwitch
             An existing switch.
-        required_packages : Iterable[Tuple[str, VersionConstraint]]
-            A set of required packages and their version constraints.
+        formula : Iterable[Tuple[str, VersionConstraint]]
+            A formula expressing the required packages and their
+            version constraints.
+        variables : Mapping[str, Union[bool, int, str]] | None, optional
+            Optional variables that may impact the interpretation of the
+            formula and override the manager's preset variables.
 
         Returns
         -------
         bool
             Whether the `switch` satisfies the given constraints.
         """
+        if variables is not None:
+            variables = {}
+        active_variables = dict(self.variables)
+        active_variables.update(variables)
         config: OpamSwitch.Configuration = self._get_switch_config(switch)
-        installed = dict(config.installed)
-        for package_name, constraint in required_packages:
-            try:
-                installed_version = installed[package_name]
-            except KeyError:
-                return False
-            else:
-                if installed_version not in constraint:
-                    return False
-        return True
+        return formula.is_satisfied(dict(config.installed), active_variables)
