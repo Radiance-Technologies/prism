@@ -2,15 +2,12 @@
 Defines the base class and interface for all switch managers.
 """
 import abc
-from typing import Dict, Iterable, Optional, Set, Tuple, Union
+from typing import Dict, Iterable, Optional, Set, Union
 
-from prism.util.opam import AssignedVariables, OpamSwitch, VersionConstraint
-from prism.util.opam.formula import PackageFormula
+from prism.util.opam import AssignedVariables, OpamSwitch, PackageFormula
 from prism.util.radpytools import cachedmethod
 
 from .exception import UnsatisfiableConstraints
-
-PackageConstraint = Tuple[str, Optional[VersionConstraint]]
 
 
 class SwitchManager(abc.ABC):
