@@ -172,7 +172,7 @@ class Version(Parseable, abc.ABC):
 
 
 @dataclass(frozen=True)
-class OpamVersion(Version, Parseable):
+class OpamVersion(Version):
     """
     Version specifiers according to the OCaml package manager.
 
