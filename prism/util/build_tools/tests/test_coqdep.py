@@ -57,6 +57,7 @@ class TestOpamCoqDepAPI(unittest.TestCase):
         """
         Check that a dependency graph can be made from a list of files.
         """
+        '''
         edges = {
             'Substitution.vo': [],
             'Marks.vo': [],
@@ -79,6 +80,24 @@ class TestOpamCoqDepAPI(unittest.TestCase):
                     'Marks.vo'
                 ]
         }
+        '''
+        edges = {}
+        edges['Substitution.vo'] = []
+        edges['Marks.v'] = []
+        edges['Redexes.vo'] = ['Substitution.vo',
+                               'Marks.vo']
+        edges['Reduction.vo'] = ['Redexes.vo',
+                                 'Marks.vo',
+                                 'Substitution.vo']
+        edges['Terms.vo'] = ['Reduction.vo',
+                             'Redexes.vo',
+                             'Marks.vo',
+                             'Substitution.vo']
+        edges['Test.vo'] = ['Terms.vo',
+                            'Reduction.vo',
+                            'Redexes.vo',
+                            'Substitution.vo',
+                            'Marks.vo']
         expected = nx.DiGraph(edges)
 
         files = [
