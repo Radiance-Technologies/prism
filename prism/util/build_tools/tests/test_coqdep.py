@@ -60,24 +60,35 @@ class TestOpamCoqDepAPI(unittest.TestCase):
         edges = {
             'Substitution.vo': [],
             'Marks.vo': [],
-            'Redexes.vo': ['Substitution.vo', 
+            'Redexes.vo': ['Substitution.vo',
                            'Marks.vo'],
             'Reduction.vo': ['Redexes.vo',
                              'Marks.vo',
                              'Substitution.vo'],
-            'Terms.vo': ['Reduction.vo',
-                         'Redexes.vo',
-                         'Marks.vo',
-                         'Substitution.vo'],
-            'Test.vo': ['Terms.vo',
-                        'Reduction.vo',
-                        'Redexes.vo',
-                        'Substitution.vo',
-                        'Marks.vo']
+            'Terms.vo':
+                ['Reduction.vo',
+                 'Redexes.vo',
+                 'Marks.vo',
+                 'Substitution.vo'],
+            'Test.vo':
+                [
+                    'Terms.vo',
+                    'Reduction.vo',
+                    'Redexes.vo',
+                    'Substitution.vo',
+                    'Marks.vo'
+                ]
         }
         expected = nx.DiGraph(edges)
 
-        files = ['Test.v', 'Terms.v', 'Reduction.v', 'Redexes.v', 'Marks.v', 'Substitution.v']
+        files = [
+            'Test.v',
+            'Terms.v',
+            'Reduction.v',
+            'Redexes.v',
+            'Marks.v',
+            'Substitution.v'
+        ]
         with prism.util.radpytools.os.pushd(self.repo_paths["lambda"]):
             dg = make_dependency_graph(files, OpamAPI.active_switch)
         self.assertTrue(nx.utils.misc.edges_equal(dg.edges, expected.edges))
