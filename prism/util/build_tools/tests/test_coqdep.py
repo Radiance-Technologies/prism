@@ -84,20 +84,21 @@ class TestOpamCoqDepAPI(unittest.TestCase):
         edges = {}
         edges['Substitution.vo'] = []
         edges['Marks.v'] = []
-        edges['Redexes.vo'] = ['Substitution.vo',
-                               'Marks.vo']
-        edges['Reduction.vo'] = ['Redexes.vo',
-                                 'Marks.vo',
-                                 'Substitution.vo']
-        edges['Terms.vo'] = ['Reduction.vo',
-                             'Redexes.vo',
-                             'Marks.vo',
-                             'Substitution.vo']
-        edges['Test.vo'] = ['Terms.vo',
-                            'Reduction.vo',
-                            'Redexes.vo',
-                            'Substitution.vo',
-                            'Marks.vo']
+        edges['Redexes.vo'] = ['Substitution.vo', 'Marks.vo']
+        edges['Reduction.vo'] = ['Redexes.vo', 'Marks.vo', 'Substitution.vo']
+        edges['Terms.vo'] = [
+            'Reduction.vo',
+            'Redexes.vo',
+            'Marks.vo',
+            'Substitution.vo'
+        ]
+        edges['Test.vo'] = [
+            'Terms.vo',
+            'Reduction.vo',
+            'Redexes.vo',
+            'Substitution.vo',
+            'Marks.vo'
+        ]
         expected = nx.DiGraph(edges)
 
         files = [
