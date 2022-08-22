@@ -6,9 +6,15 @@ import shutil
 import unittest
 
 import git
+import networkx as nx
 
 import prism.util.radpytools.os
-from prism.util.build_tools.coqdep import order_dependencies
+from prism.util.build_tools.coqdep import (check_valid_topological_sort,
+                                           get_dependencies,
+                                           make_dependency_graph,
+                                           order_dependencies)
+
+
 from prism.util.opam import OpamAPI
 
 
@@ -16,6 +22,46 @@ class TestOpamCoqDepAPI(unittest.TestCase):
     """
     Test suite for `CoqDepAPI`.
     """
+
+    def test_check_valid_topological_sort(self):
+        """
+        Test that topological sorts can be verified.
+        """
+        edges = {'Redexes.v': [],
+                 'Reduction.v': ['Redexes.v'],
+                 'Terms.v': ['Reduction.v', 'Redexes.v'],
+                 'Test.v': ['Terms.v', 'Reduction.v', 'Redexes.v']}
+        dg = nx.DiGraph(edges)
+
+        expected = ["Test.v", "Terms.v", "Reduction.v", "Redexes.v"]
+        self.assertTrue(check_valid_topological_sort(dg, expected))
+
+    def test_get_dependencies(self):
+        """
+        Verify that dependencies can be sorted.
+        """
+        with prism.util.radpytools.os.pushd(self.repo_paths["lambda"]):
+            files = os.listdir("./")
+            files = [x for x in files if x[-2 :] == '.v']
+            deps = get_dependencies("Redexes.v", OpamAPI.active_switch)
+            expected = ["Test.vo", "Terms.vo", "Reduction.vo"]
+            for file in expected:
+                self.assertTrue(file in deps)
+
+    def test_make_dep_graph(self):
+        """
+        Check that a dependency graph can be made from a list of files.
+        """
+        edges = {'Redexes.vo': [],
+                 'Reduction.vo': ['Redexes.vo'],
+                 'Terms.vo': ['Reduction.vo', 'Redexes.vo'],
+                 'Test.vo': ['Terms.vo', 'Reduction.vo', 'Redexes.vo']}
+        expected = nx.DiGraph(edges).reverse()
+
+        files = ['Test.v', 'Terms.v', 'Reduction.v', 'Redexes.v']
+        with prism.util.radpytools.os.pushd(self.repo_paths["lambda"]):
+            dg = make_dependency_graph(files, OpamAPI.active_switch)
+        self.assertTrue(nx.utils.misc.edges_equal(dg.edges, expected.edges))
 
     def test_order_dependencies(self):
         """
