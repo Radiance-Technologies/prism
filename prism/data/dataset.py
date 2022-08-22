@@ -441,9 +441,11 @@ class CoqProjectBaseDataset:
             self,
             commit_names: Optional[Dict[str,
                                         str]] = None,
-            glom_proofs: bool = True) -> Generator[str,
-                                                   None,
-                                                   None]:
+            glom_proofs: bool = True,
+            glom_ltac: bool = False,
+            return_asts: bool = False) -> Generator[str,
+                                                    None,
+                                                    None]:
         """
         Yield Coq sentences from `CoqProjectBaseDataset`.
 
@@ -465,6 +467,8 @@ class CoqProjectBaseDataset:
             sentence_list = Project.extract_sentences(
                 file_obj,
                 glom_proofs=glom_proofs,
+                glom_ltac=glom_ltac,
+                return_asts=return_asts,
                 sentence_extraction_method=self.sentence_extraction_method)
             for sentence in sentence_list:
                 yield sentence

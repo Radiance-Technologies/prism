@@ -5,16 +5,20 @@ import pathlib
 import re
 import warnings
 from dataclasses import dataclass, field
-from typing import List, Set
+from typing import List, Set, Tuple
 
 from seutil import io
 
 from prism.data.document import CoqDocument
+from prism.language.gallina.analyze import SexpAnalyzer
 from prism.language.gallina.parser import CoqParser
 from prism.util.iterable import CallableIterator, CompareIterator
 from prism.util.radpytools.dataclasses import default_field
 from prism.util.radpytools.os import pushd
 
+from ...data.vernac_sentence import VernacularSentence
+from ..sexp.list import SexpList
+from ..sexp.node import SexpNode
 from .assertion import Assertion
 from .util import ParserUtils
 
@@ -555,6 +559,55 @@ class HeuristicParser:
         return result
 
     @classmethod
+    def _glom_ltac(
+        cls,
+        vernac_sentences: List[VernacularSentence],
+        sexp_asts: List[SexpNode],
+    ) -> List[Tuple[VernacularSentence,
+                    SexpNode]]:
+        """
+        Combine contiguous LTAC sentences together.
+
+        Parameters
+        ----------
+        vernac_sentences : List[VernacularSentence]
+            List of vernacular sentences from a document.
+        sexp_asts : List[SexpNode]
+            List of sexpression ASTs for each vernacular sentence
+            in `vernac_sentences`.
+
+        Returns
+        -------
+        List[VernacularSentence], List[SexpNode]
+            List of vernacular sentences and nodes.
+        """
+        sentences = []
+        asts = []
+        in_ltac_region = False
+        for sentence, ast in zip(vernac_sentences, sexp_asts):
+            if SexpAnalyzer.is_ltac(ast):
+                if not in_ltac_region:
+                    # Enter ltac region and create empty buffers
+                    in_ltac_region = True
+                    ltac_sentences = []
+                    ltac_asts = []
+                # Add Ltac sentence and ast to buffers
+                ltac_sentences.append(sentence)
+                ltac_asts.append(ast)
+            elif in_ltac_region:
+                # Join sentences by a space
+                sentence = ltac_sentences
+                # Create a single node containing all
+                # continugous Ltac asts.
+                ast = SexpList(ltac_asts)
+                # Exit ltac region
+                in_ltac_region = False
+            # pair sentence with ast node.
+            sentences.append(sentence)
+            asts.append(ast)
+        return sentences, asts
+
+    @classmethod
     def _get_sentences(cls, file_contents: str) -> List[str]:
         """
         Get the sentences of the given file.
@@ -765,6 +818,8 @@ class SerAPIParser(HeuristicParser):
             document: CoqDocument,
             _encoding: str = "utf-8",
             glom_proofs: bool = True,
+            glom_ltac: bool = False,
+            return_asts: bool = False,
             **kwargs) -> List[str]:
         """
         Extract sentences from a Coq document using SerAPI.
@@ -778,6 +833,12 @@ class SerAPIParser(HeuristicParser):
         glom_proofs : bool, optional
             A flag indicating whether or not proofs should be re-glommed
             after sentences are split, by default `True`.
+        glom_ltac : bool, optional
+            Glom together contiguous regions of Ltac code,
+            by default `False`
+        return_asts: bool, optional
+            Return asts with sentences as a list of tuples,
+            by default `False`
         kwargs : Dict[str, Any]
             Optional keyword arguments to `CoqParser.parse_all`, such as
             `opam_switch` or `serapi_options`.
@@ -812,13 +873,22 @@ class SerAPIParser(HeuristicParser):
             else:
                 serapi_options = ""
         with pushd(document.project_path):
-            vernac_sentences, _, _ = CoqParser.parse_all(
+            vernac_sentences, asts, _ = CoqParser.parse_all(
                 coq_file,
                 source_code,
                 serapi_options,
                 **kwargs)
-        sentences = [str(vs) for vs in vernac_sentences]
+        if glom_ltac:
+            vernac_sentences, asts = cls._glom_ltac(vernac_sentences, asts)
+        sentences = [
+            ' '.join((str(s)
+                      for s in vs)) if isinstance(vs,
+                                                  list) else str(vs)
+            for vs in vernac_sentences
+        ]
         if glom_proofs:
             stats = cls._compute_sentence_statistics(sentences)
             sentences = cls._glom_proofs(document.index, sentences, stats)
+        if return_asts:
+            sentences = [(s, a) for s, a in zip(sentences, asts)]
         return sentences
