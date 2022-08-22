@@ -71,11 +71,13 @@ class TestOpamCoqDepAPI(unittest.TestCase):
                  'Marks.vo',
                  'Substitution.vo'],
             'Test.vo':
-                ['Terms.vo',
-                 'Reduction.vo',
-                 'Redexes.vo',
-                 'Substitution.vo',
-                 'Marks.vo']
+                [
+                    'Terms.vo',
+                    'Reduction.vo',
+                    'Redexes.vo',
+                    'Substitution.vo',
+                    'Marks.vo'
+                ]
         }
         expected = nx.DiGraph(edges)
 
