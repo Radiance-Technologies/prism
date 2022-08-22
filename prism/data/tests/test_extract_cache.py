@@ -37,7 +37,7 @@ class TestExtractCache(unittest.TestCase):
         Set up an on-disk cache to share among all unit tests.
         """
         cls.cache = CoqProjectBuildCache(cls.CACHE_DIR)
-        cls.swim = SwitchManager(OpamAPI.active_switch)
+        cls.swim = SwitchManager([OpamAPI.active_switch])
         cls.storage = MetadataStorage.load(
             _PROJECT_EXAMPLES_PATH / "project_metadata.yml")
         cls.dir_list = [
