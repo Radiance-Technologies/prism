@@ -1,10 +1,10 @@
 """
 Provides an object-oriented abstraction of OPAM switches.
 """
-import networkx as nx
 from os import PathLike
 from typing import List
 
+import networkx as nx
 from networkx.algorithms.dag import all_topological_sorts
 
 from prism.util.opam.switch import OpamSwitch

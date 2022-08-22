@@ -9,12 +9,12 @@ import git
 import networkx as nx
 
 import prism.util.radpytools.os
-from prism.util.build_tools.coqdep import (check_valid_topological_sort,
-                                           get_dependencies,
-                                           make_dependency_graph,
-                                           order_dependencies)
-
-
+from prism.util.build_tools.coqdep import (
+    check_valid_topological_sort,
+    get_dependencies,
+    make_dependency_graph,
+    order_dependencies,
+)
 from prism.util.opam import OpamAPI
 
 
@@ -27,10 +27,15 @@ class TestOpamCoqDepAPI(unittest.TestCase):
         """
         Test that topological sorts can be verified.
         """
-        edges = {'Redexes.v': [],
-                 'Reduction.v': ['Redexes.v'],
-                 'Terms.v': ['Reduction.v', 'Redexes.v'],
-                 'Test.v': ['Terms.v', 'Reduction.v', 'Redexes.v']}
+        edges = {
+            'Redexes.v': [],
+            'Reduction.v': ['Redexes.v'],
+            'Terms.v': ['Reduction.v',
+                        'Redexes.v'],
+            'Test.v': ['Terms.v',
+                       'Reduction.v',
+                       'Redexes.v']
+        }
         dg = nx.DiGraph(edges)
 
         expected = ["Test.v", "Terms.v", "Reduction.v", "Redexes.v"]
@@ -52,10 +57,15 @@ class TestOpamCoqDepAPI(unittest.TestCase):
         """
         Check that a dependency graph can be made from a list of files.
         """
-        edges = {'Redexes.vo': [],
-                 'Reduction.vo': ['Redexes.vo'],
-                 'Terms.vo': ['Reduction.vo', 'Redexes.vo'],
-                 'Test.vo': ['Terms.vo', 'Reduction.vo', 'Redexes.vo']}
+        edges = {
+            'Redexes.vo': [],
+            'Reduction.vo': ['Redexes.vo'],
+            'Terms.vo': ['Reduction.vo',
+                         'Redexes.vo'],
+            'Test.vo': ['Terms.vo',
+                        'Reduction.vo',
+                        'Redexes.vo']
+        }
         expected = nx.DiGraph(edges).reverse()
 
         files = ['Test.v', 'Terms.v', 'Reduction.v', 'Redexes.v']
