@@ -6304,7 +6304,7 @@ ocaml_packages:
 - - '"coq-inf-seq-ext"'
   - 56
 - - '"coq-struct-tact"'
-  - "57"
+  - 57
 - - '"coq-cheerios"'
   - 58
 opam_dependencies:
