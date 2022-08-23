@@ -2,7 +2,6 @@
 Provides an object-oriented abstraction of OPAM switches.
 """
 import os
-
 from os import PathLike
 from typing import List
 
@@ -57,7 +56,7 @@ def make_dependency_graph(
     """
     dep_graph_dict = {}
     for file in files:
-        if file[-3:] == ".vo":
+        if file[-3 :] == ".vo":
             file = file[:-1]
         deps = []
         deps = get_dependencies(file, switch, IQR, boot)

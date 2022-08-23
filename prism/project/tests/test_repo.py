@@ -12,7 +12,6 @@ import git
 import networkx as nx
 
 import prism.util.radpytools.os
-
 from prism.project import ProjectRepo, SentenceExtractionMethod
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
@@ -21,11 +20,11 @@ from prism.project.repo import (
     CommitIterator,
     CommitTraversalStrategy,
 )
+from prism.tests import _MINIMAL_METADATA, _MINIMAL_METASTORAGE
 from prism.util.build_tools.coqdep import (
     check_valid_topological_sort,
     make_dependency_graph,
 )
-from prism.tests import _MINIMAL_METADATA, _MINIMAL_METASTORAGE
 
 TEST_DIR = os.path.dirname(__file__)
 PROJECT_DIR = os.path.dirname(TEST_DIR)
@@ -326,7 +325,10 @@ class TestProjectRepoLambda(unittest.TestCase):
         with prism.util.radpytools.os.pushd(self.repo_path):
             ordered = self.project.get_ordered_file_list()
             files = os.listdir("./")
-            files = [os.path.join(self.repo_path, x) for x in files if x[-2 :] == '.v']
+            files = [
+                os.path.join(self.repo_path,
+                             x) for x in files if x[-2 :] == '.v'
+            ]
             graph = make_dependency_graph(files, self.project.opam_switch)
             self.assertTrue(len(list(nx.simple_cycles(graph))) == 0)
             self.assertTrue(check_valid_topological_sort(graph, ordered))
