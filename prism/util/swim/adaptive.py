@@ -47,7 +47,7 @@ class AdaptiveSwitchManager(SwitchManager):
         """
         Clone the given switch.
         """
-        prefix = switch.name.split("_clone_")[-1 :]
+        prefix = switch.name.split("_clone_")[-1]
         prefix = f"{prefix}_clone_"
         clone_dir = Path(tempfile.mkdtemp(prefix=prefix, dir=switch.root))
         clone = OpamAPI.clone_switch(switch.name, clone_dir.stem, switch.root)
@@ -91,7 +91,7 @@ class AdaptiveSwitchManager(SwitchManager):
         closest_switch = None
         minimum_size = Top()
         for switch in self.switches:
-            simplified = self.simplify(switch, formula, variables)
+            simplified = self.simplify(switch, formula, **variables)
             if isinstance(simplified, bool):
                 if simplified:
                     simplified_size = 0
