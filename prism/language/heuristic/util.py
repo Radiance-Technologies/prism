@@ -5,11 +5,10 @@ Provides internal utilities for heuristic parsing of Coq source files.
 import re
 from dataclasses import dataclass
 from functools import partialmethod
-from typing import Iterable, List, Optional, Set, Tuple
+from typing import Iterable, List, Optional, Set, Tuple, Union
 
+from prism.language.gallina.analyze import SexpInfo
 from prism.util.re import regex_from_options
-
-from ..gallina.analyze import SexpInfo
 
 
 class ParserUtils:
@@ -795,9 +794,107 @@ class ParserUtils:
         Strings stored in objects of this class should only be those
         that have been loaded from files. The location data is only
         meaningful in that context.
+
+        If a string spans multiple lines, it is assumed that the newline
+        and other whitespace characters that situate the lines are
+        present in the string.
         """
 
         string: str
         """The string itself."""
         loc: SexpInfo.Loc
         """The string's original location."""
+
+        def __str__(self) -> str:
+            """
+            Return a plain-string representation of the located string.
+
+            Returns
+            -------
+            str
+                String representation
+            """
+            return self.string
+
+        @classmethod
+        def re_split(
+                cls,
+                pattern: Union[str,
+                               re.Pattern[str]],
+                string: 'ParserUtils.StrWithLocation',
+                maxsplit: int = 0,
+                flags: re._FlagsType = 0
+        ) -> List['ParserUtils.StrWithLocation']:
+            """
+            Mimic re.split, but maintain location information.
+
+            Parameters
+            ----------
+            pattern : Union[str, re.Pattern[str]]
+                Pattern to match for split
+            string : ParserUtils.StrWithLocation
+                The string with location to split
+            maxsplit : int, optional
+                Maximum number of splits to do; unlimited if 0, by
+                default 0
+            flags : re._FlagsType, optional
+                Flags to pass to compile operation if pattern is a str,
+                by default 0
+
+            Returns
+            -------
+            List[StrWithLocation]
+                A list of strings with locations after being split by
+                the pattern
+            """
+            if isinstance(pattern, str):
+                pattern = re.compile(pattern, flags)
+            located_result: List[ParserUtils.StrWithLocation] = []
+            remaining_str = cls(string.string, string.loc)
+            current_split = 0
+            while remaining_str:
+                match = pattern.search(remaining_str)
+                if match is None or (maxsplit > 0
+                                     and current_split >= maxsplit):
+                    located_result.append(remaining_str)
+                    break
+                else:
+                    # <TODO>:
+                    # Get pre split part
+                    # Get offsets for the pre-split part
+                    # Get offsets for the split part
+                    # Count newlines in pre-split part
+                    # Count newlines in split part
+                    # For result, we already have filename, lineno,
+                    # bol_pos, and beg_charno; need to compute
+                    # lineno_last and end_charno.
+                    # For remaining_str, already have filename,
+                    # lineno_last, and end_charno; need to compute
+                    # lineno, bol_pos, and beg_charno.
+                    ...
+                current_split += 1
+            return located_result
+
+        def re_sub(self):
+            """
+            Mimic re.sub, keeping track of locations.
+            """
+            ...
+
+        def str_append(self):
+            """
+            Implement string += operation.
+            """
+            ...
+
+        def str_join(self):
+            """
+            Join multiple strings with locations.
+            """
+            ...
+
+        def str_strip(self):
+            """
+            Mimic str strip method, keeping track of location.
+            """
+            ...
