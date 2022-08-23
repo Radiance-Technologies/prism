@@ -802,19 +802,36 @@ class ParserUtils:
 
         string: str
         """The string itself."""
-        loc: SexpInfo.Loc
-        """The string's original location."""
+        loc: Optional[SexpInfo.Loc]
+        """
+        The string's original location. Should only be None if `string`
+        is empty.
+        """
+
+        def __post_init__(self):
+            """
+            Verify inputs.
+
+            Raises
+            ------
+            ValueError
+                If a non-empty string and a "None" location are provided
+            """
+            if self.string and self.loc is None:
+                raise ValueError(
+                    "Non-empty strings must be accompanied by a location.")
 
         def __str__(self) -> str:
             """
             Return a plain-string representation of the located string.
-
-            Returns
-            -------
-            str
-                String representation
             """
             return self.string
+
+        def __bool__(self) -> bool:
+            """
+            Tie truth value to string field.
+            """
+            return len(self.string) > 0
 
         @classmethod
         def re_split(
@@ -857,22 +874,58 @@ class ParserUtils:
                 match = pattern.search(remaining_str)
                 if match is None or (maxsplit > 0
                                      and current_split >= maxsplit):
+                    # Either pattern is not found or maxsplit limit has
+                    # been reached. In both cases, stop splitting.
                     located_result.append(remaining_str)
-                    break
+                    remaining_str = cls("", None)
                 else:
-                    # <TODO>:
-                    # Get pre split part
-                    # Get offsets for the pre-split part
-                    # Get offsets for the split part
-                    # Count newlines in pre-split part
-                    # Count newlines in split part
-                    # For result, we already have filename, lineno,
-                    # bol_pos, and beg_charno; need to compute
-                    # lineno_last and end_charno.
-                    # For remaining_str, already have filename,
-                    # lineno_last, and end_charno; need to compute
-                    # lineno, bol_pos, and beg_charno.
-                    ...
+                    # Carry on splitting
+                    if match.start() > 0:
+                        # If part of the remaining string lies before
+                        # the first split pattern occurrence...
+                        pre_split_str = remaining_str.string[: match.start()]
+                        pre_split_num_newlines = pre_split_str.count("\n")
+                        pre_split_len = len(pre_split_str)
+                        pre_split_located = cls(
+                            pre_split_str,
+                            SexpInfo.Loc(
+                                remaining_str.loc.filename,
+                                remaining_str.loc.lineno,
+                                remaining_str.loc.bol_pos,
+                                remaining_str.loc.lineno
+                                + pre_split_num_newlines,
+                                0,
+                                remaining_str.loc.beg_charno,
+                                remaining_str.loc.beg_charno + pre_split_len))
+                        located_result.append(pre_split_located)
+                    else:
+                        # If the split pattern occurs very first thing
+                        # in the remaining string...
+                        pre_split_num_newlines = 0
+                        pre_split_len = 0
+                    # Here, deal with the part of the remaining string
+                    # that matches the split pattern
+                    split_str = remaining_str.string[match.start(): match.end()]
+                    split_num_newlines = split_str.count("\n")
+                    split_len = len(split_str)
+                    if match.end() == len(remaining_str.string):
+                        remaining_str = cls("", None)
+                    else:
+                        remaining_str = cls(
+                            remaining_str.string[match.end():],
+                            SexpInfo.Loc(
+                                remaining_str.loc.filename,
+                                (
+                                    remaining_str.loc.lineno
+                                    + pre_split_num_newlines
+                                    + split_num_newlines),
+                                0,
+                                remaining_str.loc.lineno_last,
+                                remaining_str.loc.bol_pos_last,
+                                (
+                                    remaining_str.log.beg_charno + pre_split_len
+                                    + split_len + 1),
+                                remaining_str.loc.end_charno))
                 current_split += 1
             return located_result
 
