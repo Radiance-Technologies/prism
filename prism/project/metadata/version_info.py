@@ -7,7 +7,8 @@ from typing import Dict, List, Optional, Set, Tuple, Union
 
 import seutil.io as io
 
-from prism.util.opam import OCamlVersion, OpamAPI, Version, VersionConstraint
+from prism.util.opam import OCamlVersion, OpamAPI, Version
+from prism.util.opam.formula import LogicalPF, PackageConstraint, VersionFormula
 from prism.util.radpytools import cachedmethod
 from prism.util.radpytools.dataclasses import default_field
 
@@ -20,9 +21,9 @@ class VersionInfo:
     Encapsulates version/dependency metadata.
     """
 
-    coq_versions: InitVar[Union[VersionConstraint, Set[Version]]] = None
-    serapi_versions: InitVar[Union[VersionConstraint, Set[Version]]] = None
-    ocaml_versions: InitVar[Union[VersionConstraint, Set[Version]]] = None
+    coq_versions: InitVar[Union[VersionFormula, Set[Version]]] = None
+    serapi_versions: InitVar[Union[VersionFormula, Set[Version]]] = None
+    ocaml_versions: InitVar[Union[VersionFormula, Set[Version]]] = None
     available_coq_versions: Set[str] = default_field(set())
     available_serapi_versions: Set[str] = default_field(set())
     available_ocaml_versions: Set[str] = default_field(set())
@@ -40,11 +41,11 @@ class VersionInfo:
 
         def _init_versions(
                 pkg: str,
-                versions: Union[VersionConstraint,
-                                Set[Version]],
+                versions: Optional[Union[VersionFormula,
+                                         Set[Version]]],
                 attr: Set[str]) -> Tuple[List[str],
                                          List[Version]]:
-            if versions is None or isinstance(versions, VersionConstraint):
+            if versions is None or isinstance(versions, VersionFormula):
                 available_versions = OpamAPI.active_switch.get_available_versions(
                     pkg)
                 if versions is None:
@@ -56,7 +57,7 @@ class VersionInfo:
             attr.update(versions)
             return (
                 sorted([str(v) for v in versions]),
-                sorted([OCamlVersion.parse(v) for v in attr]))
+                sorted([Version.parse(v) for v in attr]))
 
         new_coq_versions, sorted_coq_versions = _init_versions(
             'coq',
@@ -76,8 +77,17 @@ class VersionInfo:
             dependencies = OpamAPI.active_switch.get_dependencies(
                 "coq-serapi",
                 serapi_version)
-            coq_constraint = dependencies['coq']
-            for coq_version in coq_constraint.apply(sorted_coq_versions):
+            assert isinstance(dependencies, LogicalPF)
+            dependencies = dependencies.to_conjunctive_list()
+            coq_constraint = None
+            for dependency in dependencies:
+                if (isinstance(dependency,
+                               PackageConstraint)
+                        and dependency.package_name == 'coq'):
+                    coq_constraint = dependency.version_constraint
+                    break
+            assert coq_constraint is not None
+            for coq_version in coq_constraint.filter(sorted_coq_versions):
                 coq_version = str(coq_version)
                 if coq_version not in serapi_coq_compat:
                     serapi_coq_compat[coq_version] = set()
@@ -90,8 +100,17 @@ class VersionInfo:
             dependencies = OpamAPI.active_switch.get_dependencies(
                 "coq",
                 coq_version)
-            ocaml_constraint = dependencies['ocaml']
-            for ocaml_version in ocaml_constraint.apply(sorted_ocaml_versions):
+            assert isinstance(dependencies, LogicalPF)
+            dependencies = dependencies.to_conjunctive_list()
+            coq_constraint = None
+            for dependency in dependencies:
+                if (isinstance(dependency,
+                               PackageConstraint)
+                        and dependency.package_name == 'ocaml'):
+                    ocaml_constraint = dependency.version_constraint
+                    break
+            assert ocaml_constraint is not None
+            for ocaml_version in ocaml_constraint.filter(sorted_ocaml_versions):
                 ocaml_version = str(ocaml_version)
                 coq_ocaml_compat[coq_version].add(ocaml_version)
 

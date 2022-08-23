@@ -5,9 +5,18 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
-from typing import Dict
 
-from prism.util.opam import OCamlVersion, OpamAPI, Version, VersionConstraint
+from prism.util.opam import OCamlVersion, OpamAPI, Version
+from prism.util.opam.formula import (
+    FilterAtom,
+    LogicalPF,
+    LogicalVF,
+    LogOp,
+    PackageConstraint,
+    RelOp,
+    Variable,
+    VersionConstraint,
+)
 
 TEST_DIR = Path(__file__).parent
 
@@ -62,24 +71,29 @@ class TestOpamSwitch(unittest.TestCase):
         Test retrieval of dependencies for a single package.
         """
         actual = self.test_switch.get_dependencies("coq", "8.10.2")
-        expected: Dict[str, VersionConstraint]
-        expected = {
-            "ocaml":
-                VersionConstraint(
-                    OCamlVersion(4,
-                                 '05',
-                                 0),
-                    OCamlVersion(4,
-                                 10),
-                    True,
-                    False),
-            "ocamlfind":
-                VersionConstraint(),
-            "num":
-                VersionConstraint(),
-            "conf-findutils":
-                VersionConstraint()
-        }
+        expected = LogicalPF(
+            PackageConstraint(
+                "ocaml",
+                LogicalVF(
+                    VersionConstraint(RelOp.GEQ,
+                                      OCamlVersion(4,
+                                                   '05',
+                                                   0)),
+                    LogOp.AND,
+                    VersionConstraint(RelOp.LT,
+                                      OCamlVersion(4,
+                                                   10)))),
+            LogOp.AND,
+            LogicalPF(
+                PackageConstraint("ocamlfind",
+                                  FilterAtom(Variable("build"))),
+                LogOp.AND,
+                LogicalPF(
+                    PackageConstraint("num"),
+                    LogOp.AND,
+                    PackageConstraint(
+                        "conf-findutils",
+                        FilterAtom(Variable("build"))))))
         self.assertEqual(actual, expected)
 
     def test_get_installed_version(self):
@@ -87,7 +101,7 @@ class TestOpamSwitch(unittest.TestCase):
         Test retrieval of installed versions.
         """
         self.assertIsNone(self.test_switch.get_installed_version("coq"))
-        self.test_switch.install('coq', version="8.10.2", yes=True)
+        self.test_switch.install('coq', version="8.10.2")
         version = self.test_switch.get_installed_version("coq")
         self.assertEqual(version, "8.10.2")
         version = self.test_switch.get_installed_version("ocaml")
@@ -118,6 +132,27 @@ class TestOpamSwitch(unittest.TestCase):
         r.check_returncode()
         returned = r.stderr
         self.assertTrue("No matches found" in returned)
+
+    def test_install_formula(self):
+        """
+        Test installation of just a package's dependencies from formula.
+        """
+        formula = self.test_switch.get_dependencies("coq", "8.10.2")
+        self.test_switch.install_formula(formula)
+        deps = formula.packages
+        installed_deps = {
+            dep: self.test_switch.get_installed_version(dep) for dep in deps
+        }
+        installed_deps = {
+            k: Version.parse(v) for k,
+            v in installed_deps.items() if v is not None
+        }
+        self.assertTrue(installed_deps)
+        self.assertIn((installed_deps,
+                       {
+                           'build': True
+                       }),
+                      formula)
 
     def test_repo_add_remove(self):
         """

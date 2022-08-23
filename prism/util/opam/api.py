@@ -68,7 +68,7 @@ class OpamAPI:
         ------
         subprocess.CalledProcessError
             If the ``opam switch create`` command fails.
-        VersionParseError
+        ParseError
             If `compiler` is not a valid version identifier.
 
         Warns
@@ -230,6 +230,20 @@ class OpamAPI:
         cls.active_switch = OpamSwitch(switch_name, opam_root)
 
     @classmethod
+    def show_root(cls) -> PathLike:
+        """
+        Get the path of the current OPAM root.
+
+        Returns
+        -------
+        str
+            The path to the current OPAM root, i.e., the root that
+            ``None`` resolves to when given as the value for `opam_root`
+            in `create_switch`.
+        """
+        return cls.active_switch.root
+
+    @classmethod
     def show_switch(cls) -> str:
         """
         Get the name of the current switch.
@@ -238,11 +252,6 @@ class OpamAPI:
         -------
         str
             The name of the current switch.
-
-        Raises
-        ------
-        subprocess.CalledProcessError
-            If the `opam switch show` command fails.
         """
         return cls.active_switch.name
 

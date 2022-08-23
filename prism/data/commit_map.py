@@ -337,7 +337,7 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
 
         Returns
         -------
-        Dict[str, T]
+        Dict[str, Except[T}]
             The output of `map`.
         MetadataStorage
             The updated `MetadataStorage` for each mapped project.

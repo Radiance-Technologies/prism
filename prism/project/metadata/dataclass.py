@@ -179,6 +179,28 @@ class ProjectMetadata:
         # standardize project url
         if self.project_url is not None:
             self.project_url = GitURL(self.project_url)
+        # guard against common kinds of misspecified or misformatted
+        # data
+        for cmd_seq in ['build_cmd', 'install_cmd', 'clean_cmd']:
+            if getattr(self, cmd_seq) is None:
+                setattr(self, cmd_seq, [])
+            else:
+                # remove None commands
+                setattr(
+                    self,
+                    cmd_seq,
+                    [cmd for cmd in getattr(self,
+                                            cmd_seq) if cmd is not None])
+        for set_tp in ['opam_repos', 'opam_dependencies', 'coq_dependencies']:
+            if getattr(self, set_tp) is None:
+                setattr(self, set_tp, set())
+            else:
+                # remove None elements
+                setattr(
+                    self,
+                    set_tp,
+                    {e for e in getattr(self,
+                                        set_tp) if e is not None})
 
     def __gt__(self, other: 'ProjectMetadata') -> bool:
         """
