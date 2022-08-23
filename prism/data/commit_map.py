@@ -5,6 +5,7 @@ import functools
 import logging
 import os
 import signal
+import traceback
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import (
@@ -52,6 +53,10 @@ class Except(Generic[T]):
     """
     An exception raised during the computation of `value`.
     """
+    trace: str
+    """
+    The stack trace of the exception.
+    """
 
 
 def _project_commit_fmap(
@@ -96,7 +101,7 @@ def _project_commit_fmap(
             result = commit_fmap(project, commit, result)
         except Exception as e:
             is_terminated = True
-            result = Except(result, e)
+            result = Except(result, e, traceback.format_exc())
     return result
 
 
