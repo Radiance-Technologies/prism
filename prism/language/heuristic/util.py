@@ -818,12 +818,13 @@ class ParserUtils:
 
         @classmethod
         def re_split(
-                cls,
-                pattern: Union[str,
-                               re.Pattern[str]],
-                string: 'ParserUtils.StrWithLocation',
-                maxsplit: int = 0,
-                flags: re._FlagsType = 0
+            cls,
+            pattern: Union[str,
+                           re.Pattern[str]],
+            string: 'ParserUtils.StrWithLocation',
+            maxsplit: int = 0,
+            flags: Union[int,
+                         re.RegexFlag] = 0
         ) -> List['ParserUtils.StrWithLocation']:
             """
             Mimic re.split, but maintain location information.
