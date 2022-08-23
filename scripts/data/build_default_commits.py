@@ -10,14 +10,14 @@ from pathlib import Path
 import tqdm
 
 from prism.data.build_cache import CoqProjectBuildCache
-from prism.data.commit_map import ProjectCommitUpdateMapper
+from prism.data.commit_map import Except, ProjectCommitUpdateMapper
 from prism.data.extract_cache import get_formula_from_metadata
 from prism.data.setup import create_default_switches
 from prism.project.base import SentenceExtractionMethod
 from prism.project.exception import ProjectBuildError
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
-from prism.util.swim import AdaptiveSwitchManager, SwitchManager
+from prism.util.swim import AutoSwitchManager, SwitchManager
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -117,11 +117,11 @@ def get_process_commit_func(switch_manager):
     return partial(process_commit, switch_manager)
 
 
-def main(root_path, storage_path, cache_dir):
+def main(root_path, storage_path):
     # Initialize from arguments
-    build_cache = CoqProjectBuildCache(cache_dir)
     metadata_storage = MetadataStorage.load(storage_path)
-    switch_manager = AdaptiveSwitchManager(create_default_switches(7))
+    create_default_switches(7)
+    switch_manager = AutoSwitchManager()
     # Generate list of projects
     projects = list(
         tqdm.tqdm(
@@ -129,7 +129,8 @@ def main(root_path, storage_path, cache_dir):
                 get_project_func(root_path,
                                  metadata_storage),
                 metadata_storage.projects),
-            desc="Initializing Project instances"))
+            desc="Initializing Project instances",
+            total=len(metadata_storage.projects)))
     # Create commit mapper
     project_looper = ProjectCommitUpdateMapper(
         projects,
@@ -137,15 +138,19 @@ def main(root_path, storage_path, cache_dir):
         get_process_commit_func(switch_manager),
         "Building projects")
     # Build projects in parallel
-    result, metadata_storage = project_looper.update_map(30)
+    results, metadata_storage = project_looper.update_map(30)
+    for p, result in results.items():
+        if isinstance(result, Except):
+            print(f"{type(result.exception)} encountered in project {p}:")
+            print(result.trace)
+    storage_dir = Path(storage_path).parent
     metadata_storage.dump(
         metadata_storage,
-        "/workspace/pearls/cache/msp/updated-metadata.yaml")
+        storage_dir / "updated-metadata.yaml")
     print("Done")
 
 
 if __name__ == "__main__":
     main(
         "/workspace/pearls/cache/msp/repos",
-        "/workspace/datasets/pearls/metadata/agg/agg_coq_repos.yml",
-        "/workspace/pearls/cache/msp/build_cache")
+        Path(f"{__file__}/../../../dataset/agg_coq_repos.yml").resolve())
