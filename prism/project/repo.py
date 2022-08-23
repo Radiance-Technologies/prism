@@ -444,8 +444,7 @@ class ProjectRepo(Repo, Project):
     def get_ordered_file_list(self,
                               commit_name: Optional[str] = None) -> List[str]:
         """
-        Return an ordered list of all Coq files associated with this
-        project.
+        Return a topologically sort of all the project's Coq files.
 
         Parameters
         ----------
