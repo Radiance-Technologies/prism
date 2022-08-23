@@ -1,6 +1,8 @@
 """
 Provides an object-oriented abstraction of OPAM switches.
 """
+import os
+
 from os import PathLike
 from typing import List
 
@@ -55,7 +57,12 @@ def make_dependency_graph(
     """
     dep_graph_dict = {}
     for file in files:
-        dep_graph_dict[file + "o"] = get_dependencies(file, switch, IQR, boot)
+        if file[-3:] == ".vo":
+            file = file[:-1]
+        deps = []
+        deps = get_dependencies(file, switch, IQR, boot)
+        file = file + "o"
+        dep_graph_dict[file] = deps
     dep_graph = nx.DiGraph(dep_graph_dict)
     return dep_graph.reverse()
 
@@ -92,7 +99,15 @@ def get_dependencies(
     command = "coqdep {0} -sort {1} {2}".format(file, IQR, boot)
     file_deps = switch.run(command)
     file_deps = file_deps.stdout.strip().replace("./", "").split(" ")
-    file_deps.remove(file + "o")
+    dirname = os.path.dirname(file)
+
+    # The dirname may not be what coqdep is using
+    # as its base directory. It may be using the working directory
+    file_deps = [os.path.join(dirname, filename) for filename in file_deps]
+
+    vo_version = file + "o"
+    if vo_version in file_deps:
+        file_deps.remove(vo_version)
     return file_deps
 
 

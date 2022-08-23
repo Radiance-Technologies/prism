@@ -9,6 +9,9 @@ import shutil
 import unittest
 
 import git
+import networkx as nx
+
+import prism.util.radpytools.os
 
 from prism.project import ProjectRepo, SentenceExtractionMethod
 from prism.project.metadata import ProjectMetadata
@@ -17,6 +20,10 @@ from prism.project.repo import (
     ChangedCoqCommitIterator,
     CommitIterator,
     CommitTraversalStrategy,
+)
+from prism.util.build_tools.coqdep import (
+    check_valid_topological_sort,
+    make_dependency_graph,
 )
 from prism.tests import _MINIMAL_METADATA, _MINIMAL_METASTORAGE
 
@@ -278,6 +285,56 @@ class TestProjectRepo(unittest.TestCase):
     def tearDownClass(cls):
         """
         Remove the cloned CompCert repo.
+        """
+        del cls.test_repo
+        shutil.rmtree(os.path.join(cls.repo_path))
+
+
+class TestProjectRepoLambda(unittest.TestCase):
+    """
+    Class for testing `ProjectRepo` using Lambda repository.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        """
+        Resolve the module path and clone Lambda repo.
+        """
+        cls.meta_path = _MINIMAL_METADATA
+        cls.metastorage_path = _MINIMAL_METASTORAGE
+        cls.test_path = os.path.dirname(__file__)
+        cls.repo_path = os.path.join(cls.test_path, "lambda")
+        try:
+            cls.test_repo = git.Repo.clone_from(
+                "https://github.com/coq-contribs/lambda.git",
+                cls.repo_path)
+        except git.GitCommandError:
+            cls.test_repo = git.Repo(cls.repo_path)
+        # Checkout HEAD of master as of March 14, 2022
+        cls.master_hash = "f531eede1b2088eff15b856558ec40f177956b96"
+        cls.test_repo.git.checkout(cls.master_hash)
+        cls.meta_storage = MetadataStorage.load(cls.metastorage_path)
+        cls.project = ProjectRepo(
+            cls.repo_path,
+            metadata_storage=cls.meta_storage,
+            sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
+
+    def test_get_ordered_files(self):
+        """
+        Ensure files are extracted in topological order.
+        """
+        with prism.util.radpytools.os.pushd(self.repo_path):
+            ordered = self.project.get_ordered_file_list()
+            files = os.listdir("./")
+            files = [os.path.join(self.repo_path, x) for x in files if x[-2 :] == '.v']
+            graph = make_dependency_graph(files, self.project.opam_switch)
+            self.assertTrue(len(list(nx.simple_cycles(graph))) == 0)
+            self.assertTrue(check_valid_topological_sort(graph, ordered))
+
+    @classmethod
+    def tearDownClass(cls):
+        """
+        Remove the cloned Lambda repo.
         """
         del cls.test_repo
         shutil.rmtree(os.path.join(cls.repo_path))

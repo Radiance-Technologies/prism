@@ -16,6 +16,7 @@ from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
 from prism.project.base import MetadataArgs, Project
 from prism.project.metadata.storage import MetadataStorage
+from prism.util.build_tools.coqdep import order_dependencies
 
 
 class CommitTraversalStrategy(Enum):
@@ -439,6 +440,29 @@ class ProjectRepo(Repo, Project):
             if f.abspath.endswith(".v")
         ]
         return sorted(files)
+
+    def get_ordered_file_list(self, commit_name: Optional[str] = None) -> List[str]:
+        """
+        Return an ordered list of all Coq files associated with this project.
+
+        Parameters
+        ----------
+        commit_name : str or None, optional
+            A commit hash, branch name, or tag name from which to get
+            the file list. This is HEAD by default.
+
+        Returns
+        -------
+        List[str]
+            The list of absolute paths to all Coq files in the project
+        """
+        commit = self.commit(commit_name)
+        files = [
+            str(f.abspath)
+            for f in commit.tree.traverse()
+            if f.abspath.endswith(".v")
+        ]
+        return order_dependencies(files, self.opam_switch)
 
     def get_random_commit(self) -> Commit:
         """
