@@ -1751,15 +1751,15 @@ contexts:
     revision:
       commit_sha: b4b41bd5654adf1385f9d98f0254b5eea28b443a
       project_source:
-        project_name: constructive-ltl
-        repo_url: https://github.com/jwiegley/constructive-ltl/blob/master/coq-constructive-ltl.opam
+        project_name: coq-cds4ltl
+        repo_url: https://github.com/jwiegley/coq-cds4ltl
   - 84
 - - coq_version: null
     ocaml_version: null
     revision:
       commit_sha: null
       project_source:
-        project_name: constructive-ltl
+        project_name: coq-cds4ltl
         repo_url: null
   - 85
 - - coq_version:
@@ -2535,7 +2535,7 @@ contexts:
     revision:
       commit_sha: 497a4c38cded3cf028c9d286297a56936d15ddd2
       project_source:
-        project_name: coq-fcsl-pcm
+        project_name: fcsl-pcm
         repo_url: https://github.com/imdea-software/fcsl-pcm
   - 162
 - - coq_version: null
@@ -2543,7 +2543,7 @@ contexts:
     revision:
       commit_sha: null
       project_source:
-        project_name: coq-fcsl-pcm
+        project_name: fcsl-pcm
         repo_url: null
   - 163
 - - coq_version:
@@ -7456,7 +7456,7 @@ project_sources:
 - project_name: certicoq
   repo_url: null
 - project_name: tarjan
-  repo_url: https://github.com/math-comp/tarjan/
+  repo_url: https://github.com/math-comp/tarjan
 - project_name: cerise
   repo_url: null
 - project_name: param-pi
@@ -7601,7 +7601,7 @@ project_sources:
   repo_url: null
 - project_name: markov
   repo_url: null
-- project_name: constructive-ltl
+- project_name: coq-cds4ltl
   repo_url: null
 - project_name: regexp
   repo_url: https://github.com/coq-contribs/regexp
@@ -7717,7 +7717,7 @@ project_sources:
   repo_url: null
 - project_name: huffman
   repo_url: https://github.com/coq-community/huffman
-- project_name: coq-fcsl-pcm
+- project_name: fcsl-pcm
   repo_url: https://github.com/imdea-software/fcsl-pcm
 - project_name: topology
   repo_url: null
@@ -7803,7 +7803,7 @@ project_sources:
   repo_url: null
 - project_name: proofs
   repo_url: https://github.com/stepchowfun/proofs
-- project_name: coq-fcsl-pcm
+- project_name: fcsl-pcm
   repo_url: null
 - project_name: goedel
   repo_url: https://github.com/coq-community/goedel
@@ -7817,8 +7817,8 @@ project_sources:
   repo_url: https://github.com/coq-contribs/algebra
 - project_name: deriving
   repo_url: https://github.com/arthuraa/deriving
-- project_name: constructive-ltl
-  repo_url: https://github.com/jwiegley/constructive-ltl/blob/master/coq-constructive-ltl.opam
+- project_name: coq-cds4ltl
+  repo_url: https://github.com/jwiegley/coq-cds4ltl
 - project_name: concat
   repo_url: https://github.com/coq-contribs/concat
 - project_name: disel
@@ -8187,7 +8187,7 @@ projects:
 - math-comp
 - demos
 - ails
-- constructive-ltl
+- coq-cds4ltl
 - monae
 - fssec-model
 - idxassoc
@@ -8344,7 +8344,7 @@ projects:
 - mini-compiler
 - schroeder
 - coqoban
-- coq-fcsl-pcm
+- fcsl-pcm
 - jordan-curve-theorem
 - univalent_parametricity
 - GraphCoQL
@@ -8519,7 +8519,7 @@ revisions:
     repo_url: https://github.com/SSProve/ssprove
 - commit_sha: 497a4c38cded3cf028c9d286297a56936d15ddd2
   project_source:
-    project_name: coq-fcsl-pcm
+    project_name: fcsl-pcm
     repo_url: https://github.com/imdea-software/fcsl-pcm
 - commit_sha: null
   project_source:
@@ -8915,7 +8915,7 @@ revisions:
     repo_url: https://github.com/coq-community/coqeal
 - commit_sha: null
   project_source:
-    project_name: coq-fcsl-pcm
+    project_name: fcsl-pcm
     repo_url: null
 - commit_sha: null
   project_source:
@@ -9019,15 +9019,15 @@ revisions:
     repo_url: null
 - commit_sha: b4b41bd5654adf1385f9d98f0254b5eea28b443a
   project_source:
-    project_name: constructive-ltl
-    repo_url: https://github.com/jwiegley/constructive-ltl/blob/master/coq-constructive-ltl.opam
+    project_name: coq-cds4ltl
+    repo_url: https://github.com/jwiegley/coq-cds4ltl
 - commit_sha: 9c34459b524e8c15753982a2dd84e778a6e3909a
   project_source:
     project_name: cerise
     repo_url: https://github.com/logsem/cerise
 - commit_sha: null
   project_source:
-    project_name: constructive-ltl
+    project_name: coq-cds4ltl
     repo_url: null
 - commit_sha: be01681925e9a34dc06f2af8261e185791c2b9f7
   project_source:
