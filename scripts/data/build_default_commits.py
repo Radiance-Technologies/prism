@@ -2,6 +2,7 @@
 Test module for `prism.data.commit_map` module.
 """
 import logging
+import traceback
 from functools import partial
 from multiprocessing import Pool
 from pathlib import Path
@@ -18,7 +19,7 @@ from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
 from prism.util.swim import AdaptiveSwitchManager, SwitchManager
 
-# logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
 
 
 class CommitBuilder:
@@ -89,23 +90,26 @@ def get_commit_iterator_func(metadata_storage):
 
 
 def process_commit(switch_manager, project, commit, results):
-    project.git.checkout(commit)
-    coq_version = project.metadata.coq_version
-    # get a switch
-    dependency_formula = get_formula_from_metadata(
-        project.metadata,
-        coq_version)
-    project.opam_switch = switch_manager.get_switch(
-        dependency_formula,
-        variables={
-            'build': True,
-            'post': True,
-            'dev': True
-        })
-    # process the commit
     try:
+        project.git.checkout(commit)
+        coq_version = project.metadata.coq_version
+        # get a switch
+        dependency_formula = get_formula_from_metadata(
+            project.metadata,
+            coq_version)
+        project.opam_switch = switch_manager.get_switch(
+            dependency_formula,
+            variables={
+                'build': True,
+                'post': True,
+                'dev': True
+            })
+        # process the commit
         _ = project.build()
-    except ProjectBuildError as pbe:
+    except Exception as exc:
+        logging.debug(
+            f"Skipping build for {project.metadata.project_name}:"
+            f"{traceback.format_exc()}")
         pass
 
 
@@ -133,7 +137,7 @@ def main(root_path, storage_path, cache_dir):
         get_process_commit_func(switch_manager),
         "Building projects")
     # Build projects in parallel
-    result, metadata_storage = project_looper.update_map()
+    result, metadata_storage = project_looper.update_map(30)
     metadata_storage.dump(
         metadata_storage,
         "/workspace/pearls/cache/msp/updated-metadata.yaml")
