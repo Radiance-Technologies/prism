@@ -39,6 +39,10 @@ class AdaptiveSwitchManager(SwitchManager):
         formula evaluated by the switch.
     """
 
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._temporary_switches = set()
+
     def _clone_switch(self, switch: OpamSwitch) -> OpamSwitch:
         """
         Clone the given switch.
@@ -110,15 +114,16 @@ class AdaptiveSwitchManager(SwitchManager):
             self.switches.add(clone)
             switch = clone
         # return a temporary clone
-        return self._clone_switch(switch)
+        clone = self._clone_switch(switch)
+        self._temporary_switches.add(clone)
+        return clone
 
     def release_switch(self, switch: OpamSwitch) -> None:
         """
         Record that a client is no longer using the given switch.
 
-        If the switch is not in the pool of switches owned by this
-        manager and is a clone, then it assumed to be a temporary clone
-        and is deleted.
+        If the switch is a clone returned by `get_switch`, then it is
+        deleted.
 
         Parameters
         ----------
@@ -126,5 +131,6 @@ class AdaptiveSwitchManager(SwitchManager):
             A switch that was presumably retrieved via `get_switch` with
             a previous client request.
         """
-        if switch not in self.switches and switch.is_clone:
+        if switch in self._temporary_switches:
+            self._temporary_switches.discard(switch)
             OpamAPI.remove_switch(switch)
