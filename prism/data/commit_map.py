@@ -6,6 +6,7 @@ import logging
 import os
 import signal
 import traceback
+import warnings
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import (
@@ -228,6 +229,12 @@ class ProjectCommitMapper(Generic[T]):
                             p.kill()
                     ex.shutdown(wait=True)
                     raise
+        missing = {k for k,
+                   v in results.items() if v is None}
+        if missing:
+            warnings.warn(f"No results found for {', '.join(missing)}")
+        for p in missing:
+            results.pop(p)
         return results
 
     def map(self, max_workers: int = 1) -> Dict[str, Except[T]]:
@@ -256,6 +263,12 @@ class ProjectCommitMapper(Generic[T]):
             The results of the project(s) that raised the unhandled
             exception will be wrapped in an `Except` object for
             subsequent handling or re-raising by the caller.
+
+        Warns
+        -----
+        UserWarning
+            If a project does not have any results. Such projects are
+            removed from the output dictionary.
         """
         return self(max_workers)
 
