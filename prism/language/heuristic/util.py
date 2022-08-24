@@ -802,11 +802,47 @@ class ParserUtils:
 
         string: str
         """The string itself."""
-        loc: Optional[SexpInfo.Loc]
+        indices: List[Tuple[int, int]]
         """
         The string's original location. Should only be None if `string`
         is empty.
         """
+
+        def __add__(self, other: 'ParserUtils.StrWithLocation'):
+            """
+            Combine this instance with another using '+'.
+            """
+            if isinstance(other, ParserUtils.StrWithLocation):
+                return ParserUtils.StrWithLocation(
+                    self.string + other.string,
+                    self.indices + other.indices)
+            else:
+                raise TypeError(
+                    "Second addened must be of the same type as the first addend."
+                )
+
+        def __bool__(self) -> bool:
+            """
+            Tie truth value to string field.
+            """
+            return len(self.string) > 0
+
+        def __getitem__(
+                self,
+                idx: Union[int,
+                           slice]) -> 'ParserUtils.StrWithLocation':
+            """
+            Return a portion of the located string at the given idx.
+            """
+            return ParserUtils.StrWithLocation(
+                self.string[idx],
+                self.indices[idx])
+
+        def __len__(self) -> int:
+            """
+            Get the length of the located string.
+            """
+            return len(self.string)
 
         def __post_init__(self):
             """
@@ -815,11 +851,11 @@ class ParserUtils:
             Raises
             ------
             ValueError
-                If a non-empty string and a "None" location are provided
+                If the length of the string list does not match the
+                length of the loc list
             """
-            if self.string and self.loc is None:
-                raise ValueError(
-                    "Non-empty strings must be accompanied by a location.")
+            if len(self.string) != len(self.loc):
+                raise ValueError("Each string should have a location.")
 
         def __str__(self) -> str:
             """
@@ -827,17 +863,118 @@ class ParserUtils:
             """
             return self.string
 
-        def __bool__(self) -> bool:
+        @property
+        def start(self) -> Optional[int]:  # noqa: D102
+            return self.indices[0][0] if self.indices else None
+
+        @property
+        def end(self) -> Optional[int]:  # noqa: D102
+            return self.indices[-1][1] if self.indices else None
+
+        def get_location(
+                self,
+                file_contents: str,
+                filename: str) -> SexpInfo.Loc:
             """
-            Tie truth value to string field.
+            Derive the SexpInfo.Loc location from the located string.
+
+            Parameters
+            ----------
+            file_contents : str
+                The full file contents in string form
+            filename : str
+                The filename the file contents were loaded from
+
+            Returns
+            -------
+            SexpInfo.Loc
+                The derived SexpInfo.Loc location
             """
-            return len(self.string) > 0
+            num_newlines_before_string = file_contents[: self.start].count(
+                r"\n")
+            num_newlines_in_string = file_contents[self.start,
+                                                   self.end].count(r"\n")
+            bol_match = re.search(
+                r"(?<=\n)[^\S\n]+$",
+                file_contents[: self.start])
+            bol_pos = len(bol_match[0]) if bol_match is not None else 0
+            bol_last_match = re.search(
+                r"(?<=\n)[^\S\n]+(?=\S[^\n]*$)",
+                file_contents[: self.end])
+            bol_pos_last = len(
+                bol_last_match[0]) if bol_last_match is not None else 0
+            return SexpInfo.Loc(
+                filename=filename,
+                lineno=num_newlines_before_string,
+                bol_pos=bol_pos,
+                lineno_last=num_newlines_before_string + num_newlines_in_string,
+                bol_pos_last=bol_pos_last,
+                beg_charno=self.start,
+                end_charno=self.end)
+
+        def lstrip(self):
+            """
+            Mimic str lstrip method, keeping track of location.
+            """
+            match = re.search(r"^\s+", self.string)
+            if match is not None:
+                self.string = self.string[match.end():]
+                self.indices = self.indices[match.end():]
+
+        def restore_final_period(self) -> 'ParserUtils.StrWithLocation':
+            """
+            Restore the final period at the end of a sentence.
+            """
+            if not self.string.endswith("."):
+                self.string += "."
+                self.indices.append(
+                    (self.indices[-1][1],
+                     self.indices[-1][1] + 1))
+
+        def rstrip(self):
+            """
+            Mimic str rstrip method, keeping track of location.
+            """
+            match = re.search(r"\s+$", self.string)
+            if match is not None:
+                self.string = self.string[: match.start()]
+                self.indices = self.indices[: match.start()]
+
+        def strip(self):
+            """
+            Mimic str strip method, but don't take an argument.
+            """
+            self.lstrip()
+            self.rstrip()
+
+        @classmethod
+        def create_from_file_contents(
+                cls,
+                file_contents: str) -> 'ParserUtils.StrWithLocation':
+            """
+            Create an instance of StrWithLocation from doc contents str.
+
+            Parameters
+            ----------
+            file_contents : str
+                A single string containing a the unaltered, full
+                contents of a Coq file
+
+            Returns
+            -------
+            ParserUtils.StrWithLocation
+                The instance created from the file contents
+            """
+            return cls(
+                file_contents,
+                [(i,
+                  i + 1) for i in range(len(file_contents))])
 
         @classmethod
         def re_split(
             cls,
             pattern: Union[str,
-                           re.Pattern[str]],
+                           re.Pattern],
             string: 'ParserUtils.StrWithLocation',
             maxsplit: int = 0,
             flags: Union[int,
@@ -855,7 +992,7 @@ class ParserUtils:
             maxsplit : int, optional
                 Maximum number of splits to do; unlimited if 0, by
                 default 0
-            flags : re._FlagsType, optional
+            flags : int or re.RegexFlag, optional
                 Flags to pass to compile operation if pattern is a str,
                 by default 0
 
@@ -868,7 +1005,7 @@ class ParserUtils:
             if isinstance(pattern, str):
                 pattern = re.compile(pattern, flags)
             located_result: List[ParserUtils.StrWithLocation] = []
-            remaining_str = cls(string.string, string.loc)
+            remaining_str = cls(string.string, string.indices)
             current_split = 0
             while remaining_str:
                 match = pattern.search(remaining_str)
@@ -877,78 +1014,61 @@ class ParserUtils:
                     # Either pattern is not found or maxsplit limit has
                     # been reached. In both cases, stop splitting.
                     located_result.append(remaining_str)
-                    remaining_str = cls("", None)
+                    remaining_str = cls("", [])
                 else:
                     # Carry on splitting
                     if match.start() > 0:
                         # If part of the remaining string lies before
                         # the first split pattern occurrence...
-                        pre_split_str = remaining_str.string[: match.start()]
-                        pre_split_num_newlines = pre_split_str.count("\n")
-                        pre_split_len = len(pre_split_str)
-                        pre_split_located = cls(
-                            pre_split_str,
-                            SexpInfo.Loc(
-                                remaining_str.loc.filename,
-                                remaining_str.loc.lineno,
-                                remaining_str.loc.bol_pos,
-                                remaining_str.loc.lineno
-                                + pre_split_num_newlines,
-                                0,
-                                remaining_str.loc.beg_charno,
-                                remaining_str.loc.beg_charno + pre_split_len))
-                        located_result.append(pre_split_located)
-                    else:
-                        # If the split pattern occurs very first thing
-                        # in the remaining string...
-                        pre_split_num_newlines = 0
-                        pre_split_len = 0
-                    # Here, deal with the part of the remaining string
-                    # that matches the split pattern
-                    split_str = remaining_str.string[match.start(): match.end()]
-                    split_num_newlines = split_str.count("\n")
-                    split_len = len(split_str)
-                    if match.end() == len(remaining_str.string):
-                        remaining_str = cls("", None)
-                    else:
-                        remaining_str = cls(
-                            remaining_str.string[match.end():],
-                            SexpInfo.Loc(
-                                remaining_str.loc.filename,
-                                (
-                                    remaining_str.loc.lineno
-                                    + pre_split_num_newlines
-                                    + split_num_newlines),
-                                0,
-                                remaining_str.loc.lineno_last,
-                                remaining_str.loc.bol_pos_last,
-                                (
-                                    remaining_str.log.beg_charno + pre_split_len
-                                    + split_len + 1),
-                                remaining_str.loc.end_charno))
+                        located_result.append(remaining_str[: match.start()])
+                    remaining_str = remaining_str[match.end():]
                 current_split += 1
             return located_result
 
-        def re_sub(self):
+        @classmethod
+        def re_sub(
+            cls,
+            pattern: Union[str,
+                           re.Pattern],
+            repl: str,
+            string: 'ParserUtils.StrWithLocation',
+            count: int = 0,
+            flags: Union[int,
+                         re.RegexFlag] = 0) -> 'ParserUtils.StrWithLocation':
             """
-            Mimic re.sub, keeping track of locations.
-            """
-            ...
+            Mimic re.sub, but maintain location information.
 
-        def str_append(self):
-            """
-            Implement string += operation.
-            """
-            ...
+            Parameters
+            ----------
+            pattern : Union[str, re.Pattern]
+                Pattern to match for split
+            repl : str
+                String to substitute in when pattern is found
+            string : ParserUtils.StrWithLocation
+                The string to perform the substitution on
+            count : int, optional
+                Maximum number of substitutions to do; unlimited if 0,
+                by default 0
+            flags : int or re.RegexFlag, optional
+                Flags to pass to compile operation if pattern is a str,
+                by default 0
 
-        def str_join(self):
+            Returns
+            -------
+            StrWithLocation
+                Located string with substitution performed
             """
-            Join multiple strings with locations.
-            """
-            ...
-
-        def str_strip(self):
-            """
-            Mimic str strip method, keeping track of location.
-            """
-            ...
+            string = cls(string.string, string.indices)
+            if isinstance(pattern, str):
+                pattern = re.compile(pattern, flags)
+            match = pattern.search(string.string)
+            idx = 0
+            while match is not None and not (idx > count > 0):
+                start, end = match.start(), match.end()
+                pre_match = string[: start]
+                post_match = string[end :]
+                repl_indices = [(start, end) for _ in range(len(repl))]
+                string = pre_match + cls(repl, repl_indices) + post_match
+                match = pattern.search(string.string, pos=start + len(repl))
+                idx += 1
+            return string
