@@ -163,7 +163,7 @@ class ProjectCommitMapper(Generic[T]):
         # By default True so that an arbitrary commit_fmap is allowed
         # to clean up any artifacts or state prior to termination
 
-    def __call__(self, max_workers: int = 1) -> Dict[str, Except[T]]:
+    def __call__(self, max_workers: int = 1) -> Dict[str, Union[T, Except[T]]]:
         """
         Map over project commits.
 
@@ -237,7 +237,7 @@ class ProjectCommitMapper(Generic[T]):
             results.pop(p)
         return results
 
-    def map(self, max_workers: int = 1) -> Dict[str, Except[T]]:
+    def map(self, max_workers: int = 1) -> Dict[str, Union[T, Except[T]]]:
         """
         Map over the project commits.
 
@@ -328,22 +328,40 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
             task_description,
             wait_on_interrupt)
 
-    def __call__(self,
+    def __call__(self,  # noqa: D102
                  max_workers: int = 1) -> Dict[str,
-                                               Except[T]]:  # noqa: D102
+                                               Union[T, Except[T]]]:
         results = super().__call__(max_workers)
-        storage = MetadataStorage.unions(*[s for _, s in results.values()])
+        # get all project's metadata with the understanding that each
+        # project only affected at most its own records
+        storage = MetadataStorage()
+        for p in self.projects:
+            try:
+                result = results[p.name]
+            except KeyError:
+                p_storage = p.metadata_storage
+            else:
+                if isinstance(result, Except):
+                    p_storage = p.metadata_storage
+                else:
+                    p_storage = result[1]
+            for metadata in p_storage.get_all(p.name):
+                storage.insert(metadata)
         for p in self.projects:
             p.metadata_storage = storage
-        return {k: r for k,
-                (r,
-                 _) in results.items()}
+        return {
+            k: r if isinstance(r,
+                               Except) else r[0] for k,
+            r in results.items()
+        }
 
     def update_map(
-            self,
-            max_workers: int = 1) -> Tuple[Dict[str,
-                                                Except[T]],
-                                           MetadataStorage]:
+        self,
+        max_workers: int = 1
+    ) -> Tuple[Dict[str,
+                    Union[T,
+                          Except[T]]],
+               MetadataStorage]:
         """
         Map over the project commits and get updated metadata.
 
