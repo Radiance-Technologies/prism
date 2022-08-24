@@ -49,8 +49,9 @@ class AdaptiveSwitchManager(SwitchManager):
         """
         prefix = switch.name.split("_clone_")[-1]
         prefix = f"{prefix}_clone_"
-        clone_dir = Path(tempfile.mkdtemp(prefix=prefix, dir=switch.root))
-        clone = OpamAPI.clone_switch(switch.name, clone_dir.stem, switch.root)
+        with tempfile.TemporaryDirectory(prefix=prefix, dir=switch.root) as d:
+            clone_dir = Path(d)
+        clone = OpamAPI.clone_switch(switch.name, clone_dir.name, switch.root)
         return clone
 
     def get_switch(
