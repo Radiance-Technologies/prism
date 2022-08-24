@@ -113,6 +113,18 @@ class Context:
                 f"Incompatible Coq/OCaml versions specified: coq={self.coq_version}, "
                 f"ocaml={self.ocaml_version}")
 
+    @property
+    def commit_sha(self) -> str:  # noqa: D102
+        return self.revision.commit_sha
+
+    @property
+    def project_name(self) -> str:  # noqa: D102
+        return self.revision.project_source.project_name
+
+    @property
+    def repo_url(self) -> Optional[GitURL]:  # noqa: D102
+        return self.revision.project_source.repo_url
+
     def as_metadata(self) -> ProjectMetadata:
         """
         Place this context in an otherwise empty metadata record.
@@ -718,6 +730,41 @@ class MetadataStorage:
             metadata_kwargs.setdefault('install_cmd', self.default_install_cmd)
             metadata_kwargs.setdefault('clean_cmd', self.default_clean_cmd)
         return ProjectMetadata(**metadata_kwargs)
+
+    def get_all(self,
+                project_name: str,
+                autofill: Optional[bool] = None) -> List[ProjectMetadata]:
+        """
+        Get all of the explicitly stored metadata records for a project.
+
+        Parameters
+        ----------
+        project_name : str
+            The name of a project in the storage.
+        autofill : Optional[bool], optional
+            Whether to automatically fill in missing metadata with
+            default values (True) or raise an error (False), by default
+            equal to ``self.autofill``.
+
+        Returns
+        -------
+        List[ProjectMetadata]
+            Each metadata record for `project_name` that is explicitly
+            stored rather than implicitly derived.
+            The list will be empty if there are no records.
+        """
+        all_metadata = []
+        for context in self.contexts:
+            if context.project_name == project_name:
+                metadata = self.get(
+                    project_name,
+                    context.repo_url,
+                    context.commit_sha,
+                    context.coq_version,
+                    context.ocaml_version,
+                    autofill)
+                all_metadata.append(metadata)
+        return all_metadata
 
     def get_project_revisions(
             self,
