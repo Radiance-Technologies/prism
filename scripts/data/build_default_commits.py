@@ -97,6 +97,7 @@ def process_commit(switch_manager, project, commit, results):
         dependency_formula = get_formula_from_metadata(
             project.metadata,
             coq_version)
+        original_switch = project.opam_switch
         project.opam_switch = switch_manager.get_switch(
             dependency_formula,
             variables={
@@ -110,7 +111,10 @@ def process_commit(switch_manager, project, commit, results):
         logging.debug(
             f"Skipping build for {project.metadata.project_name}:"
             f"{traceback.format_exc()}")
-        pass
+        raise
+    finally:
+        switch_manager.release_switch(project.opam_switch)
+        project.opam_switch = original_switch
 
 
 def get_process_commit_func(switch_manager):
@@ -146,7 +150,7 @@ def main(root_path, storage_path):
     storage_dir = Path(storage_path).parent
     metadata_storage.dump(
         metadata_storage,
-        storage_dir / "updated-metadata.yaml")
+        storage_dir / "updated_metadata.yaml")
     print("Done")
 
 
