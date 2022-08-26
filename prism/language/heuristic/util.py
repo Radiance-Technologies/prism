@@ -1149,6 +1149,11 @@ class ParserUtils:
             """
             Mimic re.sub, but maintain location information.
 
+            This method has no way to account for the location of
+            portions that are completely removed. That is, if the repl
+            string is "", the location information of any matches will
+            be completely lost.
+
             Parameters
             ----------
             pattern : Union[str, re.Pattern]
@@ -1174,11 +1179,14 @@ class ParserUtils:
                 pattern = re.compile(pattern, flags)
             match = pattern.search(string.string)
             idx = 0
-            while match is not None and not (idx > count > 0):
+            while match is not None and not (idx >= count > 0):
                 start, end = match.start(), match.end()
                 pre_match = string[: start]
                 post_match = string[end :]
-                repl_indices = [(start, end) for _ in range(len(repl))]
+                repl_indices = [
+                    (string[start : end].start,
+                     string[start : end].end) for _ in range(len(repl))
+                ]
                 string = pre_match + cls(repl, repl_indices) + post_match
                 match = pattern.search(string.string, pos=start + len(repl))
                 idx += 1

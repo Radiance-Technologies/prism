@@ -113,7 +113,31 @@ class TestStrWithLocation(unittest.TestCase):
         """
         Test re_sub class method.
         """
-        ...
+        sub_result_1 = ParserUtils.StrWithLocation.re_sub(
+            " ",
+            "  ",
+            self.example,
+            count=2)
+        expected_result_1_indices = [(i, i + 1) for i in range(43)]
+        expected_result_1_indices.insert(3, (3, 4))
+        expected_result_1_indices.insert(10, (9, 10))
+        expected_result_1 = ParserUtils.StrWithLocation(
+            "The  quick  red\nfox jumps\n\nover the\tlazy dog.",
+            expected_result_1_indices)
+        self.assertEqual(sub_result_1, expected_result_1)
+        sub_result_2 = ParserUtils.StrWithLocation.re_sub(
+            r"red\nfox jumps",
+            "*",
+            self.example)
+        expected_result_2_indices = [(i, i + 1) for i in range(43)]
+        expected_result_2_indices = expected_result_2_indices[: 10] + [
+            (10,
+             23)
+        ] + expected_result_2_indices[23 :]
+        expected_result_2 = ParserUtils.StrWithLocation(
+            "The quick *\n\nover the\tlazy dog.",
+            expected_result_2_indices)
+        self.assertEqual(sub_result_2, expected_result_2)
 
 
 if __name__ == "__main__":
