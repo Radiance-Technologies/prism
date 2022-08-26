@@ -448,7 +448,7 @@ class ParserUtils:
     @staticmethod
     def _strip_comments(
             file_contents: 'ParserUtils.StrWithLocation',
-            encoding: str = 'utf-8') -> str:
+            encoding: str = 'utf-8') -> 'ParserUtils.StrWithLocation':
         # comments can be nested, so a single regex cannot be used
         # to detect this recursive structure.
         # Instead, split on comment boundaries and manually match
@@ -834,11 +834,13 @@ class ParserUtils:
         """
 
         string: str = ""
-        """The string itself."""
+        """
+        The string itself.
+        """
         indices: List[Tuple[int, int]] = default_field(list())
         """
-        The string's original location. Should only be None if `string`
-        is empty.
+        Indices that refer to the string's original location in the full
+        document string.
         """
 
         def __add__(self, other: 'ParserUtils.StrWithLocation'):
@@ -903,7 +905,7 @@ class ParserUtils:
                 If the length of the string list does not match the
                 length of the loc list
             """
-            if len(self.string) != len(self.loc):
+            if len(self.string) != len(self.indices):
                 raise ValueError("Each string should have a location.")
 
         def __str__(self) -> str:
@@ -1110,7 +1112,7 @@ class ParserUtils:
             remaining_str = cls(string.string, string.indices)
             current_split = 0
             while remaining_str:
-                match = pattern.search(remaining_str)
+                match = pattern.search(remaining_str.string)
                 if match is None or (maxsplit > 0
                                      and current_split >= maxsplit):
                     # Either pattern is not found or maxsplit limit has
