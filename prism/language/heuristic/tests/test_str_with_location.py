@@ -25,28 +25,89 @@ class TestStrWithLocation(unittest.TestCase):
             cls.simple_file,
             CoqParser.parse_source(cls.simple_file),
             project_path=_COQ_EXAMPLES_PATH)
-        cls.located_str = ParserUtils.StrWithLocation.create_from_file_contents(
-            cls.simple_doc.source_code)
+        cls.located_str_simple = \
+            ParserUtils.StrWithLocation.create_from_file_contents(
+                cls.simple_doc.source_code)
+        # Yes, I know the phrase isn't quite right. By the time I
+        # counted up all the expected indices, I couldn't bring myself
+        # to fix it and re-count everything.
+        cls.example = ParserUtils.StrWithLocation.create_from_file_contents(
+            "The quick red\nfox jumps\n\nover the\tlazy dog.")
 
     def test_init(self):
         """
         Test object init.
         """
         self.assertEqual(
-            len(self.located_str),
+            len(self.located_str_simple),
             len(self.simple_doc.source_code))
-        print(self.located_str.string)
-        print(self.located_str.indices)
+        # print(self.located_str_simple.string)
+        # print(self.located_str_simple.indices)
 
     def test_re_split(self):
         """
         Test re_split class method.
         """
-        split_result = ParserUtils.StrWithLocation.re_split(
-            "Print",
-            self.located_str)
-        for res in split_result:
-            print(res)
+        split_result_1 = ParserUtils.StrWithLocation.re_split(
+            r"\b[a-z]{3}\b",
+            self.example)
+        expected_result_1_str = [
+            "The quick ",
+            "\n",
+            " jumps\n\nover ",
+            "\tlazy ",
+            "."
+        ]
+        expected_result_1_ind = [
+            [(i,
+              i + 1) for i in range(10)],
+            [(13,
+              14)],
+            [(i,
+              i + 1) for i in range(17,
+                                    30)],
+            [(i,
+              i + 1) for i in range(33,
+                                    39)],
+            [(42,
+              43)]
+        ]
+        expected_result_1 = [
+            ParserUtils.StrWithLocation(i,
+                                        j) for i,
+            j in zip(expected_result_1_str,
+                     expected_result_1_ind)
+        ]
+        self.assertEqual(split_result_1, expected_result_1)
+        split_result_2 = ParserUtils.StrWithLocation.re_split(
+            r"\b[a-z]{3}\b",
+            self.example,
+            maxsplit=1,
+            return_split=True)
+        expected_result_2_str = [
+            "",
+            "The quick ",
+            "red",
+            "\nfox jumps\n\nover the\tlazy dog."
+        ]
+        expected_result_2_ind = [
+            [],
+            [(i,
+              i + 1) for i in range(10)],
+            [(i,
+              i + 1) for i in range(10,
+                                    13)],
+            [(i,
+              i + 1) for i in range(13,
+                                    43)]
+        ]
+        expected_result_2 = [
+            ParserUtils.StrWithLocation(i,
+                                        j) for i,
+            j in zip(expected_result_2_str,
+                     expected_result_2_ind)
+        ]
+        self.assertEqual(split_result_2, expected_result_2)
 
     def test_re_sub(self):
         """

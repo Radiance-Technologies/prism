@@ -1120,16 +1120,16 @@ class ParserUtils:
                     located_result.append(remaining_str)
                     remaining_str = cls("", [])
                 else:
+                    if return_split and not located_result:
+                        # re.split returns an empty str at the
+                        # beginning in this case. Follow that.
+                        located_result.append(cls("", []))
                     # Carry on splitting
                     if match.start() > 0:
                         # If part of the remaining string lies before
                         # the first split pattern occurrence...
                         located_result.append(remaining_str[: match.start()])
                         if return_split:
-                            if not located_result:
-                                # re.split returns an empty str at the
-                                # beginning in this case. Follow that.
-                                located_result.append(cls("", []))
                             located_result.append(
                                 remaining_str[match.start(): match.end()])
                     remaining_str = remaining_str[match.end():]
