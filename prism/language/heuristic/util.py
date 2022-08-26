@@ -947,12 +947,11 @@ class ParserUtils:
             SexpInfo.Loc
                 The derived SexpInfo.Loc location
             """
-            num_newlines_before_string = file_contents[: self.start].count(
-                r"\n")
-            num_newlines_in_string = file_contents[self.start,
-                                                   self.end].count(r"\n")
+            num_newlines_before_string = file_contents[: self.start].count("\n")
+            num_newlines_in_string = file_contents[self.start : self.end].count(
+                "\n")
             bol_match = re.search(
-                r"(?<=\n)[^\S\n]+$",
+                r"(?<=\n)[^\n]+$",
                 file_contents[: self.start])
             bol_pos = len(bol_match[0]) if bol_match is not None else 0
             bol_last_match = re.search(
@@ -967,7 +966,7 @@ class ParserUtils:
                 lineno_last=num_newlines_before_string + num_newlines_in_string,
                 bol_pos_last=bol_pos_last,
                 beg_charno=self.start,
-                end_charno=self.end)
+                end_charno=self.end - 1)
 
         def lstrip(self) -> 'ParserUtils.StrWithLocation':
             """

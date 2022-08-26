@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from prism.data.document import CoqDocument
+from prism.language.gallina.analyze import SexpInfo
 from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.util import ParserUtils
 from prism.tests import _COQ_EXAMPLES_PATH
@@ -41,8 +42,6 @@ class TestStrWithLocation(unittest.TestCase):
         self.assertEqual(
             len(self.located_str_simple),
             len(self.simple_doc.source_code))
-        # print(self.located_str_simple.string)
-        # print(self.located_str_simple.indices)
 
     def test_re_split(self):
         """
@@ -138,6 +137,65 @@ class TestStrWithLocation(unittest.TestCase):
             "The quick *\n\nover the\tlazy dog.",
             expected_result_2_indices)
         self.assertEqual(sub_result_2, expected_result_2)
+
+    def test_strip(self):
+        """
+        Ensure strip, lstrip, and rstrip methods work as they should.
+        """
+        example = ParserUtils.StrWithLocation(
+            "    \ta b c \t \t ",
+            [(i,
+              i + 1) for i in range(15)])
+        lstrip_result = example.lstrip()
+        rstrip_result = example.rstrip()
+        strip_result = example.strip()
+        lstrip_expected = example[5 :]
+        rstrip_expected = example[: 10]
+        strip_expected = example[5 : 10]
+        self.assertEqual(lstrip_result, lstrip_expected)
+        self.assertEqual(rstrip_result, rstrip_expected)
+        self.assertEqual(strip_result, strip_expected)
+
+    def test_get_location(self):
+        """
+        Ensure locations are generated properly from indices.
+        """
+        split_result = ParserUtils.StrWithLocation.re_split(
+            "Check",
+            self.located_str_simple)
+        loc_results = []
+        for res in split_result:
+            loc_results.append(
+                res.get_location(
+                    self.simple_doc.source_code,
+                    str(self.simple_file)))
+        expected_loc_results = [
+            SexpInfo.Loc(
+                filename=str(self.simple_file),
+                lineno=0,
+                bol_pos=0,
+                lineno_last=28,
+                bol_pos_last=0,
+                beg_charno=0,
+                end_charno=1265),
+            SexpInfo.Loc(
+                filename=str(self.simple_file),
+                lineno=28,
+                bol_pos=7,
+                lineno_last=39,
+                bol_pos_last=0,
+                beg_charno=1271,
+                end_charno=1399),
+            SexpInfo.Loc(
+                filename=str(self.simple_file),
+                lineno=39,
+                bol_pos=5,
+                lineno_last=44,
+                bol_pos_last=0,
+                beg_charno=1405,
+                end_charno=1546)
+        ]
+        self.assertEqual(loc_results, expected_loc_results)
 
 
 if __name__ == "__main__":
