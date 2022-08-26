@@ -196,6 +196,35 @@ class TestStrWithLocation(unittest.TestCase):
                 end_charno=1546)
         ]
         self.assertEqual(loc_results, expected_loc_results)
+        split_result_2 = ParserUtils.StrWithLocation.re_split(
+            ": seq",
+            self.located_str_simple,
+            maxsplit=1)
+        loc_results_2 = []
+        for res in split_result_2:
+            loc_results_2.append(
+                res.get_location(
+                    self.simple_doc.source_code,
+                    str(self.simple_file)))
+        expected_loc_results_2 = [
+            SexpInfo.Loc(
+                filename=str(self.simple_file),
+                lineno=0,
+                bol_pos=0,
+                lineno_last=15,
+                bol_pos_last=2,
+                beg_charno=0,
+                end_charno=884),
+            SexpInfo.Loc(
+                filename=str(self.simple_file),
+                lineno=15,
+                bol_pos=14,
+                lineno_last=44,
+                bol_pos_last=0,
+                beg_charno=890,
+                end_charno=1546),
+        ]
+        self.assertEqual(loc_results_2, expected_loc_results_2)
 
 
 if __name__ == "__main__":
