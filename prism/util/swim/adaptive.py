@@ -133,5 +133,6 @@ class AdaptiveSwitchManager(SwitchManager):
             a previous client request.
         """
         if switch in self._temporary_switches:
+            assert switch.is_clone()
             self._temporary_switches.discard(switch)
             OpamAPI.remove_switch(switch)
