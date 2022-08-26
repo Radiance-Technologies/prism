@@ -981,12 +981,12 @@ class ParserUtils:
             else:
                 return self
 
-        def restore_final_ellipses(self) -> 'ParserUtils.StrWithLocation':
+        def restore_final_ellipsis(self) -> 'ParserUtils.StrWithLocation':
             """
-            Restore ellipses at the end of a line.
+            Restore ellipsis at the end of a line.
 
-            Only call this method if there were originally ellipses at
-            the end of this string. Otherwise, the indices will be
+            Only call this method if there were originally an ellipsis
+            at the end of this string. Otherwise, the indices will be
             garbage.
             """
             result = ParserUtils.StrWithLocation(self.string, self.indices)

@@ -629,7 +629,7 @@ class HeuristicParser:
             if num_new > 0:
                 # restore ellipses
                 sentences[i : i + 1] = [
-                    s.restore_final_ellipses() if j < num_new else s for j,
+                    s.restore_final_ellipsis() if j < num_new else s for j,
                     s in enumerate(new_sentences)
                 ]
                 sentence = sentences[i]
