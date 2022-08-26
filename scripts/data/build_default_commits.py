@@ -9,64 +9,15 @@ from pathlib import Path
 
 import tqdm
 
-from prism.data.build_cache import CoqProjectBuildCache
 from prism.data.commit_map import Except, ProjectCommitUpdateMapper
 from prism.data.extract_cache import get_formula_from_metadata
 from prism.data.setup import create_default_switches
 from prism.project.base import SentenceExtractionMethod
-from prism.project.exception import ProjectBuildError
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
-from prism.util.swim import AutoSwitchManager, SwitchManager
+from prism.util.swim import AutoSwitchManager
 
 logging.basicConfig(level=logging.DEBUG)
-
-
-class CommitBuilder:
-
-    def __init__(
-            self,
-            build_cache: CoqProjectBuildCache,
-            switch_manager: SwitchManager,
-            metadata_storage: MetadataStorage,
-            root_path: str):
-        self.build_cache = build_cache
-        self.switch_manager = switch_manager
-        self.metadata_storage = metadata_storage
-        self.root_path = root_path
-
-    def get_project(self, project_name):
-        repo_path = Path(self.root_path) / project_name
-        return ProjectRepo(
-            repo_path,
-            self.metadata_storage,
-            sentence_extraction_method=self.sentence_extraction_method)
-
-    def get_commit_iterator(self, project):
-        return self.metadata_storage.get_project_revisions(project.project_name)
-
-    def process_commit(self, project, commit, results):
-        project.git.checkout(commit)
-        coq_version = project.metadata.coq_version
-        # get a switch
-        dependency_formula = get_formula_from_metadata(
-            project.metadata,
-            coq_version)
-        project.opam_switch = self.switch_manager.get_switch(
-            dependency_formula,
-            variables={
-                'build': True,
-                'post': True,
-                'dev': True
-            })
-        # process the commit
-        try:
-            _ = project.build()
-        except ProjectBuildError as pbe:
-            pass
-
-    def __call__(self, project, commit, results):
-        return self.process_commit(project, commit, results)
 
 
 def get_project(root_path, metadata_storage, project_name):
@@ -107,7 +58,7 @@ def process_commit(switch_manager, project, commit, results):
             })
         # process the commit
         _ = project.build()
-    except Exception as exc:
+    except Exception:
         logging.debug(
             f"Skipping build for {project.metadata.project_name}:"
             f"{traceback.format_exc()}")
