@@ -1138,19 +1138,15 @@ class ParserUtils:
             if isinstance(pattern, str):
                 pattern = re.compile(pattern, flags)
             located_result: List[ParserUtils.StrWithLocation] = []
-            remaining_str = cls(string.string, string.indices)
-            re_module_result = pattern.split(
-                remaining_str.string,
-                maxsplit=maxsplit)
+            string = cls(string.string, string.indices)
+            split_list = pattern.split(string.string, maxsplit=maxsplit)
             match_start_pos = 0
-            for result in re_module_result:
-                match_start = remaining_str.string.index(
-                    result,
-                    match_start_pos)
-                match_end = match_start + len(result)
+            for split in split_list:
+                match_start = string.string.index(split, match_start_pos)
+                match_end = match_start + len(split)
                 located_result.append(
-                    cls(result,
-                        remaining_str.indices[match_start : match_end]))
+                    cls(split,
+                        string.indices[match_start : match_end]))
                 match_start_pos = match_end
             return located_result
 
@@ -1192,22 +1188,30 @@ class ParserUtils:
             StrWithLocation
                 Located string with substitution performed
             """
-            # Try to do this with findall and keep track of offsets
-            # manually
             string = cls(string.string, string.indices)
             if isinstance(pattern, str):
                 pattern = re.compile(pattern, flags)
             match = pattern.search(string.string)
+            if not match:
+                return string
+            subbed_string = pattern.sub(repl, string.string, count)
+            subbed_indices = []
+            prev_end = 0
             idx = 0
-            while match is not None and not (idx >= count > 0):
-                start, end = match.start(), match.end()
-                pre_match = string[: start]
-                post_match = string[end :]
-                repl_indices = [
-                    (string[start : end].start,
-                     string[start : end].end) for _ in range(len(repl))
-                ]
-                string = pre_match + cls(repl, repl_indices) + post_match
-                match = pattern.search(string.string, pos=start + len(repl))
-                idx += 1
-            return string
+            for match in pattern.finditer(string.string):
+                if count > 0 and idx >= count:
+                    break
+                else:
+                    # Get the indices prior to subbed location
+                    subbed_indices.extend(
+                        string.indices[prev_end : match.start()])
+                    # Get the indices for the next subbed location
+                    subbed_indices.extend(
+                        [
+                            (match.start(),
+                             match.end()) for _ in range(len(repl))
+                        ])
+                    prev_end = match.end()
+                    idx += 1
+            subbed_indices.extend(string.indices[prev_end :])
+            return cls(subbed_string, subbed_indices)
