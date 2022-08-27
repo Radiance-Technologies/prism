@@ -614,6 +614,7 @@ class HeuristicParser:
             sentence = sentences[i]
             # If the sentence is whitespace only, skip it.
             if not sentence.strip():
+                i += 1
                 continue
             sentence = ParserUtils.StrWithLocation.re_sub(
                 r"(\s)+",

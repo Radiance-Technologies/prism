@@ -459,8 +459,7 @@ class ParserUtils:
         comment_depth = 0
         comment_delimited = ParserUtils.StrWithLocation.re_split(
             ParserUtils.sentence_splitter,
-            file_contents,
-            return_split=True)
+            file_contents)
         str_no_comments = []
         for segment in comment_delimited:
             if segment.string == '(*':
@@ -675,13 +674,18 @@ class ParserUtils:
                 return sentence, attribute
         elif isinstance(sentence, ParserUtils.StrWithLocation):
             attribute = re.match(ParserUtils.attributes, sentence.string)
-            if attribute is not None:
-                _, attribute, stripped = ParserUtils.StrWithLocation.re_split(
+            if attribute is None:
+                attribute = ParserUtils.StrWithLocation.empty()
+            else:
+                attribute = ParserUtils.StrWithLocation(
+                    attribute.group(),
+                    sentence.indices[attribute.start(): attribute.end()])
+            if attribute:
+                stripped = ParserUtils.StrWithLocation.re_split(
                     ParserUtils.attributes,
                     sentence,
-                    maxsplit=1,
-                    return_split=True)
-                return stripped.lstrip(), attribute
+                    maxsplit=1)[1].lstrip()
+                return stripped, attribute
             else:
                 return sentence, attribute
 
@@ -706,7 +710,7 @@ class ParserUtils:
         """
         attributes = []
         stripped, attribute = ParserUtils.strip_attribute(sentence)
-        while attribute is not None:
+        while attribute:
             attributes.append(attribute)
             sentence = stripped
             stripped, attribute = ParserUtils.strip_attribute(sentence)
@@ -768,8 +772,7 @@ class ParserUtils:
         bullet_re = ParserUtils.StrWithLocation.re_split(
             ParserUtils.brace_splitter,
             sentence,
-            maxsplit=1,
-            return_split=True)
+            maxsplit=1)
         if len(bullet_re) > 1:
             # throw away empty first token
             # by structure of regex, there can be only 2 sections
@@ -845,8 +848,7 @@ class ParserUtils:
         bullet_re = ParserUtils.StrWithLocation.re_split(
             ParserUtils.bullet_splitter,
             sentence,
-            maxsplit=1,
-            return_split=True)
+            maxsplit=1)
         if len(bullet_re) > 1:
             # throw away empty first token
             # by structure of regex, there can be only 2 sections
@@ -1104,14 +1106,13 @@ class ParserUtils:
 
         @classmethod
         def re_split(
-                cls,
-                pattern: Union[str,
-                               re.Pattern],
-                string: 'ParserUtils.StrWithLocation',
-                maxsplit: int = 0,
-                flags: Union[int,
-                             re.RegexFlag] = 0,
-                return_split: bool = False
+            cls,
+            pattern: Union[str,
+                           re.Pattern],
+            string: 'ParserUtils.StrWithLocation',
+            maxsplit: int = 0,
+            flags: Union[int,
+                         re.RegexFlag] = 0
         ) -> List['ParserUtils.StrWithLocation']:
             """
             Mimic re.split, but maintain location information.
