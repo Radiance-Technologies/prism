@@ -97,7 +97,8 @@ class TestHeuristicParser(unittest.TestCase):
             requirements=set(),
             custom_tactics=set())
         sentences = HeuristicParser._get_sentences(self.test_contents["simple"])
-        actual_stats = HeuristicParser._compute_sentence_statistics(sentences)
+        actual_stats = HeuristicParser._compute_sentence_statistics(
+            [str(s) for s in sentences])
         self.assertEqual(actual_stats, expected_stats)
 
     def test_nested_statistics(self):
@@ -163,7 +164,8 @@ class TestHeuristicParser(unittest.TestCase):
             requirements={'Program'},
             custom_tactics=set())
         sentences = HeuristicParser._get_sentences(self.test_contents["nested"])
-        actual_stats = HeuristicParser._compute_sentence_statistics(sentences)
+        actual_stats = HeuristicParser._compute_sentence_statistics(
+            [str(s) for s in sentences])
         self.assertEqual(actual_stats, expected_stats)
 
     def test_Alphabet_statistics(self):
@@ -349,7 +351,8 @@ class TestHeuristicParser(unittest.TestCase):
             custom_tactics=set())
         sentences = HeuristicParser._get_sentences(
             self.test_contents["Alphabet"])
-        actual_stats = HeuristicParser._compute_sentence_statistics(sentences)
+        actual_stats = HeuristicParser._compute_sentence_statistics(
+            [str(s) for s in sentences])
         self.assertEqual(actual_stats, expected_stats)
 
     def test_attribute_syntax_statistics(self):
@@ -387,7 +390,8 @@ class TestHeuristicParser(unittest.TestCase):
             custom_tactics={"foo"})
         sentences = HeuristicParser._get_sentences(
             self.test_contents["attribute_syntax"])
-        actual_stats = HeuristicParser._compute_sentence_statistics(sentences)
+        actual_stats = HeuristicParser._compute_sentence_statistics(
+            [str(s) for s in sentences])
         self.assertEqual(actual_stats, expected_stats)
 
 

@@ -79,18 +79,15 @@ class TestStrWithLocation(unittest.TestCase):
         ]
         self.assertEqual(split_result_1, expected_result_1)
         split_result_2 = ParserUtils.StrWithLocation.re_split(
-            r"\b[a-z]{3}\b",
+            r"(\b[a-z]{3}\b)",
             self.example,
-            maxsplit=1,
-            return_split=True)
+            maxsplit=1)
         expected_result_2_str = [
-            "",
             "The quick ",
             "red",
             "\nfox jumps\n\nover the\tlazy dog."
         ]
         expected_result_2_ind = [
-            [],
             [(i,
               i + 1) for i in range(10)],
             [(i,

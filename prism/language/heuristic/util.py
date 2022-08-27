@@ -428,6 +428,9 @@ class ParserUtils:
     """
     Used to define logical paths of loaded files and libraries.
     """
+    sentence_splitter: re.Pattern = re.compile(r"(\(\*|\*\))")
+    brace_splitter: re.Pattern = re.compile(r"^\s*({|})")
+    bullet_splitter: re.Pattern = re.compile(r"^\s*(-+|\++|\*+)")
 
     @classmethod
     def _is_command_type(
@@ -455,8 +458,9 @@ class ParserUtils:
         # openers and closers.
         comment_depth = 0
         comment_delimited = ParserUtils.StrWithLocation.re_split(
-            r"(\(\*|\*\))",
-            file_contents)
+            ParserUtils.sentence_splitter,
+            file_contents,
+            return_split=True)
         str_no_comments = []
         for segment in comment_delimited:
             if segment.string == '(*':
@@ -466,7 +470,9 @@ class ParserUtils:
             if segment.string == '*)':
                 if comment_depth > 0:
                     comment_depth -= 1
-        str_no_comments = sum(str_no_comments)
+        str_no_comments = sum(
+            str_no_comments,
+            start=ParserUtils.StrWithLocation.empty())
         return str_no_comments
 
     defines_tactic = partialmethod(_is_command_type, tactic_definers)
@@ -640,44 +646,62 @@ class ParserUtils:
     @classmethod
     def strip_attribute(
         cls,
-        sentence: 'ParserUtils.StrWithLocation'
-    ) -> Tuple['ParserUtils.StrWithLocation',
-               Optional['ParserUtils.StrWithLocation']]:
+        sentence: Union[str,
+                        'ParserUtils.StrWithLocation']
+    ) -> Tuple[Union[str,
+                     'ParserUtils.StrWithLocation'],
+               Optional[Union[str,
+                              'ParserUtils.StrWithLocation']]]:
         """
         Strip an attribute from the start of the sentence.
 
         Returns
         -------
-        stripped : 'ParserUtils.StrWithLocation'
+        stripped : Union[str, 'ParserUtils.StrWithLocation']
             The sentence stripped of its leading attribute.
-        attribute : Optional['ParserUtils.StrWithLocation']
+        attribute : Optional[Union[str, 'ParserUtils.StrWithLocation']]
             The leading attribute or None if there is no attribute.
         """
-        attribute = re.match(ParserUtils.attributes, sentence.string)
-        if attribute is not None:
-            _, attribute, stripped = ParserUtils.StrWithLocation.re_split(
-                ParserUtils.attributes,
-                sentence,
-                maxsplit=1,
-                return_split=True)
-            return stripped.lstrip(), attribute
-        else:
-            return sentence, attribute
+        if isinstance(sentence, str):
+            attribute = re.match(ParserUtils.attributes, sentence)
+            if attribute is not None:
+                attribute = attribute.group()
+                stripped = re.split(
+                    ParserUtils.attributes,
+                    sentence,
+                    maxsplit=1)[1].lstrip()
+                return stripped, attribute
+            else:
+                return sentence, attribute
+        elif isinstance(sentence, ParserUtils.StrWithLocation):
+            attribute = re.match(ParserUtils.attributes, sentence.string)
+            if attribute is not None:
+                _, attribute, stripped = ParserUtils.StrWithLocation.re_split(
+                    ParserUtils.attributes,
+                    sentence,
+                    maxsplit=1,
+                    return_split=True)
+                return stripped.lstrip(), attribute
+            else:
+                return sentence, attribute
 
     @classmethod
     def strip_attributes(
         cls,
-        sentence: 'ParserUtils.StrWithLocation'
-    ) -> Tuple['ParserUtils.StrWithLocation',
-               List['ParserUtils.StrWithLocation']]:
+        sentence: Union[str,
+                        'ParserUtils.StrWithLocation']
+    ) -> Tuple[Union[str,
+                     'ParserUtils.StrWithLocation'],
+               List[Union[str,
+                          'ParserUtils.StrWithLocation']]]:
         """
         Strip any attributes from the start of the sentence.
 
         Returns
         -------
-        stripped : 'ParserUtils.StrWithLocation'
+        stripped : Union[str, 'ParserUtils.StrWithLocation']
             The sentence stripped of its leading attributes.
-        attributes : List['ParserUtils.StrWithLocation']
+        attributes : List[Union[str, 'ParserUtils.StrWithLocation']]
             The stripped attributes in order of appearance.
         """
         attributes = []
@@ -691,18 +715,29 @@ class ParserUtils:
     @classmethod
     def strip_control(
         cls,
-        sentence: 'ParserUtils.StrWithLocation'
-    ) -> 'ParserUtils.StrWithLocation':
+        sentence: Union[str,
+                        'ParserUtils.StrWithLocation']
+    ) -> Union[str,
+               'ParserUtils.StrWithLocation']:
         """
         Strip any control commands from the start of the sentence.
         """
-        if re.match(ParserUtils.controllers, sentence.string) is not None:
-            return ParserUtils.StrWithLocation.re_split(
-                ParserUtils.controllers,
-                sentence,
-                maxsplit=1)[1].lstrip()
-        else:
-            return sentence
+        if isinstance(sentence, str):
+            if re.match(ParserUtils.controllers, sentence) is not None:
+                return re.split(
+                    ParserUtils.controllers,
+                    sentence,
+                    maxsplit=1)[1].lstrip()
+            else:
+                return sentence
+        elif isinstance(sentence, ParserUtils.StrWithLocation):
+            if re.match(ParserUtils.controllers, sentence.string) is not None:
+                return ParserUtils.StrWithLocation.re_split(
+                    ParserUtils.controllers,
+                    sentence,
+                    maxsplit=1)[-1].lstrip()
+            else:
+                return sentence
 
     @staticmethod
     def split_brace(
@@ -731,7 +766,7 @@ class ParserUtils:
         Thus we assume that `sentence` concludes with a period.
         """
         bullet_re = ParserUtils.StrWithLocation.re_split(
-            r"^\s*(\{|\})",
+            ParserUtils.brace_splitter,
             sentence,
             maxsplit=1,
             return_split=True)
@@ -808,7 +843,7 @@ class ParserUtils:
         Thus we assume that `sentence` concludes with a period.
         """
         bullet_re = ParserUtils.StrWithLocation.re_split(
-            r"^\s*(-+|\++|\*+)",
+            ParserUtils.bullet_splitter,
             sentence,
             maxsplit=1,
             return_split=True)
@@ -842,6 +877,11 @@ class ParserUtils:
         Indices that refer to the string's original location in the full
         document string.
         """
+        bol_matcher: re.Pattern = re.compile(r"(?<=\n)[^\n]+$")
+        bol_last_matcher: re.Pattern = re.compile(
+            r"(?<=\n)[^\S\n]+(?=\S[^\n]*$)")
+        lstrip_matcher: re.Pattern = re.compile(r"^\s+")
+        rstrip_matcher: re.Pattern = re.compile(r"\s+$")
 
         def __add__(self, other: 'ParserUtils.StrWithLocation'):
             """
@@ -950,12 +990,9 @@ class ParserUtils:
             num_newlines_before_string = file_contents[: self.start].count("\n")
             num_newlines_in_string = file_contents[self.start : self.end].count(
                 "\n")
-            bol_match = re.search(
-                r"(?<=\n)[^\n]+$",
-                file_contents[: self.start])
+            bol_match = self.bol_matcher.search(file_contents[: self.start])
             bol_pos = len(bol_match[0]) if bol_match is not None else 0
-            bol_last_match = re.search(
-                r"(?<=\n)[^\S\n]+(?=\S[^\n]*$)",
+            bol_last_match = self.bol_last_matcher.search(
                 file_contents[: self.end])
             bol_pos_last = len(
                 bol_last_match[0]) if bol_last_match is not None else 0
@@ -972,7 +1009,8 @@ class ParserUtils:
             """
             Mimic str lstrip method, keeping track of location.
             """
-            match = re.search(r"^\s+", self.string)
+            # try difference in length before and after strip
+            match = self.lstrip_matcher.search(self.string)
             if match is not None:
                 return ParserUtils.StrWithLocation(
                     self.string[match.end():],
@@ -1013,7 +1051,8 @@ class ParserUtils:
             """
             Mimic str rstrip method, keeping track of location.
             """
-            match = re.search(r"\s+$", self.string)
+            # Try the same as the note on lstrip
+            match = self.rstrip_matcher.search(self.string)
             if match is not None:
                 return ParserUtils.StrWithLocation(
                     self.string[: match.start()],
@@ -1077,11 +1116,6 @@ class ParserUtils:
             """
             Mimic re.split, but maintain location information.
 
-            Note that this method does not completely follow re.split.
-            The presence or absence of parenthetical groupings in the
-            pattern does not affect what is returned. The pattern is
-            never returned as part of the result.
-
             Parameters
             ----------
             pattern : Union[str, re.Pattern[str]]
@@ -1094,10 +1128,6 @@ class ParserUtils:
             flags : int or re.RegexFlag, optional
                 Flags to pass to compile operation if pattern is a str,
                 by default 0
-            return_split : bool, optional
-                Flag determining whether the "split" strings matching
-                pattern are returned interleaved with the results, by
-                default False
 
             Returns
             -------
@@ -1109,30 +1139,19 @@ class ParserUtils:
                 pattern = re.compile(pattern, flags)
             located_result: List[ParserUtils.StrWithLocation] = []
             remaining_str = cls(string.string, string.indices)
-            current_split = 0
-            while remaining_str:
-                match = pattern.search(remaining_str.string)
-                if match is None or (maxsplit > 0
-                                     and current_split >= maxsplit):
-                    # Either pattern is not found or maxsplit limit has
-                    # been reached. In both cases, stop splitting.
-                    located_result.append(remaining_str)
-                    remaining_str = cls("", [])
-                else:
-                    if return_split and not located_result:
-                        # re.split returns an empty str at the
-                        # beginning in this case. Follow that.
-                        located_result.append(cls("", []))
-                    # Carry on splitting
-                    if match.start() > 0:
-                        # If part of the remaining string lies before
-                        # the first split pattern occurrence...
-                        located_result.append(remaining_str[: match.start()])
-                        if return_split:
-                            located_result.append(
-                                remaining_str[match.start(): match.end()])
-                    remaining_str = remaining_str[match.end():]
-                current_split += 1
+            re_module_result = pattern.split(
+                remaining_str.string,
+                maxsplit=maxsplit)
+            match_start_pos = 0
+            for result in re_module_result:
+                match_start = remaining_str.string.index(
+                    result,
+                    match_start_pos)
+                match_end = match_start + len(result)
+                located_result.append(
+                    cls(result,
+                        remaining_str.indices[match_start : match_end]))
+                match_start_pos = match_end
             return located_result
 
         @classmethod
@@ -1173,6 +1192,8 @@ class ParserUtils:
             StrWithLocation
                 Located string with substitution performed
             """
+            # Try to do this with findall and keep track of offsets
+            # manually
             string = cls(string.string, string.indices)
             if isinstance(pattern, str):
                 pattern = re.compile(pattern, flags)

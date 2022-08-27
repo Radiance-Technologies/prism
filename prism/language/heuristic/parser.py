@@ -5,7 +5,7 @@ import pathlib
 import re
 import warnings
 from dataclasses import dataclass, field
-from typing import List, Optional, Set, Tuple, Union
+from typing import List, Set, Tuple, Union
 
 from seutil import io
 
@@ -583,7 +583,9 @@ class HeuristicParser:
             located_file_contents)
         # Mask notations to avoid accidental splitting on quoted
         # periods.
-        notations = re.findall(r"Notation\s+\".*\"", file_contents_no_comments)
+        notations = re.findall(
+            r"Notation\s+\".*\"",
+            file_contents_no_comments.string)
         file_contents_no_comments = ParserUtils.StrWithLocation.re_sub(
             r"Notation \".*\"",
             cls.notation_mask,
@@ -610,6 +612,9 @@ class HeuristicParser:
             # Replace any whitespace or group of whitespace with a
             # single space.
             sentence = sentences[i]
+            # If the sentence is whitespace only, skip it.
+            if not sentence.strip():
+                continue
             sentence = ParserUtils.StrWithLocation.re_sub(
                 r"(\s)+",
                 " ",
@@ -692,8 +697,9 @@ class HeuristicParser:
             glom_proofs: bool = True,
             project_path: str = "",
             return_locations: bool = False,
-            **kwargs) -> Tuple[List[str],
-                               Optional[SexpInfo.Loc]]:
+            **kwargs) -> Union[Tuple[List[str],
+                                     List[SexpInfo.Loc]],
+                               List[str]]:
         """
         Split the Coq file text by sentences.
 
@@ -727,8 +733,9 @@ class HeuristicParser:
             A list of strings corresponding to Coq source file
             sentences, with proofs glommed (or not) depending on input
             flag.
-        Optional[List[SexpInfo.Loc]]
-            Fully-qualified sentence locations
+        List[SexpInfo.Loc]
+            Fully-qualified sentence locations, returned only if
+            `return_locations` is set to True
         """
         document = CoqDocument(
             file_path,
@@ -748,8 +755,9 @@ class HeuristicParser:
             encoding: str = 'utf-8',
             glom_proofs: bool = True,
             return_locations: bool = False,
-            **kwargs) -> Tuple[List[str],
-                               Optional[SexpInfo.Loc]]:
+            **kwargs) -> Union[Tuple[List[str],
+                                     SexpInfo.Loc],
+                               List[str]]:
         """
         Split the Coq file text by sentences.
 
@@ -781,20 +789,21 @@ class HeuristicParser:
             A list of strings corresponding to Coq source file
             sentences, with proofs glommed (or not) depending on input
             flag.
-        Optional[List[SexpInfo.Loc]]
-            Full qualified sentence locations
+        List[SexpInfo.Loc]
+            Fully-qualified sentence locations, returned only if
+            `return_locations` is set to True
         """
         file_contents = document.source_code
         located_sentences = cls._get_sentences(file_contents)
         sentences = [s.string for s in located_sentences]
         if glom_proofs:
             stats = cls._compute_sentence_statistics(sentences)
-            return cls._glom_proofs(document.index, sentences, stats), None
+            return cls._glom_proofs(document.index, sentences, stats)
         else:
             if return_locations:
                 return sentences, [s.get_location() for s in located_sentences]
             else:
-                return sentences, None
+                return sentences
 
 
 class SerAPIParser(HeuristicParser):
