@@ -248,7 +248,7 @@ class OpamSwitch:
             # we need a mountpoint.
             # maybe the original clone was deleted?
             dest.mkdir()
-        command = f'bwrap --dev-bind / / --bind {src} {dest} -- {command}'
+        command = f'bwrap --dev-bind / / --bind {src} {dest} -- bash -c "{command}"'
         return command, src, dest
 
     def export(self, include_id: bool = True) -> 'OpamSwitch.Configuration':
