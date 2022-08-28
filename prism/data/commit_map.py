@@ -229,12 +229,6 @@ class ProjectCommitMapper(Generic[T]):
                             p.kill()
                     ex.shutdown(wait=True)
                     raise
-        missing = {k for k,
-                   v in results.items() if v is None}
-        if missing:
-            warnings.warn(f"No results found for {', '.join(missing)}")
-        for p in missing:
-            results.pop(p)
         return results
 
     def map(self, max_workers: int = 1) -> Dict[str, Union[T, Except[T]]]:
@@ -263,12 +257,6 @@ class ProjectCommitMapper(Generic[T]):
             The results of the project(s) that raised the unhandled
             exception will be wrapped in an `Except` object for
             subsequent handling or re-raising by the caller.
-
-        Warns
-        -----
-        UserWarning
-            If a project does not have any results. Such projects are
-            removed from the output dictionary.
         """
         return self(max_workers)
 
@@ -336,11 +324,12 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
         # project only affected at most its own records
         storage = MetadataStorage()
         for p in self.projects:
-            try:
-                result = results[p.name]
-            except KeyError:
+            result = results[p.name]
+            if result is None:
+                warnings.warn(f"No results found for {p.name}")
                 p_storage = p.metadata_storage
             else:
+                result = results[p.name]
                 if isinstance(result, Except):
                     p_storage = p.metadata_storage
                 else:
@@ -377,6 +366,11 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
             The output of `map`.
         MetadataStorage
             The updated `MetadataStorage` for each mapped project.
+
+        Warns
+        -----
+        UserWarning
+            If a project does not have any results.
 
         See Also
         --------
