@@ -49,7 +49,7 @@ class TestOpamCoqDepAPI(unittest.TestCase):
             files = os.listdir("./")
             files = [x for x in files if x[-2 :] == '.v']
             deps = get_dependencies("Redexes.v", OpamAPI.active_switch)
-            expected = ["Test.vo", "Terms.vo", "Reduction.vo"]
+            expected = ["Test.v", "Terms.v", "Reduction.v"]
             for file in expected:
                 self.assertTrue(file in deps)
 
@@ -57,47 +57,23 @@ class TestOpamCoqDepAPI(unittest.TestCase):
         """
         Check that a dependency graph can be made from a list of files.
         """
-        '''
-        edges = {
-            'Substitution.vo': [],
-            'Marks.vo': [],
-            'Redexes.vo': ['Substitution.vo',
-                           'Marks.vo'],
-            'Reduction.vo': ['Redexes.vo',
-                             'Marks.vo',
-                             'Substitution.vo'],
-            'Terms.vo':
-                ['Reduction.vo',
-                 'Redexes.vo',
-                 'Marks.vo',
-                 'Substitution.vo'],
-            'Test.vo':
-                [
-                    'Terms.vo',
-                    'Reduction.vo',
-                    'Redexes.vo',
-                    'Substitution.vo',
-                    'Marks.vo'
-                ]
-        }
-        '''
         edges = {}
-        edges['Substitution.vo'] = []
+        edges['Substitution.v'] = []
         edges['Marks.v'] = []
-        edges['Redexes.vo'] = ['Substitution.vo', 'Marks.vo']
-        edges['Reduction.vo'] = ['Redexes.vo', 'Marks.vo', 'Substitution.vo']
-        edges['Terms.vo'] = [
-            'Reduction.vo',
-            'Redexes.vo',
-            'Marks.vo',
-            'Substitution.vo'
+        edges['Redexes.v'] = ['Substitution.v', 'Marks.v']
+        edges['Reduction.v'] = ['Redexes.v', 'Marks.v', 'Substitution.v']
+        edges['Terms.v'] = [
+            'Reduction.v',
+            'Redexes.v',
+            'Marks.v',
+            'Substitution.v'
         ]
-        edges['Test.vo'] = [
-            'Terms.vo',
-            'Reduction.vo',
-            'Redexes.vo',
-            'Substitution.vo',
-            'Marks.vo'
+        edges['Test.v'] = [
+            'Terms.v',
+            'Reduction.v',
+            'Redexes.v',
+            'Substitution.v',
+            'Marks.v'
         ]
         expected = nx.DiGraph(edges)
 
@@ -157,8 +133,6 @@ class TestOpamCoqDepAPI(unittest.TestCase):
     def tearDownClass(cls) -> None:
         """
         Remove the test switch.
-
-        Doubles as test for switch removal.
         """
         for project_name, repo in cls.repos.items():
             del repo

@@ -2,6 +2,7 @@
 Provides an object-oriented abstraction of OPAM switches.
 """
 import os
+import re
 from os import PathLike
 from typing import List
 
@@ -59,12 +60,13 @@ def make_dependency_graph(
         between the given files.
     """
     dep_graph_dict = {}
+    regex = re.compile(r"(.*\.v)o{0,1}")
     for file in files:
         if file[-3 :] == ".vo":
             file = file[:-1]
         deps = []
         deps = get_dependencies(file, switch, IQR, boot)
-        file = file + "o"
+        deps = [regex.match(x).groups()[0] for x in deps]
         dep_graph_dict[file] = deps
     dep_graph = nx.DiGraph(dep_graph_dict)
     return dep_graph.reverse()
@@ -74,14 +76,14 @@ def get_dependencies(
         file: PathLike,
         switch: OpamSwitch,
         IQR: str = '',
-        boot: bool = False) -> List[str]:
+        boot: bool = False) -> List[PathLike]:
     """
     Return dependencies for the given file.
 
     Parameters
     ----------
-    files : PathLike
-        Path of files to be submitted to coqdep
+    file : PathLike
+        Path of file to be submitted to coqdep
     switch : OpamSwitch
         Used for execution of coqdep in the proper environment
     IQR : str, optional
@@ -106,11 +108,15 @@ def get_dependencies(
 
     # The dirname may not be what coqdep is using
     # as its base directory. It may be using the working directory
-    file_deps = [os.path.join(dirname, filename) for filename in file_deps]
+    def join(f):
+        return os.path.join(dirname, f)
 
-    vo_version = file + "o"
-    if vo_version in file_deps:
-        file_deps.remove(vo_version)
+    file_deps = [join(filename) for filename in file_deps]
+    regex = re.compile(r"(.*\.v)o{0,1}")
+    file_deps = [regex.match(x).groups()[0] for x in file_deps]
+
+    if file in file_deps:
+        file_deps.remove(file)
     return file_deps
 
 
@@ -118,7 +124,7 @@ def order_dependencies(
         files: List[PathLike],
         switch: OpamSwitch,
         IQR: str = '',
-        boot: bool = False) -> List[str]:
+        boot: bool = False) -> List[PathLike]:
     """
     Return sorted dependencies for supplied files.
 
@@ -147,4 +153,8 @@ def order_dependencies(
     command = "coqdep {0} -sort {1} {2}".format(files, IQR, boot)
     file_deps = switch.run(command)
     file_deps = file_deps.stdout.strip().split(" ")
+
+    regex = re.compile(r"(.*\.v)o{0,1}")
+    file_deps = [regex.match(x).groups()[0] for x in file_deps]
+
     return file_deps
