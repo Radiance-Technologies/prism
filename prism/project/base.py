@@ -263,7 +263,7 @@ class Project(ABC):
             obj,
             'utf-8',
             glom_proofs,
-            self.sentence_extraction_method,
+            sentence_extraction_method=self.sentence_extraction_method,
             serapi_options=self.serapi_options,
             opam_switch=self.opam_switch)
         return sentences
@@ -554,6 +554,8 @@ class Project(ABC):
             document: CoqDocument,
             encoding: str = 'utf-8',
             glom_proofs: bool = True,
+            glom_ltac: bool = False,
+            return_asts: bool = False,
             sentence_extraction_method: SEM = SEM.SERAPI,
             **kwargs) -> List[str]:
         """
@@ -572,6 +574,13 @@ class Project(ABC):
         glom_proofs : bool, optional
             A flag indicating whether or not proofs should be re-glommed
             after sentences are split, by default `True`
+        glom_ltacs: bool, optional
+            Glom together contiguous regions of Ltac code,
+            by default `False`
+        return_asts: bool, optional
+            Return asts with sentences as a list of tuples,
+            by default `False`
+
         sentence_extraction_method : SentenceExtractionMethod
             Method by which sentences should be extracted
 
@@ -587,4 +596,6 @@ class Project(ABC):
             document,
             encoding,
             glom_proofs,
+            glom_ltac=glom_ltac,
+            return_asts=return_asts,
             **kwargs)

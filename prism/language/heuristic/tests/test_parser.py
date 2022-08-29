@@ -1,12 +1,13 @@
 """
 Test suite for heuristic parsers.
 """
+import json
 import unittest
 from itertools import chain, repeat
 from pathlib import Path
 
 from prism.language.gallina.parser import CoqParser
-from prism.language.heuristic.parser import HeuristicParser
+from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
 from prism.tests import _COQ_EXAMPLES_PATH
 
 
@@ -388,6 +389,51 @@ class TestHeuristicParser(unittest.TestCase):
             self.test_contents["attribute_syntax"])
         actual_stats = HeuristicParser._compute_sentence_statistics(sentences)
         self.assertEqual(actual_stats, expected_stats)
+
+
+class TestSerAPIParser(unittest.TestCase):
+    """
+    Unit test suite for the heuristic SerAPI parser.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        """
+        Set up a common document for each test.
+        """
+        coq_example_files = ["simple", "nested", "Alphabet"]
+        cls.test_files = {
+            coq_file: Path(_COQ_EXAMPLES_PATH) / f"{coq_file}.v"
+            for coq_file in coq_example_files
+        }
+        expected_filename = Path(
+            _COQ_EXAMPLES_PATH) / "split_by_sentence_expected.json"
+        cls.test_glom_ltac_list = {}
+        for coq_file in coq_example_files:
+            with open(expected_filename, "rt") as f:
+                contents = json.load(f)
+                cls.test_glom_ltac_list[coq_file] = contents[
+                    f"{coq_file}_test_glom_ltac_list"]
+
+    def test_glom_ltac(self):
+        """
+        Verify that contiguous regions of ltac get glommed.
+        """
+        for coq_file, test_file in self.test_files.items():
+            expected_glommed = self.test_glom_ltac_list[coq_file]
+            with self.subTest(coq_file):
+                (actual_glommed,
+                 glommed_asts) = SerAPIParser.parse_sentences_from_file(
+                     test_file,
+                     project_path=_COQ_EXAMPLES_PATH,
+                     glom_proofs=False,
+                     glom_ltac=True,
+                     return_asts=True)
+                actual_glommed = [" ".join(s.split()) for s in actual_glommed]
+                self.assertEqual(expected_glommed, actual_glommed)
+                # assert some ltac ASTs got glommed
+                self.assertTrue(
+                    any(ast.head() == "glommed_ltac" for ast in glommed_asts))
 
 
 if __name__ == '__main__':
