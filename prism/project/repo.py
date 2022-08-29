@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 import pathlib
 import random
+import re
 from enum import Enum
 from typing import List, Optional
 
@@ -434,11 +435,18 @@ class ProjectRepo(Repo, Project):
             The list of absolute paths to all Coq files in the project
         """
         commit = self.commit(commit_name)
-        files = [
-            str(f.abspath)
-            for f in commit.tree.traverse()
-            if f.abspath.endswith(".v")
-        ]
+        files = []
+        regex_strs = self.metadata.ignore_path_regex
+        ignore_regexes = [re.compile(x) for x in regex_strs]
+        for f in commit.tree.traverse():
+            filename = str(f.abspath)
+            if filename.endswith(".v"):
+                success = True
+                for regex in ignore_regexes:
+                    if regex.match(filename):
+                        success = False
+                if success:
+                    files.append(filename)
         return sorted(files)
 
     def get_ordered_file_list(self,
@@ -457,12 +465,7 @@ class ProjectRepo(Repo, Project):
         List[str]
             The list of absolute paths to all Coq files in the project
         """
-        commit = self.commit(commit_name)
-        files = [
-            str(f.abspath)
-            for f in commit.tree.traverse()
-            if f.abspath.endswith(".v")
-        ]
+        files = self.get_file_list()
         return order_dependencies(files, self.opam_switch)
 
     def get_random_commit(self) -> Commit:

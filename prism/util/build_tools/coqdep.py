@@ -11,7 +11,9 @@ from networkx.algorithms.dag import all_topological_sorts
 from prism.util.opam.switch import OpamSwitch
 
 
-def check_valid_topological_sort(dep_graph: nx.DiGraph, dep_list: List[str]):
+def check_valid_topological_sort(
+        dep_graph: nx.DiGraph,
+        dep_list: List[str]) -> bool:
     """
     Determine whether the given topological sort of files is valid.
 
@@ -34,7 +36,7 @@ def make_dependency_graph(
         files: List[PathLike],
         switch: OpamSwitch,
         IQR: str = '',
-        boot: bool = False):
+        boot: bool = False) -> nx.DiGraph:
     """
     Return directed graph of dependencies for supplied files.
 
@@ -47,12 +49,14 @@ def make_dependency_graph(
     IQR : str, optional
         IQR flags for coqdep
     boot : bool
-        Flag indicating whether to include the -boot option in
-        the `coqdep` command
+        For coq developers, prints dependencies over coq
+        library files (omitted by default).
 
     Returns
     -------
     dep_graph : networkx.DiGraph
+        Networkx directed graph representing the dependencies
+        between the given files.
     """
     dep_graph_dict = {}
     for file in files:
@@ -70,7 +74,7 @@ def get_dependencies(
         file: PathLike,
         switch: OpamSwitch,
         IQR: str = '',
-        boot: bool = False):
+        boot: bool = False) -> List[str]:
     """
     Return dependencies for the given file.
 
@@ -83,8 +87,8 @@ def get_dependencies(
     IQR : str, optional
         IQR flags for coqdep
     boot : bool
-        Flag indicating whether to include the -boot option in
-        the `coqdep` command
+        For coq developers, prints dependencies over coq
+        library files (omitted by default).
 
     Returns
     -------
@@ -114,7 +118,7 @@ def order_dependencies(
         files: List[PathLike],
         switch: OpamSwitch,
         IQR: str = '',
-        boot: bool = False):
+        boot: bool = False) -> List[str]:
     """
     Return sorted dependencies for supplied files.
 
@@ -127,8 +131,8 @@ def order_dependencies(
     IQR : str, optional
         IQR flags for coqdep
     boot : bool
-        Flag indicating whether to include the -boot option in
-        the `coqdep` command
+        For coq developers, prints dependencies over coq
+        library files (omitted by default).
 
     Returns
     -------
