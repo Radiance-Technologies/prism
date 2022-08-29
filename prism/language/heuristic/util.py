@@ -882,8 +882,6 @@ class ParserUtils:
         bol_matcher: re.Pattern = re.compile(r"(?<=\n)[^\n]+$")
         bol_last_matcher: re.Pattern = re.compile(
             r"(?<=\n)[^\S\n]+(?=\S[^\n]*$)")
-        lstrip_matcher: re.Pattern = re.compile(r"^\s+")
-        rstrip_matcher: re.Pattern = re.compile(r"\s+$")
 
         def __add__(self, other: 'ParserUtils.StrWithLocation'):
             """
