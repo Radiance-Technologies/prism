@@ -1011,14 +1011,11 @@ class ParserUtils:
             """
             Mimic str lstrip method, keeping track of location.
             """
-            # try difference in length before and after strip
-            match = self.lstrip_matcher.search(self.string)
-            if match is not None:
-                return ParserUtils.StrWithLocation(
-                    self.string[match.end():],
-                    self.indices[match.end():])
-            else:
-                return self
+            stripped = self.string.lstrip()
+            len_to_strip = len(self.string) - len(stripped)
+            return ParserUtils.StrWithLocation(
+                stripped,
+                self.indices[len_to_strip :])
 
         def restore_final_ellipsis(self) -> 'ParserUtils.StrWithLocation':
             """
@@ -1053,14 +1050,12 @@ class ParserUtils:
             """
             Mimic str rstrip method, keeping track of location.
             """
-            # Try the same as the note on lstrip
-            match = self.rstrip_matcher.search(self.string)
-            if match is not None:
-                return ParserUtils.StrWithLocation(
-                    self.string[: match.start()],
-                    self.indices[: match.start()])
-            else:
-                return self
+            stripped = self.string.rstrip()
+            len_to_strip = len(self.string) - len(stripped)
+            end_idx = -1 * len_to_strip if len_to_strip > 0 else None
+            return ParserUtils.StrWithLocation(
+                stripped,
+                self.indices[: end_idx])
 
         def startswith(self, *args, **kwargs) -> bool:
             """
