@@ -263,7 +263,7 @@ class Project(ABC):
             obj,
             'utf-8',
             glom_proofs,
-            self.sentence_extraction_method,
+            sentence_extraction_method=self.sentence_extraction_method,
             serapi_options=self.serapi_options,
             opam_switch=self.opam_switch)
         return sentences
