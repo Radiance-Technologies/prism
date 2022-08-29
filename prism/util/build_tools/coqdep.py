@@ -66,7 +66,9 @@ def make_dependency_graph(
             file = file[:-1]
         deps = []
         deps = get_dependencies(file, switch, IQR, boot)
+
         deps = [regex.match(x).groups()[0] for x in deps]
+
         dep_graph_dict[file] = deps
     dep_graph = nx.DiGraph(dep_graph_dict)
     return dep_graph.reverse()
