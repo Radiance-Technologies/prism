@@ -54,7 +54,7 @@ class Version(Parseable, abc.ABC):
     An abstract base class for OCaml package versions.
     """
 
-    _version_chars: re.Pattern = re.compile(r"[a-zA-Z0-9\-_\+\.~]+")
+    _version_chars: re.Pattern = re.compile(r"[a-zA-Z0-9\-_\+\.\/:~]+")
 
     def __hash__(self) -> int:  # noqa: D105
         # cannot make abstract and also have dataclass auto-derive it
@@ -207,7 +207,7 @@ class OpamVersion(Version):
     with a non-digit sequence even if empty.
     """
     _version_syntax: ClassVar[re.Pattern] = re.compile(
-        r"^[a-zA-Z0-9\-_\+\.~]+$")
+            r"^[a-zA-Z0-9\-_\+\.\/:~]+$")
     _sequence_syntax: ClassVar[re.Pattern] = re.compile(r"([^0-9]+)?([0-9]+)")
     _digit_re: ClassVar[re.Pattern] = re.compile(r'\d')
 
