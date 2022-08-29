@@ -596,6 +596,6 @@ class Project(ABC):
             document,
             encoding,
             glom_proofs,
-            glom_ltac,
-            return_asts,
+            glom_ltac=glom_ltac,
+            return_asts=return_asts,
             **kwargs)
