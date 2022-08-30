@@ -14,9 +14,9 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 import lark
-from seutil import bash
 from strace_parser.parser import get_parser
 
+from prism.util.opam.switch import OpamSwitch
 from prism.util.path import get_relative_path
 
 _EXECUTABLE = 'coqc'
@@ -424,6 +424,7 @@ def _parse_strace_logdir(logdir: str,
 
 
 def strace_build(
+        opam_switch: OpamSwitch,
         command: str,
         executable: str = _EXECUTABLE,
         regex: str = _REGEX,
@@ -486,8 +487,8 @@ def strace_build(
             f"curdir {os.getcwd()}")
         strace_cmd = (
             'strace -e trace=execve -v -ff -s 100000000 -xx -ttt -o'
-            f' {logfname} {command}')
-        r = bash.run(strace_cmd, cwd=workdir, **kwargs)
+            f' {logfname} bash -c "{command}"')
+        r = opam_switch.run(strace_cmd, cwd=workdir, **kwargs)
         if r.stdout is not None:
             for line in r.stdout.splitlines():
                 logging.debug(f"strace stdout: {line}")
