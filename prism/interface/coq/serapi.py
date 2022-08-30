@@ -27,7 +27,6 @@ from prism.interface.coq.exception import CoqExn, CoqTimeout
 from prism.interface.coq.goals import Goal, Goals, Hypothesis
 from prism.interface.coq.names import mod_path_file, print_ker_name
 from prism.interface.coq.re_patterns import ADDED_STATE_PATTERN
-from prism.interface.coq.util import escape, normalize_spaces
 from prism.language.sexp import SexpNode
 from prism.language.sexp.exception import IllegalSexpOperationException
 from prism.language.sexp.list import SexpList
@@ -37,6 +36,7 @@ from prism.util.logging import default_log_level
 from prism.util.opam import OpamSwitch
 from prism.util.opam.version import OpamVersion
 from prism.util.radpytools.dataclasses import default_field
+from prism.util.string import escape, normalize_spaces
 
 logger = logging.getLogger(__file__)
 logger.setLevel(default_log_level())

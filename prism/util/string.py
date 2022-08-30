@@ -4,22 +4,27 @@ Miscellaneous utilities for SerAPI interaction.
 
 import re
 
+_whitespace_regex = re.compile(r"\s+")
 
-def escape(vernac_cmd: str) -> str:
+
+def escape(cmd: str) -> str:
     """
     Sanitize the given command by escaping special characters.
 
+    In particular, backslashes and double quotes are escaped by
+    prepending backslashes to each.
+
     Parameters
     ----------
-    vernac_cmd : str
-        A command to be sent to SerAPI.
+    cmd : str
+        A command.
 
     Returns
     -------
     str
         The sanitized command.
     """
-    return vernac_cmd.replace("\\", "\\\\").replace('"', '\\"')
+    return cmd.replace("\\", r"\\").replace('"', r'\"')
 
 
 def normalize_spaces(s: str) -> str:
@@ -28,4 +33,4 @@ def normalize_spaces(s: str) -> str:
 
     Also remove leading and trailing whitespace.
     """
-    return re.sub(r"\s+", " ", s, flags=re.DOTALL).strip()
+    return _whitespace_regex.sub(" ", s, flags=re.DOTALL).strip()
