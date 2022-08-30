@@ -13,6 +13,7 @@ from prism.data.commit_map import (
 )
 from prism.project.repo import ProjectRepo
 from prism.tests.factories import DatasetFactory
+from prism.util.identity import Identity
 
 
 def get_commit_iterator(p):
@@ -121,7 +122,8 @@ class TestProjectCommitMapper(unittest.TestCase):
         expected_result = {p: [f"Success {p}"] for p in self.project_names}
         expected_result[failed_project] = Except(
             expected_result[failed_project],
-            Exception(f"Failure: {failed_project}"))
+            Exception(f"Failure: {failed_project}"),
+            Identity())
         result = project_looper(3)
         self.assertEqual(
             {k: v for k,
