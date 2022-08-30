@@ -325,24 +325,26 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
         storage = MetadataStorage()
         for p in self.projects:
             result = results[p.name]
+            exception = None
+            if isinstance(result, Except):
+                exception = result
+                result = result.value
             if result is None:
                 warnings.warn(f"No results found for {p.name}")
                 p_storage = p.metadata_storage
             else:
-                result = results[p.name]
-                if isinstance(result, Except):
-                    p_storage = p.metadata_storage
+                # strip storage from results
+                if exception is not None:
+                    # change mapped result value in place
+                    exception.value = result[0]
                 else:
-                    p_storage = result[1]
+                    results[p.name] = result[0]
+                p_storage = result[1]
             for metadata in p_storage.get_all(p.name):
                 storage.insert(metadata)
         for p in self.projects:
             p.metadata_storage = storage
-        return {
-            k: r if isinstance(r,
-                               Except) else r[0] for k,
-            r in results.items()
-        }
+        return results
 
     def update_map(
         self,
