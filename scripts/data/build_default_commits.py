@@ -5,7 +5,9 @@ import logging
 import traceback
 from functools import partial
 from multiprocessing import Pool
+from os import PathLike
 from pathlib import Path
+from typing import Callable, Set
 
 import tqdm
 
@@ -15,12 +17,15 @@ from prism.data.setup import create_default_switches
 from prism.project.base import SentenceExtractionMethod
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
-from prism.util.swim import AutoSwitchManager
+from prism.util.swim import AutoSwitchManager, SwitchManager
 
 logging.basicConfig(level=logging.DEBUG)
 
 
-def get_project(root_path, metadata_storage, project_name):
+def get_project(
+        root_path: PathLike,
+        metadata_storage: MetadataStorage,
+        project_name: str) -> ProjectRepo:
     repo_path = Path(root_path) / project_name
     return ProjectRepo(
         repo_path,
@@ -28,22 +33,41 @@ def get_project(root_path, metadata_storage, project_name):
         sentence_extraction_method=SentenceExtractionMethod.SERAPI)
 
 
-def get_project_func(root_path, metadata_storage):
+def get_project_func(
+        root_path: PathLike,
+        metadata_storage: MetadataStorage) -> Callable[[str],
+                                                       ProjectRepo]:
     return partial(get_project, root_path, metadata_storage)
 
 
-def get_commit_iterator(metadata_storage, project):
+def get_commit_iterator(
+        metadata_storage: MetadataStorage,
+        project: ProjectRepo) -> Set[str]:
     return metadata_storage.get_project_revisions(project.metadata.project_name)
 
 
-def get_commit_iterator_func(metadata_storage):
+def get_commit_iterator_func(
+        metadata_storage: MetadataStorage) -> Callable[[ProjectRepo],
+                                                       Set[str]]:
     return partial(get_commit_iterator, metadata_storage)
 
 
-def process_commit(switch_manager, project, commit, results):
+def process_commit(
+        switch_manager: SwitchManager,
+        project: ProjectRepo,
+        commit: str,
+        results: None) -> None:
     try:
         project.git.checkout(commit)
-        coq_version = project.metadata.coq_version
+        coq_version = project.metadata_storage.get_project_coq_versions(
+            project.name,
+            project.remote_url,
+            project.commit_sha)
+        try:
+            coq_version = coq_version.pop()
+        except KeyError:
+            coq_version = '8.10.2'
+        print(f'Choosing "coq.{coq_version}" for {project.name}')
         # get a switch
         dependency_formula = get_formula_from_metadata(
             project.metadata,
@@ -68,11 +92,15 @@ def process_commit(switch_manager, project, commit, results):
         project.opam_switch = original_switch
 
 
-def get_process_commit_func(switch_manager):
+def get_process_commit_func(
+        switch_manager: SwitchManager) -> Callable[[ProjectRepo,
+                                                    str,
+                                                    None],
+                                                   None]:
     return partial(process_commit, switch_manager)
 
 
-def main(root_path, storage_path):
+def main(root_path: PathLike, storage_path: PathLike) -> None:
     # Initialize from arguments
     metadata_storage = MetadataStorage.load(storage_path)
     create_default_switches(7)
