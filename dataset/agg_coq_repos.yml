@@ -1,4 +1,4 @@
-autofill: true
+autofill: true23
 build_cmd:
   0: 0
   1: 0
@@ -820,7 +820,8 @@ command_sequences:
 - - commands:
     - make coq
   - 22
-- - commands: ./configure make
+- - commands:
+    - ./configure make
   - 23
 - - commands:
     - make maple
