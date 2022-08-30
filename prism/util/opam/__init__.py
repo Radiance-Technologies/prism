@@ -17,3 +17,6 @@ from .version import (  # noqa: F401
     ParseError,
     Version,
 )
+from .versiondist import (
+    VersionDistribution
+)
