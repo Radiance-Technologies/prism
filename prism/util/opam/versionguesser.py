@@ -44,88 +44,106 @@ CLONE_PROCESS = Process(target=__background_clone)
 CLONE_PROCESS.start()
 
 
-def version_distribution(package, date=None, n=20):
+class VersionDistribution:
     """
-    Order versions of `package` by popularity.
-
-    Returns a count of how often each version of `package` could be
-    used as a dependency for the latest version of other packages.
-
-    `date` is a datetime object specifying at what point in history
-    to find the version distribution of `package`.
+    Class for information about the usage of versions of packages.
     """
-    versions = list(
-        map(
-            OpamVersion.parse,
-            filter(
-                lambda x: x and not x.startswith("#"),
-                OpamAPI.run(f"opam list -VA --columns=version {package}").stdout
-                .split("\n"))))
 
-    if date is None:
-        date = datetime.now()
+    @classmethod
+    def search(cls, package, date=None):
+        """
+        Order versions of `package` by 'popularity'.
 
-    REPO_LOCK.acquire()
+        Returns a count of how often each version of `package` could be
+        used as a dependency for the latest version of other packages.
 
-    repo = git.Repo(REPO_DIRECTORY.name)
+        `date` is a datetime object specifying at what point in history
+        to find the version distribution of `package`.
 
-    # get the commit right before the time desired
-    commit = repo.git.execute(
-        [
-            "git",
-            "rev-list",
-            "-n1",
-            f"--before=\"{date.strftime('%Y-%m-%d')}\"",
-            "master"
-        ])
-    if (commit == ""):
-        # time given must predate entire repository!
-        raise ValueError("time given predates opam-coq repo")
+        Can be used as a sort key to prioritize versions of packages:
+        ```
+        sort(versions,
+             key=lambda x: VersionDistribution.search(package)[x],
+             reverse=True
+        )
+        ```
+        where indexing an unknown value will return 0.
+        """
+        versions = list(
+            map(
+                OpamVersion.parse,
+                filter(
+                    lambda x: x and not x.startswith("#"),
+                    OpamAPI.run(f"opam list -VA --columns=version {package}")
+                    .stdout.split("\n"))))
 
-    repo.git.checkout(commit)
+        if date is None:
+            date = datetime.now()
 
-    # base directory of all packages (released,extra-dev,etc)
-    all_packages = list(
-        map(
-            Path,
-            glob.glob(REPO_DIRECTORY.name + "/**/packages/*",
-                      recursive=True)))
+        REPO_LOCK.acquire()
 
-    # we only care about the most recent version
-    # of packages at this timestamp
-    new_packages = filter(
-        None,
-        (
-            max(map(OpamVersion.parse,
-                    glob.glob(str(x / "*"))),
-                default=None) for x in all_packages))
+        repo = git.Repo(REPO_DIRECTORY.name)
 
-    # build a regex
-    single_dep_regex = r'"[^\"]+"\s*(\{[^\}]+\})?\s*'
+        # get the commit right before the time desired
+        commit = repo.git.execute(
+            [
+                "git",
+                "rev-list",
+                "-n1",
+                f"--before=\"{date.strftime('%Y-%m-%d')}\"",
+                "master"
+            ])
+        if (commit == ""):
+            # time given must predate entire repository!
+            raise ValueError("time given predates opam-coq repo")
 
-    dep_regex = re.compile(
-        r'depends:\s*\[\s*(' + single_dep_regex + ')*('
-        + single_dep_regex.replace(r'[^\"]+',
-                                   package) + ')(' + single_dep_regex + ')*]',
-        flags=re.MULTILINE)
+        repo.git.checkout(commit)
 
-    count = Counter()
+        # base directory of all packages (released,extra-dev,etc)
+        all_packages = list(
+            map(
+                Path,
+                glob.glob(
+                    REPO_DIRECTORY.name + "/**/packages/*",
+                    recursive=True)))
 
-    for package in new_packages:
-        try:
-            m = dep_regex.search((Path(str(package)) / "opam").read_text())
-        except NotADirectoryError:
-            # circa 2018 some packages had different structures
-            # and we drop those.
-            continue
-        if (m and m.group(4)):
+        # we only care about the most recent version
+        # of packages at this timestamp
+        new_packages = filter(
+            None,
+            (
+                max(
+                    map(OpamVersion.parse,
+                        glob.glob(str(x / "*"))),
+                    default=None) for x in all_packages))
+
+        # build a regex to find our version constraint
+        single_dep_regex = r'"[^\"]+"\s*(\{[^\}]+\})?\s*'
+
+        dep_regex = re.compile(
+            r'depends:\s*\[\s*(' + single_dep_regex + ')*('
+            + single_dep_regex.replace(r'[^\"]+',
+                                       package) + ')(' + single_dep_regex
+            + ')*]',
+            flags=re.MULTILINE)
+
+        count = Counter()
+
+        for package in new_packages:
             try:
-                constraint = VersionFormula.parse(m.group(4)[1 :-1])
-                count.update(constraint.filter(versions))
-            except ParseError as e:
-                print(e)
-                pass
+                m = dep_regex.search((Path(str(package)) / "opam").read_text())
+            except NotADirectoryError:
+                # circa 2018 some packages had different structures
+                # so we will exclude those
+                continue
+            if (m and m.group(4)):
+                try:
+                    constraint = VersionFormula.parse(m.group(4)[1 :-1])
+                    count.update(constraint.filter(versions))
+                except ParseError as e:
+                    print(e)
+                    pass
 
-    REPO_LOCK.release()
+        REPO_LOCK.release()
 
-    return count
+        return count
