@@ -15,6 +15,8 @@ from typing import ClassVar, Dict, List, Optional, Tuple, Union
 
 from seutil import bash
 
+from prism.util.bash import escape
+
 from .file import OpamFile
 from .formula import LogicalPF, LogOp, PackageFormula
 from .version import OCamlVersion, OpamVersion, Version
@@ -248,6 +250,7 @@ class OpamSwitch:
             # we need a mountpoint.
             # maybe the original clone was deleted?
             dest.mkdir()
+        command = escape(command)
         command = f'bwrap --dev-bind / / --bind {src} {dest} -- bash -c "{command}"'
         return command, src, dest
 
