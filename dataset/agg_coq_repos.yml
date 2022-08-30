@@ -869,8 +869,8 @@ command_sequences:
     - null
   - 33
 - - commands:
-    - git submodule init
-    - git submodule update
+    - git submodule set-url -- CompCert https://github.com/inria-parkas/CompCert.git
+    - git submodule update --init
     - ./configure x86_64-linux
     - make -j8
   - 34
