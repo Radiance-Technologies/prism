@@ -356,67 +356,10 @@ class Project(ABC):
         Build the project.
         """
         if self.serapi_options is None:
-            _, rcode, stdout, stderr = self.build_and_get_iqr()
+            _, rcode, stdout, stderr = self.infer_serapi_options()
             return rcode, stdout, stderr
         else:
             return self._make("build", "Compilation")
-
-    def build_and_get_iqr(self) -> Tuple[str, int, str, str]:
-        """
-        Build project and get IQR options, simultaneously.
-
-        Invoking this function will replace any serapi_options already
-        present in the metadata.
-
-        Returns
-        -------
-        str
-            The IQR flags string that should be stored in serapi_options
-        int
-            The return code of the last-executed command
-        str
-            The total stdout of all commands run
-        str
-            The total stderr of all commands run
-        """
-        contexts: List[CoqContext] = []
-        stdout_out = ""
-        stderr_out = ""
-        env = self.opam_switch.environ
-        for cmd in self.build_cmd:
-            if "make" in cmd.lower() or "dune" in cmd.lower():
-                context, rcode_out, stdout, stderr = strace_build(
-                    cmd,
-                    workdir=self.path,
-                    env=env)
-                contexts += context
-            else:
-                r = bash.run(cmd, cwd=self.path, env=env)
-                rcode_out = r.returncode
-                stdout = r.stdout
-                stderr = r.stderr
-                logging.debug(
-                    f"Command {cmd} finished with return code {r.returncode}.")
-            stdout_out = os.linesep.join((stdout_out, stdout))
-            stderr_out = os.linesep.join((stderr_out, stderr))
-            # Emulate the behavior of _make where commands are joined by
-            # &&.
-            if rcode_out:
-                break
-
-        def or_(x, y):
-            return x | y
-
-        serapi_options = str(
-            reduce(
-                or_,
-                [c.iqr for c in contexts],
-                IQR(set(),
-                    set(),
-                    set(),
-                    self.path)))
-        self._update_metadata(serapi_options=serapi_options)
-        return serapi_options, rcode_out, stdout_out, stderr_out
 
     clean = partialmethod(_make, "clean", "Cleaning")
     """
@@ -543,6 +486,63 @@ class Project(ABC):
             counter += 1
         first_sentence_idx = random.randint(0, len(sentences) - 2)
         return sentences[first_sentence_idx : first_sentence_idx + 2]
+
+    def infer_serapi_options(self) -> Tuple[str, int, str, str]:
+        """
+        Build project and get IQR options, simultaneously.
+
+        Invoking this function will replace any serapi_options already
+        present in the metadata.
+
+        Returns
+        -------
+        str
+            The IQR flags string that should be stored in serapi_options
+        int
+            The return code of the last-executed command
+        str
+            The total stdout of all commands run
+        str
+            The total stderr of all commands run
+        """
+        contexts: List[CoqContext] = []
+        stdout_out = ""
+        stderr_out = ""
+        env = self.opam_switch.environ
+        for cmd in self.build_cmd:
+            if "make" in cmd.lower() or "dune" in cmd.lower():
+                context, rcode_out, stdout, stderr = strace_build(
+                    cmd,
+                    workdir=self.path,
+                    env=env)
+                contexts += context
+            else:
+                r = bash.run(cmd, cwd=self.path, env=env)
+                rcode_out = r.returncode
+                stdout = r.stdout
+                stderr = r.stderr
+                logging.debug(
+                    f"Command {cmd} finished with return code {r.returncode}.")
+            stdout_out = os.linesep.join((stdout_out, stdout))
+            stderr_out = os.linesep.join((stderr_out, stderr))
+            # Emulate the behavior of _make where commands are joined by
+            # &&.
+            if rcode_out:
+                break
+
+        def or_(x, y):
+            return x | y
+
+        serapi_options = str(
+            reduce(
+                or_,
+                [c.iqr for c in contexts],
+                IQR(set(),
+                    set(),
+                    set(),
+                    self.path)))
+        self._update_metadata(serapi_options=serapi_options)
+        return serapi_options, rcode_out, stdout_out, stderr_out
 
     install = partialmethod(_make, "install", "Installation")
     """
