@@ -3,6 +3,7 @@ Contains all metadata related to paticular GitHub repositories.
 """
 
 import os
+import warnings
 # from collections.abc import Iterable
 from dataclasses import asdict, dataclass, fields
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Set
@@ -31,6 +32,8 @@ class ProjectMetadata:
     Specifies a list of commands for this project (e.g., `build.sh` or
     `make`) that result in building (compiling) the Coq project.
     Commands are presumed to be executed in a shell, e.g., Bash.
+    The build commands should not generally install dependencies, which
+    should be presumed to already be present.
     """
     install_cmd: List[str]
     """
@@ -106,6 +109,10 @@ class ProjectMetadata:
     typically assumed to be installed prior to running ``make``.
     Only dependencies that are not handled by the project's build system
     should be listed here.
+
+    .. warning::
+        This field is deprecated and will be removed in a future
+        version. Use `opam_dependencies` instead.
     """
     opam_repos: Set[str] = default_field(set())
     """
@@ -117,18 +124,17 @@ class ProjectMetadata:
     ``remove``, and ``set-url``, and are updated from their URLs using
     ``opam update``.
     """
-    opam_dependencies: Set[str] = default_field(set())
+    opam_dependencies: List[str] = default_field(list())
     """
-    Set of non-Coq OPAM dependencies whose installation is required to
-    build the project.
-    A string ``pkg`` in `opam_dependencies` should be given such that
-    ``opam install pkg`` results in installing the named dependency.
+    A conjunctive list of OPAM package formulas expressing dependencies
+    whose installation is required to build the project.
+    The format should generally match that found in the ``depends:``
+    field of an OPAM file.
     Coq projects are often built or installed using `make` and
     ``make install`` under the assumption of an existing Makefile for
     the Coq project in dataset, but the `coq_dependencies` are typically
     assumed to be installed prior to running ``make``.
-    Only dependencies that are not handled by the project's build system
-    need to be listed here.
+    All OPAM-installable dependencies should be expressed here.
     """
     project_url: Optional[GitURL] = None
     """
@@ -201,6 +207,13 @@ class ProjectMetadata:
                     set_tp,
                     {e for e in getattr(self,
                                         set_tp) if e is not None})
+        if self.coq_dependencies:
+            warnings.warn(
+                "The 'coq_dependencies' field is deprecated. "
+                "Use 'opam_dependencies' instead.",
+                DeprecationWarning)
+            self.opam_dependencies.extend(self.coq_dependencies)
+            self.coq_dependencies = set()
 
     def __gt__(self, other: 'ProjectMetadata') -> bool:
         """
