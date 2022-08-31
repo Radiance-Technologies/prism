@@ -105,11 +105,23 @@ class StrWithLocation:
         return self.string
 
     @property
-    def start(self) -> Optional[int]:  # noqa: D102
+    def start(self) -> Optional[int]:
+        """
+        Get the first index in the indices list.
+
+        With respect to the start and end properties, `string`
+        corresponds to <original document string>[start, end].
+        """
         return self.indices[0][0] if self.indices else None
 
     @property
-    def end(self) -> Optional[int]:  # noqa: D102
+    def end(self) -> Optional[int]:
+        """
+        Get the final index in the indices list.
+
+        With respect to the start and end properties, `string`
+        corresponds to <original document string>[start, end].
+        """
         return self.indices[-1][1] if self.indices else None
 
     def endswith(self, *args, **kwargs) -> bool:
