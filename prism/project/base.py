@@ -8,6 +8,7 @@ import random
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from functools import partialmethod, reduce
+from subprocess import CalledProcessError
 from typing import List, NamedTuple, Optional, Tuple, Union
 
 from seutil import bash
@@ -19,7 +20,8 @@ from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.strace import IQR, CoqContext, strace_build
 from prism.util.logging import default_log_level
-from prism.util.opam import OpamSwitch
+from prism.util.opam import OpamSwitch, PackageFormula
+from prism.util.opam.formula.package import LogicalPF
 
 logger: logging.Logger = logging.getLogger(__name__)
 logger.setLevel(default_log_level())
@@ -486,6 +488,35 @@ class Project(ABC):
             counter += 1
         first_sentence_idx = random.randint(0, len(sentences) - 2)
         return sentences[first_sentence_idx : first_sentence_idx + 2]
+
+    def infer_opam_dependencies(self) -> List[str]:
+        """
+        Try to infer Opam-installable dependencies for the project.
+
+        Returns
+        -------
+        List[str]
+            A conjunctive list of package formulas specifying
+            dependencies that must be installed before the project is
+            built.
+
+        See Also
+        --------
+        PackageFormula : For more information about package formulas.
+        """
+        try:
+            formula = self.opam_switch.get_dependencies(self.path)
+        except CalledProcessError:
+            # TODO: try to infer dependencies by other means
+            formula = []
+        if isinstance(formula, PackageFormula):
+            if isinstance(formula, LogicalPF):
+                formula = formula.to_conjunctive_list()
+            else:
+                formula = [formula]
+        formula = [str(c) for c in formula]
+        self._update_metadata(opam_dependencies=formula)
+        return formula
 
     def infer_serapi_options(self) -> Tuple[str, int, str, str]:
         """
