@@ -66,8 +66,7 @@ class StrWithLocation:
                 self.string + other.string,
                 self.indices + other.indices)
         else:
-            raise TypeError(
-                "Second addened must be of the same type as the first addend.")
+            return NotImplemented
 
     def __bool__(self) -> bool:
         """
@@ -85,7 +84,7 @@ class StrWithLocation:
             return (
                 self.string == other.string and self.indices == other.indices)
         else:
-            return False
+            return NotImplemented
 
     def __getitem__(self, idx: Union[int, slice]) -> 'StrWithLocation':
         """
