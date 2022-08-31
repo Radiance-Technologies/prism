@@ -7,7 +7,7 @@ from pathlib import Path
 from prism.data.document import CoqDocument
 from prism.language.gallina.analyze import SexpInfo
 from prism.language.gallina.parser import CoqParser
-from prism.language.heuristic.util import ParserUtils
+from prism.language.heuristic.str_with_location import StrWithLocation
 from prism.tests import _COQ_EXAMPLES_PATH
 
 
@@ -27,12 +27,12 @@ class TestStrWithLocation(unittest.TestCase):
             CoqParser.parse_source(cls.simple_file),
             project_path=_COQ_EXAMPLES_PATH)
         cls.located_str_simple = \
-            ParserUtils.StrWithLocation.create_from_file_contents(
+            StrWithLocation.create_from_file_contents(
                 cls.simple_doc.source_code)
         # Yes, I know the phrase isn't quite right. By the time I
         # counted up all the expected indices, I couldn't bring myself
         # to fix it and re-count everything.
-        cls.example = ParserUtils.StrWithLocation.create_from_file_contents(
+        cls.example = StrWithLocation.create_from_file_contents(
             "The quick red\nfox jumps\n\nover the\tlazy dog.")
 
     def test_init(self):
@@ -47,9 +47,7 @@ class TestStrWithLocation(unittest.TestCase):
         """
         Test re_split class method.
         """
-        split_result_1 = ParserUtils.StrWithLocation.re_split(
-            r"\b[a-z]{3}\b",
-            self.example)
+        split_result_1 = StrWithLocation.re_split(r"\b[a-z]{3}\b", self.example)
         expected_result_1_str = [
             "The quick ",
             "\n",
@@ -72,13 +70,13 @@ class TestStrWithLocation(unittest.TestCase):
               43)]
         ]
         expected_result_1 = [
-            ParserUtils.StrWithLocation(i,
-                                        j) for i,
+            StrWithLocation(i,
+                            j) for i,
             j in zip(expected_result_1_str,
                      expected_result_1_ind)
         ]
         self.assertEqual(split_result_1, expected_result_1)
-        split_result_2 = ParserUtils.StrWithLocation.re_split(
+        split_result_2 = StrWithLocation.re_split(
             r"(\b[a-z]{3}\b)",
             self.example,
             maxsplit=1)
@@ -98,8 +96,8 @@ class TestStrWithLocation(unittest.TestCase):
                                     43)]
         ]
         expected_result_2 = [
-            ParserUtils.StrWithLocation(i,
-                                        j) for i,
+            StrWithLocation(i,
+                            j) for i,
             j in zip(expected_result_2_str,
                      expected_result_2_ind)
         ]
@@ -109,19 +107,15 @@ class TestStrWithLocation(unittest.TestCase):
         """
         Test re_sub class method.
         """
-        sub_result_1 = ParserUtils.StrWithLocation.re_sub(
-            " ",
-            "  ",
-            self.example,
-            count=2)
+        sub_result_1 = StrWithLocation.re_sub(" ", "  ", self.example, count=2)
         expected_result_1_indices = [(i, i + 1) for i in range(43)]
         expected_result_1_indices.insert(3, (3, 4))
         expected_result_1_indices.insert(10, (9, 10))
-        expected_result_1 = ParserUtils.StrWithLocation(
+        expected_result_1 = StrWithLocation(
             "The  quick  red\nfox jumps\n\nover the\tlazy dog.",
             expected_result_1_indices)
         self.assertEqual(sub_result_1, expected_result_1)
-        sub_result_2 = ParserUtils.StrWithLocation.re_sub(
+        sub_result_2 = StrWithLocation.re_sub(
             r"red\nfox jumps",
             "*",
             self.example)
@@ -130,7 +124,7 @@ class TestStrWithLocation(unittest.TestCase):
             (10,
              23)
         ] + expected_result_2_indices[23 :]
-        expected_result_2 = ParserUtils.StrWithLocation(
+        expected_result_2 = StrWithLocation(
             "The quick *\n\nover the\tlazy dog.",
             expected_result_2_indices)
         self.assertEqual(sub_result_2, expected_result_2)
@@ -139,7 +133,7 @@ class TestStrWithLocation(unittest.TestCase):
         """
         Ensure strip, lstrip, and rstrip methods work as they should.
         """
-        example = ParserUtils.StrWithLocation(
+        example = StrWithLocation(
             "    \ta b c \t \t ",
             [(i,
               i + 1) for i in range(15)])
@@ -157,7 +151,7 @@ class TestStrWithLocation(unittest.TestCase):
         """
         Ensure locations are generated properly from indices.
         """
-        split_result = ParserUtils.StrWithLocation.re_split(
+        split_result = StrWithLocation.re_split(
             "Check",
             self.located_str_simple)
         loc_results = []
@@ -193,7 +187,7 @@ class TestStrWithLocation(unittest.TestCase):
                 end_charno=1546)
         ]
         self.assertEqual(loc_results, expected_loc_results)
-        split_result_2 = ParserUtils.StrWithLocation.re_split(
+        split_result_2 = StrWithLocation.re_split(
             ": seq",
             self.located_str_simple,
             maxsplit=1)

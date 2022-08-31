@@ -3,12 +3,10 @@ Provides internal utilities for heuristic parsing of Coq source files.
 """
 
 import re
-from dataclasses import dataclass
 from functools import partialmethod
 from typing import Iterable, List, Optional, Set, Tuple, Union
 
-from prism.language.gallina.analyze import SexpInfo
-from prism.util.radpytools.dataclasses import default_field
+from prism.language.heuristic.str_with_location import StrWithLocation
 from prism.util.re import regex_from_options
 
 
@@ -450,14 +448,14 @@ class ParserUtils:
 
     @staticmethod
     def _strip_comments(
-            file_contents: 'ParserUtils.StrWithLocation',
-            encoding: str = 'utf-8') -> 'ParserUtils.StrWithLocation':
+            file_contents: 'StrWithLocation',
+            encoding: str = 'utf-8') -> 'StrWithLocation':
         # comments can be nested, so a single regex cannot be used
         # to detect this recursive structure.
         # Instead, split on comment boundaries and manually match
         # openers and closers.
         comment_depth = 0
-        comment_delimited = ParserUtils.StrWithLocation.re_split(
+        comment_delimited = StrWithLocation.re_split(
             ParserUtils.sentence_splitter,
             file_contents)
         str_no_comments = []
@@ -469,9 +467,7 @@ class ParserUtils:
             if segment.string == '*)':
                 if comment_depth > 0:
                     comment_depth -= 1
-        str_no_comments = sum(
-            str_no_comments,
-            start=ParserUtils.StrWithLocation.empty())
+        str_no_comments = sum(str_no_comments, start=StrWithLocation.empty())
         return str_no_comments
 
     defines_tactic = partialmethod(_is_command_type, tactic_definers)
@@ -646,19 +642,19 @@ class ParserUtils:
     def strip_attribute(
         cls,
         sentence: Union[str,
-                        'ParserUtils.StrWithLocation']
+                        'StrWithLocation']
     ) -> Tuple[Union[str,
-                     'ParserUtils.StrWithLocation'],
+                     'StrWithLocation'],
                Optional[Union[str,
-                              'ParserUtils.StrWithLocation']]]:
+                              'StrWithLocation']]]:
         """
         Strip an attribute from the start of the sentence.
 
         Returns
         -------
-        stripped : Union[str, 'ParserUtils.StrWithLocation']
+        stripped : Union[str, 'StrWithLocation']
             The sentence stripped of its leading attribute.
-        attribute : Optional[Union[str, 'ParserUtils.StrWithLocation']]
+        attribute : Optional[Union[str, 'StrWithLocation']]
             The leading attribute or None if there is no attribute.
         """
         if isinstance(sentence, str):
@@ -672,16 +668,16 @@ class ParserUtils:
                 return stripped, attribute
             else:
                 return sentence, attribute
-        elif isinstance(sentence, ParserUtils.StrWithLocation):
+        elif isinstance(sentence, StrWithLocation):
             attribute = re.match(ParserUtils.attributes, sentence.string)
             if attribute is None:
-                attribute = ParserUtils.StrWithLocation.empty()
+                attribute = StrWithLocation.empty()
             else:
-                attribute = ParserUtils.StrWithLocation(
+                attribute = StrWithLocation(
                     attribute.group(),
                     sentence.indices[attribute.start(): attribute.end()])
             if attribute:
-                stripped = ParserUtils.StrWithLocation.re_split(
+                stripped = StrWithLocation.re_split(
                     ParserUtils.attributes,
                     sentence,
                     maxsplit=1)[1].lstrip()
@@ -693,19 +689,19 @@ class ParserUtils:
     def strip_attributes(
         cls,
         sentence: Union[str,
-                        'ParserUtils.StrWithLocation']
+                        'StrWithLocation']
     ) -> Tuple[Union[str,
-                     'ParserUtils.StrWithLocation'],
+                     'StrWithLocation'],
                List[Union[str,
-                          'ParserUtils.StrWithLocation']]]:
+                          'StrWithLocation']]]:
         """
         Strip any attributes from the start of the sentence.
 
         Returns
         -------
-        stripped : Union[str, 'ParserUtils.StrWithLocation']
+        stripped : Union[str, 'StrWithLocation']
             The sentence stripped of its leading attributes.
-        attributes : List[Union[str, 'ParserUtils.StrWithLocation']]
+        attributes : List[Union[str, 'StrWithLocation']]
             The stripped attributes in order of appearance.
         """
         attributes = []
@@ -720,9 +716,8 @@ class ParserUtils:
     def strip_control(
         cls,
         sentence: Union[str,
-                        'ParserUtils.StrWithLocation']
-    ) -> Union[str,
-               'ParserUtils.StrWithLocation']:
+                        'StrWithLocation']) -> Union[str,
+                                                     'StrWithLocation']:
         """
         Strip any control commands from the start of the sentence.
         """
@@ -734,9 +729,9 @@ class ParserUtils:
                     maxsplit=1)[1].lstrip()
             else:
                 return sentence
-        elif isinstance(sentence, ParserUtils.StrWithLocation):
+        elif isinstance(sentence, StrWithLocation):
             if re.match(ParserUtils.controllers, sentence.string) is not None:
-                return ParserUtils.StrWithLocation.re_split(
+                return StrWithLocation.re_split(
                     ParserUtils.controllers,
                     sentence,
                     maxsplit=1)[-1].lstrip()
@@ -745,22 +740,21 @@ class ParserUtils:
 
     @staticmethod
     def split_brace(
-        sentence: 'ParserUtils.StrWithLocation'
-    ) -> Tuple['ParserUtils.StrWithLocation',
-               'ParserUtils.StrWithLocation']:
+        sentence: 'StrWithLocation') -> Tuple['StrWithLocation',
+                                              'StrWithLocation']:
         """
         Split the bullets from the start of a sentence.
 
         Parameters
         ----------
-        sentence : 'ParserUtils.StrWithLocation'
+        sentence : 'StrWithLocation'
             A sentence.
 
         Returns
         -------
-        bullet : 'ParserUtils.StrWithLocation'
+        bullet : 'StrWithLocation'
             The brace or an empty string if no bullets are found.
-        remainder : 'ParserUtils.StrWithLocation'
+        remainder : 'StrWithLocation'
             The rest of the sentence after the bullet.
 
         Notes
@@ -769,7 +763,7 @@ class ParserUtils:
         document based upon ending periods.
         Thus we assume that `sentence` concludes with a period.
         """
-        bullet_re = ParserUtils.StrWithLocation.re_split(
+        bullet_re = StrWithLocation.re_split(
             ParserUtils.brace_splitter,
             sentence,
             maxsplit=1)
@@ -778,27 +772,27 @@ class ParserUtils:
             # by structure of regex, there can be only 2 sections
             return bullet_re[1], bullet_re[2]
         else:
-            return ParserUtils.StrWithLocation.empty(), sentence
+            return StrWithLocation.empty(), sentence
 
     @staticmethod
     def split_braces_and_bullets(
-        sentence: 'ParserUtils.StrWithLocation'
-    ) -> Tuple[List['ParserUtils.StrWithLocation'],
-               'ParserUtils.StrWithLocation']:
+        sentence: 'StrWithLocation'
+    ) -> Tuple[List['StrWithLocation'],
+               'StrWithLocation']:
         """
         Split braces and bullets from the start of a sentence.
 
         Parameters
         ----------
-        sentence : ParserUtils.StrWithLocation
+        sentence : StrWithLocation
             A sentence.
 
         Returns
         -------
-        braces_and_bullets : List[ParserUtils.StrWithLocation]
+        braces_and_bullets : List[StrWithLocation]
             The braces or bullets.
             If none are found, then an empty list is returned.
-        remainder : ParserUtils.StrWithLocation
+        remainder : StrWithLocation
             The rest of the sentence after the braces and bullets.
 
         Notes
@@ -821,22 +815,21 @@ class ParserUtils:
 
     @staticmethod
     def split_bullet(
-        sentence: 'ParserUtils.StrWithLocation'
-    ) -> Tuple['ParserUtils.StrWithLocation',
-               'ParserUtils.StrWithLocation']:
+        sentence: 'StrWithLocation') -> Tuple['StrWithLocation',
+                                              'StrWithLocation']:
         """
         Split a bullet from the start of a sentence.
 
         Parameters
         ----------
-        sentence : 'ParserUtils.StrWithLocation'
+        sentence : 'StrWithLocation'
             A sentence.
 
         Returns
         -------
-        bullet : 'ParserUtils.StrWithLocation'
+        bullet : 'StrWithLocation'
             The bullet or an empty string if no bullets are found.
-        remainder : 'ParserUtils.StrWithLocation'
+        remainder : 'StrWithLocation'
             The rest of the sentence after the bullet.
 
         Notes
@@ -845,7 +838,7 @@ class ParserUtils:
         document based upon ending periods.
         Thus we assume that `sentence` concludes with a period.
         """
-        bullet_re = ParserUtils.StrWithLocation.re_split(
+        bullet_re = StrWithLocation.re_split(
             ParserUtils.bullet_splitter,
             sentence,
             maxsplit=1)
@@ -854,358 +847,4 @@ class ParserUtils:
             # by structure of regex, there can be only 2 sections
             return bullet_re[1], bullet_re[2]
         else:
-            return ParserUtils.StrWithLocation.empty(), sentence
-
-    @dataclass
-    class StrWithLocation:
-        """
-        Class that ties strings to their original in-file locations.
-
-        Strings stored in objects of this class should only be those
-        that have been loaded from files. The location data is only
-        meaningful in that context.
-
-        If a string spans multiple lines, it is assumed that the newline
-        and other whitespace characters that situate the lines are
-        present in the string.
-        """
-
-        string: str = ""
-        """
-        The string itself.
-        """
-        indices: List[Tuple[int, int]] = default_field(list())
-        """
-        Indices that refer to the string's original location in the full
-        document string.
-        """
-        bol_matcher: re.Pattern = re.compile(r"(?<=\n)[^\n]+$")
-        bol_last_matcher: re.Pattern = re.compile(
-            r"(?<=\n)[^\S\n]+(?=\S[^\n]*$)")
-
-        def __add__(self, other: 'ParserUtils.StrWithLocation'):
-            """
-            Combine this instance with another using '+'.
-            """
-            if isinstance(other, ParserUtils.StrWithLocation):
-                return ParserUtils.StrWithLocation(
-                    self.string + other.string,
-                    self.indices + other.indices)
-            else:
-                raise TypeError(
-                    "Second addened must be of the same type as the first addend."
-                )
-
-        def __bool__(self) -> bool:
-            """
-            Tie truth value to string field.
-            """
-            return len(self.string) > 0
-
-        def __eq__(
-                self,
-                other: Union[str,
-                             'ParserUtils.StrWithLocation']) -> bool:
-            """
-            Test equality of objects.
-            """
-            if isinstance(other, str):
-                return self.string == other
-            elif isinstance(other, ParserUtils.StrWithLocation):
-                return (
-                    self.string == other.string
-                    and self.indices == other.indices)
-            else:
-                return False
-
-        def __getitem__(
-                self,
-                idx: Union[int,
-                           slice]) -> 'ParserUtils.StrWithLocation':
-            """
-            Return a portion of the located string at the given idx.
-            """
-            return ParserUtils.StrWithLocation(
-                self.string[idx],
-                self.indices[idx])
-
-        def __len__(self) -> int:
-            """
-            Get the length of the located string.
-            """
-            return len(self.string)
-
-        def __post_init__(self):
-            """
-            Verify inputs.
-
-            Raises
-            ------
-            ValueError
-                If the length of the string list does not match the
-                length of the loc list
-            """
-            if len(self.string) != len(self.indices):
-                raise ValueError("Each string should have a location.")
-
-        def __str__(self) -> str:
-            """
-            Return a plain-string representation of the located string.
-            """
-            return self.string
-
-        @property
-        def start(self) -> Optional[int]:  # noqa: D102
-            return self.indices[0][0] if self.indices else None
-
-        @property
-        def end(self) -> Optional[int]:  # noqa: D102
-            return self.indices[-1][1] if self.indices else None
-
-        def endswith(self, *args, **kwargs) -> bool:
-            """
-            Pass through string endswith method.
-            """
-            return self.string.endswith(*args, **kwargs)
-
-        def get_location(
-                self,
-                file_contents: str,
-                filename: str) -> SexpInfo.Loc:
-            """
-            Derive the SexpInfo.Loc location from the located string.
-
-            Parameters
-            ----------
-            file_contents : str
-                The full file contents in string form
-            filename : str
-                The filename the file contents were loaded from
-
-            Returns
-            -------
-            SexpInfo.Loc
-                The derived SexpInfo.Loc location
-            """
-            num_newlines_before_string = file_contents[: self.start].count("\n")
-            num_newlines_in_string = file_contents[self.start : self.end].count(
-                "\n")
-            bol_match = self.bol_matcher.search(file_contents[: self.start])
-            bol_pos = len(bol_match[0]) if bol_match is not None else 0
-            bol_last_match = self.bol_last_matcher.search(
-                file_contents[: self.end])
-            bol_pos_last = len(
-                bol_last_match[0]) if bol_last_match is not None else 0
-            return SexpInfo.Loc(
-                filename=filename,
-                lineno=num_newlines_before_string,
-                bol_pos=bol_pos,
-                lineno_last=num_newlines_before_string + num_newlines_in_string,
-                bol_pos_last=bol_pos_last,
-                beg_charno=self.start,
-                end_charno=self.end - 1)
-
-        def lstrip(self) -> 'ParserUtils.StrWithLocation':
-            """
-            Mimic str lstrip method, keeping track of location.
-            """
-            stripped = self.string.lstrip()
-            len_to_strip = len(self.string) - len(stripped)
-            return ParserUtils.StrWithLocation(
-                stripped,
-                self.indices[len_to_strip :])
-
-        def restore_final_ellipsis(self) -> 'ParserUtils.StrWithLocation':
-            """
-            Restore ellipsis at the end of a line.
-
-            Only call this method if there were originally an ellipsis
-            at the end of this string. Otherwise, the indices will be
-            garbage.
-            """
-            result = ParserUtils.StrWithLocation(self.string, self.indices)
-            result.string += "..."
-            result.indices.extend(
-                [(result.end + i,
-                  result.end + i + 1) for i in range(3)])
-            return result
-
-        def restore_final_period(self) -> 'ParserUtils.StrWithLocation':
-            """
-            Restore the final period at the end of a sentence.
-
-            Only call this method if there was originally a period at
-            the end of this string. Otherwise, the indices will be
-            garbage.
-            """
-            result = ParserUtils.StrWithLocation(self.string, self.indices)
-            if not result.string.endswith("."):
-                result.string += "."
-                result.indices.append((self.end, self.end + 1))
-            return result
-
-        def rstrip(self) -> 'ParserUtils.StrWithLocation':
-            """
-            Mimic str rstrip method, keeping track of location.
-            """
-            stripped = self.string.rstrip()
-            len_to_strip = len(self.string) - len(stripped)
-            end_idx = -1 * len_to_strip if len_to_strip > 0 else None
-            return ParserUtils.StrWithLocation(
-                stripped,
-                self.indices[: end_idx])
-
-        def startswith(self, *args, **kwargs) -> bool:
-            """
-            Pass through string startswith method.
-            """
-            return self.string.startswith(*args, **kwargs)
-
-        def strip(self) -> 'ParserUtils.StrWithLocation':
-            """
-            Mimic str strip method, but don't take an argument.
-            """
-            return self.lstrip().rstrip()
-
-        @classmethod
-        def create_from_file_contents(
-                cls,
-                file_contents: str) -> 'ParserUtils.StrWithLocation':
-            """
-            Create an instance of StrWithLocation from doc contents str.
-
-            Parameters
-            ----------
-            file_contents : str
-                A single string containing a the unaltered, full
-                contents of a Coq file
-
-            Returns
-            -------
-            ParserUtils.StrWithLocation
-                The instance created from the file contents
-            """
-            return cls(
-                file_contents,
-                [(i,
-                  i + 1) for i in range(len(file_contents))])
-
-        @classmethod
-        def empty(cls) -> 'ParserUtils.StrWithLocation':
-            """
-            Create and return an empty instance.
-            """
-            return cls("", [])
-
-        @classmethod
-        def re_split(
-            cls,
-            pattern: Union[str,
-                           re.Pattern],
-            string: 'ParserUtils.StrWithLocation',
-            maxsplit: int = 0,
-            flags: Union[int,
-                         re.RegexFlag] = 0
-        ) -> List['ParserUtils.StrWithLocation']:
-            """
-            Mimic re.split, but maintain location information.
-
-            Parameters
-            ----------
-            pattern : Union[str, re.Pattern[str]]
-                Pattern to match for split
-            string : ParserUtils.StrWithLocation
-                The string with location to split
-            maxsplit : int, optional
-                Maximum number of splits to do; unlimited if 0, by
-                default 0
-            flags : int or re.RegexFlag, optional
-                Flags to pass to compile operation if pattern is a str,
-                by default 0
-
-            Returns
-            -------
-            List[StrWithLocation]
-                A list of strings with locations after being split by
-                the pattern
-            """
-            if isinstance(pattern, str):
-                pattern = re.compile(pattern, flags)
-            located_result: List[ParserUtils.StrWithLocation] = []
-            string = cls(string.string, string.indices)
-            split_list = pattern.split(string.string, maxsplit=maxsplit)
-            match_start_pos = 0
-            for split in split_list:
-                match_start = string.string.index(split, match_start_pos)
-                match_end = match_start + len(split)
-                located_result.append(
-                    cls(split,
-                        string.indices[match_start : match_end]))
-                match_start_pos = match_end
-            return located_result
-
-        @classmethod
-        def re_sub(
-            cls,
-            pattern: Union[str,
-                           re.Pattern],
-            repl: str,
-            string: 'ParserUtils.StrWithLocation',
-            count: int = 0,
-            flags: Union[int,
-                         re.RegexFlag] = 0) -> 'ParserUtils.StrWithLocation':
-            """
-            Mimic re.sub, but maintain location information.
-
-            This method has no way to account for the location of
-            portions that are completely removed. That is, if the repl
-            string is "", the location information of any matches will
-            be completely lost.
-
-            Parameters
-            ----------
-            pattern : Union[str, re.Pattern]
-                Pattern to match for split
-            repl : str
-                String to substitute in when pattern is found
-            string : ParserUtils.StrWithLocation
-                The string to perform the substitution on
-            count : int, optional
-                Maximum number of substitutions to do; unlimited if 0,
-                by default 0
-            flags : int or re.RegexFlag, optional
-                Flags to pass to compile operation if pattern is a str,
-                by default 0
-
-            Returns
-            -------
-            StrWithLocation
-                Located string with substitution performed
-            """
-            string = cls(string.string, string.indices)
-            if isinstance(pattern, str):
-                pattern = re.compile(pattern, flags)
-            match = pattern.search(string.string)
-            if not match:
-                return string
-            subbed_string = pattern.sub(repl, string.string, count)
-            subbed_indices = []
-            prev_end = 0
-            idx = 0
-            for match in pattern.finditer(string.string):
-                if count > 0 and idx >= count:
-                    break
-                else:
-                    # Get the indices prior to subbed location
-                    subbed_indices.extend(
-                        string.indices[prev_end : match.start()])
-                    # Get the indices for the next subbed location
-                    subbed_indices.extend(
-                        [
-                            (match.start(),
-                             match.end()) for _ in range(len(repl))
-                        ])
-                    prev_end = match.end()
-                    idx += 1
-            subbed_indices.extend(string.indices[prev_end :])
-            return cls(subbed_string, subbed_indices)
+            return StrWithLocation.empty(), sentence

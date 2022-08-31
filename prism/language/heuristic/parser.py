@@ -12,6 +12,7 @@ from seutil import io
 from prism.data.document import CoqDocument
 from prism.language.gallina.analyze import SexpAnalyzer, SexpInfo
 from prism.language.gallina.parser import CoqParser
+from prism.language.heuristic.str_with_location import StrWithLocation
 from prism.util.iterable import CallableIterator, CompareIterator
 from prism.util.radpytools.dataclasses import default_field
 from prism.util.radpytools.os import pushd
@@ -560,9 +561,7 @@ class HeuristicParser:
         return result
 
     @classmethod
-    def _get_sentences(cls,
-                       file_contents: str
-                       ) -> List['ParserUtils.StrWithLocation']:
+    def _get_sentences(cls, file_contents: str) -> List['StrWithLocation']:
         """
         Get the sentences of the given file.
 
@@ -573,10 +572,10 @@ class HeuristicParser:
 
         Returns
         -------
-        List['ParserUtils.StrWithLocation']
+        List['StrWithLocation']
             The sentences of the Coq document.
         """
-        located_file_contents = ParserUtils.StrWithLocation.create_from_file_contents(
+        located_file_contents = StrWithLocation.create_from_file_contents(
             file_contents)
         # Remove comments
         file_contents_no_comments = ParserUtils._strip_comments(
@@ -586,13 +585,13 @@ class HeuristicParser:
         notations = re.findall(
             r"Notation\s+\".*\"",
             file_contents_no_comments.string)
-        file_contents_no_comments = ParserUtils.StrWithLocation.re_sub(
+        file_contents_no_comments = StrWithLocation.re_sub(
             r"Notation \".*\"",
             cls.notation_mask,
             file_contents_no_comments)
         # Mask strings to avoid accidental splitting on quoted periods.
         strings = re.findall(r"\".*\"", file_contents_no_comments.string)
-        file_contents_no_comments = ParserUtils.StrWithLocation.re_sub(
+        file_contents_no_comments = StrWithLocation.re_sub(
             r"Notation \".*\"",
             cls.string_mask,
             file_contents_no_comments)
@@ -600,14 +599,14 @@ class HeuristicParser:
         # whitespace. Double (or more) periods are specifically
         # excluded.
         # Ellipses will be handled later.
-        sentences = ParserUtils.StrWithLocation.re_split(
+        sentences = StrWithLocation.re_split(
             r"(?<!\.)\.\s",
             file_contents_no_comments)
         # Now perform further splitting of braces, bullets, and ellipses
         i = 0
         notation_it = iter(notations)
         string_it = CallableIterator(strings)
-        processed_sentences: List[ParserUtils.StrWithLocation] = []
+        processed_sentences: List[StrWithLocation] = []
         while i < len(sentences):  # `sentences` length may change
             # Replace any whitespace or group of whitespace with a
             # single space.
@@ -616,10 +615,7 @@ class HeuristicParser:
             if not sentence.strip():
                 i += 1
                 continue
-            sentence = ParserUtils.StrWithLocation.re_sub(
-                r"(\s)+",
-                " ",
-                sentence)
+            sentence = StrWithLocation.re_sub(r"(\s)+", " ", sentence)
             sentence = sentence.strip()
             # restore periods
             if not sentence.endswith("."):
@@ -628,9 +624,7 @@ class HeuristicParser:
             (braces_and_bullets,
              sentence) = ParserUtils.split_braces_and_bullets(sentence)
             # split on ellipses
-            new_sentences = ParserUtils.StrWithLocation.re_split(
-                r"\.\.\.",
-                sentence)
+            new_sentences = StrWithLocation.re_split(r"\.\.\.", sentence)
             num_new = len(new_sentences) - 1
             if num_new > 0:
                 # restore ellipses
@@ -644,12 +638,12 @@ class HeuristicParser:
                 sentence_sans_control)
             # restore notation
             if sentence_sans_attributes.startswith(cls.notation_mask):
-                sentence = ParserUtils.StrWithLocation.re_sub(
+                sentence = StrWithLocation.re_sub(
                     cls.notation_mask,
                     next(notation_it),
                     sentence)
             # restore strings
-            sentence = ParserUtils.StrWithLocation.re_sub(
+            sentence = StrWithLocation.re_sub(
                 cls.string_mask,
                 string_it,
                 sentence)
