@@ -10,7 +10,7 @@ from dataclasses import fields
 from enum import Enum, auto
 from functools import partialmethod, reduce
 from subprocess import CalledProcessError
-from typing import Iterable, List, NamedTuple, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
 
 from seutil import bash
 
@@ -492,7 +492,8 @@ class Project(ABC):
 
     def infer_metadata(
             self,
-            fields_to_infer: Optional[Iterable[str]] = None) -> ProjectMetadata:
+            fields_to_infer: Optional[Iterable[str]] = None) -> Dict[str,
+                                                                     Any]:
         """
         Try to infer any missing metadata.
 
@@ -505,8 +506,8 @@ class Project(ABC):
 
         Returns
         -------
-        ProjectMetadata
-            The resulting metadata including any inferred updates.
+        Dict[str, Any]
+            The values for each newly inferred field.
         """
         if fields_to_infer is None:
             fields_to_infer = set()
@@ -514,19 +515,21 @@ class Project(ABC):
             fields_to_infer = set(fields_to_infer)
         current_metadata = self.metadata
         for f in fields(ProjectMetadata):
+            # TODO: skip fields that cannot be inferred
             if getattr(current_metadata, f.name) is None:
                 fields_to_infer.add(f.name)
         # if the order of field inference matters, manually pop such
         # fields and infer them first before looping over the rest
+        inferred_fields = {}
         for f in fields_to_infer:
             # force an attribute error for non-existent fields
             getattr(current_metadata, f)
             try:
-                getattr(self, f'infer_{f}')()
+                inferred_fields[f] = getattr(self, f'infer_{f}')()
             except AttributeError:
                 raise NotImplementedError(
                     f"Cannot infer metadata field named '{f}'")
-        return self.metadata
+        return inferred_fields
 
     def infer_opam_dependencies(self) -> List[str]:
         """
