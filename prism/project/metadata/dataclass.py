@@ -124,7 +124,7 @@ class ProjectMetadata:
     ``remove``, and ``set-url``, and are updated from their URLs using
     ``opam update``.
     """
-    opam_dependencies: List[str] = default_field(list())
+    opam_dependencies: Optional[List[str]] = None
     """
     A conjunctive list of OPAM package formulas expressing dependencies
     whose installation is required to build the project.
@@ -135,6 +135,8 @@ class ProjectMetadata:
     the Coq project in dataset, but the `coq_dependencies` are typically
     assumed to be installed prior to running ``make``.
     All OPAM-installable dependencies should be expressed here.
+    If not given, then the options are presumed to not yet be specified
+    and must be inferred later.
     """
     project_url: Optional[GitURL] = None
     """
@@ -199,7 +201,8 @@ class ProjectMetadata:
                                             cmd_seq) if cmd is not None])
         for set_tp in ['opam_repos', 'opam_dependencies', 'coq_dependencies']:
             if getattr(self, set_tp) is None:
-                setattr(self, set_tp, set())
+                if set_tp != 'opam_dependencies':
+                    setattr(self, set_tp, set())
             else:
                 # remove None elements
                 setattr(
@@ -212,6 +215,8 @@ class ProjectMetadata:
                 "The 'coq_dependencies' field is deprecated. "
                 "Use 'opam_dependencies' instead.",
                 DeprecationWarning)
+            if self.opam_dependencies is None:
+                self.opam_dependencies = set()
             self.opam_dependencies.extend(self.coq_dependencies)
             self.coq_dependencies = set()
 
