@@ -6,7 +6,7 @@ import os
 import warnings
 # from collections.abc import Iterable
 from dataclasses import asdict, dataclass, fields
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Set
+from typing import Any, ClassVar, Dict, Iterable, Iterator, List, Optional, Set
 
 import seutil as su
 
@@ -20,6 +20,18 @@ from .version_info import version_info
 class ProjectMetadata:
     """
     Class containing the metadata for a single project.
+    """
+
+    _immutable_fields: ClassVar[Set[str]] = {
+        'project_name',
+        'project_url',
+        'commit_sha',
+        'ocaml_version',
+        'coq_version',
+        'serapi_version'
+    }
+    """
+    Fields that are defined a priori and cannot be inferred.
     """
 
     project_name: str

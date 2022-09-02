@@ -533,8 +533,9 @@ class Project(ABC):
             fields_to_infer = set(fields_to_infer)
         current_metadata = self.metadata
         for f in fields(ProjectMetadata):
-            # TODO: skip fields that cannot be inferred
-            if getattr(current_metadata, f.name) is None:
+            if (getattr(current_metadata,
+                        f.name) is None
+                    and f.name not in ProjectMetadata.immutable_fields):
                 fields_to_infer.add(f.name)
         # if the order of field inference matters, manually pop such
         # fields and infer them first before looping over the rest
