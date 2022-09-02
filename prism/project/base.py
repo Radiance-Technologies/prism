@@ -196,6 +196,22 @@ class Project(ABC):
         return self._ocaml_version
 
     @property
+    def opam_dependencies(self) -> List[str]:
+        """
+        Get the OPAM-installable dependencies of this project.
+
+        Returns
+        -------
+        List[str]
+            A list of serialized `PackageFormula` that must each be
+            satisfied by the project's `OpamSwitch` prior to building.
+        """
+        opam_deps = self.metadata.opam_dependencies
+        if opam_deps is None:
+            opam_deps = self.infer_opam_dependencies()
+        return opam_deps
+
+    @property
     def opam_switch(self) -> OpamSwitch:
         """
         Get the project's switch, which entails the build environment.
@@ -224,7 +240,9 @@ class Project(ABC):
         """
         Get the SerAPI options for parsing this project's files.
 
-        If None, then the SerAPI options have not yet been determined.
+        If None, then the SerAPI options have not yet been determined
+        and will be inferred automatically the next time the project is
+        built.
 
         Returns
         -------

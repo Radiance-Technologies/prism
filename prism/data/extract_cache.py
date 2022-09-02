@@ -2,8 +2,7 @@
 Module for storing cache extraction functions.
 """
 from functools import reduce
-from itertools import chain
-from typing import Callable, Dict, Optional, Set
+from typing import Callable, Dict, List, Optional, Set, Union
 
 from prism.data.build_cache import (
     CoqProjectBuildCache,
@@ -18,32 +17,32 @@ from prism.language.heuristic.util import ParserUtils
 from prism.language.id import LanguageId
 from prism.project.base import Project
 from prism.project.exception import ProjectBuildError
-from prism.project.metadata import ProjectMetadata
 from prism.project.repo import ProjectRepo
 from prism.util.opam import PackageFormula
 from prism.util.opam.formula import LogicalPF, LogOp
+from prism.util.opam.version import Version
 from prism.util.radpytools.os import pushd
 from prism.util.swim import SwitchManager
 
 VernacDict = Dict[str, Set[VernacCommandData]]
 
 
-def get_formula_from_metadata(
-        metadata: ProjectMetadata,
+def get_dependency_formula(
+        opam_dependencies: List[str],
+        ocaml_version: Optional[Union[str,
+                                      Version]],
         coq_version: str) -> PackageFormula:
     """
-    Get the dependency formula for the given metadata.
+    Get the dependency formula for the given constraints.
 
     This formula can then be used to retrieve an appropriate switch.
     """
     formula = []
     formula.append(PackageFormula.parse(f'"coq.{coq_version}"'))
     formula.append(PackageFormula.parse('"coq-serapi"'))
-    if metadata.ocaml_version is not None:
-        formula.append(
-            PackageFormula.parse(f'"ocaml.{metadata.ocaml_version}"'))
-    for dependency in chain(metadata.opam_dependencies,
-                            metadata.coq_dependencies):
+    if ocaml_version is not None:
+        formula.append(PackageFormula.parse(f'"ocaml.{ocaml_version}"'))
+    for dependency in opam_dependencies:
         formula.append(PackageFormula.parse(dependency))
     formula = reduce(
         lambda l,
@@ -217,8 +216,9 @@ def extract_cache_new(
     """
     project.git.checkout(commit_sha)
     # get a switch
-    dependency_formula = get_formula_from_metadata(
-        project.metadata,
+    dependency_formula = get_dependency_formula(
+        project.opam_dependencies,  # infers dependencies as side-effect
+        project.ocaml_version,
         coq_version)
     original_switch = project.opam_switch
     project.opam_switch = switch_manager.get_switch(
