@@ -467,7 +467,7 @@ class ParserUtils:
             if segment == '*)':
                 if comment_depth > 0:
                     comment_depth -= 1
-        str_no_comments = StrWithLocation.empty().join(str_no_comments)
+        str_no_comments = StrWithLocation().join(str_no_comments)
         return str_no_comments
 
     defines_tactic = partialmethod(_is_command_type, tactic_definers)
@@ -664,7 +664,7 @@ class ParserUtils:
         elif isinstance(sentence, StrWithLocation):
             attribute = re.match(ParserUtils.attributes, sentence)
             if attribute is None:
-                attribute = StrWithLocation.empty()
+                attribute = StrWithLocation()
             else:
                 attribute = StrWithLocation(
                     attribute.group(),
@@ -754,7 +754,7 @@ class ParserUtils:
             # by structure of regex, there can be only 2 sections
             return bullet_re[1], bullet_re[2]
         else:
-            return StrWithLocation.empty(), sentence
+            return StrWithLocation(), sentence
 
     @staticmethod
     def split_braces_and_bullets(
@@ -829,4 +829,4 @@ class ParserUtils:
             # by structure of regex, there can be only 2 sections
             return bullet_re[1], bullet_re[2]
         else:
-            return StrWithLocation.empty(), sentence
+            return StrWithLocation(), sentence

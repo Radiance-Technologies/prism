@@ -46,9 +46,9 @@ class StrWithLocation(str):
 
     def __new__(
             cls,
-            string: LiteralString,
-            indices: List[Tuple[int,
-                                int]],
+            string: LiteralString = "",
+            indices: Optional[List[Tuple[int,
+                                         int]]] = None,
             *args,
             **kwargs) -> 'StrWithLocation':
         """
@@ -56,16 +56,19 @@ class StrWithLocation(str):
 
         Parameters
         ----------
-        string : LiteralString
-            The string to be located
-        indices : List[Tuple[int, int]]
-            The indices locating the string within its original document
+        string : LiteralString, optional
+            The string to be located, by default the empty string
+        indices : Optional[List[Tuple[int, int]]], optional
+            The indices locating the string within its original
+            document, by default None.
 
         Returns
         -------
         StrWithLocation
             The newly-constructed `StrWithLocation` object
         """
+        if indices is None:
+            indices = []
         result = super().__new__(cls, string, *args, **kwargs)
         object.__setattr__(result, 'indices', indices)
         return result
@@ -278,13 +281,6 @@ class StrWithLocation(str):
             file_contents,
             [(i,
               i + 1) for i in range(len(file_contents))])
-
-    @classmethod
-    def empty(cls) -> 'StrWithLocation':
-        """
-        Create and return an empty instance.
-        """
-        return cls("", [])
 
     @classmethod
     def re_split(
