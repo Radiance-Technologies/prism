@@ -199,24 +199,31 @@ class ProjectMetadata:
                     cmd_seq,
                     [cmd for cmd in getattr(self,
                                             cmd_seq) if cmd is not None])
-        for set_tp in ['opam_repos', 'opam_dependencies', 'coq_dependencies']:
-            if getattr(self, set_tp) is None:
-                if set_tp != 'opam_dependencies':
-                    setattr(self, set_tp, set())
+        for (attr,
+             tp) in [('opam_repos',
+                      set),
+                     ('opam_dependencies',
+                      list),
+                     ('coq_dependencies',
+                      set)]:
+            if getattr(self, attr) is None:
+                if attr != 'opam_dependencies':
+                    # opam_dependencies is allowed to be None
+                    setattr(self, attr, set())
             else:
                 # remove None elements
                 setattr(
                     self,
-                    set_tp,
-                    {e for e in getattr(self,
-                                        set_tp) if e is not None})
+                    attr,
+                    tp(e for e in getattr(self,
+                                          attr) if e is not None))
         if self.coq_dependencies:
             warnings.warn(
                 "The 'coq_dependencies' field is deprecated. "
                 "Use 'opam_dependencies' instead.",
                 DeprecationWarning)
             if self.opam_dependencies is None:
-                self.opam_dependencies = set()
+                self.opam_dependencies = list()
             self.opam_dependencies.extend(self.coq_dependencies)
             self.coq_dependencies = set()
 
