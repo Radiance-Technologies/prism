@@ -22,7 +22,7 @@ class ProjectMetadata:
     Class containing the metadata for a single project.
     """
 
-    _immutable_fields: ClassVar[Set[str]] = {
+    immutable_fields: ClassVar[Set[str]] = {
         'project_name',
         'project_url',
         'commit_sha',
