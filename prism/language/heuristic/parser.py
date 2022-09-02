@@ -582,15 +582,13 @@ class HeuristicParser:
             located_file_contents)
         # Mask notations to avoid accidental splitting on quoted
         # periods.
-        notations = re.findall(
-            r"Notation\s+\".*\"",
-            file_contents_no_comments.string)
+        notations = re.findall(r"Notation\s+\".*\"", file_contents_no_comments)
         file_contents_no_comments = StrWithLocation.re_sub(
             r"Notation \".*\"",
             cls.notation_mask,
             file_contents_no_comments)
         # Mask strings to avoid accidental splitting on quoted periods.
-        strings = re.findall(r"\".*\"", file_contents_no_comments.string)
+        strings = re.findall(r"\".*\"", file_contents_no_comments)
         file_contents_no_comments = StrWithLocation.re_sub(
             r"Notation \".*\"",
             cls.string_mask,
@@ -790,7 +788,7 @@ class HeuristicParser:
         """
         file_contents = document.source_code
         located_sentences = cls._get_sentences(file_contents)
-        sentences = [s.string for s in located_sentences]
+        sentences = [str(s) for s in located_sentences]
         if glom_proofs:
             stats = cls._compute_sentence_statistics(sentences)
             return cls._glom_proofs(document.index, sentences, stats)

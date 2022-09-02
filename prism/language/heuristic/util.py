@@ -4,7 +4,7 @@ Provides internal utilities for heuristic parsing of Coq source files.
 
 import re
 from functools import partialmethod
-from typing import Iterable, List, Optional, Set, Tuple, Union
+from typing import Iterable, List, Optional, Set, Tuple
 
 from prism.language.heuristic.str_with_location import StrWithLocation
 from prism.util.re import regex_from_options
@@ -460,14 +460,14 @@ class ParserUtils:
             file_contents)
         str_no_comments = []
         for segment in comment_delimited:
-            if segment.string == '(*':
+            if segment == '(*':
                 comment_depth += 1
             if comment_depth == 0:
                 str_no_comments.append(segment)
-            if segment.string == '*)':
+            if segment == '*)':
                 if comment_depth > 0:
                     comment_depth -= 1
-        str_no_comments = sum(str_no_comments, start=StrWithLocation.empty())
+        str_no_comments = StrWithLocation.empty().join(str_no_comments)
         return str_no_comments
 
     defines_tactic = partialmethod(_is_command_type, tactic_definers)
@@ -639,14 +639,7 @@ class ParserUtils:
             return None
 
     @classmethod
-    def strip_attribute(
-        cls,
-        sentence: Union[str,
-                        'StrWithLocation']
-    ) -> Tuple[Union[str,
-                     'StrWithLocation'],
-               Optional[Union[str,
-                              'StrWithLocation']]]:
+    def strip_attribute(cls, sentence: str) -> Tuple[str, Optional[str]]:
         """
         Strip an attribute from the start of the sentence.
 
@@ -657,7 +650,7 @@ class ParserUtils:
         attribute : Optional[Union[str, 'StrWithLocation']]
             The leading attribute or None if there is no attribute.
         """
-        if isinstance(sentence, str):
+        if isinstance(sentence, str) and not hasattr(sentence, 'indices'):
             attribute = re.match(ParserUtils.attributes, sentence)
             if attribute is not None:
                 attribute = attribute.group()
@@ -669,7 +662,7 @@ class ParserUtils:
             else:
                 return sentence, attribute
         elif isinstance(sentence, StrWithLocation):
-            attribute = re.match(ParserUtils.attributes, sentence.string)
+            attribute = re.match(ParserUtils.attributes, sentence)
             if attribute is None:
                 attribute = StrWithLocation.empty()
             else:
@@ -686,14 +679,7 @@ class ParserUtils:
                 return sentence, attribute
 
     @classmethod
-    def strip_attributes(
-        cls,
-        sentence: Union[str,
-                        'StrWithLocation']
-    ) -> Tuple[Union[str,
-                     'StrWithLocation'],
-               List[Union[str,
-                          'StrWithLocation']]]:
+    def strip_attributes(cls, sentence: str) -> Tuple[str, List[str]]:
         """
         Strip any attributes from the start of the sentence.
 
@@ -713,11 +699,7 @@ class ParserUtils:
         return stripped, attributes
 
     @classmethod
-    def strip_control(
-        cls,
-        sentence: Union[str,
-                        'StrWithLocation']) -> Union[str,
-                                                     'StrWithLocation']:
+    def strip_control(cls, sentence: str) -> str:
         """
         Strip any control commands from the start of the sentence.
         """
@@ -730,7 +712,7 @@ class ParserUtils:
             else:
                 return sentence
         elif isinstance(sentence, StrWithLocation):
-            if re.match(ParserUtils.controllers, sentence.string) is not None:
+            if re.match(ParserUtils.controllers, sentence) is not None:
                 return StrWithLocation.re_split(
                     ParserUtils.controllers,
                     sentence,

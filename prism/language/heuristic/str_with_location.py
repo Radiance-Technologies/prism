@@ -3,14 +3,17 @@ Module providing a class that ties strings to original file locations.
 """
 import re
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, Union
+from functools import cached_property
+from typing import ClassVar, Iterable, List, Optional, Tuple, Union
+
+from typing_extensions import LiteralString
 
 from prism.language.gallina.analyze import SexpInfo
 from prism.util.radpytools.dataclasses import default_field
 
 
-@dataclass
-class StrWithLocation:
+@dataclass(frozen=True)
+class StrWithLocation(str):
     """
     Class that ties strings to their original in-file locations.
 
@@ -23,10 +26,6 @@ class StrWithLocation:
     present in the string.
     """
 
-    string: str = ""
-    """
-    The string itself.
-    """
     indices: List[Tuple[int, int]] = default_field(list())
     """
     Indices that refer to the string's original location in the full
@@ -41,8 +40,45 @@ class StrWithLocation:
     instance might arise from replacing a substring of length 5 with a
     single character.
     """
-    bol_matcher: re.Pattern = re.compile(r"(?<=\n)[^\n]+$")
-    bol_last_matcher: re.Pattern = re.compile(r"(?<=\n)[^\S\n]+(?=\S[^\n]*$)")
+    _bol_matcher: ClassVar[re.Pattern] = re.compile(r"(?<=\n)[^\n]+$")
+    _bol_last_matcher: ClassVar[re.Pattern] = re.compile(
+        r"(?<=\n)[^\S\n]+(?=\S[^\n]*$)")
+
+    def __new__(
+            cls,
+            string: LiteralString,
+            indices: List[Tuple[int,
+                                int]],
+            *args,
+            **kwargs) -> 'StrWithLocation':
+        """
+        Construct a new instance of `StrWithLocation`.
+
+        Parameters
+        ----------
+        string : LiteralString
+            The string to be located
+        indices : List[Tuple[int, int]]
+            The indices locating the string within its original document
+
+        Returns
+        -------
+        StrWithLocation
+            The newly-constructed `StrWithLocation` object
+        """
+        result = super().__new__(cls, string, *args, **kwargs)
+        object.__setattr__(result, 'indices', indices)
+        return result
+
+    def __init__(self, *args_ignore, **kwargs_ignore):
+        """
+        Provide dummy __init__.
+
+        The __init__ function will inevitably be called, since __new__
+        returns an instance of the object, but we don't actually need it
+        to do anything.
+        """
+        self.__post_init__()
 
     def __post_init__(self):
         """
@@ -54,8 +90,13 @@ class StrWithLocation:
             If the length of the string list does not match the
             length of the loc list
         """
-        if len(self.string) != len(self.indices):
+        if len(self) != len(self.indices):
             raise ValueError("Each string should have a location.")
+        for ind in self.indices:
+            if not isinstance(ind, tuple):
+                raise TypeError(
+                    "indices attribute contains object that is not tuple. The"
+                    f" incorrect type is {type(ind)}.")
 
     def __add__(self, other: 'StrWithLocation'):
         """
@@ -63,26 +104,20 @@ class StrWithLocation:
         """
         if isinstance(other, StrWithLocation):
             return StrWithLocation(
-                self.string + other.string,
+                str(self) + str(other),
                 self.indices + other.indices)
         else:
             return NotImplemented
-
-    def __bool__(self) -> bool:
-        """
-        Tie truth value to string field.
-        """
-        return len(self.string) > 0
 
     def __eq__(self, other: Union[str, 'StrWithLocation']) -> bool:
         """
         Test equality of objects.
         """
-        if isinstance(other, str):
-            return self.string == other
+        if isinstance(other, str) and not hasattr(other, 'indices'):
+            # i.e., other is an actual str
+            return str(self) == other
         elif isinstance(other, StrWithLocation):
-            return (
-                self.string == other.string and self.indices == other.indices)
+            return str(self) == str(other) and self.indices == other.indices
         else:
             return NotImplemented
 
@@ -90,21 +125,9 @@ class StrWithLocation:
         """
         Return a portion of the located string at the given idx.
         """
-        return StrWithLocation(self.string[idx], self.indices[idx])
+        return StrWithLocation(super().__getitem__(idx), self.indices[idx])
 
-    def __len__(self) -> int:
-        """
-        Get the length of the located string.
-        """
-        return len(self.string)
-
-    def __str__(self) -> str:
-        """
-        Return a plain-string representation of the located string.
-        """
-        return self.string
-
-    @property
+    @cached_property
     def start(self) -> Optional[int]:
         """
         Get the first index in the indices list.
@@ -114,7 +137,7 @@ class StrWithLocation:
         """
         return self.indices[0][0] if self.indices else None
 
-    @property
+    @cached_property
     def end(self) -> Optional[int]:
         """
         Get the final index in the indices list.
@@ -123,12 +146,6 @@ class StrWithLocation:
         corresponds to <original document string>[start, end].
         """
         return self.indices[-1][1] if self.indices else None
-
-    def endswith(self, *args, **kwargs) -> bool:
-        """
-        Pass through string endswith method.
-        """
-        return self.string.endswith(*args, **kwargs)
 
     def get_location(self, file_contents: str, filename: str) -> SexpInfo.Loc:
         """
@@ -149,9 +166,10 @@ class StrWithLocation:
         num_newlines_before_string = file_contents[: self.start].count("\n")
         num_newlines_in_string = file_contents[self.start : self.end].count(
             "\n")
-        bol_match = self.bol_matcher.search(file_contents[: self.start])
+        bol_match = self._bol_matcher.search(file_contents[: self.start])
         bol_pos = len(bol_match[0]) if bol_match is not None else 0
-        bol_last_match = self.bol_last_matcher.search(file_contents[: self.end])
+        bol_last_match = self._bol_last_matcher.search(
+            file_contents[: self.end])
         bol_pos_last = len(
             bol_last_match[0]) if bol_last_match is not None else 0
         return SexpInfo.Loc(
@@ -163,12 +181,36 @@ class StrWithLocation:
             beg_charno=self.start,
             end_charno=self.end - 1)
 
+    def join(self, it: Iterable['StrWithLocation']) -> 'StrWithLocation':
+        """
+        Reimplement str join method for StrWithLocation.
+
+        Parameters
+        ----------
+        it : Iterable[StrWithLocation]
+            Iterable of StrWithLocation objects to be joined
+
+        Returns
+        -------
+        StrWithLocation
+            Joined StrWithLocation object
+        """
+        str_part = super().join(it)
+        indices_part = []
+        for i, item in enumerate(it):
+            if i < len(it) - 1:
+                indices_part.extend(item.indices)
+                indices_part.extend(self.indices)
+            else:
+                indices_part.extend(item.indices)
+        return StrWithLocation(str_part, indices_part)
+
     def lstrip(self) -> 'StrWithLocation':
         """
         Mimic str lstrip method, keeping track of location.
         """
-        stripped = self.string.lstrip()
-        len_to_strip = len(self.string) - len(stripped)
+        stripped = super().lstrip()
+        len_to_strip = len(self) - len(stripped)
         return StrWithLocation(stripped, self.indices[len_to_strip :])
 
     def restore_final_ellipsis(self) -> 'StrWithLocation':
@@ -178,12 +220,12 @@ class StrWithLocation:
         Only call this method if there were originally an ellipsis at
         the end of this string. Otherwise, the indices will be garbage.
         """
-        result = StrWithLocation(self.string, self.indices)
-        result.string += "..."
-        result.indices.extend(
-            [(result.end + i,
-              result.end + i + 1) for i in range(3)])
-        return result
+        result_str = str(self) + "..."
+        result_indices = self.indices
+        result_indices.extend(
+            [(self.end + i,
+              self.end + i + 1) for i in range(3)])
+        return StrWithLocation(result_str, result_indices)
 
     def restore_final_period(self) -> 'StrWithLocation':
         """
@@ -192,26 +234,23 @@ class StrWithLocation:
         Only call this method if there was originally a period at the
         end of this string. Otherwise, the indices will be garbage.
         """
-        result = StrWithLocation(self.string, self.indices)
-        if not result.string.endswith("."):
-            result.string += "."
-            result.indices.append((self.end, self.end + 1))
-        return result
+        if not self.endswith("."):
+            result_str = str(self)
+            result_indices = self.indices
+            result_str += "."
+            result_indices.append((self.end, self.end + 1))
+            return StrWithLocation(result_str, result_indices)
+        else:
+            return self
 
     def rstrip(self) -> 'StrWithLocation':
         """
         Mimic str rstrip method, keeping track of location.
         """
-        stripped = self.string.rstrip()
-        len_to_strip = len(self.string) - len(stripped)
+        stripped = super().rstrip()
+        len_to_strip = len(self) - len(stripped)
         end_idx = -1 * len_to_strip if len_to_strip > 0 else None
         return StrWithLocation(stripped, self.indices[: end_idx])
-
-    def startswith(self, *args, **kwargs) -> bool:
-        """
-        Pass through string startswith method.
-        """
-        return self.string.startswith(*args, **kwargs)
 
     def strip(self) -> 'StrWithLocation':
         """
@@ -281,11 +320,11 @@ class StrWithLocation:
         if isinstance(pattern, str):
             pattern = re.compile(pattern, flags)
         located_result: List[StrWithLocation] = []
-        string = cls(string.string, string.indices)
-        split_list = pattern.split(string.string, maxsplit=maxsplit)
+        string = cls(str(string), string.indices)
+        split_list = pattern.split(string, maxsplit=maxsplit)
         match_start_pos = 0
         for split in split_list:
-            match_start = string.string.index(split, match_start_pos)
+            match_start = string.index(split, match_start_pos)
             match_end = match_start + len(split)
             located_result.append(
                 cls(split,
@@ -331,17 +370,17 @@ class StrWithLocation:
         StrWithLocation
             Located string with substitution performed
         """
-        string = cls(string.string, string.indices)
+        string = cls(str(string), string.indices)
         if isinstance(pattern, str):
             pattern = re.compile(pattern, flags)
-        match = pattern.search(string.string)
+        match = pattern.search(string)
         if not match:
             return string
-        subbed_string = pattern.sub(repl, string.string, count)
+        subbed_string = pattern.sub(repl, string, count)
         subbed_indices = []
         prev_end = 0
         idx = 0
-        for match in pattern.finditer(string.string):
+        for match in pattern.finditer(string):
             if count > 0 and idx >= count:
                 break
             else:
