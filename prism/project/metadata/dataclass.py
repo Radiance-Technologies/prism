@@ -203,7 +203,7 @@ class ProjectMetadata:
              tp) in [('opam_repos',
                       set),
                      ('opam_dependencies',
-                      list),
+                      lambda x: list(dict.fromkeys(x))),
                      ('coq_dependencies',
                       set)]:
             if getattr(self, attr) is None:
@@ -218,14 +218,16 @@ class ProjectMetadata:
                     tp(e for e in getattr(self,
                                           attr) if e is not None))
         if self.coq_dependencies:
+            # transfer to opam_dependencies as side-effect
+            self.coq_dependencies = self.coq_dependencies
+
+    def __getattribute__(self, attr: str) -> Any:  # noqa: D105
+        if attr == "coq_dependencies":
             warnings.warn(
                 "The 'coq_dependencies' field is deprecated. "
                 "Use 'opam_dependencies' instead.",
                 DeprecationWarning)
-            if self.opam_dependencies is None:
-                self.opam_dependencies = list()
-            self.opam_dependencies.extend(self.coq_dependencies)
-            self.coq_dependencies = set()
+        return super().__getattribute__(attr)
 
     def __gt__(self, other: 'ProjectMetadata') -> bool:
         """
@@ -270,6 +272,20 @@ class ProjectMetadata:
                 and other.coq_version == self.coq_version and (
                     other.ocaml_version is not None
                     and self.ocaml_version is None)))
+
+    def __setattribute__(self, attr: str, value: Any) -> None:  # noqa: D105
+        if attr == 'coq_dependencies':
+            warnings.warn(
+                "The 'coq_dependencies' field is deprecated. "
+                "Use 'opam_dependencies' instead.",
+                DeprecationWarning)
+            if self.opam_dependencies is None:
+                self.opam_dependencies = []
+            self.opam_dependencies.extend(value)
+            self.opam_dependencies = list(dict.fromkeys(self.opam_dependencies))
+            self.coq_dependencies = set()
+        else:
+            super().__setattribute__(attr, value)
 
     @property
     def level(self) -> int:
