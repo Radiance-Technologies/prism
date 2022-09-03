@@ -2,6 +2,7 @@
 Module providing a class that ties strings to original file locations.
 """
 import re
+import warnings
 from dataclasses import dataclass
 from functools import cached_property
 from typing import ClassVar, Iterable, List, Optional, Tuple, Union
@@ -136,22 +137,16 @@ class StrWithLocation(str):
     @cached_property
     def start(self) -> Optional[int]:
         """
-        Get the first index in the indices list.
-
-        With respect to the start and end properties, `string`
-        corresponds to <original document string>[start, end].
+        Get the least first index in the indices list.
         """
-        return self.indices[0][0] if self.indices else None
+        return min([x for x, _ in self.indices]) if self.indices else None
 
     @cached_property
     def end(self) -> Optional[int]:
         """
-        Get the final index in the indices list.
-
-        With respect to the start and end properties, `string`
-        corresponds to <original document string>[start, end].
+        Get the largest second index in the indices list.
         """
-        return self.indices[-1][1] if self.indices else None
+        return max([x for _, x in self.indices]) if self.indices else None
 
     def get_location(self, file_contents: str, filename: str) -> SexpInfo.Loc:
         """
@@ -314,10 +309,10 @@ class StrWithLocation(str):
         """
         Mimic re.sub, but maintain location information.
 
-        This method has no way to account for the location of
-        portions that are completely removed. That is, if the repl
-        string is "", the location information of any matches will
-        be completely lost.
+        This method does not currently support completely removing
+        portions of the string while remembering the location of the
+        removed copmonent. In other words, if the repl string is "", the
+        location information of any matches will be completely lost.
 
         Parameters
         ----------
@@ -339,6 +334,11 @@ class StrWithLocation(str):
         StrWithLocation
             Located string with substitution performed
         """
+        if repl == "":
+            warnings.warn(
+                "Substituting in an empty string will cause location "
+                "information where the empty string is substituted to"
+                " be lost.")
         string = cls(str(string), string.indices)
         if isinstance(pattern, str):
             pattern = re.compile(pattern, flags)
