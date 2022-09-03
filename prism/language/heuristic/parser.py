@@ -807,7 +807,9 @@ class HeuristicParser:
             return cls._glom_proofs(document.index, sentences, stats)
         else:
             if return_locations:
-                return sentences, [s.get_location() for s in located_sentences]
+                return sentences, [s.get_location(
+                    file_contents,
+                    document.abspath) for s in located_sentences]
             else:
                 return sentences
 
@@ -881,6 +883,7 @@ class SerAPIParser(HeuristicParser):
             _encoding: str = "utf-8",
             glom_proofs: bool = True,
             glom_ltac: bool = False,
+            _return_locations: bool = False,
             return_asts: bool = False,
             **kwargs) -> Union[List[str],
                                Tuple[List[str],
@@ -900,6 +903,8 @@ class SerAPIParser(HeuristicParser):
         glom_ltac : bool, optional
             Glom together contiguous regions of Ltac code,
             by default `False`.
+        _return_locations : bool, optional
+            Ignore, by default False.
         return_asts: bool, optional
             If True, then also return asts. By default `False`.
         kwargs : Dict[str, Any]
