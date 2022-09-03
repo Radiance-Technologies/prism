@@ -1,6 +1,7 @@
 """
 Module providing a class that ties strings to original file locations.
 """
+import math
 import re
 import warnings
 from dataclasses import dataclass
@@ -356,9 +357,17 @@ class StrWithLocation(str):
                 # Get the indices prior to subbed location
                 subbed_indices.extend(string.indices[prev_end : match.start()])
                 # Get the indices for the next subbed location
+                start = string.indices[match.start()][0]
+                end = string.indices[match.end() - 1][-1]
+                step = (end - start) / len(repl)
                 subbed_indices.extend(
-                    [(match.start(),
-                      match.end()) for _ in range(len(repl))])
+                    [
+                        (
+                            start + math.floor(i * step),
+                            min(end,
+                                start + math.ceil((i + 1) * step)))
+                        for i in range(len(repl))
+                    ])
                 prev_end = match.end()
                 idx += 1
         subbed_indices.extend(string.indices[prev_end :])
