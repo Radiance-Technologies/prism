@@ -149,9 +149,21 @@ class StrWithLocation(str):
         """
         return max([x for _, x in self.indices]) if self.indices else None
 
-    def get_location(self, file_contents: str, filename: str) -> SexpInfo.Loc:
+    def get_location(
+            self,
+            file_contents: str,
+            filename: str,
+            start_idx: int = 0,
+            newlines_so_far: int = 0) -> SexpInfo.Loc:
         """
         Derive the SexpInfo.Loc location from the located string.
+
+        The final two arguments are intended to be used when a large
+        batch of locations are sequentially computed in order to reduce
+        the search space for newlines and for BoL matches.
+
+        The correct location can be derived with only the first two
+        arguments, but providing the final two should yield a speed-up.
 
         Parameters
         ----------
@@ -159,19 +171,35 @@ class StrWithLocation(str):
             The full file contents in string form
         filename : str
             The filename the file contents were loaded from
+        start_idx : int, optional
+            Index of file_contents to start with. Pass this argument if
+            some of the document has already been processed up to this
+            index. If any newlines have been encountered so far, an
+            accurate count should be given to `newlines_so_far` for that
+            computation to be correct. By default 0.
+        newlines_so_far : int, optional
+            The number of newlines encountered in the document in any
+            prior sequential processing. By default 0.
 
         Returns
         -------
         SexpInfo.Loc
             The derived SexpInfo.Loc location
         """
-        num_newlines_before_string = file_contents[: self.start].count("\n")
-        num_newlines_in_string = file_contents[self.start : self.end].count(
-            "\n")
-        bol_match = self._bol_matcher.search(file_contents[: self.start])
+        num_newlines_before_string = file_contents.count(
+            "\n",
+            start_idx,
+            self.start) + newlines_so_far
+        num_newlines_in_string = file_contents.count("\n", self.start, self.end)
+        bol_match = self._bol_matcher.search(
+            file_contents,
+            pos=start_idx,
+            endpos=self.start)
         bol_pos = len(bol_match[0]) if bol_match is not None else 0
         bol_last_match = self._bol_last_matcher.search(
-            file_contents[: self.end])
+            file_contents,
+            pos=self.start,
+            endpos=self.end)
         bol_pos_last = len(
             bol_last_match[0]) if bol_last_match is not None else 0
         return SexpInfo.Loc(
