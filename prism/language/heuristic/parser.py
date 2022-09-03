@@ -597,8 +597,10 @@ class HeuristicParser:
         # whitespace. Double (or more) periods are specifically
         # excluded.
         # Ellipses will be handled later.
+        # Due to the parenthetical grouping, this split keeps the period
+        # characters as separate items between each pair of sentences.
         sentences = StrWithLocation.re_split(
-            r"(?<!\.)\.\s",
+            r"(?<!\.)(\.\s)",
             file_contents_no_comments)
         # Now perform further splitting of braces, bullets, and ellipses
         i = 0
@@ -613,23 +615,34 @@ class HeuristicParser:
             if not sentence.strip():
                 i += 1
                 continue
+            # If the sentence is just a period, skip it
+            if re.match(r"\.\s", sentence):
+                i += 1
+                continue
             sentence = StrWithLocation.re_sub(r"(\s)+", " ", sentence)
             sentence = sentence.strip()
             # restore periods
             if not sentence.endswith("."):
-                sentence = sentence.restore_final_period()
+                period = sentences[i + 1][0]
+                assert str(period) == "."
+                sentence += period
             # split braces and bullets
             (braces_and_bullets,
              sentence) = ParserUtils.split_braces_and_bullets(sentence)
             # split on ellipses
-            new_sentences = StrWithLocation.re_split(r"\.\.\.", sentence)
-            num_new = len(new_sentences) - 1
-            if num_new > 0:
-                # restore ellipses
-                sentences[i : i + 1] = [
-                    s.restore_final_ellipsis() if j < num_new else s for j,
-                    s in enumerate(new_sentences)
-                ]
+            new_sentences = StrWithLocation.re_split(r"(\.\.\.)", sentence)
+            new_new_sentences = []
+            for j, new_sentence in enumerate(new_sentences):
+                if not new_sentence or new_sentence == "...":
+                    continue
+                elif j < len(new_sentences) - 1 and new_sentences[j
+                                                                  + 1] == "...":
+                    # Restore the ellipsis if one is present
+                    new_new_sentences.append(
+                        new_sentence + new_sentences[j + 1])
+                else:
+                    new_new_sentences.append(new_sentence)
+                sentences[i : i + 1] = new_new_sentences
                 sentence = sentences[i]
             sentence_sans_control = ParserUtils.strip_control(sentence)
             sentence_sans_attributes, _ = ParserUtils.strip_attributes(

@@ -128,7 +128,10 @@ class StrWithLocation(str):
         """
         Return a portion of the located string at the given idx.
         """
-        return StrWithLocation(super().__getitem__(idx), self.indices[idx])
+        new_indices = self.indices.__getitem__(idx)
+        if isinstance(new_indices, tuple):
+            new_indices = [new_indices]
+        return StrWithLocation(super().__getitem__(idx), new_indices)
 
     @cached_property
     def start(self) -> Optional[int]:
@@ -215,36 +218,6 @@ class StrWithLocation(str):
         stripped = super().lstrip()
         len_to_strip = len(self) - len(stripped)
         return StrWithLocation(stripped, self.indices[len_to_strip :])
-
-    def restore_final_ellipsis(self) -> 'StrWithLocation':
-        """
-        Restore ellipsis at the end of a line.
-
-        Only call this method if there were originally an ellipsis at
-        the end of this string. Otherwise, the indices will be garbage.
-        """
-        result_str = str(self) + "..."
-        result_indices = self.indices
-        result_indices.extend(
-            [(self.end + i,
-              self.end + i + 1) for i in range(3)])
-        return StrWithLocation(result_str, result_indices)
-
-    def restore_final_period(self) -> 'StrWithLocation':
-        """
-        Restore the final period at the end of a sentence.
-
-        Only call this method if there was originally a period at the
-        end of this string. Otherwise, the indices will be garbage.
-        """
-        if not self.endswith("."):
-            result_str = str(self)
-            result_indices = self.indices
-            result_str += "."
-            result_indices.append((self.end, self.end + 1))
-            return StrWithLocation(result_str, result_indices)
-        else:
-            return self
 
     def rstrip(self) -> 'StrWithLocation':
         """
