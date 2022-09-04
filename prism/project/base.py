@@ -598,6 +598,7 @@ class Project(ABC):
         except CalledProcessError:
             # TODO: try to infer dependencies by other means
             formula = []
+            return formula
         if isinstance(formula, PackageFormula):
             if isinstance(formula, LogicalPF):
                 formula = formula.to_conjunctive_list()
