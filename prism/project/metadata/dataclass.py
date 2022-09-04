@@ -245,6 +245,8 @@ class ProjectMetadata:
         """
         Return whether this metadata overrides the other metadata.
         """
+        if not isinstance(other, ProjectMetadata):
+            return NotImplemented
         return other < self
 
     def __hash__(self) -> int:
