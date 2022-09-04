@@ -4,7 +4,7 @@ Miscellaneous utilities for SerAPI interaction.
 
 import re
 
-_whitespace_regex = re.compile(r"\s+")
+_whitespace_regex = re.compile(r"\s+", flags=re.DOTALL)
 
 
 def escape(cmd: str) -> str:
@@ -33,4 +33,4 @@ def normalize_spaces(s: str) -> str:
 
     Also remove leading and trailing whitespace.
     """
-    return _whitespace_regex.sub(" ", s, flags=re.DOTALL).strip()
+    return _whitespace_regex.sub(" ", s).strip()
