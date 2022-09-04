@@ -10,8 +10,9 @@ from typing import List, Set, Tuple, Union
 from seutil import io
 
 from prism.data.document import CoqDocument
-from prism.language.gallina.analyze import SexpAnalyzer
+from prism.language.gallina.analyze import SexpAnalyzer, SexpInfo
 from prism.language.gallina.parser import CoqParser
+from prism.language.heuristic.str_with_location import StrWithLocation
 from prism.util.iterable import CallableIterator, CompareIterator
 from prism.util.radpytools.dataclasses import default_field
 from prism.util.radpytools.os import pushd
@@ -560,7 +561,7 @@ class HeuristicParser:
         return result
 
     @classmethod
-    def _get_sentences(cls, file_contents: str) -> List[str]:
+    def _get_sentences(cls, file_contents: str) -> List['StrWithLocation']:
         """
         Get the sentences of the given file.
 
@@ -571,21 +572,24 @@ class HeuristicParser:
 
         Returns
         -------
-        List[str]
+        List['StrWithLocation']
             The sentences of the Coq document.
         """
+        located_file_contents = StrWithLocation.create_from_file_contents(
+            file_contents)
         # Remove comments
-        file_contents_no_comments = ParserUtils._strip_comments(file_contents)
+        file_contents_no_comments = ParserUtils._strip_comments(
+            located_file_contents)
         # Mask notations to avoid accidental splitting on quoted
         # periods.
         notations = re.findall(r"Notation\s+\".*\"", file_contents_no_comments)
-        file_contents_no_comments = re.sub(
+        file_contents_no_comments = StrWithLocation.re_sub(
             r"Notation \".*\"",
             cls.notation_mask,
             file_contents_no_comments)
         # Mask strings to avoid accidental splitting on quoted periods.
         strings = re.findall(r"\".*\"", file_contents_no_comments)
-        file_contents_no_comments = re.sub(
+        file_contents_no_comments = StrWithLocation.re_sub(
             r"Notation \".*\"",
             cls.string_mask,
             file_contents_no_comments)
@@ -593,44 +597,69 @@ class HeuristicParser:
         # whitespace. Double (or more) periods are specifically
         # excluded.
         # Ellipses will be handled later.
-        sentences = re.split(r"(?<!\.)\.\s", file_contents_no_comments)
+        # Due to the parenthetical grouping, this split keeps the period
+        # characters as separate items between each pair of sentences.
+        sentences = StrWithLocation.re_split(
+            r"(?<!\.)(\.\s)",
+            file_contents_no_comments)
         # Now perform further splitting of braces, bullets, and ellipses
         i = 0
         notation_it = iter(notations)
         string_it = CallableIterator(strings)
-        processed_sentences: List[str] = []
+        processed_sentences: List[StrWithLocation] = []
         while i < len(sentences):  # `sentences` length may change
             # Replace any whitespace or group of whitespace with a
             # single space.
             sentence = sentences[i]
-            sentence = re.sub(r"(\s)+", " ", sentence)
+            # If the sentence is whitespace only, skip it.
+            if not sentence.strip():
+                i += 1
+                continue
+            # If the sentence is just a period, skip it
+            if re.match(r"\.\s", sentence):
+                i += 1
+                continue
+            sentence = StrWithLocation.re_sub(r"(\s)+", " ", sentence)
             sentence = sentence.strip()
             # restore periods
             if not sentence.endswith("."):
-                sentence += "."
+                period = sentences[i + 1][0]
+                assert str(period) == "."
+                sentence += period
             # split braces and bullets
             (braces_and_bullets,
              sentence) = ParserUtils.split_braces_and_bullets(sentence)
             # split on ellipses
-            new_sentences = re.split(r"\.\.\.", sentence)
-            num_new = len(new_sentences) - 1
+            new_sentences = StrWithLocation.re_split(r"(\.\.\.)", sentence)
+            new_new_sentences = []
+            for j, new_sentence in enumerate(new_sentences):
+                if not new_sentence or new_sentence == "...":
+                    continue
+                elif (j < len(new_sentences) - 1
+                      and new_sentences[j + 1] == "..."):
+                    # Restore the ellipsis if one is present
+                    new_new_sentences.append(
+                        new_sentence + new_sentences[j + 1])
+                else:
+                    new_new_sentences.append(new_sentence)
+            num_new = len(new_new_sentences) - 1
             if num_new > 0:
-                # restore ellipses
-                sentences[i : i + 1] = [
-                    (s + "...") if j < num_new else s for j,
-                    s in enumerate(new_sentences)
-                ]
+                sentences[i : i + 1] = new_new_sentences
                 sentence = sentences[i]
             sentence_sans_control = ParserUtils.strip_control(sentence)
             sentence_sans_attributes, _ = ParserUtils.strip_attributes(
                 sentence_sans_control)
             # restore notation
             if sentence_sans_attributes.startswith(cls.notation_mask):
-                sentence = sentence.replace(
+                sentence = StrWithLocation.re_sub(
                     cls.notation_mask,
-                    next(notation_it))
+                    next(notation_it),
+                    sentence)
             # restore strings
-            sentence = re.sub(cls.string_mask, string_it, sentence)
+            sentence = StrWithLocation.re_sub(
+                cls.string_mask,
+                string_it,
+                sentence)
             processed_sentences.extend(braces_and_bullets)
             processed_sentences.append(sentence)
             i += 1
@@ -675,7 +704,10 @@ class HeuristicParser:
             encoding: str = 'utf-8',
             glom_proofs: bool = True,
             project_path: str = "",
-            **kwargs) -> List[str]:
+            return_locations: bool = False,
+            **kwargs) -> Union[Tuple[List[str],
+                                     List[SexpInfo.Loc]],
+                               List[str]]:
         """
         Split the Coq file text by sentences.
 
@@ -690,9 +722,15 @@ class HeuristicParser:
             provided, by default 'utf-8'.
         glom_proofs : bool, optional
             A flag indicating whether or not proofs should be re-glommed
-            after sentences are split, by default `True`.
+            after sentences are split, by default `True`. If glom_proofs
+            is True, return_locations is set to False no matter the
+            given value.
         project_path : str, optional
             Path to the project this file is from, by default "".
+        return_locations : bool, optional
+            A flag indicating whether sentence locations are returned,
+            by default False. If glom_proofs is True, locations are not
+            returned no matter what.
         kwargs : Dict[str, Any]
             Optional keyword arguments to
             `parse_sentences_from_document`.
@@ -703,6 +741,9 @@ class HeuristicParser:
             A list of strings corresponding to Coq source file
             sentences, with proofs glommed (or not) depending on input
             flag.
+        List[SexpInfo.Loc]
+            Fully-qualified sentence locations, returned only if
+            `return_locations` is set to True
         """
         document = CoqDocument(
             file_path,
@@ -712,6 +753,7 @@ class HeuristicParser:
             document,
             encoding,
             glom_proofs,
+            return_locations,
             **kwargs)
 
     @classmethod
@@ -720,7 +762,10 @@ class HeuristicParser:
             document: CoqDocument,
             encoding: str = 'utf-8',
             glom_proofs: bool = True,
-            **kwargs) -> List[str]:
+            return_locations: bool = False,
+            **kwargs) -> Union[Tuple[List[str],
+                                     SexpInfo.Loc],
+                               List[str]]:
         """
         Split the Coq file text by sentences.
 
@@ -736,7 +781,13 @@ class HeuristicParser:
             provided, by default 'utf-8'.
         glom_proofs : bool, optional
             A flag indicating whether or not proofs should be re-glommed
-            after sentences are split, by default `True`.
+            after sentences are split, by default `True`. If glom_proofs
+            is True, return_locations is set to False no matter the
+            given value.
+        return_locations : bool, optional
+            A flag indicating whether sentence locations are returned,
+            by default False. If glom_proofs is True, locations are not
+            returned no matter what.
         kwargs : Dict[str, Any]
             Optional keyword arguments for subclass implementations.
 
@@ -746,15 +797,33 @@ class HeuristicParser:
             A list of strings corresponding to Coq source file
             sentences, with proofs glommed (or not) depending on input
             flag.
+        List[SexpInfo.Loc]
+            Fully-qualified sentence locations, returned only if
+            `return_locations` is set to True
         """
         file_contents = document.source_code
-        sentences = cls._get_sentences(file_contents)
-        stats = cls._compute_sentence_statistics(sentences)
+        located_sentences = cls._get_sentences(file_contents)
+        sentences = [str(s) for s in located_sentences]
         if glom_proofs:
+            stats = cls._compute_sentence_statistics(sentences)
             return cls._glom_proofs(document.index, sentences, stats)
         else:
-            result = sentences
-        return result
+            if return_locations:
+                start_idx = 0
+                newlines_so_far = 0
+                locs: List[SexpInfo.Loc] = []
+                for ls in located_sentences:
+                    loc = ls.get_location(
+                        file_contents,
+                        document.abspath,
+                        start_idx,
+                        newlines_so_far)
+                    locs.append(loc)
+                    start_idx = loc.end_charno
+                    newlines_so_far = loc.lineno_last
+                return sentences, locs
+            else:
+                return sentences
 
 
 class SerAPIParser(HeuristicParser):
@@ -825,6 +894,7 @@ class SerAPIParser(HeuristicParser):
             document: CoqDocument,
             _encoding: str = "utf-8",
             glom_proofs: bool = True,
+            return_locations: bool = False,
             glom_ltac: bool = False,
             return_asts: bool = False,
             **kwargs) -> Union[List[str],
@@ -842,6 +912,8 @@ class SerAPIParser(HeuristicParser):
         glom_proofs : bool, optional
             A flag indicating whether or not proofs should be re-glommed
             after sentences are split, by default `True`.
+        return_locations : bool, optional
+            Currently ignored, by default False.
         glom_ltac : bool, optional
             Glom together contiguous regions of Ltac code,
             by default `False`.
@@ -872,6 +944,9 @@ class SerAPIParser(HeuristicParser):
             raise NotImplementedError(
                 "Returning ASTs alongside glommed proofs is not currently supported."
             )
+        if return_locations:
+            raise NotImplementedError(
+                "Location returning is not currently supported.")
         source_code = document.source_code
         coq_file = document.abspath
         serapi_options = kwargs.pop('serapi_options', None)

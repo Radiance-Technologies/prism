@@ -101,8 +101,16 @@ class SexpInfo:
         filename: str
         lineno: int
         bol_pos: int
+        """
+        The unencoded character count of the beginning position of the
+        first line of this located object.
+        """
         lineno_last: int
         bol_pos_last: int
+        """
+        The unencoded character count of the beginning position of the
+        last line of this located object.
+        """
         beg_charno: int
         end_charno: int
 
@@ -1018,8 +1026,8 @@ class SexpAnalyzer:
                     unicode_offsets)
 
             return SexpInfo.Loc(**kwargs)
-        except IllegalSexpOperationException:
-            raise SexpAnalyzingException(sexp)
+        except IllegalSexpOperationException as e:
+            raise SexpAnalyzingException(sexp) from e
 
     @classmethod
     def analyze_sertok_sentences(
