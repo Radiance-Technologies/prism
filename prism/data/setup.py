@@ -54,6 +54,7 @@ def initialize_switch(
     # Pin Coq version and SerAPI version to OPAM switch
     new_switch.run("opam pin add coq %s -y" % coq_version)
     new_switch.run("opam pin add coq-serapi %s -y" % serapi_version)
+    new_switch.add_repo("coq-released", "https://coq.inria.fr/opam/released")
 
     return new_switch
 

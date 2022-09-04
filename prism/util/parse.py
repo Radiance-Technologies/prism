@@ -15,6 +15,9 @@ class ParseError(Exception):
         self.tp = tp
         self.parsed = parsed
 
+    def __reduce__(self) -> Union[str, Tuple[type, str]]:  # noqa: D105
+        return ParseError, (self.tp, self.parsed)
+
     def __str__(self) -> str:  # noqa: D105
         return f"Failed to parse {self.tp} from {self.parsed}"
 

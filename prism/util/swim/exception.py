@@ -2,6 +2,8 @@
 Custom exceptions related to switch management.
 """
 
+from typing import Tuple, Union
+
 from prism.util.opam.formula import PackageFormula
 
 
@@ -12,6 +14,9 @@ class UnsatisfiableConstraints(Exception):
 
     def __init__(self, formula: PackageFormula) -> None:
         self.unsatisfiable = formula
+
+    def __reduce__(self) -> Union[str, Tuple[PackageFormula]]:  # noqa: D105
+        return UnsatisfiableConstraints, (self.unsatisfiable,)
 
     def __str__(self) -> str:
         """

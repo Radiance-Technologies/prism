@@ -1,6 +1,7 @@
 """
 Module providing Coq project class representations.
 """
+
 import logging
 import os
 import pathlib
@@ -12,14 +13,12 @@ from functools import partialmethod, reduce
 from subprocess import CalledProcessError
 from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
 
-from seutil import bash
-
 from prism.data.document import CoqDocument
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
 from prism.project.exception import ProjectBuildError
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
-from prism.project.strace import IQR, CoqContext, strace_build
+from prism.project.strace import IQR, strace_build
 from prism.util.logging import default_log_level
 from prism.util.opam import OpamSwitch, PackageFormula
 from prism.util.opam.formula.package import LogicalPF
@@ -100,6 +99,11 @@ class Project(ABC):
         bytes
     sentence_extraction_method : SentenceExtractionMethod
         The method by which sentences are extracted.
+    """
+
+    coq_library_exts = ["*.vio", "*.vo", "*.vos", "*.vok"]
+    """
+    A list of possible Coq library file extensions.
     """
 
     def __init__(
@@ -252,6 +256,14 @@ class Project(ABC):
         """
         return self.metadata.serapi_options
 
+    def _clean(self) -> None:
+        """
+        Remove all compiled Coq library (object) files.
+        """
+        for ext in self.coq_library_exts:
+            for lib in pathlib.Path(self.path).rglob(ext):
+                lib.unlink()
+
     @abstractmethod
     def _get_file(self, filename: str, *args, **kwargs) -> CoqDocument:
         """
@@ -303,6 +315,28 @@ class Project(ABC):
                 for f in pathlib.Path(self.path).glob('**/.git/**/*')
                 if f.is_file())
 
+    def _prepare_command(self, target: str) -> str:
+        commands = [f"({cmd})" for cmd in getattr(self, f"{target}_cmd")]
+        if not commands:
+            raise RuntimeError(
+                f"{target.capitalize()} command not set for {self.name}.")
+        return " && ".join(commands)
+
+    def _process_command_output(
+            self,
+            action: str,
+            returncode: int,
+            stdout: str,
+            stderr: str) -> None:
+        status = "failed" if returncode != 0 else "finished"
+        msg = (
+            f"{action} {status}! Return code is {returncode}! "
+            f"stdout:\n{stdout}\n; stderr:\n{stderr}")
+        if returncode != 0:
+            raise ProjectBuildError(msg, returncode, stdout, stderr)
+        else:
+            logger.debug(msg)
+
     def _make(self, target: str, action: str) -> Tuple[int, str, str]:
         """
         Make a build target (one of build, clean, or install).
@@ -333,20 +367,10 @@ class Project(ABC):
         """
         # wrap in parentheses to preserve operator precedence when
         # joining commands with &&
-        commands = [f"({cmd})" for cmd in getattr(self, f"{target}_cmd")]
-        if not commands:
-            raise RuntimeError(
-                f"{target.capitalize()} command not set for {self.name}.")
-        r = self.opam_switch.run(" && ".join(commands), cwd=self.path)
-        status = "failed" if r.returncode != 0 else "finished"
-        msg = (
-            f"{action} {status}! Return code is {r.returncode}! "
-            f"stdout:\n{r.stdout}\n; stderr:\n{r.stderr}")
+        cmd = self._prepare_command(target)
+        r = self.opam_switch.run(cmd, cwd=self.path, check=False)
         result = (r.returncode, r.stdout, r.stderr)
-        if r.returncode != 0:
-            raise ProjectBuildError(msg, *result)
-        else:
-            logger.debug(msg)
+        self._process_command_output(action, *result)
         return result
 
     @abstractmethod
@@ -382,10 +406,14 @@ class Project(ABC):
         else:
             return self._make("build", "Compilation")
 
-    clean = partialmethod(_make, "clean", "Cleaning")
-    """
-    Clean the build status of the project.
-    """
+    def clean(self) -> Tuple[int, str, str]:
+        """
+        Clean the build status of the project.
+        """
+        r = self._make("clean", "Cleaning")
+        # ensure removal of Coq library files
+        self._clean()
+        return r
 
     def get_file(self, filename: str, *args, **kwargs) -> CoqDocument:
         """
@@ -570,6 +598,7 @@ class Project(ABC):
         except CalledProcessError:
             # TODO: try to infer dependencies by other means
             formula = []
+            return formula
         if isinstance(formula, PackageFormula):
             if isinstance(formula, LogicalPF):
                 formula = formula.to_conjunctive_list()
@@ -597,30 +626,20 @@ class Project(ABC):
         str
             The total stderr of all commands run
         """
-        contexts: List[CoqContext] = []
-        stdout_out = ""
-        stderr_out = ""
-        env = self.opam_switch.environ
-        for cmd in self.build_cmd:
-            if "make" in cmd.lower() or "dune" in cmd.lower():
-                context, rcode_out, stdout, stderr = strace_build(
-                    cmd,
-                    workdir=self.path,
-                    env=env)
-                contexts += context
-            else:
-                r = bash.run(cmd, cwd=self.path, env=env)
-                rcode_out = r.returncode
-                stdout = r.stdout
-                stderr = r.stderr
-                logging.debug(
-                    f"Command {cmd} finished with return code {r.returncode}.")
-            stdout_out = os.linesep.join((stdout_out, stdout))
-            stderr_out = os.linesep.join((stderr_out, stderr))
-            # Emulate the behavior of _make where commands are joined by
-            # &&.
-            if rcode_out:
-                break
+        # ensure we are building from a clean slate
+        try:
+            self.clean()
+        except ProjectBuildError:
+            # cleaning may fail if nothing to clean or the project has
+            # not yet been configured by a prior build
+            pass
+        cmd = self._prepare_command("build")
+        contexts, rcode_out, stdout, stderr = strace_build(
+            self.opam_switch,
+            cmd,
+            workdir=self.path,
+            check=False)
+        self._process_command_output("Strace", rcode_out, stdout, stderr)
 
         def or_(x, y):
             return x | y
@@ -634,7 +653,7 @@ class Project(ABC):
                     set(),
                     self.path)))
         self._update_metadata(serapi_options=serapi_options)
-        return serapi_options, rcode_out, stdout_out, stderr_out
+        return serapi_options, rcode_out, stdout, stderr
 
     install = partialmethod(_make, "install", "Installation")
     """

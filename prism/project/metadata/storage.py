@@ -113,6 +113,18 @@ class Context:
                 f"Incompatible Coq/OCaml versions specified: coq={self.coq_version}, "
                 f"ocaml={self.ocaml_version}")
 
+    @property
+    def commit_sha(self) -> str:  # noqa: D102
+        return self.revision.commit_sha
+
+    @property
+    def project_name(self) -> str:  # noqa: D102
+        return self.revision.project_source.project_name
+
+    @property
+    def repo_url(self) -> Optional[GitURL]:  # noqa: D102
+        return self.revision.project_source.repo_url
+
     def as_metadata(self) -> ProjectMetadata:
         """
         Place this context in an otherwise empty metadata record.
@@ -345,6 +357,13 @@ class MetadataStorage:
     KeyError
         If metadata is already stored for the implied context.
     """
+
+    def _check_project_exists(self, project_name: str) -> None:
+        """
+        Raise an error if the project does not have any metadata.
+        """
+        if project_name not in self.projects:
+            raise KeyError(f"Unknown project: {project_name}")
 
     def _get_default(self, metadata: ProjectMetadata) -> ProjectMetadata:
         """
@@ -719,6 +738,41 @@ class MetadataStorage:
             metadata_kwargs.setdefault('clean_cmd', self.default_clean_cmd)
         return ProjectMetadata(**metadata_kwargs)
 
+    def get_all(self,
+                project_name: str,
+                autofill: Optional[bool] = None) -> List[ProjectMetadata]:
+        """
+        Get all of the explicitly stored metadata records for a project.
+
+        Parameters
+        ----------
+        project_name : str
+            The name of a project in the storage.
+        autofill : Optional[bool], optional
+            Whether to automatically fill in missing metadata with
+            default values (True) or raise an error (False), by default
+            equal to ``self.autofill``.
+
+        Returns
+        -------
+        List[ProjectMetadata]
+            Each metadata record for `project_name` that is explicitly
+            stored rather than implicitly derived.
+            The list will be empty if there are no records.
+        """
+        all_metadata = []
+        for context in self.contexts:
+            if context.project_name == project_name:
+                metadata = self.get(
+                    project_name,
+                    context.repo_url,
+                    context.commit_sha,
+                    context.coq_version,
+                    context.ocaml_version,
+                    autofill)
+                all_metadata.append(metadata)
+        return all_metadata
+
     def get_project_revisions(
             self,
             project_name: str,
@@ -748,8 +802,7 @@ class MetadataStorage:
         KeyError
             If the project does not possess any metadata.
         """
-        if project_name not in self.projects:
-            raise KeyError(f"Unknown project: {project_name}")
+        self._check_project_exists(project_name)
         return {
             r.commit_sha
             for r in self.revisions
@@ -777,12 +830,58 @@ class MetadataStorage:
         KeyError
             If the project does not possess any metadata.
         """
-        if project_name not in self.projects:
-            raise KeyError(f"Unknown project: {project_name}")
+        self._check_project_exists(project_name)
         return {
             s.repo_url
             for s in self.project_sources
             if s.project_name == project_name and s.repo_url is not None
+        }
+
+    def get_project_coq_versions(
+            self,
+            project_name: str,
+            project_url: Optional[str] = None,
+            commit_sha: Optional[str] = None) -> Set[str]:
+        """
+        Get the set of Coq versions supported by the given project.
+
+        Note that this is NOT the complete list of versions that may
+        potentially be supported across all sources or commits for a
+        project rather just those versions that have been used within
+        unique metadata entries in the storage.
+
+        Parameters
+        ----------
+        project_name : str
+            The name of a project in the storage.
+        project_url : Optional[str], optional
+            A source URL for the project, by default None.
+            If None, then all supported Coq versions for any sources
+            are returned.
+        commit_sha : Optional[str], optional
+            A revision for the project and project URL, by default None.
+            If None, then all supported Coq versions for any revision
+            satisfying the other two arguments are returned.
+
+        Returns
+        -------
+        Set[str]
+            A set of strings indicating Coq versions associated with the
+            given arguments.
+
+        Raises
+        ------
+        KeyError
+            If the project does not possess any metadata.
+        """
+        self._check_project_exists(project_name)
+        return {
+            str(c.coq_version)
+            for c in self.contexts
+            if c.project_name == project_name and (
+                project_url is None or c.repo_url == project_url) and (
+                    c.commit_sha is None or c.commit_sha == commit_sha)
+            and c.coq_version is not None
         }
 
     def insert(self, metadata: ProjectMetadata) -> None:

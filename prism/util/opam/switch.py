@@ -15,6 +15,8 @@ from typing import ClassVar, Dict, List, Optional, Tuple, Union
 
 from seutil import bash
 
+from prism.util.bash import escape
+
 from .file import OpamFile
 from .formula import LogicalPF, LogOp, PackageFormula
 from .version import OCamlVersion, OpamVersion, Version
@@ -248,7 +250,8 @@ class OpamSwitch:
             # we need a mountpoint.
             # maybe the original clone was deleted?
             dest.mkdir()
-        command = f'bwrap --dev-bind / / --bind {src} {dest} -- {command}'
+        command = escape(command)
+        command = f'bwrap --dev-bind / / --bind {src} {dest} -- bash -c "{command}"'
         return command, src, dest
 
     def export(self, include_id: bool = True) -> 'OpamSwitch.Configuration':
@@ -270,7 +273,7 @@ class OpamSwitch:
         OpamSwitch.Configuration
             The switch configuration.
         """
-        with tempfile.NamedTemporaryFile('r', dir=self.path) as f:
+        with tempfile.NamedTemporaryFile('r') as f:
             self.run(f"opam switch export {f.name}")
             # Contents are so close but not quite yaml or json.
             # Custom parsing is required.
@@ -492,7 +495,7 @@ class OpamSwitch:
         CalledProcessError
             If the installation fails for any reason.
         """
-        with tempfile.NamedTemporaryFile('w', delete=False, dir=self.path) as f:
+        with tempfile.NamedTemporaryFile('w', delete=False) as f:
             f.write(
                 str(
                     OpamFile(

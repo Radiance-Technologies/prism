@@ -5,6 +5,8 @@ import functools
 import logging
 import os
 import signal
+import traceback
+import warnings
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import (
@@ -52,6 +54,10 @@ class Except(Generic[T]):
     """
     An exception raised during the computation of `value`.
     """
+    trace: str
+    """
+    The stack trace of the exception.
+    """
 
 
 def _project_commit_fmap(
@@ -96,7 +102,7 @@ def _project_commit_fmap(
             result = commit_fmap(project, commit, result)
         except Exception as e:
             is_terminated = True
-            result = Except(result, e)
+            result = Except(result, e, traceback.format_exc())
     return result
 
 
@@ -122,7 +128,8 @@ class ProjectCommitMapper(Generic[T]):
                                    Optional[T]],
                                   T],
             task_description: Optional[str] = None,
-            wait_on_interrupt: bool = True):
+            wait_on_interrupt: bool = True,
+            terminate_on_except: bool = True):
         """
         Initialize ProjectCommitMapper object.
 
@@ -148,16 +155,22 @@ class ProjectCommitMapper(Generic[T]):
             subprocesses to finish processing their current commit or
             to kill them immediately (with a non-blockable SIGKILL).
             By default True.
+        terminate_on_except : bool, optional
+            Whether to terminate the process pool on the return of an
+            `Except` value from a subprocess or to continue processing
+            projects.
+            By default True.
         """
         self.projects = list(projects)
         self.get_commit_iterator = get_commit_iterator
         self.commit_fmap = commit_fmap
         self._task_description = task_description
         self._wait = wait_on_interrupt
+        self._terminate = terminate_on_except
         # By default True so that an arbitrary commit_fmap is allowed
         # to clean up any artifacts or state prior to termination
 
-    def __call__(self, max_workers: int = 1) -> Dict[str, Except[T]]:
+    def __call__(self, max_workers: int = 1) -> Dict[str, Union[T, Except[T]]]:
         """
         Map over project commits.
 
@@ -198,7 +211,7 @@ class ProjectCommitMapper(Generic[T]):
                         result = future.result()
                         logger.debug(f"Job {project_name} completed.")
                         results[project_name] = result
-                        if isinstance(result, Except):
+                        if isinstance(result, Except) and self._terminate:
                             logger.critical(
                                 f"Job {project_name} failed. Terminating process pool.",
                                 exc_info=result.exception)
@@ -225,7 +238,7 @@ class ProjectCommitMapper(Generic[T]):
                     raise
         return results
 
-    def map(self, max_workers: int = 1) -> Dict[str, Except[T]]:
+    def map(self, max_workers: int = 1) -> Dict[str, Union[T, Except[T]]]:
         """
         Map over the project commits.
 
@@ -310,22 +323,43 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
             task_description,
             wait_on_interrupt)
 
-    def __call__(self,
+    def __call__(self,  # noqa: D102
                  max_workers: int = 1) -> Dict[str,
-                                               Except[T]]:  # noqa: D102
+                                               Union[T, Except[T]]]:
         results = super().__call__(max_workers)
-        storage = MetadataStorage.unions(*[s for _, s in results.values()])
+        # get all project's metadata with the understanding that each
+        # project only affected at most its own records
+        storage = MetadataStorage()
+        for p in self.projects:
+            result = results[p.name]
+            exception = None
+            if isinstance(result, Except):
+                exception = result
+                result = result.value
+            if result is None:
+                warnings.warn(f"No results found for {p.name}")
+                p_storage = p.metadata_storage
+            else:
+                # strip storage from results
+                if exception is not None:
+                    # change mapped result value in place
+                    exception.value = result[0]
+                else:
+                    results[p.name] = result[0]
+                p_storage = result[1]
+            for metadata in p_storage.get_all(p.name):
+                storage.insert(metadata)
         for p in self.projects:
             p.metadata_storage = storage
-        return {k: r for k,
-                (r,
-                 _) in results.items()}
+        return results
 
     def update_map(
-            self,
-            max_workers: int = 1) -> Tuple[Dict[str,
-                                                Except[T]],
-                                           MetadataStorage]:
+        self,
+        max_workers: int = 1
+    ) -> Tuple[Dict[str,
+                    Union[T,
+                          Except[T]]],
+               MetadataStorage]:
         """
         Map over the project commits and get updated metadata.
 
@@ -341,6 +375,11 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
             The output of `map`.
         MetadataStorage
             The updated `MetadataStorage` for each mapped project.
+
+        Warns
+        -----
+        UserWarning
+            If a project does not have any results.
 
         See Also
         --------

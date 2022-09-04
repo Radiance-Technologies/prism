@@ -338,7 +338,8 @@ class ProjectRepo(Repo, Project):
 
     @property
     def name(self) -> str:  # noqa: D102
-        return self.remote_url.split('.git')[0].split('/')[-1]
+        # get last non-empty segment of URL
+        return pathlib.Path(self.remote_url).stem
 
     @property
     def path(self) -> os.PathLike:  # noqa: D102

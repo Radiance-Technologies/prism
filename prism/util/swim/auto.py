@@ -70,7 +70,7 @@ class AutoSwitchManager(AdaptiveSwitchManager):
         for potential_switch in root.iterdir():
             if potential_switch.is_dir():
                 try:
-                    switch = OpamSwitch(potential_switch.stem, root)
+                    switch = OpamSwitch(potential_switch.name, root)
                 except ValueError:
                     continue
                 else:
