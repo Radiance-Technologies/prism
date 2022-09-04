@@ -945,7 +945,8 @@ class SerAPIParser(HeuristicParser):
                 "Returning ASTs alongside glommed proofs is not currently supported."
             )
         if return_locations:
-            warnings.warn("Location returning is not currently supported.")
+            raise NotImplementedError(
+                "Location returning is not currently supported.")
         source_code = document.source_code
         coq_file = document.abspath
         serapi_options = kwargs.pop('serapi_options', None)
