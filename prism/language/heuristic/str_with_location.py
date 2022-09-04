@@ -14,7 +14,7 @@ from prism.language.gallina.analyze import SexpInfo
 from prism.util.radpytools.dataclasses import default_field
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class StrWithLocation(str):
     """
     Class that ties strings to their original in-file locations.
@@ -99,12 +99,15 @@ class StrWithLocation(str):
             length of the loc list
         """
         if len(self) != len(self.indices):
-            raise ValueError("Each string should have a location.")
+            raise ValueError("Each character should have a location.")
         for ind in self.indices:
             if not isinstance(ind, tuple):
                 raise TypeError(
-                    "indices attribute contains object that is not tuple. The"
-                    f" incorrect type is {type(ind)}.")
+                    "'indices' attribute contains object that is not a tuple. "
+                    f"The incorrect type is {type(ind)}.")
+            if len(ind) != 2 or ind[0] > ind[1]:
+                raise ValueError(
+                    f"Expected two locations in ascending order, got {ind}")
 
     def __add__(self, other: 'StrWithLocation'):
         """
@@ -198,18 +201,14 @@ class StrWithLocation(str):
             file_contents,
             pos=0,
             endpos=self.start + 1)
-        if bol_match is not None:
-            bol_pos = bol_match.start()
-        else:
-            raise RuntimeError("This regex should match. Something's wrong.")
+        assert bol_match is not None
+        bol_pos = bol_match.start()
         bol_last_match = self._bol_matcher.search(
             file_contents,
             pos=0,
             endpos=self.end)
-        if bol_last_match is not None:
-            bol_pos_last = bol_last_match.start()
-        else:
-            raise RuntimeError("This regex should match. Something's wrong.")
+        assert bol_last_match is not None
+        bol_pos_last = bol_last_match.start()
         return SexpInfo.Loc(
             filename=filename,
             lineno=num_newlines_before_string,
@@ -393,8 +392,9 @@ class StrWithLocation(str):
                 # Get the indices prior to subbed location
                 subbed_indices.extend(string.indices[prev_end : match.start()])
                 # Get the indices for the next subbed location
-                start = string.indices[match.start()][0]
-                end = string.indices[match.end() - 1][-1]
+                subbed = string[match.start(): match.end()]
+                start = subbed.start
+                end = subbed.end
                 step = (end - start) / len(repl)
                 subbed_indices.extend(
                     [

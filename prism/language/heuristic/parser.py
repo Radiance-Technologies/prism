@@ -635,13 +635,15 @@ class HeuristicParser:
             for j, new_sentence in enumerate(new_sentences):
                 if not new_sentence or new_sentence == "...":
                     continue
-                elif j < len(new_sentences) - 1 and new_sentences[j
-                                                                  + 1] == "...":
+                elif (j < len(new_sentences) - 1
+                      and new_sentences[j + 1] == "..."):
                     # Restore the ellipsis if one is present
                     new_new_sentences.append(
                         new_sentence + new_sentences[j + 1])
                 else:
                     new_new_sentences.append(new_sentence)
+            num_new = len(new_new_sentences) - 1
+            if num_new > 0:
                 sentences[i : i + 1] = new_new_sentences
                 sentence = sentences[i]
             sentence_sans_control = ParserUtils.strip_control(sentence)
@@ -893,7 +895,7 @@ class SerAPIParser(HeuristicParser):
             _encoding: str = "utf-8",
             glom_proofs: bool = True,
             glom_ltac: bool = False,
-            _return_locations: bool = False,
+            return_locations: bool = False,
             return_asts: bool = False,
             **kwargs) -> Union[List[str],
                                Tuple[List[str],
@@ -913,8 +915,8 @@ class SerAPIParser(HeuristicParser):
         glom_ltac : bool, optional
             Glom together contiguous regions of Ltac code,
             by default `False`.
-        _return_locations : bool, optional
-            Ignore, by default False.
+        return_locations : bool, optional
+            Currently ignored, by default False.
         return_asts: bool, optional
             If True, then also return asts. By default `False`.
         kwargs : Dict[str, Any]
@@ -942,6 +944,8 @@ class SerAPIParser(HeuristicParser):
             raise NotImplementedError(
                 "Returning ASTs alongside glommed proofs is not currently supported."
             )
+        if return_locations:
+            warnings.warn("Location returning is not currently supported.")
         source_code = document.source_code
         coq_file = document.abspath
         serapi_options = kwargs.pop('serapi_options', None)
