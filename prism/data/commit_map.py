@@ -128,7 +128,8 @@ class ProjectCommitMapper(Generic[T]):
                                    Optional[T]],
                                   T],
             task_description: Optional[str] = None,
-            wait_on_interrupt: bool = True):
+            wait_on_interrupt: bool = True,
+            terminate_on_except: bool = True):
         """
         Initialize ProjectCommitMapper object.
 
@@ -154,12 +155,18 @@ class ProjectCommitMapper(Generic[T]):
             subprocesses to finish processing their current commit or
             to kill them immediately (with a non-blockable SIGKILL).
             By default True.
+        terminate_on_except : bool, optional
+            Whether to terminate the process pool on the return of an
+            `Except` value from a subprocess or to continue processing
+            projects.
+            By default True.
         """
         self.projects = list(projects)
         self.get_commit_iterator = get_commit_iterator
         self.commit_fmap = commit_fmap
         self._task_description = task_description
         self._wait = wait_on_interrupt
+        self._terminate = terminate_on_except
         # By default True so that an arbitrary commit_fmap is allowed
         # to clean up any artifacts or state prior to termination
 
@@ -204,7 +211,7 @@ class ProjectCommitMapper(Generic[T]):
                         result = future.result()
                         logger.debug(f"Job {project_name} completed.")
                         results[project_name] = result
-                        if isinstance(result, Except):
+                        if isinstance(result, Except) and self._terminate:
                             logger.critical(
                                 f"Job {project_name} failed. Terminating process pool.",
                                 exc_info=result.exception)
