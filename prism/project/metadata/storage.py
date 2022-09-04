@@ -12,6 +12,7 @@ from typing import (
     ClassVar,
     Dict,
     Hashable,
+    Iterable,
     Iterator,
     List,
     Optional,
@@ -207,7 +208,7 @@ class MetadataStorage:
     # match metadata field names exactly
     opam_repos: Dict[ContextID, Set[RepoID]] = default_field(dict())
     coq_dependencies: Dict[ContextID, Set[PackageID]] = default_field(dict())
-    opam_dependencies: Dict[ContextID, Set[PackageID]] = default_field(dict())
+    opam_dependencies: Dict[ContextID, List[PackageID]] = default_field(dict())
     ignore_path_regex: Dict[ContextID, Set[str]] = default_field(dict())
     # meta-metadata
     ocaml_packages: bidict[str, PackageID] = default_field(bidict())
@@ -383,6 +384,55 @@ class MetadataStorage:
             default = ProjectMetadata(metadata.project_name, [], [], [])
         return default
 
+    def _get_field_origins(
+            self,
+            metadata: ProjectMetadata,
+            fields: Optional[Iterable[str]] = None) -> Dict[str,
+                                                            ProjectMetadata]:
+        """
+        Get the metadata that defines each field.
+
+        Parameters
+        ----------
+        metadata: ProjectMetadata
+            A metadata record.
+        fields : Optional[Iterable[str]], optional
+            An optional collection of fields whose origins are desired.
+            By default None, which results in retrieving the origins of
+            all fields.
+
+        Returns
+        -------
+        Dict[str, ProjectMetadata]
+            A map from inherited field names to the stored records
+            that originate their values in the given `metadata`.
+            If a field is not inherited, then it will not appear in this
+            map.
+        """
+        level = metadata.level
+        if level == 0:
+            return {}  # not possible to inherit anything at this level
+        if fields is None:
+            fields = self._mutable_fields
+        mutable_fields = self._mutable_fields.intersection(fields)
+        origins = {}
+        views = list(metadata.levels(inclusive=False))
+        while mutable_fields and views:
+            try:
+                default = self.populate(views.pop(), autofill=False)
+            except KeyError:
+                continue
+            for mf in list(mutable_fields):
+                if getattr(default, mf) != getattr(metadata, mf):
+                    if metadata.level != level:
+                        origins[mf] = metadata
+                    mutable_fields.discard(mf)
+            metadata = default
+        for mf in mutable_fields:
+            if metadata.level != level:
+                origins[mf] = metadata
+        return origins
+
     def _get(
             self,
             project_name: str,
@@ -468,7 +518,7 @@ class MetadataStorage:
         """
         Insert a field's value for the given context.
 
-        The value is taken from a given metadata and it only actually
+        The value is taken from a given metadata and is only actually
         inserted if it differs from the default (i.e., if it overrides
         the default).
 
@@ -494,10 +544,9 @@ class MetadataStorage:
                             field_value,
                             key_maker=CommandSequence)
                     else:
-                        val = {
+                        val = type(field_value)(
                             self._add_to_index(index,
-                                               val) for val in field_value
-                        }
+                                               val) for val in field_value)
                     getattr(self, field_name)[context_id] = val
                 elif field_name in ['ignore_path_regex']:
                     getattr(self, field_name)[context_id] = set(field_value)
@@ -935,6 +984,7 @@ class MetadataStorage:
                                         Version]] = None,
             ocaml_version: Optional[Union[str,
                                           Version]] = None,
+            cascade: bool = True,
             **kwargs) -> None:
         """
         Update the indicated metadata.
@@ -956,6 +1006,13 @@ class MetadataStorage:
         ocaml_version : Optional[str], optional
             The version of the OCaml compiler against which the project
             should be built, by default None.
+        cascade : bool, optional
+            If True, then update lower precedence metadata as well until
+            an explicitly stored value for a field is found.
+            If False, update only the indicated record.
+            For example, if no default value exists for a field, then
+            cascading an update to the field will ensure it exists for
+            all future records that inherit from a common ancestor.
         kwargs : Dict[str, Any]
             New values for fields of the indicated metadata.
 
@@ -1001,6 +1058,24 @@ class MetadataStorage:
                         break
                 if not is_implied:
                     raise
+            if cascade:
+                origins = self._get_field_origins(
+                    self.get(
+                        project_name,
+                        project_url,
+                        commit_sha,
+                        coq_version,
+                        ocaml_version),
+                    kwargs.keys())
+                for inherited, origin in origins.items():
+                    # ensure origin exists
+                    ocontext = Context.from_metadata(origin)
+                    if ocontext not in self.contexts:
+                        self._add_context(ocontext)
+                    self.update(
+                        origin,
+                        cascade=False,
+                        **{inherited: kwargs.pop(inherited)})
             default = self._get_default(metadata)
             for field_name, field_value in kwargs.items():
                 self._remove_field(context_id, field_name)

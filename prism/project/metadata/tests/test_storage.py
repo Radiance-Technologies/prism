@@ -191,8 +191,8 @@ class TestMetadataStorage(unittest.TestCase):
             0: {0}
         }
         expected.opam_dependencies = {
-            0: {1,
-                2}
+            0: [1,
+                2]
         }
         expected.ignore_path_regex = {
             0: {'gstew5_games/test_suite/.*'}
@@ -300,7 +300,10 @@ class TestMetadataStorage(unittest.TestCase):
             expected_base.opam_repos = new_field_value
             expected_override = copy(override)
             expected_override.opam_repos = new_field_value
-            storage.update(base_metadata, opam_repos=new_field_value)
+            storage.update(
+                base_metadata,
+                cascade=False,
+                opam_repos=new_field_value)
             updated_base = storage.populate(base_metadata)
             updated_override = storage.populate(override)
             self.assertEqual(updated_base, expected_base)
@@ -310,7 +313,10 @@ class TestMetadataStorage(unittest.TestCase):
             new_field_value = {'coq-mathcomp-ssreflect',
                                'coq-games'}
             expected_override.coq_dependencies = new_field_value
-            storage.update(override, coq_dependencies=new_field_value)
+            storage.update(
+                override,
+                cascade=False,
+                coq_dependencies=new_field_value)
             updated_base = storage.populate(base_metadata)
             updated_override = storage.populate(override)
             self.assertEqual(updated_base, expected_base)
@@ -319,7 +325,20 @@ class TestMetadataStorage(unittest.TestCase):
             # verify one can update an overridden attribute
             new_field_value = {'coq-mathcomp-ssreflect'}
             expected_base.coq_dependencies = new_field_value
-            storage.update(base_metadata, coq_dependencies=new_field_value)
+            storage.update(
+                base_metadata,
+                cascade=False,
+                coq_dependencies=new_field_value)
+            updated_base = storage.populate(base_metadata)
+            updated_override = storage.populate(override)
+            self.assertEqual(updated_base, expected_base)
+            self.assertEqual(updated_override, expected_override)
+        with self.subTest("update_cascade"):
+            # verify one can cascade an update to an inherited attribute
+            new_field_value = {'fake-coq-released'}
+            expected_base.opam_repos = new_field_value
+            expected_override.opam_repos = new_field_value
+            storage.update(override, cascade=True, opam_repos=new_field_value)
             updated_base = storage.populate(base_metadata)
             updated_override = storage.populate(override)
             self.assertEqual(updated_base, expected_base)
@@ -330,7 +349,10 @@ class TestMetadataStorage(unittest.TestCase):
             expected_novel = copy(expected_base)
             expected_novel.project_url = override.project_url
             expected_novel.commit_sha = "fake_test_sha"
-            storage.update(expected_novel, coq_dependencies=new_field_value)
+            storage.update(
+                expected_novel,
+                cascade=False,
+                coq_dependencies=new_field_value)
             updated_base = storage.populate(base_metadata)
             updated_novel = storage.populate(expected_novel)
             expected_novel.coq_dependencies = new_field_value
