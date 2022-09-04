@@ -12,7 +12,7 @@ from typing import Callable, Set
 import tqdm
 
 from prism.data.commit_map import Except, ProjectCommitUpdateMapper
-from prism.data.extract_cache import get_formula_from_metadata
+from prism.data.extract_cache import get_dependency_formula
 from prism.data.setup import create_default_switches
 from prism.project.base import SentenceExtractionMethod
 from prism.project.metadata.storage import MetadataStorage
@@ -69,8 +69,10 @@ def process_commit(
             coq_version = '8.10.2'
         print(f'Choosing "coq.{coq_version}" for {project.name}')
         # get a switch
-        dependency_formula = get_formula_from_metadata(
-            project.metadata,
+        project.infer_opam_dependencies()  # force inference
+        dependency_formula = get_dependency_formula(
+            project.opam_dependencies,
+            project.ocaml_version,
             coq_version)
         original_switch = project.opam_switch
         project.opam_switch = switch_manager.get_switch(
@@ -122,11 +124,21 @@ def main(root_path: PathLike, storage_path: PathLike) -> None:
         "Building projects")
     # Build projects in parallel
     results, metadata_storage = project_looper.update_map(30)
-    for p, result in results.items():
-        if isinstance(result, Except):
-            print(f"{type(result.exception)} encountered in project {p}:")
-            print(result.trace)
     storage_dir = Path(storage_path).parent
+    # report errors
+    with open(storage_dir / "build_error_log.txt") as f:
+        for p, result in results.items():
+            if isinstance(result, Except):
+                print(f"{type(result.exception)} encountered in project {p}:")
+                print(result.trace)
+                f.write(
+                    '\n'.join(
+                        [
+                            "###################################################",
+                            f"{type(result.exception)} encountered in project {p}:",
+                            result.trace
+                        ]))
+    # update metadata
     metadata_storage.dump(
         metadata_storage,
         storage_dir / "updated_metadata.yaml")
