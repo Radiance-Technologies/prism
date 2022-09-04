@@ -807,9 +807,19 @@ class HeuristicParser:
             return cls._glom_proofs(document.index, sentences, stats)
         else:
             if return_locations:
-                return sentences, [s.get_location(
-                    file_contents,
-                    document.abspath) for s in located_sentences]
+                start_idx = 0
+                newlines_so_far = 0
+                locs: List[SexpInfo.Loc] = []
+                for ls in located_sentences:
+                    loc = ls.get_location(
+                        file_contents,
+                        document.abspath,
+                        start_idx,
+                        newlines_so_far)
+                    locs.append(loc)
+                    start_idx = loc.end_charno
+                    newlines_so_far = loc.lineno_last
+                return sentences, locs
             else:
                 return sentences
 

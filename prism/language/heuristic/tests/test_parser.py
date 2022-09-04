@@ -6,6 +6,7 @@ import unittest
 from itertools import chain, repeat
 from pathlib import Path
 
+from prism.language.gallina.analyze import SexpInfo
 from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
 from prism.tests import _COQ_EXAMPLES_PATH
@@ -393,6 +394,45 @@ class TestHeuristicParser(unittest.TestCase):
         actual_stats = HeuristicParser._compute_sentence_statistics(
             [str(s) for s in sentences])
         self.assertEqual(actual_stats, expected_stats)
+
+    def test_parser_return_location(self):
+        """
+        Ensure the heuristic parser can return sentences with locs.
+        """
+        simple_file = self.test_files['simple']
+        _, locs = HeuristicParser.parse_sentences_from_file(
+            simple_file,
+            project_path=_COQ_EXAMPLES_PATH,
+            return_locations=True,
+            glom_proofs=False)
+        expected_loc_results = {
+            0: SexpInfo.Loc(
+                filename=str(simple_file),
+                lineno=14,
+                bol_pos=846,
+                lineno_last=16,
+                bol_pos_last=893,
+                beg_charno=846,
+                end_charno=946),
+            4: SexpInfo.Loc(  # About seq.
+                filename=str(simple_file),
+                lineno=26,
+                bol_pos=1237,
+                lineno_last=26,
+                bol_pos_last=1237,
+                beg_charno=1239,
+                end_charno=1248),
+            11: SexpInfo.Loc(  # trivial.
+                filename=str(simple_file),
+                lineno=32,
+                bol_pos=1317,
+                lineno_last=32,
+                bol_pos_last=1317,
+                beg_charno=1321,
+                end_charno=1328)
+        }
+        for i, v in expected_loc_results.items():
+            self.assertEqual(locs[i], v)
 
 
 class TestSerAPIParser(unittest.TestCase):

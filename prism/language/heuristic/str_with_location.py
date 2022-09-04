@@ -42,9 +42,12 @@ class StrWithLocation(str):
     instance might arise from replacing a substring of length 5 with a
     single character.
     """
-    _bol_matcher: ClassVar[re.Pattern] = re.compile(r"(?<=\n)[^\n]+$")
-    _bol_last_matcher: ClassVar[re.Pattern] = re.compile(
-        r"(?<=\n)[^\S\n]+(?=\S[^\n]*$)")
+    _bol_matcher: ClassVar[re.Pattern] = re.compile(
+        r"((?<=\n)[^\n](?=[^\n]*$))|(^[^\n](?=[^\n]*$))")
+    """
+    Pattern to match the character immediately following the last
+    newline as long as newline has non-newline characters after it.
+    """
 
     def __new__(
             cls,
@@ -193,15 +196,20 @@ class StrWithLocation(str):
         num_newlines_in_string = file_contents.count("\n", self.start, self.end)
         bol_match = self._bol_matcher.search(
             file_contents,
-            pos=start_idx,
-            endpos=self.start)
-        bol_pos = len(bol_match[0]) if bol_match is not None else 0
-        bol_last_match = self._bol_last_matcher.search(
+            pos=0,
+            endpos=self.start + 1)
+        if bol_match is not None:
+            bol_pos = bol_match.start()
+        else:
+            raise RuntimeError("This regex should match. Something's wrong.")
+        bol_last_match = self._bol_matcher.search(
             file_contents,
-            pos=self.start,
+            pos=0,
             endpos=self.end)
-        bol_pos_last = len(
-            bol_last_match[0]) if bol_last_match is not None else 0
+        if bol_last_match is not None:
+            bol_pos_last = bol_last_match.start()
+        else:
+            raise RuntimeError("This regex should match. Something's wrong.")
         return SexpInfo.Loc(
             filename=filename,
             lineno=num_newlines_before_string,
