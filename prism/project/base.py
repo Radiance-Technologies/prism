@@ -6,9 +6,11 @@ import os
 import pathlib
 import random
 from abc import ABC, abstractmethod
+from dataclasses import fields
 from enum import Enum, auto
 from functools import partialmethod, reduce
-from typing import List, NamedTuple, Optional, Tuple, Union
+from subprocess import CalledProcessError
+from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
 
 from seutil import bash
 
@@ -19,7 +21,8 @@ from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.strace import IQR, CoqContext, strace_build
 from prism.util.logging import default_log_level
-from prism.util.opam import OpamSwitch
+from prism.util.opam import OpamSwitch, PackageFormula
+from prism.util.opam.formula.package import LogicalPF
 
 logger: logging.Logger = logging.getLogger(__name__)
 logger.setLevel(default_log_level())
@@ -193,6 +196,22 @@ class Project(ABC):
         return self._ocaml_version
 
     @property
+    def opam_dependencies(self) -> List[str]:
+        """
+        Get the OPAM-installable dependencies of this project.
+
+        Returns
+        -------
+        List[str]
+            A list of serialized `PackageFormula` that must each be
+            satisfied by the project's `OpamSwitch` prior to building.
+        """
+        opam_deps = self.metadata.opam_dependencies
+        if opam_deps is None:
+            opam_deps = self.infer_opam_dependencies()
+        return opam_deps
+
+    @property
     def opam_switch(self) -> OpamSwitch:
         """
         Get the project's switch, which entails the build environment.
@@ -221,7 +240,9 @@ class Project(ABC):
         """
         Get the SerAPI options for parsing this project's files.
 
-        If None, then the SerAPI options have not yet been determined.
+        If None, then the SerAPI options have not yet been determined
+        and will be inferred automatically the next time the project is
+        built.
 
         Returns
         -------
@@ -356,67 +377,10 @@ class Project(ABC):
         Build the project.
         """
         if self.serapi_options is None:
-            _, rcode, stdout, stderr = self.build_and_get_iqr()
+            _, rcode, stdout, stderr = self.infer_serapi_options()
             return rcode, stdout, stderr
         else:
             return self._make("build", "Compilation")
-
-    def build_and_get_iqr(self) -> Tuple[str, int, str, str]:
-        """
-        Build project and get IQR options, simultaneously.
-
-        Invoking this function will replace any serapi_options already
-        present in the metadata.
-
-        Returns
-        -------
-        str
-            The IQR flags string that should be stored in serapi_options
-        int
-            The return code of the last-executed command
-        str
-            The total stdout of all commands run
-        str
-            The total stderr of all commands run
-        """
-        contexts: List[CoqContext] = []
-        stdout_out = ""
-        stderr_out = ""
-        env = self.opam_switch.environ
-        for cmd in self.build_cmd:
-            if "make" in cmd.lower() or "dune" in cmd.lower():
-                context, rcode_out, stdout, stderr = strace_build(
-                    cmd,
-                    workdir=self.path,
-                    env=env)
-                contexts += context
-            else:
-                r = bash.run(cmd, cwd=self.path, env=env)
-                rcode_out = r.returncode
-                stdout = r.stdout
-                stderr = r.stderr
-                logging.debug(
-                    f"Command {cmd} finished with return code {r.returncode}.")
-            stdout_out = os.linesep.join((stdout_out, stdout))
-            stderr_out = os.linesep.join((stderr_out, stderr))
-            # Emulate the behavior of _make where commands are joined by
-            # &&.
-            if rcode_out:
-                break
-
-        def or_(x, y):
-            return x | y
-
-        serapi_options = str(
-            reduce(
-                or_,
-                [c.iqr for c in contexts],
-                IQR(set(),
-                    set(),
-                    set(),
-                    self.path)))
-        self._update_metadata(serapi_options=serapi_options)
-        return serapi_options, rcode_out, stdout_out, stderr_out
 
     clean = partialmethod(_make, "clean", "Cleaning")
     """
@@ -543,6 +507,134 @@ class Project(ABC):
             counter += 1
         first_sentence_idx = random.randint(0, len(sentences) - 2)
         return sentences[first_sentence_idx : first_sentence_idx + 2]
+
+    def infer_metadata(
+            self,
+            fields_to_infer: Optional[Iterable[str]] = None) -> Dict[str,
+                                                                     Any]:
+        """
+        Try to infer any missing metadata.
+
+        Parameters
+        ----------
+        infer_fields : Optional[Iterable[str]], optional
+            Optional fields for which inference of new values should be
+            performed even if already defined, by default None.
+            The names should match attributes of `ProjectMetadata`.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The values for each newly inferred field.
+        """
+        if fields_to_infer is None:
+            fields_to_infer = set()
+        else:
+            fields_to_infer = set(fields_to_infer)
+        current_metadata = self.metadata
+        for f in fields(ProjectMetadata):
+            if (getattr(current_metadata,
+                        f.name) is None
+                    and f.name not in ProjectMetadata.immutable_fields):
+                fields_to_infer.add(f.name)
+        # if the order of field inference matters, manually pop such
+        # fields and infer them first before looping over the rest
+        inferred_fields = {}
+        for f in fields_to_infer:
+            # force an attribute error for non-existent fields
+            getattr(current_metadata, f)
+            try:
+                inferred_fields[f] = getattr(self, f'infer_{f}')()
+            except AttributeError:
+                raise NotImplementedError(
+                    f"Cannot infer metadata field named '{f}'")
+        return inferred_fields
+
+    def infer_opam_dependencies(self) -> List[str]:
+        """
+        Try to infer Opam-installable dependencies for the project.
+
+        Returns
+        -------
+        List[str]
+            A conjunctive list of package formulas specifying
+            dependencies that must be installed before the project is
+            built.
+
+        See Also
+        --------
+        PackageFormula : For more information about package formulas.
+        """
+        try:
+            formula = self.opam_switch.get_dependencies(self.path)
+        except CalledProcessError:
+            # TODO: try to infer dependencies by other means
+            formula = []
+        if isinstance(formula, PackageFormula):
+            if isinstance(formula, LogicalPF):
+                formula = formula.to_conjunctive_list()
+            else:
+                formula = [formula]
+        formula = [str(c) for c in formula]
+        self._update_metadata(opam_dependencies=formula)
+        return formula
+
+    def infer_serapi_options(self) -> Tuple[str, int, str, str]:
+        """
+        Build project and get IQR options, simultaneously.
+
+        Invoking this function will replace any serapi_options already
+        present in the metadata.
+
+        Returns
+        -------
+        str
+            The IQR flags string that should be stored in serapi_options
+        int
+            The return code of the last-executed command
+        str
+            The total stdout of all commands run
+        str
+            The total stderr of all commands run
+        """
+        contexts: List[CoqContext] = []
+        stdout_out = ""
+        stderr_out = ""
+        env = self.opam_switch.environ
+        for cmd in self.build_cmd:
+            if "make" in cmd.lower() or "dune" in cmd.lower():
+                context, rcode_out, stdout, stderr = strace_build(
+                    cmd,
+                    workdir=self.path,
+                    env=env)
+                contexts += context
+            else:
+                r = bash.run(cmd, cwd=self.path, env=env)
+                rcode_out = r.returncode
+                stdout = r.stdout
+                stderr = r.stderr
+                logging.debug(
+                    f"Command {cmd} finished with return code {r.returncode}.")
+            stdout_out = os.linesep.join((stdout_out, stdout))
+            stderr_out = os.linesep.join((stderr_out, stderr))
+            # Emulate the behavior of _make where commands are joined by
+            # &&.
+            if rcode_out:
+                break
+
+        def or_(x, y):
+            return x | y
+
+        serapi_options = str(
+            reduce(
+                or_,
+                [c.iqr for c in contexts],
+                IQR(set(),
+                    set(),
+                    set(),
+                    self.path)))
+        self._update_metadata(serapi_options=serapi_options)
+        return serapi_options, rcode_out, stdout_out, stderr_out
 
     install = partialmethod(_make, "install", "Installation")
     """

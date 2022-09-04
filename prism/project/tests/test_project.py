@@ -237,7 +237,7 @@ class TestProject(unittest.TestCase):
         # work its magic
         self.test_iqr_project.clean()
         original_metadata = self.test_iqr_project.metadata
-        output, rcode, stdout, stderr = self.test_iqr_project.build_and_get_iqr()
+        output, rcode, stdout, stderr = self.test_iqr_project.infer_serapi_options()
         if not os.path.exists("./test_logs"):
             os.makedirs("./test_logs")
         with open("./test_logs/test_build_and_get_iqr.txt", "wt") as f:
