@@ -894,8 +894,8 @@ class SerAPIParser(HeuristicParser):
             document: CoqDocument,
             _encoding: str = "utf-8",
             glom_proofs: bool = True,
-            glom_ltac: bool = False,
             return_locations: bool = False,
+            glom_ltac: bool = False,
             return_asts: bool = False,
             **kwargs) -> Union[List[str],
                                Tuple[List[str],
@@ -912,11 +912,11 @@ class SerAPIParser(HeuristicParser):
         glom_proofs : bool, optional
             A flag indicating whether or not proofs should be re-glommed
             after sentences are split, by default `True`.
+        return_locations : bool, optional
+            Currently ignored, by default False.
         glom_ltac : bool, optional
             Glom together contiguous regions of Ltac code,
             by default `False`.
-        return_locations : bool, optional
-            Currently ignored, by default False.
         return_asts: bool, optional
             If True, then also return asts. By default `False`.
         kwargs : Dict[str, Any]
