@@ -4,7 +4,7 @@ Provides utilities for working with OCaml package constraints.
 
 import enum
 import re
-from typing import Any, Dict, Mapping, Protocol, Tuple, TypeVar, Union
+from typing import Any, Dict, Mapping, Optional, Protocol, Tuple, TypeVar, Union
 
 from prism.util.abc_enum import ABCEnumMeta
 from prism.util.parse import Parseable, ParseError
@@ -79,6 +79,12 @@ class RelOp(Parseable, enum.Enum, metaclass=ABCEnumMeta):
     GT = enum.auto()
     GEQ = enum.auto()
 
+    def __call__(self, left: Any, right: Any) -> bool:
+        """
+        Apply the operator.
+        """
+        return self.evaluate(left, right)
+
     def __str__(self) -> str:  # noqa: D105
         if self == RelOp.EQ:
             result = "="
@@ -92,6 +98,24 @@ class RelOp(Parseable, enum.Enum, metaclass=ABCEnumMeta):
             result = ">"
         elif self == RelOp.GEQ:
             result = ">="
+        return result
+
+    def evaluate(self, left: Any, right: Any) -> bool:
+        """
+        Evaluate the arguments according to this relational operator.
+        """
+        if self.relop == RelOp.EQ:
+            result = left == right
+        elif self.relop == RelOp.NEQ:
+            result = left != right
+        elif self.relop == RelOp.LT:
+            result = left < right
+        elif self.relop == RelOp.LEQ:
+            result = left <= right
+        elif self.relop == RelOp.GT:
+            result = left > right
+        elif self.relop == RelOp.GEQ:
+            result = left >= right
         return result
 
     @classmethod
@@ -178,3 +202,48 @@ class Variable(str):
 AssignedVariables = Mapping[str, Union[bool, int, str]]
 
 FormulaT = TypeVar('FormulaT', 'Formula', Parseable)
+
+Value = Optional[Union[bool, str]]
+"""
+The result of reducing a filter.
+"""
+
+
+def value_to_bool(v: Value) -> bool:
+    """
+    Cast a `Value` to a Boolean.
+
+    Notes
+    -----
+    Based on ``opam/src/format/opamFilter.ml:value_bool`` with a default
+    of False.
+    """
+    if v is None:
+        return False
+    elif isinstance(v, str):
+        if v == "true":
+            return True
+        else:
+            return False
+    else:
+        return v
+
+
+def value_to_string(v: Value) -> str:
+    """
+    Cast a `Value` to a string (e.g., for version-order comparisons).
+
+    Notes
+    -----
+    Based on ``opam/src/format/opamFilter.ml:value_string`` with a
+    default of the empty string.
+    """
+    if v is None:
+        return ""
+    elif isinstance(v, bool):
+        if v:
+            return "true"
+        else:
+            return "false"
+    else:
+        return v
