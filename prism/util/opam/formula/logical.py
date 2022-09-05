@@ -5,65 +5,17 @@ Defines a generic class for conjunctive and disjunctive formulas.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import partialmethod
-from typing import (
-    Any,
-    Dict,
-    Generic,
-    Iterator,
-    List,
-    Optional,
-    Tuple,
-    Type,
-    Union,
-)
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Type, Union
 
-from prism.util.parse import Parseable
-
+from .binary import Binary
 from .common import FormulaT, LogOp
 
 
 @dataclass(frozen=True)
-class Logical(Parseable, Generic[FormulaT], ABC):
+class Logical(Binary[FormulaT, LogOp], ABC):
     """
-    A logical combination of two version formulae.
+    A logical combination of two formulae.
     """
-
-    left: FormulaT
-    logop: LogOp
-    right: FormulaT
-
-    def __post_init__(self) -> None:
-        """
-        Ensure conjunction has higher precedence than disjunction.
-        """
-        cls = type(self)
-        left = self.left
-        logop = self.logop
-        right = self.right
-        if isinstance(left,
-                      Logical) and (logop == LogOp.AND or logop == LogOp.OR
-                                    and left.logop == LogOp.OR):
-            # A | B & C incorrectly represented as (A | B) & C
-            # or
-            # A & B & C inefficiently represented as (A & B) & C
-            # or
-            # A | B | C inefficiently represented as (A | B) | C
-            # (less efficient short-circuiting during evaluations)
-            # Pivot!
-            object.__setattr__(self, 'left', left.left)
-            object.__setattr__(self, 'logop', left.logop)
-            object.__setattr__(self, 'right', cls(left.right, logop, right))
-            self.__post_init__()
-        elif isinstance(
-                right,
-                Logical
-        ) and self.logop == LogOp.AND and self.right.logop == LogOp.OR:
-            # A & B | C incorrectly represented as A & (B | C)
-            # Pivot!
-            object.__setattr__(self, 'left', cls(left, logop, right.left))
-            object.__setattr__(self, 'logop', right.logop)
-            object.__setattr__(self, 'right', right.right)
-            self.__post_init__()
 
     def __iter__(self) -> Iterator['FormulaT']:
         """
@@ -71,8 +23,12 @@ class Logical(Parseable, Generic[FormulaT], ABC):
         """
         yield from self.to_conjunctive_list()
 
-    def __str__(self) -> str:  # noqa: D105
-        return f"{self.left} {self.logop} {self.right}"
+    @property
+    def logop(self) -> LogOp:
+        """
+        Get the binary logical operator.
+        """
+        return self.op
 
     def _to_list(
         self,
@@ -180,25 +136,6 @@ class Logical(Parseable, Generic[FormulaT], ABC):
         The list of implicitly joined formulas.
         If `disjunctives` was provided, then it is returned.
     """
-
-    @classmethod
-    def _chain_parse(cls,
-                     input: str,
-                     pos: int) -> Tuple['Logical[FormulaT]',
-                                        int]:
-        """
-        Parse a binary logical combination of package formulae.
-
-        A logical combination matches the following grammar::
-
-            <Logical> ::= <Formula> <LogOp> <Formula>
-        """
-        left, pos = cls.formula_type()._chain_parse(input, pos)
-        pos = cls._lstrip(input, pos)
-        logop, pos = LogOp._chain_parse(input, pos)
-        pos = cls._lstrip(input, pos)
-        right, pos = cls.formula_type()._chain_parse(input, pos)
-        return cls(left, logop, right), pos
 
     @classmethod
     @abstractmethod
