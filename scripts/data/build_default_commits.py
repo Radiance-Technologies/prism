@@ -157,7 +157,8 @@ def main(
         projects,
         get_commit_iterator_func(default_commits),
         get_process_commit_func(switch_manager),
-        "Building projects")
+        "Building projects",
+        terminate_on_except=False)
     # Build projects in parallel
     results, metadata_storage = project_looper.update_map(30)
     storage_dir = Path(storage_path).parent
