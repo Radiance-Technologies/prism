@@ -92,11 +92,13 @@ class Version(Parseable, abc.ABC):
              str(self)])
 
     @classmethod
-    def _chain_parse(cls,
-                     input: str,
-                     pos: int,
-                     require_quotes: bool = False) -> Tuple['Version',
-                                                            int]:
+    def _chain_parse(
+            cls,
+            input: str,
+            pos: int,
+            require_quotes: bool = False,
+            check_syntax: bool = True) -> Tuple['Version',
+                                                int]:
         if cls == Version:
             cls = OCamlVersion
         begpos = pos
@@ -110,7 +112,7 @@ class Version(Parseable, abc.ABC):
             pos = pos + len(version)
             if require_quotes:
                 pos = cls._expect(input, pos, '"', begpos)
-            parsed = cls._exhaustive_parse(version)
+            parsed = cls._exhaustive_parse(version, check_syntax=check_syntax)
             pos = cls._lstrip(input, pos)
         else:
             raise ParseError(Version, input[begpos :])
@@ -118,7 +120,10 @@ class Version(Parseable, abc.ABC):
 
     @classmethod
     @abstractmethod
-    def _exhaustive_parse(cls, input: str) -> 'Version':
+    def _exhaustive_parse(
+            cls,
+            input: str,
+            check_syntax: bool = True) -> 'Version':
         """
         Consume the entire input when parsing the version.
         """
@@ -160,7 +165,8 @@ class Version(Parseable, abc.ABC):
             input: str,
             exhaustive: bool = True,
             lstrip: bool = False,
-            require_quotes: bool = False) -> 'Version':
+            require_quotes: bool = False,
+            check_syntax: bool = True) -> 'Version':
         """
         Parse a version string with or without enclosing quotes.
         """
@@ -168,7 +174,8 @@ class Version(Parseable, abc.ABC):
             input,
             exhaustive,
             lstrip,
-            require_quotes=require_quotes)
+            require_quotes=require_quotes,
+            check_syntax=check_syntax)
 
 
 @dataclass(frozen=True)
@@ -232,8 +239,11 @@ class OpamVersion(Version):
                             VersionString) else int(f) for f in self.fields)
 
     @classmethod
-    def _exhaustive_parse(cls, version: str) -> Version:  # noqa: D102
-        if cls._version_syntax.match(version) is None:
+    def _exhaustive_parse(  # noqa: D102
+            cls,
+            version: str,
+            check_syntax: bool = True) -> 'OpamVersion':
+        if check_syntax and cls._version_syntax.match(version) is None:
             raise ParseError(cls, version)
 
         sequence = [f for f in cls._sequence_syntax.split(version) if f]
@@ -346,7 +356,10 @@ class OCamlVersion(Version):
         return OpamVersion.parse(str(self)).key
 
     @classmethod
-    def _exhaustive_parse(cls, version: str) -> Version:  # noqa: D102
+    def _exhaustive_parse(
+            cls,
+            version: str,
+            check_syntax: bool = True) -> Version:  # noqa: D102
         prerelease = None
         try:
             (major,
@@ -356,7 +369,7 @@ class OCamlVersion(Version):
              sep,
              extra) = cls._version_syntax.match(version).groups()
         except (TypeError, AttributeError):
-            return OpamVersion._exhaustive_parse(version)
+            return OpamVersion._exhaustive_parse(version, check_syntax)
         if sep == "~":
             if extra is None:
                 prerelease = ""
