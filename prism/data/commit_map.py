@@ -314,14 +314,16 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
                                    Optional[T]],
                                   T],
             task_description: Optional[str] = None,
-            wait_on_interrupt: bool = True):
+            wait_on_interrupt: bool = True,
+            terminate_on_except: bool = True):
         super().__init__(
             projects,
             get_commit_iterator,
             functools.partial(_commit_fmap_and_update,
                               commit_fmap),
             task_description,
-            wait_on_interrupt)
+            wait_on_interrupt,
+            terminate_on_except)
 
     def __call__(self,  # noqa: D102
                  max_workers: int = 1) -> Dict[str,
