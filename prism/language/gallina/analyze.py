@@ -6,14 +6,11 @@ at https://github.com/EngineeringSoftware/roosterize/.
 """
 from __future__ import annotations
 
-import collections
 import functools
 import logging
 import re
 from dataclasses import asdict, dataclass
-from typing import Any, Callable, Counter, List, Optional, Set, Tuple, Union
-
-from deprecated.sphinx import deprecated
+from typing import Any, Callable, List, Optional, Set, Tuple, Union
 
 from prism.language.gallina.util import ParserUtils
 from prism.language.sexp import IllegalSexpOperationException, SexpNode
@@ -104,8 +101,16 @@ class SexpInfo:
         filename: str
         lineno: int
         bol_pos: int
+        """
+        The unencoded character count of the beginning position of the
+        first line of this located object.
+        """
         lineno_last: int
         bol_pos_last: int
+        """
+        The unencoded character count of the beginning position of the
+        last line of this located object.
+        """
         beg_charno: int
         end_charno: int
 
@@ -461,6 +466,28 @@ class SexpAnalyzer:
 
     logger: logging.Logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
+
+    _ltac_regex: re.Pattern[str] = re.compile(
+        "|".join(
+            [
+                "VernacAbort",
+                "VernacAbortAll",
+                "VernacRestart",
+                "VernacUndo",
+                "VernacUndoTo",
+                "VernacFocus",
+                "VernacUnfocus",
+                "VernacUnfocused",
+                "VernacBullet",
+                "VernacSubproof",
+                "VernacEndSubproof",
+                "VernacShow",
+                "VernacCheckGuard",
+                "VernacProof",
+                "VernacProofMode",
+                "VernacExtend",
+                "VernacEndProof"
+            ]))
 
     @classmethod
     def analyze_vernac(cls, sexp: SexpNode) -> SexpInfo.Vernac:
@@ -999,8 +1026,8 @@ class SexpAnalyzer:
                     unicode_offsets)
 
             return SexpInfo.Loc(**kwargs)
-        except IllegalSexpOperationException:
-            raise SexpAnalyzingException(sexp)
+        except IllegalSexpOperationException as e:
+            raise SexpAnalyzingException(sexp) from e
 
     @classmethod
     def analyze_sertok_sentences(
@@ -1198,313 +1225,25 @@ class SexpAnalyzer:
             raise SexpAnalyzingException(sexp)
 
     @classmethod
-    def is_vernac(cls, sexp: SexpNode) -> bool:
+    def is_ltac(cls, sexp: SexpNode) -> bool:
         """
-        Determine if an s-expression represents a Vernacular command.
-
-        We're looking for the following two cases:
-
-        ( v (VernacExpr()  (   <TYPE>  ... )) )
-          0 1  1,0     1,1 1,2 1,2,0
-        ( v (VernacExpr()  <TYPE> ) )
-                           1,2
-
-        or
-
-        v_child
-        ( v (VernacFail ( ( v (VernacExpr () ( ...
-          0 1  1,0
+        Determine whether the given sexp contains Ltac (see below).
 
         Parameters
         ----------
         sexp : SexpNode
-            A parsed s-expression node representing a Vernacular command
-            term.
-            The structure should conform to the following format:
-            <sexp_vernac> = ( ( v (VernacExpr (...) ( <TYPE>  ... )) )
-                                ^----------vernac_sexp-----------^
-                            <sexp_loc> )
+            An s-expression, presumed to be correspond to a valid AST.
 
         Returns
         -------
         bool
-            True if `sexp` represents a Vernacular command
+            True if the s-expression contains Ltac, False otherwise.
+
+        Notes
+        -----
+        This function does not simply detect Ltac in a strict sense but
+        also determines whether the given input corresponds to a
+        sentence that would occur while in proof mode (such as
+        ``Proof.``, ``Qed.``, or a brace/bullet).
         """
-        try:
-            if len(sexp) != 2:
-                return False
-            v_present = sexp[0][0].content == "v"
-            if v_present and (sexp[0][1][0].content == "VernacExpr"
-                              or sexp[0][1][0].content == "VernacFail"):
-                return True
-            elif sexp[
-                    0].content == "VernacExpr" and sexp[1][0] != "VernacExtend":
-                return True
-            # elif sexp[0].content == "VernacFail" and sexp[1]
-            else:
-                return False
-        except IllegalSexpOperationException:
-            return False
-
-    @classmethod
-    @deprecated(reason="This is not used anywhere.", version="0.1.0")
-    def find_i_pat_ids(cls, sexp: SexpNode) -> Counter[str]:
-        """
-        Do something TBD. TODO.
-
-        _extended_summary_
-
-        Parameters
-        ----------
-        sexp : SexpNode
-            _description_
-
-        Returns
-        -------
-        Counter[str]
-            _description_
-
-        Raises
-        ------
-        SexpAnalyzingException
-            _description_
-        """
-        try:
-            i_pat_ids: Counter[str] = collections.Counter()
-
-            def match_i_pad_id_recur(
-                    sexp_part: SexpNode) -> SexpNode.RecurAction:
-                nonlocal i_pat_ids
-                try:
-                    # ( IPatId ( Id <pat_id> ))
-                    #   0      1 10 11
-                    if sexp_part[0].content == "IPatId" and sexp_part[1][
-                            0].content == "Id":
-                        i_pat_ids[sexp_part[1][1].content] += 1
-                        return SexpNode.RecurAction.StopRecursion
-                    else:
-                        return SexpNode.RecurAction.ContinueRecursion
-                    # end if
-                except (IllegalSexpOperationException, SexpAnalyzingException):
-                    return SexpNode.RecurAction.ContinueRecursion
-                # end try
-
-            # end def
-
-            sexp.apply_recur(match_i_pad_id_recur)
-
-            return i_pat_ids
-        except IllegalSexpOperationException:
-            raise SexpAnalyzingException(sexp)
-
-    @classmethod
-    @deprecated(reason="This is not used anywhere.", version="0.1.0")
-    def cut_lemma_backend_sexp(cls, sexp: SexpNode) -> SexpNode:
-        """
-        Do something TBD. TODO.
-
-        _extended_summary_
-
-        Parameters
-        ----------
-        sexp : SexpNode
-            _description_
-
-        Returns
-        -------
-        SexpNode
-            _description_
-        """
-
-        def pre_children_modify(
-            current: SexpNode) -> Tuple[Optional[SexpNode],
-                                        SexpNode.RecurAction]:
-            while True:
-                no_change = True
-
-                # TODO: Different Coq.Init names, experiment removing
-                # them at later phases.
-
-                # ( ( v <X> ) ( loc () ) ) -> <X>
-                if (current.is_list() and len(current) == 2
-                        and current[0].is_list() and len(current[0]) == 2
-                        and current[0][0].is_string()
-                        and current[0][0].content == "v"
-                        and current[1].is_list() and len(current[1]) == 2
-                        and current[1][0].is_string()
-                        and current[1][0].content == "loc"
-                        and current[1][1].is_list()
-                        and len(current[1][1]) == 0):
-                    # then
-                    current = current[0][1]
-                    no_change = False
-                # end if
-
-                # ( <A> <X> ) -> <X>,
-                # where <A> in [Id, ConstRef, Name, GVar]
-                if (current.is_list() and len(current) == 2
-                        and current[0].is_string()
-                        and current[0].content in ["Id",
-                                                   "ConstRef",
-                                                   "Name",
-                                                   "GVar"]):
-                    # then
-                    current = current[1]
-                    no_change = False
-                # end if
-
-                # # ( <A> ( <Xs> ) <Ys> ) -> ( <Ys> ),
-                # # where <A> in [MPfile]
-                # if (current.is_list() and len(current) >= 2
-                #         and current[0].is_string()
-                #         and current[0].content in ["MPfile"]
-                #         and current[1].is_list()):
-                #     # then
-                #     del current.get_children()[0 : 2]
-                #     no_change = False
-                # # end if
-
-                # # ( <A> ( <Xs> ) <Ys> ) -> ( <Xs> <Ys> ),
-                # # where <A> in [MPdot, DirPath, Constant, MulInd]
-                # if (current.is_list() and len(current) >= 2
-                #         and current[0].is_string()
-                #         and current[0].content in ["MPdot",
-                #                                    "DirPath",
-                #                                    "Constant",
-                #                                    "MutInd"]
-                #         and current[1].is_list()):
-                #     # then
-                #     current[1].get_children().extend(current[2 :])
-                #     current = current[1]
-                #     no_change = False
-                # # end if
-
-                # ( <A> ( <Xs> ) <Ys> )
-                #     -> <Ys[-1]>, or ( <A> ( <Xs> ) ) -> <Xs[-1]>,
-                # where <A> in
-                # [MPdot, DirPath, Constant, MulInd, MPfile]
-                if (current.is_list() and len(current) >= 2
-                        and current[0].is_string()
-                        and current[0].content in ["MPdot",
-                                                   "DirPath",
-                                                   "Constant",
-                                                   "MutInd",
-                                                   "MPfile"]
-                        and current[1].is_list() and len(current[1]) > 0):
-                    # then
-                    if len(current) == 2:
-                        current = current[1][-1]
-                    else:
-                        current = current[-1]
-                    # end if
-                    no_change = False
-                # end if
-
-                # ( <A> <X> ()) -> <X>, where <A> in [GRef]
-                if (current.is_list() and len(current) == 3
-                        and current[0].is_string()
-                        and current[0].content in ["GRef"]
-                        and current[2].is_list() and len(current[2]) == 0):
-                    # then
-                    current = current[1]
-                    no_change = False
-                # end if
-
-                # # ( <A> <X> ( <Ys> ) ) -> ( <X> <Ys> ),
-                # # where <A> in [GApp]
-                # if (current.is_list() and len(current) == 3
-                #         and current[0].is_string()
-                #         and current[0].content in ["GApp"]
-                #         and current[2].is_list()):
-                #     # then
-                #     current = (SexpList([current[1]]
-                #                + current[2].get_children()))
-                #     no_change = False
-                # # end if
-
-                # ( IndRef ( ( <Xs> ) <n> ) ) -> <Xs[-1]>
-                if (current.is_list() and len(current) == 2
-                        and current[0].is_string()
-                        and current[0].content == "IndRef"
-                        and current[1].is_list() and len(current[1]) == 2
-                        and current[1][0].is_list() and len(current[1][0]) > 0):
-                    # then
-                    current = current[1][0][-1]
-                    no_change = False
-                # end if
-
-                # ( ConstructRef ( ( ( <Xs> ) <n> ) <m> ) ) -> <Xs[-1]>
-                if (current.is_list() and len(current) == 2
-                        and current[0].is_string()
-                        and current[0].content == "ConstructRef"
-                        and current[1].is_list() and len(current[1]) == 2
-                        and current[1][0].is_list() and len(current[1][0]) == 2
-                        and current[1][0][0].is_list()
-                        and len(current[1][0][0]) > 0):
-                    # then
-                    current = current[1][0][0][-1]
-                    no_change = False
-                # end if
-
-                if no_change:
-                    break
-            # end while
-
-            # ( GProd . <X> ... ) -> ( GProd . ... )
-            if (current.is_list() and len(current) >= 3
-                    and current[0].is_string()
-                    and current[0].content == "GProd"):
-                # then
-                del current.get_children()[2]
-            # end if
-
-            return current, SexpNode.RecurAction.ContinueRecursion
-
-        # end def
-
-        sexp = sexp.modify_recur(pre_children_modify)
-
-        return sexp
-
-    @classmethod
-    @deprecated(reason="This is not used anywhere.", version="0.1.0")
-    def split_lemma_backend_sexp(cls,
-                                 sexp: SexpNode) -> Tuple[Optional[SexpNode],
-                                                          SexpNode]:
-        """
-        Do something TBD. TODO.
-
-        _extended_summary_
-
-        Parameters
-        ----------
-        sexp : SexpNode
-            _description_
-
-        Returns
-        -------
-        Tuple[Optional[SexpNode], SexpNode]
-            _description_
-        """
-        last_gprod_node: Optional[SexpNode] = None
-        first_non_gprod_node: SexpNode = None
-
-        def find_first_non_gprod(sexp: SexpNode):
-            nonlocal last_gprod_node, first_non_gprod_node
-            if (sexp.is_list() and len(sexp) >= 2 and sexp[0].is_string()
-                    and sexp[0].content == "GProd"):
-                # then
-                last_gprod_node = sexp
-                find_first_non_gprod(sexp[-1])
-            else:
-                first_non_gprod_node = sexp
-                return
-            # end if
-
-        # end def
-
-        find_first_non_gprod(sexp)
-
-        # TODO: return a list of the GProds instead of tree, currently
-        # set to None
-        return None, first_non_gprod_node
+        return cls._ltac_regex.search(str(sexp)) is not None

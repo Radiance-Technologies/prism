@@ -7,7 +7,9 @@ at https://github.com/EngineeringSoftware/roosterize/.
 import copy
 import re
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
+
+from prism.util.radpytools.dataclasses import default_field
 
 from ..language.id import LanguageId
 from ..language.token import Token
@@ -24,7 +26,7 @@ class VernacularSentence:
         List of tokens present in the sentence
     """
 
-    tokens: Optional[List[Token]] = None
+    tokens: List[Token] = default_field(list())
 
     def __copy__(self):
         """
@@ -39,7 +41,7 @@ class VernacularSentence:
 
     def __str__(self) -> str:
         """
-        Return the minimal str representation of the sentence.
+        Return the minimal `str` representation of the sentence.
 
         Returns
         -------
@@ -73,6 +75,22 @@ class VernacularSentence:
             return LanguageId.Vernac
         # end if
 
+    def concat(self, *others: 'VernacularSentence') -> 'VernacularSentence':
+        """
+        Concatenate this sentence with another.
+
+        Returns
+        -------
+        VernacularSentence
+            A sentence comprising the tokens of this sentence followed
+            by the tokens of the provided sentences in order of their
+            appearance.
+        """
+        tokens = list(self.tokens)
+        for other in others:
+            tokens.extend(other.tokens)
+        return VernacularSentence(tokens)
+
     def str_with_space(self) -> str:
         """
         Get a string representation of the tokens in the sentence.
@@ -82,7 +100,7 @@ class VernacularSentence:
         str
             String representation of tokens in sentence
         """
-        return "".join([t.str_with_space() for t in self.tokens])
+        return "".join([t.str_with_space() for t in self.tokens]).strip()
 
     def str_minimal_whitespace(self) -> str:
         """

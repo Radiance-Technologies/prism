@@ -7,13 +7,20 @@ import shutil
 import unittest
 from pathlib import Path
 
-from prism.data.build_cache import CoqProjectBuildCache, ProjectCommitData
+from prism.data.build_cache import (
+    CoqProjectBuildCache,
+    ProjectBuildEnvironment,
+    ProjectBuildResult,
+    ProjectCommitData,
+)
 from prism.data.dataset import CoqProjectBaseDataset
 from prism.data.extract_cache import extract_cache, extract_vernac_commands
 from prism.project.base import SentenceExtractionMethod
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
 from prism.tests import _PROJECT_EXAMPLES_PATH
+from prism.util.opam import OpamAPI
+from prism.util.swim import SwitchManager
 
 
 class TestExtractCache(unittest.TestCase):
@@ -30,6 +37,7 @@ class TestExtractCache(unittest.TestCase):
         Set up an on-disk cache to share among all unit tests.
         """
         cls.cache = CoqProjectBuildCache(cls.CACHE_DIR)
+        cls.swim = SwitchManager([OpamAPI.active_switch])
         cls.storage = MetadataStorage.load(
             _PROJECT_EXAMPLES_PATH / "project_metadata.yml")
         cls.dir_list = [
@@ -73,8 +81,13 @@ class TestExtractCache(unittest.TestCase):
         coq_float = self.dataset.projects['float']
         coq_float.git.checkout(self.float_head)
         coq_version = coq_float.coq_version
-        dummy_float_data = ProjectCommitData(coq_float.metadata,
-                                             {})
+        dummy_float_data = ProjectCommitData(
+            coq_float.metadata,
+            {},
+            ProjectBuildEnvironment(OpamAPI.active_switch.export()),
+            ProjectBuildResult(0,
+                               "",
+                               ""))
         self.cache.insert(dummy_float_data)
         coq_float.git.checkout(coq_float.reset_head)
         self.assertEqual(coq_float.commit_sha, coq_float.reset_head)
@@ -98,11 +111,13 @@ class TestExtractCache(unittest.TestCase):
                 self.logger.debug(f"Project folder: {project.dir_abspath}")
                 continue
             project: ProjectRepo
-            extract_cache(self.cache,
-                          project,
-                          head,
-                          lambda x: {},
-                          coq_version)
+            extract_cache(
+                self.cache,
+                self.swim,
+                project,
+                head,
+                lambda x: {},
+                coq_version)
             self.logger.debug(f"Success {project_name}")
         # assert that the other float commit was not checked out
         self.assertEqual(coq_float.commit_sha, coq_float.reset_head)

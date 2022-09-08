@@ -9,7 +9,6 @@ from typing import Dict, List, Optional
 
 from prism.interface.coq.exception import CoqExn
 from prism.interface.coq.serapi import Goal, Goals, Hypothesis, SerAPI
-from prism.interface.coq.util import normalize_spaces
 from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.parser import HeuristicParser
 from prism.language.sexp.list import SexpList
@@ -17,6 +16,7 @@ from prism.language.sexp.node import SexpNode
 from prism.language.sexp.parser import SexpParser
 from prism.language.sexp.string import SexpString
 from prism.tests import _COQ_EXAMPLES_PATH
+from prism.util.string import normalize_spaces
 
 
 def omit_locs(sexp: SexpNode) -> SexpNode:

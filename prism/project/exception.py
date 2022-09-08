@@ -2,6 +2,8 @@
 Defines exceptions related to project management.
 """
 
+from typing import Tuple, Union
+
 
 class DirHasNoCoqFiles(Exception):
     """
@@ -21,4 +23,20 @@ class ProjectBuildError(Exception):
     Also raised when a project fails to clean or install.
     """
 
-    pass
+    def __init__(
+            self,
+            msg: str,
+            return_code: int,
+            stdout: str,
+            stderr: str) -> None:
+        super().__init__()
+        self.msg = msg
+        self.return_code = return_code
+        self.stdout = stdout
+        self.stderr = stderr
+
+    def __reduce__(self) -> Union[str, Tuple[str, int, str, str]]:  # noqa: D105
+        return ProjectBuildError, (self.msg, self.return_code, self.stdout, self.stderr)
+
+    def __str__(self) -> str:  # noqa: D105
+        return self.msg

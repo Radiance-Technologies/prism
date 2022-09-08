@@ -6,6 +6,7 @@ import re
 from functools import partialmethod
 from typing import Iterable, List, Optional, Set, Tuple
 
+from prism.language.heuristic.str_with_location import StrWithLocation
 from prism.util.re import regex_from_options
 
 
@@ -425,6 +426,9 @@ class ParserUtils:
     """
     Used to define logical paths of loaded files and libraries.
     """
+    sentence_splitter: re.Pattern = re.compile(r"(\(\*|\*\))")
+    brace_splitter: re.Pattern = re.compile(r"^\s*({|})")
+    bullet_splitter: re.Pattern = re.compile(r"^\s*(-+|\++|\*+)")
 
     @classmethod
     def _is_command_type(
@@ -443,13 +447,17 @@ class ParserUtils:
         return re.match(command_regex, sentence) is not None
 
     @staticmethod
-    def _strip_comments(file_contents: str, encoding: str = 'utf-8') -> str:
+    def _strip_comments(
+            file_contents: 'StrWithLocation',
+            encoding: str = 'utf-8') -> 'StrWithLocation':
         # comments can be nested, so a single regex cannot be used
         # to detect this recursive structure.
         # Instead, split on comment boundaries and manually match
         # openers and closers.
         comment_depth = 0
-        comment_delimited = re.split(r"(\(\*|\*\))", file_contents)
+        comment_delimited = StrWithLocation.re_split(
+            ParserUtils.sentence_splitter,
+            file_contents)
         str_no_comments = []
         for segment in comment_delimited:
             if segment == '(*':
@@ -459,7 +467,7 @@ class ParserUtils:
             if segment == '*)':
                 if comment_depth > 0:
                     comment_depth -= 1
-        str_no_comments = ''.join(str_no_comments)
+        str_no_comments = StrWithLocation().join(str_no_comments)
         return str_no_comments
 
     defines_tactic = partialmethod(_is_command_type, tactic_definers)
@@ -637,21 +645,38 @@ class ParserUtils:
 
         Returns
         -------
-        stripped : str
+        stripped : Union[str, 'StrWithLocation']
             The sentence stripped of its leading attribute.
-        attribute : Optional[str]
+        attribute : Optional[Union[str, 'StrWithLocation']]
             The leading attribute or None if there is no attribute.
         """
-        attribute = re.match(ParserUtils.attributes, sentence)
-        if attribute is not None:
-            attribute = attribute.group()
-            stripped = re.split(
-                ParserUtils.attributes,
-                sentence,
-                maxsplit=1)[1].lstrip()
-            return stripped, attribute
-        else:
-            return sentence, attribute
+        if isinstance(sentence, str) and not hasattr(sentence, 'indices'):
+            attribute = re.match(ParserUtils.attributes, sentence)
+            if attribute is not None:
+                attribute = attribute.group()
+                stripped = re.split(
+                    ParserUtils.attributes,
+                    sentence,
+                    maxsplit=1)[1].lstrip()
+                return stripped, attribute
+            else:
+                return sentence, attribute
+        elif isinstance(sentence, StrWithLocation):
+            attribute = re.match(ParserUtils.attributes, sentence)
+            if attribute is None:
+                attribute = StrWithLocation()
+            else:
+                attribute = StrWithLocation(
+                    attribute.group(),
+                    sentence.indices[attribute.start(): attribute.end()])
+            if attribute:
+                stripped = StrWithLocation.re_split(
+                    ParserUtils.attributes,
+                    sentence,
+                    maxsplit=1)[1].lstrip()
+                return stripped, attribute
+            else:
+                return sentence, attribute
 
     @classmethod
     def strip_attributes(cls, sentence: str) -> Tuple[str, List[str]]:
@@ -660,14 +685,14 @@ class ParserUtils:
 
         Returns
         -------
-        stripped : str
+        stripped : Union[str, 'StrWithLocation']
             The sentence stripped of its leading attributes.
-        attributes : List[str]
+        attributes : List[Union[str, 'StrWithLocation']]
             The stripped attributes in order of appearance.
         """
         attributes = []
         stripped, attribute = ParserUtils.strip_attribute(sentence)
-        while attribute is not None:
+        while attribute:
             attributes.append(attribute)
             sentence = stripped
             stripped, attribute = ParserUtils.strip_attribute(sentence)
@@ -678,29 +703,40 @@ class ParserUtils:
         """
         Strip any control commands from the start of the sentence.
         """
-        if re.match(ParserUtils.controllers, sentence) is not None:
-            return re.split(
-                ParserUtils.controllers,
-                sentence,
-                maxsplit=1)[1].lstrip()
-        else:
-            return sentence
+        if isinstance(sentence, str):
+            if re.match(ParserUtils.controllers, sentence) is not None:
+                return re.split(
+                    ParserUtils.controllers,
+                    sentence,
+                    maxsplit=1)[1].lstrip()
+            else:
+                return sentence
+        elif isinstance(sentence, StrWithLocation):
+            if re.match(ParserUtils.controllers, sentence) is not None:
+                return StrWithLocation.re_split(
+                    ParserUtils.controllers,
+                    sentence,
+                    maxsplit=1)[-1].lstrip()
+            else:
+                return sentence
 
     @staticmethod
-    def split_brace(sentence: str) -> Tuple[str, str]:
+    def split_brace(
+        sentence: 'StrWithLocation') -> Tuple['StrWithLocation',
+                                              'StrWithLocation']:
         """
         Split the bullets from the start of a sentence.
 
         Parameters
         ----------
-        sentence : str
+        sentence : 'StrWithLocation'
             A sentence.
 
         Returns
         -------
-        bullet : str
+        bullet : 'StrWithLocation'
             The brace or an empty string if no bullets are found.
-        remainder : str
+        remainder : 'StrWithLocation'
             The rest of the sentence after the bullet.
 
         Notes
@@ -709,30 +745,36 @@ class ParserUtils:
         document based upon ending periods.
         Thus we assume that `sentence` concludes with a period.
         """
-        bullet_re = re.split(r"^\s*(\{|\})", sentence, maxsplit=1)
+        bullet_re = StrWithLocation.re_split(
+            ParserUtils.brace_splitter,
+            sentence,
+            maxsplit=1)
         if len(bullet_re) > 1:
             # throw away empty first token
             # by structure of regex, there can be only 2 sections
             return bullet_re[1], bullet_re[2]
         else:
-            return "", sentence
+            return StrWithLocation(), sentence
 
     @staticmethod
-    def split_braces_and_bullets(sentence: str) -> Tuple[List[str], str]:
+    def split_braces_and_bullets(
+        sentence: 'StrWithLocation'
+    ) -> Tuple[List['StrWithLocation'],
+               'StrWithLocation']:
         """
         Split braces and bullets from the start of a sentence.
 
         Parameters
         ----------
-        sentence : str
+        sentence : StrWithLocation
             A sentence.
 
         Returns
         -------
-        braces_and_bullets : List[str]
+        braces_and_bullets : List[StrWithLocation]
             The braces or bullets.
             If none are found, then an empty list is returned.
-        remainder : str
+        remainder : StrWithLocation
             The rest of the sentence after the braces and bullets.
 
         Notes
@@ -754,20 +796,22 @@ class ParserUtils:
         return braces_and_bullets, sentence.lstrip()
 
     @staticmethod
-    def split_bullet(sentence: str) -> Tuple[str, str]:
+    def split_bullet(
+        sentence: 'StrWithLocation') -> Tuple['StrWithLocation',
+                                              'StrWithLocation']:
         """
         Split a bullet from the start of a sentence.
 
         Parameters
         ----------
-        sentence : str
+        sentence : 'StrWithLocation'
             A sentence.
 
         Returns
         -------
-        bullet : str
+        bullet : 'StrWithLocation'
             The bullet or an empty string if no bullets are found.
-        remainder : str
+        remainder : 'StrWithLocation'
             The rest of the sentence after the bullet.
 
         Notes
@@ -776,10 +820,13 @@ class ParserUtils:
         document based upon ending periods.
         Thus we assume that `sentence` concludes with a period.
         """
-        bullet_re = re.split(r"^\s*(-+|\++|\*+)", sentence, maxsplit=1)
+        bullet_re = StrWithLocation.re_split(
+            ParserUtils.bullet_splitter,
+            sentence,
+            maxsplit=1)
         if len(bullet_re) > 1:
             # throw away empty first token
             # by structure of regex, there can be only 2 sections
             return bullet_re[1], bullet_re[2]
         else:
-            return "", sentence
+            return StrWithLocation(), sentence

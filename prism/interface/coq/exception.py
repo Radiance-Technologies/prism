@@ -2,6 +2,8 @@
 Exceptions related to interacting with Coq through SerAPI.
 """
 
+from typing import Tuple, Union
+
 
 class CoqExn(Exception):
     """
@@ -19,14 +21,17 @@ class CoqExn(Exception):
         The full S-expression containing the error yielded from SerAPI.
         """
 
+    def __reduce__(self) -> Union[str, Tuple[str, str]]:  # noqa: D105
+        return CoqExn, (self.msg, self.full_sexp)
+
+    def __repr__(self) -> str:  # noqa: D105
+        return str(self)
+
     def __str__(self) -> str:
         """
         Get the Coq error message.
         """
         return self.msg
-
-    def __repr__(self) -> str:  # noqa: D105
-        return str(self)
 
 
 class CoqTimeout(Exception):

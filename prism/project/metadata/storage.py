@@ -5,12 +5,14 @@ Defines central storage/retrieval mechanisms for project metadata.
 import os
 from dataclasses import dataclass, fields
 from functools import partialmethod
+from itertools import chain
 from typing import (
     Any,
     Callable,
     ClassVar,
     Dict,
     Hashable,
+    Iterable,
     Iterator,
     List,
     Optional,
@@ -111,6 +113,18 @@ class Context:
                 f"Incompatible Coq/OCaml versions specified: coq={self.coq_version}, "
                 f"ocaml={self.ocaml_version}")
 
+    @property
+    def commit_sha(self) -> str:  # noqa: D102
+        return self.revision.commit_sha
+
+    @property
+    def project_name(self) -> str:  # noqa: D102
+        return self.revision.project_source.project_name
+
+    @property
+    def repo_url(self) -> Optional[GitURL]:  # noqa: D102
+        return self.revision.project_source.repo_url
+
     def as_metadata(self) -> ProjectMetadata:
         """
         Place this context in an otherwise empty metadata record.
@@ -206,7 +220,7 @@ class MetadataStorage:
     # match metadata field names exactly
     opam_repos: Dict[ContextID, Set[RepoID]] = default_field(dict())
     coq_dependencies: Dict[ContextID, Set[PackageID]] = default_field(dict())
-    opam_dependencies: Dict[ContextID, Set[PackageID]] = default_field(dict())
+    opam_dependencies: Dict[ContextID, List[PackageID]] = default_field(dict())
     ignore_path_regex: Dict[ContextID, Set[str]] = default_field(dict())
     # meta-metadata
     ocaml_packages: bidict[str, PackageID] = default_field(bidict())
@@ -344,6 +358,13 @@ class MetadataStorage:
         If metadata is already stored for the implied context.
     """
 
+    def _check_project_exists(self, project_name: str) -> None:
+        """
+        Raise an error if the project does not have any metadata.
+        """
+        if project_name not in self.projects:
+            raise KeyError(f"Unknown project: {project_name}")
+
     def _get_default(self, metadata: ProjectMetadata) -> ProjectMetadata:
         """
         Get the default metadata for the given record.
@@ -381,6 +402,55 @@ class MetadataStorage:
             # fake a default
             default = ProjectMetadata(metadata.project_name, [], [], [])
         return default
+
+    def _get_field_origins(
+            self,
+            metadata: ProjectMetadata,
+            fields: Optional[Iterable[str]] = None) -> Dict[str,
+                                                            ProjectMetadata]:
+        """
+        Get the metadata that defines each field.
+
+        Parameters
+        ----------
+        metadata: ProjectMetadata
+            A metadata record.
+        fields : Optional[Iterable[str]], optional
+            An optional collection of fields whose origins are desired.
+            By default None, which results in retrieving the origins of
+            all fields.
+
+        Returns
+        -------
+        Dict[str, ProjectMetadata]
+            A map from inherited field names to the stored records
+            that originate their values in the given `metadata`.
+            If a field is not inherited, then it will not appear in this
+            map.
+        """
+        level = metadata.level
+        if level == 0:
+            return {}  # not possible to inherit anything at this level
+        if fields is None:
+            fields = self._mutable_fields
+        mutable_fields = self._mutable_fields.intersection(fields)
+        origins = {}
+        views = list(metadata.levels(inclusive=False))
+        while mutable_fields and views:
+            try:
+                default = self.populate(views.pop(), autofill=False)
+            except KeyError:
+                continue
+            for mf in list(mutable_fields):
+                if getattr(default, mf) != getattr(metadata, mf):
+                    if metadata.level != level:
+                        origins[mf] = metadata
+                    mutable_fields.discard(mf)
+            metadata = default
+        for mf in mutable_fields:
+            if metadata.level != level:
+                origins[mf] = metadata
+        return origins
 
     def _get(
             self,
@@ -467,7 +537,7 @@ class MetadataStorage:
         """
         Insert a field's value for the given context.
 
-        The value is taken from a given metadata and it only actually
+        The value is taken from a given metadata and is only actually
         inserted if it differs from the default (i.e., if it overrides
         the default).
 
@@ -493,10 +563,9 @@ class MetadataStorage:
                             field_value,
                             key_maker=CommandSequence)
                     else:
-                        val = {
+                        val = type(field_value)(
                             self._add_to_index(index,
-                                               val) for val in field_value
-                        }
+                                               val) for val in field_value)
                     getattr(self, field_name)[context_id] = val
                 elif field_name in ['ignore_path_regex']:
                     getattr(self, field_name)[context_id] = set(field_value)
@@ -669,6 +738,41 @@ class MetadataStorage:
             metadata_kwargs.setdefault('clean_cmd', self.default_clean_cmd)
         return ProjectMetadata(**metadata_kwargs)
 
+    def get_all(self,
+                project_name: str,
+                autofill: Optional[bool] = None) -> List[ProjectMetadata]:
+        """
+        Get all of the explicitly stored metadata records for a project.
+
+        Parameters
+        ----------
+        project_name : str
+            The name of a project in the storage.
+        autofill : Optional[bool], optional
+            Whether to automatically fill in missing metadata with
+            default values (True) or raise an error (False), by default
+            equal to ``self.autofill``.
+
+        Returns
+        -------
+        List[ProjectMetadata]
+            Each metadata record for `project_name` that is explicitly
+            stored rather than implicitly derived.
+            The list will be empty if there are no records.
+        """
+        all_metadata = []
+        for context in self.contexts:
+            if context.project_name == project_name:
+                metadata = self.get(
+                    project_name,
+                    context.repo_url,
+                    context.commit_sha,
+                    context.coq_version,
+                    context.ocaml_version,
+                    autofill)
+                all_metadata.append(metadata)
+        return all_metadata
+
     def get_project_revisions(
             self,
             project_name: str,
@@ -698,8 +802,7 @@ class MetadataStorage:
         KeyError
             If the project does not possess any metadata.
         """
-        if project_name not in self.projects:
-            raise KeyError(f"Unknown project: {project_name}")
+        self._check_project_exists(project_name)
         return {
             r.commit_sha
             for r in self.revisions
@@ -727,12 +830,58 @@ class MetadataStorage:
         KeyError
             If the project does not possess any metadata.
         """
-        if project_name not in self.projects:
-            raise KeyError(f"Unknown project: {project_name}")
+        self._check_project_exists(project_name)
         return {
             s.repo_url
             for s in self.project_sources
             if s.project_name == project_name and s.repo_url is not None
+        }
+
+    def get_project_coq_versions(
+            self,
+            project_name: str,
+            project_url: Optional[str] = None,
+            commit_sha: Optional[str] = None) -> Set[str]:
+        """
+        Get the set of Coq versions supported by the given project.
+
+        Note that this is NOT the complete list of versions that may
+        potentially be supported across all sources or commits for a
+        project rather just those versions that have been used within
+        unique metadata entries in the storage.
+
+        Parameters
+        ----------
+        project_name : str
+            The name of a project in the storage.
+        project_url : Optional[str], optional
+            A source URL for the project, by default None.
+            If None, then all supported Coq versions for any sources
+            are returned.
+        commit_sha : Optional[str], optional
+            A revision for the project and project URL, by default None.
+            If None, then all supported Coq versions for any revision
+            satisfying the other two arguments are returned.
+
+        Returns
+        -------
+        Set[str]
+            A set of strings indicating Coq versions associated with the
+            given arguments.
+
+        Raises
+        ------
+        KeyError
+            If the project does not possess any metadata.
+        """
+        self._check_project_exists(project_name)
+        return {
+            str(c.coq_version)
+            for c in self.contexts
+            if c.project_name == project_name and (
+                project_url is None or c.repo_url == project_url) and (
+                    c.commit_sha is None or c.commit_sha == commit_sha)
+            and c.coq_version is not None
         }
 
     def insert(self, metadata: ProjectMetadata) -> None:
@@ -892,6 +1041,38 @@ class MetadataStorage:
             result[f] = io.serialize(list(getattr(self, f).items()))
         return result
 
+    def union(
+            self,
+            *others: Tuple['MetadataStorage',
+                           ...]) -> 'MetadataStorage':
+        """
+        Get the union of this and one or more other repositories.
+
+        If two repositories share the same metadata record, the one that
+        appears first takes precedence (where `self` takes precedence
+        over all `others`).
+
+        Parameters
+        ----------
+        others : tuple of MetadataStorage
+            One or more other metadata repositories.
+
+        Returns
+        -------
+        MetadataStorage
+            The union of this and each given repository.
+        """
+        # take the lazy way of iterating each repo's data and inserting
+        # into a new storage versus tediously merging each internal data
+        # structure
+        result = MetadataStorage()
+        for metadata in chain(self, *others):
+            try:
+                result.insert(metadata)
+            except KeyError:
+                continue
+        return result
+
     def update(
             self,
             project_name: Union[str,
@@ -902,6 +1083,7 @@ class MetadataStorage:
                                         Version]] = None,
             ocaml_version: Optional[Union[str,
                                           Version]] = None,
+            cascade: bool = True,
             **kwargs) -> None:
         """
         Update the indicated metadata.
@@ -923,6 +1105,13 @@ class MetadataStorage:
         ocaml_version : Optional[str], optional
             The version of the OCaml compiler against which the project
             should be built, by default None.
+        cascade : bool, optional
+            If True, then update lower precedence metadata as well until
+            an explicitly stored value for a field is found.
+            If False, update only the indicated record.
+            For example, if no default value exists for a field, then
+            cascading an update to the field will ensure it exists for
+            all future records that inherit from a common ancestor.
         kwargs : Dict[str, Any]
             New values for fields of the indicated metadata.
 
@@ -968,6 +1157,24 @@ class MetadataStorage:
                         break
                 if not is_implied:
                     raise
+            if cascade:
+                origins = self._get_field_origins(
+                    self.get(
+                        project_name,
+                        project_url,
+                        commit_sha,
+                        coq_version,
+                        ocaml_version),
+                    kwargs.keys())
+                for inherited, origin in origins.items():
+                    # ensure origin exists
+                    ocontext = Context.from_metadata(origin)
+                    if ocontext not in self.contexts:
+                        self._add_context(ocontext)
+                    self.update(
+                        origin,
+                        cascade=False,
+                        **{inherited: kwargs.pop(inherited)})
             default = self._get_default(metadata)
             for field_name, field_value in kwargs.items():
                 self._remove_field(context_id, field_name)
@@ -1056,3 +1263,26 @@ class MetadataStorage:
             A metadata storage instance.
         """
         return io.load(filepath, fmt, serialization=True, clz=MetadataStorage)
+
+    @classmethod
+    def unions(cls, *repos: Tuple['MetadataStorage', ...]) -> 'MetadataStorage':
+        """
+        Get the union of the given metadata repositories.
+
+        If two repositories share the same metadata record, the one that
+        appears first takes precedence.
+
+        Parameters
+        ----------
+        repos : tuple of MetadataStorage
+            A sequence of metadata repositories.
+
+        Returns
+        -------
+        MetadataStorage
+            The union of the given repositories.
+        """
+        if repos:
+            return repos[0].union(*repos[1 :])
+        else:
+            return MetadataStorage()

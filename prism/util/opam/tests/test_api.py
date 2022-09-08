@@ -26,7 +26,7 @@ class TestOpamAPI(unittest.TestCase):
             "test_cloned_switch")
         with self.subTest("install"):
             self.assertIsNone(clone.get_installed_version("coq-shell"))
-            clone.install("coq-shell", version='1', yes=True)
+            clone.install("coq-shell", version='1')
             version = clone.get_installed_version("coq-shell")
             self.assertEqual(version, "1")
             version = clone.get_installed_version("ocaml")
@@ -35,14 +35,14 @@ class TestOpamAPI(unittest.TestCase):
             # verify that the original switch is isolated from the clone
             self.assertIsNone(
                 self.test_switch.get_installed_version("coq-shell"))
-            self.test_switch.install("coq-shell", version='1', yes=True)
+            self.test_switch.install("coq-shell", version='1')
             version = self.test_switch.get_installed_version("coq-shell")
             self.assertEqual(version, "1")
         with self.subTest("sandbox-install-backward"):
             # verify that the clone is isolated from the original switch
-            self.test_switch.install("conf-dpkg", version='1', yes=True)
+            self.test_switch.install("conf-dpkg", version='1')
             self.assertIsNone(clone.get_installed_version("conf-dpkg"))
-            clone.install("conf-dpkg", version='1', yes=True)
+            clone.install("conf-dpkg", version='1')
             version = clone.get_installed_version("conf-dpkg")
             self.assertEqual(version, "1")
         with self.subTest("remove"):

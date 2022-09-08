@@ -3,9 +3,10 @@ Contains all metadata related to paticular GitHub repositories.
 """
 
 import os
+import warnings
 # from collections.abc import Iterable
 from dataclasses import asdict, dataclass, fields
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Set
+from typing import Any, ClassVar, Dict, Iterable, Iterator, List, Optional, Set
 
 import seutil as su
 
@@ -21,6 +22,18 @@ class ProjectMetadata:
     Class containing the metadata for a single project.
     """
 
+    immutable_fields: ClassVar[Set[str]] = {
+        'project_name',
+        'project_url',
+        'commit_sha',
+        'ocaml_version',
+        'coq_version',
+        'serapi_version'
+    }
+    """
+    Fields that are defined a priori and cannot be inferred.
+    """
+
     project_name: str
     """
     The unique name of the project in the dataset either literal or
@@ -31,6 +44,8 @@ class ProjectMetadata:
     Specifies a list of commands for this project (e.g., `build.sh` or
     `make`) that result in building (compiling) the Coq project.
     Commands are presumed to be executed in a shell, e.g., Bash.
+    The build commands should not generally install dependencies, which
+    should be presumed to already be present.
     """
     install_cmd: List[str]
     """
@@ -106,6 +121,10 @@ class ProjectMetadata:
     typically assumed to be installed prior to running ``make``.
     Only dependencies that are not handled by the project's build system
     should be listed here.
+
+    .. warning::
+        This field is deprecated and will be removed in a future
+        version. Use `opam_dependencies` instead.
     """
     opam_repos: Set[str] = default_field(set())
     """
@@ -117,18 +136,19 @@ class ProjectMetadata:
     ``remove``, and ``set-url``, and are updated from their URLs using
     ``opam update``.
     """
-    opam_dependencies: Set[str] = default_field(set())
+    opam_dependencies: Optional[List[str]] = None
     """
-    Set of non-Coq OPAM dependencies whose installation is required to
-    build the project.
-    A string ``pkg`` in `opam_dependencies` should be given such that
-    ``opam install pkg`` results in installing the named dependency.
+    A conjunctive list of OPAM package formulas expressing dependencies
+    whose installation is required to build the project.
+    The format should generally match that found in the ``depends:``
+    field of an OPAM file.
     Coq projects are often built or installed using `make` and
     ``make install`` under the assumption of an existing Makefile for
     the Coq project in dataset, but the `coq_dependencies` are typically
     assumed to be installed prior to running ``make``.
-    Only dependencies that are not handled by the project's build system
-    need to be listed here.
+    All OPAM-installable dependencies should be expressed here.
+    If not given, then the options are presumed to not yet be specified
+    and must be inferred later.
     """
     project_url: Optional[GitURL] = None
     """
@@ -179,11 +199,54 @@ class ProjectMetadata:
         # standardize project url
         if self.project_url is not None:
             self.project_url = GitURL(self.project_url)
+        # guard against common kinds of misspecified or misformatted
+        # data
+        for cmd_seq in ['build_cmd', 'install_cmd', 'clean_cmd']:
+            if getattr(self, cmd_seq) is None:
+                setattr(self, cmd_seq, [])
+            else:
+                # remove None commands
+                setattr(
+                    self,
+                    cmd_seq,
+                    [cmd for cmd in getattr(self,
+                                            cmd_seq) if cmd is not None])
+        for (attr,
+             tp) in [('opam_repos',
+                      set),
+                     ('opam_dependencies',
+                      lambda x: list(dict.fromkeys(x))),
+                     ('coq_dependencies',
+                      set)]:
+            if getattr(self, attr) is None:
+                if attr != 'opam_dependencies':
+                    # opam_dependencies is allowed to be None
+                    setattr(self, attr, set())
+            else:
+                # remove None elements
+                setattr(
+                    self,
+                    attr,
+                    tp(e for e in getattr(self,
+                                          attr) if e is not None))
+        if self.coq_dependencies:
+            # transfer to opam_dependencies as side-effect
+            self.coq_dependencies = self.coq_dependencies
+
+    def __getattribute__(self, attr: str) -> Any:  # noqa: D105
+        if attr == "coq_dependencies":
+            warnings.warn(
+                "The 'coq_dependencies' field is deprecated. "
+                "Use 'opam_dependencies' instead.",
+                DeprecationWarning)
+        return super().__getattribute__(attr)
 
     def __gt__(self, other: 'ProjectMetadata') -> bool:
         """
         Return whether this metadata overrides the other metadata.
         """
+        if not isinstance(other, ProjectMetadata):
+            return NotImplemented
         return other < self
 
     def __hash__(self) -> int:
@@ -223,6 +286,20 @@ class ProjectMetadata:
                 and other.coq_version == self.coq_version and (
                     other.ocaml_version is not None
                     and self.ocaml_version is None)))
+
+    def __setattribute__(self, attr: str, value: Any) -> None:  # noqa: D105
+        if attr == 'coq_dependencies':
+            warnings.warn(
+                "The 'coq_dependencies' field is deprecated. "
+                "Use 'opam_dependencies' instead.",
+                DeprecationWarning)
+            if self.opam_dependencies is None:
+                self.opam_dependencies = []
+            self.opam_dependencies.extend(value)
+            self.opam_dependencies = list(dict.fromkeys(self.opam_dependencies))
+            self.coq_dependencies = set()
+        else:
+            super().__setattribute__(attr, value)
 
     @property
     def level(self) -> int:
