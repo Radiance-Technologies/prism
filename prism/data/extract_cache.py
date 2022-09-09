@@ -90,7 +90,12 @@ def extract_vernac_commands(
                             raise e
                     else:
                         probably_ltac = False
-                    if not SexpAnalyzer.is_ltac(sexp) and not probably_ltac:
+                    # Conditionals evaluate lazily, so the following
+                    # should always work even when `sexp` is unbound.
+                    if probably_ltac or SexpAnalyzer.is_ltac(sexp):
+                        # This is where we would handle proofs
+                        ...
+                    else:
                         command_type, identifier = \
                             ParserUtils.extract_identifier(sentence)
                         file_commands.append(
@@ -101,9 +106,6 @@ def extract_vernac_commands(
                                 sentence,
                                 sexp,
                                 location))
-                    else:
-                        # This is where we would handle proofs
-                        ...
     return command_data
 
 
