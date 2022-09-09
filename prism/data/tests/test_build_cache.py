@@ -14,12 +14,13 @@ from prism.data.build_cache import (
     VernacCommandData,
 )
 from prism.data.dataset import CoqProjectBaseDataset
+from prism.language.gallina.analyze import SexpInfo
 from prism.language.heuristic.util import ParserUtils
 from prism.language.sexp.list import SexpList
 from prism.language.sexp.string import SexpString
-from prism.project import ProjectRepo
-from prism.project.base import SentenceExtractionMethod
+from prism.project.base import SEM, SentenceExtractionMethod
 from prism.project.metadata.storage import MetadataStorage
+from prism.project.repo import ProjectRepo
 from prism.tests import _PROJECT_EXAMPLES_PATH
 from prism.util.opam import OpamAPI
 
@@ -41,16 +42,20 @@ class TestCoqProjectBuildCache(unittest.TestCase):
         environment = ProjectBuildEnvironment(OpamAPI.active_switch.export())
         for project in self.dataset.projects.values():
             command_data = {}
+            project: ProjectRepo
             for filename in project.get_file_list():
                 file_commands: List[
                     VernacCommandData] = command_data.setdefault(
                         filename,
                         list())
                 doc = project.get_file(filename)
-                for sentence in project.extract_sentences(
+                for sentence, location in zip(*project.extract_sentences(
                         doc,
-                        sentence_extraction_method=project
-                        .sentence_extraction_method):
+                        sentence_extraction_method=SEM.HEURISTIC,
+                        return_locations=True,
+                        glom_proofs=False)):
+                    sentence: str
+                    location: SexpInfo.Loc
                     command_type, identifier = ParserUtils.extract_identifier(sentence)
                     file_commands.append(
                         VernacCommandData(
@@ -59,7 +64,8 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                             None,
                             str(sentence),
                             SexpList([SexpString("foo"),
-                                      SexpString("bar")])))
+                                      SexpString("bar")]),
+                            location))
                 break  # one file is enough to test
             data = ProjectCommitData(
                 project.metadata,

@@ -12,6 +12,7 @@ from prism.data.build_cache import (
     VernacCommandData,
     VernacDict,
 )
+from prism.interface.coq.exception import CoqExn
 from prism.interface.coq.serapi import SerAPI
 from prism.language.heuristic.util import ParserUtils
 from prism.project.base import SEM, Project
@@ -23,7 +24,7 @@ from prism.util.opam.version import Version
 from prism.util.radpytools.os import pushd
 from prism.util.swim import SwitchManager
 
-from ..language.gallina.analyze import SexpAnalyzer
+from ..language.gallina.analyze import SexpAnalyzer, SexpInfo
 
 
 def get_dependency_formula(
@@ -73,11 +74,23 @@ def extract_vernac_commands(
             list())
         with pushd(project.dir_abspath):
             with SerAPI(project.serapi_options) as serapi:
-                for sentence in project.extract_sentences(
+                for sentence, location in zip(*project.extract_sentences(
                         project.get_file(filename),
-                        sentence_extraction_method=SEM.HEURISTIC):
-                    sexp = serapi.query_ast(sentence)
-                    if SexpAnalyzer.is_vernac(sexp):
+                        sentence_extraction_method=SEM.HEURISTIC,
+                        return_locations=True,
+                        glom_proofs=False)):
+                    sentence: str
+                    location: SexpInfo.Loc
+                    try:
+                        sexp = serapi.query_ast(sentence)
+                    except CoqExn as e:
+                        if "Syntax error: illegal begin of vernac." in e.msg:
+                            probably_ltac = True
+                        else:
+                            raise e
+                    else:
+                        probably_ltac = False
+                    if not SexpAnalyzer.is_ltac(sexp) and not probably_ltac:
                         command_type, identifier = \
                             ParserUtils.extract_identifier(sentence)
                         file_commands.append(
@@ -86,7 +99,8 @@ def extract_vernac_commands(
                                 command_type,
                                 None,
                                 sentence,
-                                sexp))
+                                sexp,
+                                location))
                     else:
                         # This is where we would handle proofs
                         ...

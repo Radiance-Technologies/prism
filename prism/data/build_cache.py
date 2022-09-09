@@ -14,7 +14,7 @@ from typing import ClassVar, Dict, Iterable, List, Optional, Tuple, Union
 import setuptools_scm
 import seutil as su
 
-from prism.language.gallina.analyze import SexpAnalyzer, SexpInfo
+from prism.language.gallina.analyze import SexpInfo
 from prism.project.metadata import ProjectMetadata
 from prism.util.opam.switch import OpamSwitch
 from prism.util.radpytools.dataclasses import default_field
@@ -76,6 +76,10 @@ class VernacCommandData:
     """
     The serialized s-expression of this sentence.
     """
+    location: SexpInfo.Loc
+    """
+    The location of this vernacular command.
+    """
     proofs: List[Proof] = default_field(list())
     """
     Associated proofs, if any. Proofs are considered to be a list of
@@ -87,13 +91,6 @@ class VernacCommandData:
     def __hash__(self) -> int:  # noqa: D105
         # do not include the error
         return hash((self.identifier, self.command_type, self.location))
-
-    @property
-    def location(self) -> SexpInfo.Loc:
-        """
-        Return the location of the command within a project.
-        """
-        return SexpAnalyzer.analyze_loc(self.sexp)
 
 
 VernacDict = Dict[str, List[VernacCommandData]]
