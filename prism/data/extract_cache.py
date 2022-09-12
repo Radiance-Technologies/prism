@@ -12,7 +12,6 @@ from prism.data.build_cache import (
     VernacCommandData,
     VernacDict,
 )
-from prism.interface.coq.exception import CoqExn
 from prism.interface.coq.serapi import SerAPI
 from prism.language.heuristic.util import ParserUtils
 from prism.project.base import SEM, Project
@@ -81,18 +80,8 @@ def extract_vernac_commands(
                         glom_proofs=False)):
                     sentence: str
                     location: SexpInfo.Loc
-                    try:
-                        sexp = serapi.query_ast(sentence)
-                    except CoqExn as e:
-                        if "Syntax error: illegal begin of vernac." in e.msg:
-                            probably_ltac = True
-                        else:
-                            raise e
-                    else:
-                        probably_ltac = False
-                    # Conditionals evaluate lazily, so the following
-                    # should always work even when `sexp` is unbound.
-                    if probably_ltac or SexpAnalyzer.is_ltac(sexp):
+                    _, _, sexp = serapi.execute(sentence, True)
+                    if SexpAnalyzer.is_ltac(sexp):
                         # This is where we would handle proofs
                         ...
                     else:
