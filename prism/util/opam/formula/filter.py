@@ -137,6 +137,43 @@ class NotF(Not[Filter], Filter):
         return Filter
 
 
+@dataclass
+class IsDefined(Filter):
+    """
+    A test for whether a filter is defined.
+    """
+
+    formula: Filter
+
+    def __str__(self) -> str:  # noqa: D105
+        return f"?{self.formula}"
+
+    def evaluate(  # noqa: D102
+            self,
+            variables: Optional[AssignedVariables] = None
+    ) -> Value:
+        return self.formula.evaluate(variables) is not None
+
+    def simplify(  # noqa: D102
+        self,
+        variables: Optional[AssignedVariables] = None
+    ) -> Union[bool,
+               'IsDefined']:
+        formula_simplified = self.formula.simplify(variables)
+        if isinstance(formula_simplified, Filter):
+            return type(self)(formula_simplified)
+        else:
+            return formula_simplified is not None
+
+    @classmethod
+    def _chain_parse(cls, input: str, pos: int) -> Tuple['IsDefined', int]:
+        begpos = pos
+        pos = cls._expect(input, pos, "?", begpos)
+        pos = cls._lstrip(input, pos)
+        formula, pos = cls.formula_type()._chain_parse(input, pos)
+        return cls(formula), pos
+
+
 @dataclass(frozen=True)
 class ParensF(Parens[Filter], Filter):
     """
