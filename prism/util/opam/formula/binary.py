@@ -1,5 +1,5 @@
 """
-Defines a generic class for conjunctive and disjunctive formulas.
+Defines a generic class for binary relational formulas.
 """
 
 from abc import ABC, abstractmethod

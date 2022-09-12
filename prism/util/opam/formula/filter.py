@@ -2,10 +2,12 @@
 Defines classes for parsing and expressing version constraint filters.
 """
 
+import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Type, Union
 
+from prism.util.opam.formula.negate import Not
 from prism.util.opam.formula.relational import Relational
 from prism.util.opam.version import Version
 from prism.util.parse import Parseable, ParseError
@@ -91,7 +93,7 @@ class Filter(Parseable, ABC):
 @dataclass(frozen=True)
 class LogicalF(Logical[Filter], Filter):
     """
-    A logical combination of two version formulae.
+    A logical combination of two filters.
     """
 
     @property
@@ -100,6 +102,35 @@ class LogicalF(Logical[Filter], Filter):
         variables.extend(self.left.variables)
         variables.extend(self.right.variables)
         return variables
+
+    @classmethod
+    def formula_type(cls) -> Type[Filter]:  # noqa: D102
+        return Filter
+
+
+@dataclass(frozen=True)
+class NotF(Not[Filter], Filter):
+    """
+    A logical negation of a filter.
+    """
+
+    @property
+    def variables(self) -> List[str]:  # noqa: D102
+        return self.formula.variables
+
+    def evaluate(  # noqa: D102
+            self,
+            variables: Optional[AssignedVariables] = None
+    ) -> Value:
+        # imitate behavior of opam/src/format/opamFilter.ml:logop1
+        evaluated = self.formula.evaluate(variables)
+        if evaluated is None:
+            return None
+        elif isinstance(evaluated, bool):
+            return not evaluated
+        else:
+            warnings.warn(f"!({evaluated}) is undefined")
+            return None
 
     @classmethod
     def formula_type(cls) -> Type[Filter]:  # noqa: D102
@@ -124,7 +155,7 @@ class ParensF(Parens[Filter], Filter):
 @dataclass(frozen=True)
 class RelationalF(Relational[Filter], Filter):
     """
-    A logical combination of two version formulae.
+    A binary relation between two filters.
     """
 
     @property

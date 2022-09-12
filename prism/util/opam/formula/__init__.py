@@ -13,6 +13,7 @@ from .filter import (  # noqa: F401
     Filter,
     FilterAtom,
     LogicalF,
+    NotF,
     ParensF,
     RelationalF,
 )
@@ -29,7 +30,7 @@ from .version import (  # noqa: F401
     FilterConstraint,
     FilterVF,
     LogicalVF,
-    Not,
+    NotVF,
     ParensVF,
     VersionConstraint,
     VersionFormula,

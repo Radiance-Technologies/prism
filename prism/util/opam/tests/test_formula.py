@@ -8,7 +8,7 @@ from prism.util.opam.formula import (
     LogicalPF,
     LogicalVF,
     LogOp,
-    Not,
+    NotVF,
     PackageFormula,
     ParensVF,
     RelOp,
@@ -115,28 +115,28 @@ class TestVersionFormula(unittest.TestCase):
             OCamlVersion(8,
                          10,
                          2),
-            Not(VersionConstraint(RelOp.GT,
-                                  OCamlVersion(8,
-                                               10,
-                                               2))))
+            NotVF(VersionConstraint(RelOp.GT,
+                                    OCamlVersion(8,
+                                                 10,
+                                                 2))))
         self.assertNotIn(
             OCamlVersion(8,
                          10,
                          2),
-            Not(VersionConstraint(RelOp.GEQ,
-                                  OCamlVersion(8,
-                                               10,
-                                               2))))
+            NotVF(VersionConstraint(RelOp.GEQ,
+                                    OCamlVersion(8,
+                                                 10,
+                                                 2))))
         self.assertNotIn(
             OCamlVersion(8,
                          10,
                          2),
-            Not(
+            NotVF(
                 ParensVF(
-                    Not(VersionConstraint(RelOp.GT,
-                                          OCamlVersion(8,
-                                                       10,
-                                                       2))))))
+                    NotVF(VersionConstraint(RelOp.GT,
+                                            OCamlVersion(8,
+                                                         10,
+                                                         2))))))
         complex_formula = VersionFormula.parse(
             '!= "2.0.pre" & !(<= "3") & <= "3.9.0" | ="4.0+dev"')
         self.assertIn(OCamlVersion(3, 2, 0), complex_formula)
@@ -249,7 +249,7 @@ class TestVersionFormula(unittest.TestCase):
                                                0,
                                                0)),
                 LogOp.OR,
-                Not(
+                NotVF(
                     VersionConstraint(
                         RelOp.GT,
                         OCamlVersion(0,
@@ -279,7 +279,7 @@ class TestVersionFormula(unittest.TestCase):
                     LogOp.OR,
                     LogicalVF(
                         LogicalVF(
-                            Not(
+                            NotVF(
                                 ParensVF(
                                     VersionConstraint(
                                         RelOp.LT,
@@ -304,7 +304,7 @@ class TestVersionFormula(unittest.TestCase):
                                     RelOp.NEQ,
                                     OpamVersion.parse("2.0.pre")),
                                 LogOp.OR,
-                                Not(
+                                NotVF(
                                     ParensVF(
                                         VersionConstraint(
                                             RelOp.LT,

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Iterable, List, Optional, Tuple, Type, Union
 
+from prism.util.opam.formula.negate import Not
 from prism.util.opam.version import Version
 from prism.util.parse import Parseable, ParseError
 
@@ -109,7 +110,7 @@ class VersionFormula(Parseable, ABC):
                 try:
                     formula, pos = ParensVF._chain_parse(input, pos)
                 except ParseError:
-                    formula, pos = Not._chain_parse(input, pos)
+                    formula, pos = NotVF._chain_parse(input, pos)
         # attempt some left recursion
         # lookback to check that the previous term is not a negation
         if cls._lookback(input, begpos, 1)[0] != "!":
@@ -147,50 +148,18 @@ class LogicalVF(Logical[VersionFormula], VersionFormula):
 
 
 @dataclass(frozen=True)
-class Not(VersionFormula):
+class NotVF(Not[VersionFormula], VersionFormula):
     """
     A logical negation of a version formula.
     """
-
-    formula: VersionFormula
-
-    def __str__(self) -> str:  # noqa: D105
-        return f"!{self.formula}"
 
     @property
     def variables(self) -> List[str]:  # noqa: D102
         return self.formula.variables
 
-    def is_satisfied(
-            self,
-            version: Version,
-            variables: Optional[AssignedVariables] = None) -> bool:
-        """
-        Test whether the version does not satisfy the internal formula.
-        """
-        return not self.formula.is_satisfied(version, variables)
-
-    def simplify(
-            self,
-            version: Optional[Version],
-            variables: Optional[AssignedVariables] = None) -> Union[bool,
-                                                                    'Not']:
-        """
-        Substitute the given version and variables and simplify.
-        """
-        formula_simplified = self.formula.simplify(version, variables)
-        if isinstance(formula_simplified, bool):
-            return not formula_simplified
-        else:
-            return type(self)(formula_simplified)
-
     @classmethod
-    def _chain_parse(cls, input: str, pos: int) -> Tuple['Not', int]:
-        begpos = pos
-        pos = cls._expect(input, pos, "!", begpos)
-        pos = cls._lstrip(input, pos)
-        formula, pos = VersionFormula._chain_parse(input, pos)
-        return cls(formula), pos
+    def formula_type(cls) -> Type[VersionFormula]:  # noqa: D102
+        return VersionFormula
 
 
 @dataclass(frozen=True)
