@@ -163,7 +163,7 @@ class Parseable(abc.ABC):
         parsed, pos = cls._chain_parse(input, pos, **kwargs)
         if exhaustive:
             if pos < len(input):
-                raise ParseError(cls, input)
+                raise ParseError(cls, input[pos :])
             return parsed
         else:
             return parsed, pos
