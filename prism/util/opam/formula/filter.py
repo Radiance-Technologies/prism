@@ -219,7 +219,7 @@ class NotF(Not[Filter], Filter):
         return Filter
 
 
-@dataclass
+@dataclass(frozen=True)
 class IsDefined(Filter):
     """
     A test for whether a filter is defined.
