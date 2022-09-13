@@ -14,6 +14,8 @@ from prism.util.parse import Parseable, ParseError
 
 from .common import (
     AssignedVariables,
+    LogOp,
+    RelOp,
     Value,
     Variable,
     _bool_syntax,
@@ -64,6 +66,11 @@ class Filter(Parseable, ABC):
 
         The filter may evaluate to a Boolean, a string, or an undefined
         (None) value.
+
+        Notes
+        -----
+        This function roughly corresponds to
+        ``opam/src/format/opamFilter.ml:eval``.
         """
         ...
 
@@ -87,7 +94,61 @@ class Filter(Parseable, ABC):
 
     @classmethod
     def _chain_parse(cls, input: str, pos: int) -> Tuple['Filter', int]:
-        raise NotImplementedError()
+        begpos = pos
+        try:
+            formula, pos = FilterAtom._chain_parse(input, pos)
+        except ParseError:
+            try:
+                formula, pos = ParensF._chain_parse(input, pos)
+            except ParseError:
+                try:
+                    formula, pos = NotF._chain_parse(input, pos)
+                except ParseError:
+                    formula, pos = IsDefined._chain_parse(input, pos)
+        # attempt some left recursion
+        # lookback to check that the previous term is not a negation
+        # or definition check
+        prev = cls._lookback(input, begpos, 1)[0]
+        if prev != "!" and prev != "?":
+            try:
+                formula, pos = cls._lookahead_parse(begpos, formula, input, pos)
+            except ParseError:
+                pass
+        return formula, pos
+
+    @classmethod
+    def _lookahead_parse(
+            cls,
+            begpos: int,
+            left: 'Filter',
+            input: str,
+            pos: int) -> Tuple['Filter',
+                               int]:
+        """
+        Parse a binary relation by speculatively looking ahead.
+        """
+        try:
+            op, pos = LogOp._chain_parse(input, pos)
+        except ParseError:
+            try:
+                op, pos = RelOp._chain_parse(input, pos)
+            except ParseError:
+                formula = left
+                op = None
+                Binary = None
+            else:
+                Binary = RelationalF
+        else:
+            Binary = LogicalF
+        if op is not None:
+            assert Binary is not None
+            try:
+                right, pos = Filter._chain_parse(input, pos)
+            except ParseError as e:
+                raise ParseError(Binary, input[begpos :]) from e
+            else:
+                formula = Binary(left, op, right)
+        return formula, pos
 
 
 @dataclass(frozen=True)
@@ -102,6 +163,27 @@ class LogicalF(Logical[Filter], Filter):
         variables.extend(self.left.variables)
         variables.extend(self.right.variables)
         return variables
+
+    def evaluate(  # noqa: D102
+            self,
+            variables: Optional[AssignedVariables] = None
+    ) -> Value:
+        left_evaluated = self.left.evaluate(variables)
+        logop = self.logop
+        if isinstance(left_evaluated,
+                      bool) and (left_evaluated and logop == LogOp.OR
+                                 or not left_evaluated and logop == LogOp.AND):
+            return left_evaluated
+        right_evaluated = self.right.evaluate(variables)
+        if isinstance(right_evaluated,
+                      bool) and (right_evaluated and logop == LogOp.OR
+                                 or not right_evaluated and logop == LogOp.AND):
+            return right_evaluated
+        if left_evaluated is None or right_evaluated is None:
+            return None
+        return logop.evaluate(
+            value_to_bool(left_evaluated),
+            value_to_bool(right_evaluated))
 
     @classmethod
     def formula_type(cls) -> Type[Filter]:  # noqa: D102
@@ -183,6 +265,12 @@ class ParensF(Parens[Filter], Filter):
     @property
     def variables(self) -> List[str]:  # noqa: D102
         return self.formula.variables
+
+    def evaluate(  # noqa: D102
+            self,
+            variables: Optional[AssignedVariables] = None
+    ) -> Value:
+        return self.formula.evaluate(variables)
 
     @classmethod
     def formula_type(cls) -> Type[Filter]:  # noqa: D102
@@ -309,6 +397,16 @@ class FilterAtom(Filter):
 
     @classmethod
     def _chain_parse(cls, input: str, pos: int) -> Tuple['FilterAtom', int]:
+        """
+        Parse a filter atom.
+
+        A filter atom has the following grammar::
+
+            <FilterAtom> ::= <varident>
+                           | <string>
+                           | <int>
+                           | <bool>
+        """
         term = input[pos :]
         match = _bool_syntax.match(term)
         for (regex,
