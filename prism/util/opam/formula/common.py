@@ -45,6 +45,16 @@ class LogOp(Parseable, enum.Enum, metaclass=ABCEnumMeta):
             result = "|"
         return result
 
+    def evaluate(self, left: Any, right: Any) -> bool:
+        """
+        Evaluate the arguments according to this logical operator.
+        """
+        if self == LogOp.AND:
+            result = left and right
+        elif self == LogOp.OR:
+            result = left or right
+        return result
+
     @classmethod
     def _chain_parse(cls, input: str, pos: int) -> Tuple['LogOp', int]:
         try:
@@ -104,17 +114,17 @@ class RelOp(Parseable, enum.Enum, metaclass=ABCEnumMeta):
         """
         Evaluate the arguments according to this relational operator.
         """
-        if self.relop == RelOp.EQ:
+        if self == RelOp.EQ:
             result = left == right
-        elif self.relop == RelOp.NEQ:
+        elif self == RelOp.NEQ:
             result = left != right
-        elif self.relop == RelOp.LT:
+        elif self == RelOp.LT:
             result = left < right
-        elif self.relop == RelOp.LEQ:
+        elif self == RelOp.LEQ:
             result = left <= right
-        elif self.relop == RelOp.GT:
+        elif self == RelOp.GT:
             result = left > right
-        elif self.relop == RelOp.GEQ:
+        elif self == RelOp.GEQ:
             result = left >= right
         return result
 
