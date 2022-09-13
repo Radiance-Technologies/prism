@@ -704,7 +704,7 @@ class Project(ABC):
             A list of strings corresponding to Coq source file
             sentences, with proofs glommed (or not) depending on input
             flag.
-        List[SexpInfo.Loc] (optional)
+        List[SexpInfo.Loc], optional
             A list of locations corresponding to the returned list of
             sentences. This list is only returned if certain arguments
             are passed to certain parsers. With the default args, this

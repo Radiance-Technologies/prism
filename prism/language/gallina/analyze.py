@@ -467,7 +467,7 @@ class SexpAnalyzer:
     logger: logging.Logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
 
-    _ltac_regex: re.Pattern[str] = re.compile(
+    _ltac_regex: re.Pattern = re.compile(
         "|".join(
             [
                 "VernacAbort",
@@ -487,6 +487,15 @@ class SexpAnalyzer:
                 "VernacProofMode",
                 "VernacExtend",
                 "VernacEndProof"
+            ]))
+    _ltac_exclude_regex: re.Pattern = re.compile(
+        "|".join(
+            [
+                "VernacDeclareTacticDefinition",
+                "VernacTacticNotation",
+                "VernacPrintLtac",
+                "VernacLocateLtac",
+                "VernacPrintLtacs"
             ]))
 
     @classmethod
@@ -1245,5 +1254,23 @@ class SexpAnalyzer:
         also determines whether the given input corresponds to a
         sentence that would occur while in proof mode (such as
         ``Proof.``, ``Qed.``, or a brace/bullet).
-        """
-        return cls._ltac_regex.search(str(sexp)) is not None
+
+        The `_ltac_regex` and `_ltac_exclude_regex` lists were derived
+        from the notation defined at
+        https://github.com/coq/coq/blob/cbe681ab1a9db43e28327716a76db4dee5adc2e2/plugins/ltac/g_ltac.mlg
+        and the documentation at
+        https://coq.inria.fr/refman/proof-engine/ltac.html#print-identity-tactic-idtac
+        """  # noqa: B950
+        sexp_str = str(sexp)
+        if cls._ltac_regex.search(sexp_str) is not None:
+            # The sexp is ltac-related
+            if cls._ltac_exclude_regex.search(sexp_str) is not None:
+                # The sexp is defining new tactics or otherwise not
+                # part of a proof
+                return False
+            else:
+                # The sexp is part of a proof
+                return True
+        else:
+            # The sexp is not ltac-related
+            return False
