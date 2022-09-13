@@ -85,11 +85,11 @@ class VersionFormula(Parseable, ABC):
 
     @abstractmethod
     def simplify(
-        self,
-        version: Optional[Version],
-        variables: Optional[AssignedVariables] = None
-    ) -> Union[bool,
-               'VersionFormula']:
+            self,
+            version: Optional[Version],
+            variables: Optional[AssignedVariables] = None,
+            evaluate_filters: bool = False) -> Union[bool,
+                                                     'VersionFormula']:
         """
         Substitute the given version and variables into the formula.
 
@@ -102,30 +102,49 @@ class VersionFormula(Parseable, ABC):
     def _chain_parse(cls, input: str, pos: int) -> Tuple['VersionFormula', int]:
         begpos = pos
         try:
-            formula, pos = FilterConstraint._chain_parse(input, pos)
+            formula, pos = FilterVF._chain_parse(input, pos)
         except ParseError:
             try:
-                formula, pos = VersionConstraint._chain_parse(input, pos)
+                formula, pos = FilterConstraint._chain_parse(input, pos)
             except ParseError:
                 try:
-                    formula, pos = ParensVF._chain_parse(input, pos)
+                    formula, pos = VersionConstraint._chain_parse(input, pos)
                 except ParseError:
-                    formula, pos = NotVF._chain_parse(input, pos)
+                    try:
+                        formula, pos = ParensVF._chain_parse(input, pos)
+                    except ParseError:
+                        formula, pos = NotVF._chain_parse(input, pos)
         # attempt some left recursion
         # lookback to check that the previous term is not a negation
         if cls._lookback(input, begpos, 1)[0] != "!":
-            left = formula
             try:
-                logop, pos = LogOp._chain_parse(input, pos)
+                formula, pos = cls._lookahead_parse(begpos, formula, input, pos)
             except ParseError:
                 pass
+        return formula, pos
+
+    @classmethod
+    def _lookahead_parse(
+            cls,
+            begpos: int,
+            left: 'VersionFormula',
+            input: str,
+            pos: int) -> Tuple['VersionFormula',
+                               int]:
+        """
+        Parse a binary relation by speculatively looking ahead.
+        """
+        try:
+            logop, pos = LogOp._chain_parse(input, pos)
+        except ParseError:
+            formula = left
+        else:
+            try:
+                right, pos = VersionFormula._chain_parse(input, pos)
+            except ParseError as e:
+                raise ParseError(LogicalVF, input[begpos :]) from e
             else:
-                try:
-                    right, pos = VersionFormula._chain_parse(input, pos)
-                except ParseError as e:
-                    raise ParseError(LogicalVF, input[begpos :]) from e
-                else:
-                    formula = LogicalVF(left, logop, right)
+                formula = LogicalVF(left, logop, right)
         return formula, pos
 
 
@@ -203,11 +222,11 @@ class VersionConstraint(VersionFormula):
         return self.relop(version, self.version)
 
     def simplify(
-        self,
-        version: Optional[Version],
-        variables: Optional[AssignedVariables] = None
-    ) -> Union[bool,
-               'VersionConstraint']:
+            self,
+            version: Optional[Version],
+            variables: Optional[AssignedVariables] = None,
+            evaluate_filters: bool = False) -> Union[bool,
+                                                     'VersionConstraint']:
         """
         Test whether the version satisfies the binary relation.
 
@@ -262,14 +281,33 @@ class FilterVF(VersionFormula):
     def simplify(  # noqa: D102
         self,
         version: Optional[Version],
-        variables: Optional[AssignedVariables] = None
+        variables: Optional[AssignedVariables] = None,
+        evaluate_filters : bool = False
     ) -> Union[bool,
-               'VersionFormula']:
-        simplified_filter = type(self)(self.filter.simplify(variables))
-        if isinstance(simplified_filter, Filter):
-            return type(self)(simplified_filter)
+               'FilterVF']:
+        if evaluate_filters:
+            return self.is_satisfied(version, variables)
         else:
-            return value_to_bool(simplified_filter)
+            simplified_filter = self.filter.simplify(variables)
+            if isinstance(simplified_filter, Filter):
+                return type(self)(simplified_filter)
+            else:
+                return value_to_bool(simplified_filter)
+
+    @classmethod
+    def _chain_parse(cls,
+                     input: str,
+                     pos: int) -> Tuple['FilterConstraint',
+                                        int]:
+        """
+        Parse a filter constraint.
+
+        A filter constraint has the following grammar::
+
+            <FilterConstraint> ::= <RelOp> <Filter>
+        """
+        filter, pos = Filter._chain_parse(input, pos)
+        return cls(filter), pos
 
 
 @dataclass(frozen=True)
@@ -300,33 +338,40 @@ class FilterConstraint(VersionFormula):
         return self.relop(version, target)
 
     def simplify(
-        self,
-        version: Optional[Version],
-        variables: Optional[AssignedVariables] = None
-    ) -> Union[bool,
-               'VersionConstraint']:
+            self,
+            version: Optional[Version],
+            variables: Optional[AssignedVariables] = None,
+            evaluate_filters: bool = False) -> Union[bool,
+                                                     VersionFormula]:
         """
         Test whether the version satisfies the binary relation.
 
         If the version is not None, a Boolean will be returned.
         Otherwise, this instance is returned.
         """
-        simplified_filter = self.filter.simplify(variables)
-        simplified = type(self)(self.relop, simplified_filter)
-        if version is not None and not isinstance(simplified_filter, Filter):
-            return simplified.is_satisfied(version, variables)
+        if evaluate_filters:
+            simplified_filter = self.filter.evaluate(variables)
         else:
-            return simplified
+            simplified_filter = self.filter.simplify(variables)
+        if isinstance(simplified_filter, Filter):
+            simplified = type(self)(self.relop, simplified_filter)
+        else:
+            simplified = VersionConstraint(
+                self.relop,
+                value_to_string(simplified_filter))
+        if version is not None:
+            simplified = simplified.is_satisfied(version, variables)
+        return simplified
 
     @classmethod
     def _chain_parse(cls,
                      input: str,
-                     pos: int) -> Tuple['VersionConstraint',
+                     pos: int) -> Tuple['FilterConstraint',
                                         int]:
         """
-        Parse a version constraint.
+        Parse a filter constraint.
 
-        A version constraint has the following grammar::
+        A filter constraint has the following grammar::
 
             <FilterConstraint> ::= <RelOp> <Filter>
         """

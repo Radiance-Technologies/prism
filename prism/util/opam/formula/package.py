@@ -136,11 +136,27 @@ class PackageFormula(Parseable, ABC):
         except ParseError:
             formula, pos = PackageConstraint._chain_parse(input, pos)
         # attempt some left recursion
-        left = formula
+        try:
+            formula, pos = cls._lookahead_parse(begpos, formula, input, pos)
+        except ParseError:
+            pass
+        return formula, pos
+
+    @classmethod
+    def _lookahead_parse(
+            cls,
+            begpos: int,
+            left: 'PackageFormula',
+            input: str,
+            pos: int) -> Tuple['PackageFormula',
+                               int]:
+        """
+        Parse a binary relation by speculatively looking ahead.
+        """
         try:
             logop, pos = LogOp._chain_parse(input, pos)
         except ParseError:
-            pass
+            formula = left
         else:
             try:
                 right, pos = PackageFormula._chain_parse(input, pos)
@@ -264,12 +280,24 @@ class PackageConstraint(PackageFormula):
         bool
             If one of the given packages satisfies the constraint.
         """
+        constraint = self.version_constraint
+        if isinstance(constraint, VersionFormula):
+            # perform the equivalent of
+            # opam/src/format/opamFilter.mli:filter_deps
+            constraint = constraint.simplify(
+                None,
+                variables,
+                evaluate_filters=True)
+            if isinstance(constraint, bool):
+                if constraint:
+                    constraint = None
+                else:
+                    return True
         try:
             version = packages[self.package_name]
         except KeyError:
             return False
         else:
-            constraint = self.version_constraint
             if constraint is None:
                 return True
             elif isinstance(constraint, Version):
@@ -301,23 +329,18 @@ class PackageConstraint(PackageFormula):
             Otherwise, the simplification of the version formula.
         """
         constraint = self.version_constraint
+        if isinstance(constraint, VersionFormula):
+            constraint = constraint.simplify(None, variables)
+            if isinstance(constraint, bool):
+                if constraint:
+                    constraint = None
+                else:
+                    return True
         result = None
         try:
             version = packages[self.package_name]
         except KeyError:
-            if isinstance(constraint, VersionFormula):
-                constraint_simplified = constraint.simplify(None, variables)
-                if isinstance(constraint_simplified, bool):
-                    if constraint_simplified:
-                        result = type(self)(self.package_name, None)
-                    else:
-                        result = False
-                else:
-                    result = type(self)(
-                        self.package_name,
-                        constraint_simplified)
-            else:
-                result = self
+            result = type(self)(self.package_name, constraint)
         else:
             if constraint is None:
                 result = True
