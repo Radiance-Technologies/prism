@@ -38,6 +38,12 @@ class LogOp(Parseable, enum.Enum, metaclass=ABCEnumMeta):
     AND = enum.auto()
     OR = enum.auto()
 
+    def __call__(self, left: Any, right: Any) -> bool:
+        """
+        Apply the operator.
+        """
+        return self.evaluate(left, right)
+
     def __str__(self) -> str:  # noqa: D105
         if self == LogOp.AND:
             result = "&"
