@@ -18,7 +18,7 @@ from .common import (
     value_to_bool,
     value_to_string,
 )
-from .filter import Filter
+from .filter import Filter, FilterAtom
 from .logical import Logical
 from .parens import Parens
 
@@ -160,6 +160,80 @@ class LogicalVF(Logical[VersionFormula], VersionFormula):
         variables.extend(self.left.variables)
         variables.extend(self.right.variables)
         return variables
+
+    def simplify(  # noqa: D102
+            self,
+            version: Optional[Version],
+            variables: Optional[AssignedVariables] = None,
+            evaluate_filters: bool = False) -> Union[bool,
+                                                     VersionFormula]:
+        if evaluate_filters:
+            return super().simplify(version, variables, evaluate_filters=True)
+        else:
+            # filters that retain undefined variables cannot be
+            # simplified away
+            if (isinstance(self.left,
+                           (FilterVF,
+                            FilterConstraint)) and self.left.variables):
+                left_simplified = self.left.simplify(
+                    version,
+                    variables,
+                    evaluate_filters=False)
+                if isinstance(left_simplified, (FilterVF, FilterConstraint)):
+                    # still a filter with undefined variables,
+                    # cannot remove logop
+                    return type(self)(
+                        left_simplified,
+                        self.logop,
+                        self.right.simplify(
+                            None,
+                            variables,
+                            evaluate_filters=False))
+                else:
+                    # filter is defined
+                    if isinstance(left_simplified, (bool, int, str)):
+                        # ensure formula is well-typed
+                        left_simplified = FilterVF(FilterAtom(left_simplified))
+                    return type(self)(left_simplified,
+                                      self.logop,
+                                      self.right).simplify(
+                                          version,
+                                          variables,
+                                          evaluate_filters=False)
+            elif (isinstance(self.right,
+                             (FilterVF,
+                              FilterConstraint)) and self.right.variables):
+                right_simplified = self.right.simplify(
+                    version,
+                    variables,
+                    evaluate_filters=False)
+                if isinstance(right_simplified, (FilterVF, FilterConstraint)):
+                    # still a filter with undefined variables,
+                    # cannot remove logop
+                    return type(self)(
+                        self.left.simplify(
+                            None,
+                            variables,
+                            evaluate_filters=False),
+                        self.logop,
+                        right_simplified)
+                else:
+                    # filter is defined
+                    if isinstance(right_simplified, (bool, int, str)):
+                        # ensure formula is well-typed
+                        right_simplified = FilterVF(
+                            FilterAtom(right_simplified))
+                    return type(self)(self.left,
+                                      self.logop,
+                                      right_simplified).simplify(
+                                          version,
+                                          variables,
+                                          evaluate_filters=False)
+            else:
+                return super().simplify(
+                    version,
+                    variables,
+                    evaluate_filters=False)
 
     @classmethod
     def formula_type(cls) -> Type[VersionFormula]:  # noqa: D102
