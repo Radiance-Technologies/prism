@@ -9,6 +9,7 @@ from pathlib import Path
 from prism.util.opam import OCamlVersion, OpamAPI, Version
 from prism.util.opam.formula import (
     FilterAtom,
+    FilterVF,
     LogicalPF,
     LogicalVF,
     LogOp,
@@ -93,7 +94,7 @@ class TestOpamSwitch(unittest.TestCase):
                     LogOp.AND,
                     PackageConstraint(
                         "conf-findutils",
-                        FilterAtom(Variable("build"))))))
+                        FilterVF(FilterAtom(Variable("build")))))))
         self.assertEqual(actual, expected)
 
     def test_get_installed_version(self):
