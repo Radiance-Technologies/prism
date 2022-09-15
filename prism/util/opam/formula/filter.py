@@ -19,6 +19,7 @@ from .common import (
     Value,
     Variable,
     _bool_syntax,
+    _empty_string_syntax,
     _int_syntax,
     _string_syntax,
     _varident_syntax,
@@ -355,7 +356,15 @@ class FilterAtom(Filter):
         """
         Print the atom.
         """
-        return str(self.term)
+        term = self.term
+        if isinstance(term, str) and not isinstance(term, Variable):
+            if '"' in term:
+                result = f'"""{term}"""'
+            else:
+                result = f'"{term}"'
+        else:
+            result = str(term)
+        return result
 
     @property
     def variables(self) -> List[str]:  # noqa: D102
@@ -408,23 +417,31 @@ class FilterAtom(Filter):
                            | <bool>
         """
         term = input[pos :]
-        match = _bool_syntax.match(term)
+        match = None
+        group = 0
         for (regex,
              p) in [(_bool_syntax,
                      bool),
                     (_int_syntax,
                      int),
                     (_string_syntax,
+                     lambda s: str(s).encode("utf-8").decode("unicode_escape")),
+                    (_empty_string_syntax,
                      str),
                     (_varident_syntax,
                      Variable)]:
             match = regex.match(term)
             if match is not None:
                 parser = p
+                for i, g in enumerate(match.groups()):
+                    if g is not None:
+                        group = i + 1
+                        break
+                break
         if match is None:
             raise ParseError(FilterAtom, term)
         else:
-            term = parser(term[: match.end()])
+            term = parser(term[slice(*match.span(group))])
             pos += match.end()
         pos = cls._lstrip(input, pos)
         return cls(term), pos
