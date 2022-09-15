@@ -12,6 +12,7 @@ from .common import (  # noqa: F401
 from .filter import (  # noqa: F401
     Filter,
     FilterAtom,
+    IsDefined,
     LogicalF,
     NotF,
     ParensF,
