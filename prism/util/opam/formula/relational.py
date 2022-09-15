@@ -13,7 +13,7 @@ from .common import FormulaT, RelOp, Value
 @dataclass(frozen=True)
 class Relational(Binary[FormulaT, RelOp], ABC):
     """
-    A logical combination of two version formulae.
+    A binary (comparison) relation between two formulae.
     """
 
     @property
