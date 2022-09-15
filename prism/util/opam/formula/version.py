@@ -105,10 +105,10 @@ class VersionFormula(Parseable, ABC):
             formula, pos = FilterVF._chain_parse(input, pos)
         except ParseError:
             try:
-                formula, pos = FilterConstraint._chain_parse(input, pos)
+                formula, pos = VersionConstraint._chain_parse(input, pos)
             except ParseError:
                 try:
-                    formula, pos = VersionConstraint._chain_parse(input, pos)
+                    formula, pos = FilterConstraint._chain_parse(input, pos)
                 except ParseError:
                     try:
                         formula, pos = ParensVF._chain_parse(input, pos)
@@ -358,7 +358,7 @@ class FilterConstraint(VersionFormula):
         else:
             simplified = VersionConstraint(
                 self.relop,
-                value_to_string(simplified_filter))
+                Version.parse(value_to_string(simplified_filter)))
         if version is not None:
             simplified = simplified.is_satisfied(version, variables)
         return simplified
