@@ -14,18 +14,19 @@ _letter_syntax: re.Pattern = re.compile("[a-zA-Z]")
 _digit_syntax: re.Pattern = re.compile("[0-9]")
 _int_syntax: re.Pattern = re.compile(rf"\-?{_digit_syntax.pattern}+")
 _bool_syntax: re.Pattern = re.compile("true|false")
-_string_syntax: re.Pattern = re.compile('"(.*)"|"""(.*)"""')
+_string_syntax: re.Pattern = re.compile(r'"([^\s"]+)"|"""(\S*)"""')
+_empty_string_syntax: re.Pattern = re.compile('""')
 _identchar_syntax: re.Pattern = re.compile(
-    rf"({_letter_syntax.pattern}|{_digit_syntax.pattern}|\-|_)")
+    rf"(?:{_letter_syntax.pattern}|{_digit_syntax.pattern}|\-|_)")
 _ident_syntax: re.Pattern = re.compile(
     f"{_identchar_syntax.pattern}*[a-zA-Z]{_identchar_syntax.pattern}*")
 _varident_syntax: re.Pattern = re.compile(
     ''.join(
         [
-            "(",
-            f"({_ident_syntax.pattern}|_)",
-            r"(\+",
-            f"({_ident_syntax.pattern}|_))*:",
+            "(?:",
+            f"(?:{_ident_syntax.pattern}|_)",
+            r"(?:\+",
+            f"(?:{_ident_syntax.pattern}|_))*:",
             f")?{_ident_syntax.pattern}"
         ]))
 
@@ -136,14 +137,14 @@ class RelOp(Parseable, enum.Enum, metaclass=ABCEnumMeta):
 
     @classmethod
     def _chain_parse(cls, input: str, pos: int) -> Tuple['RelOp', int]:
-        input = input[pos : pos + 2]
-        if len(input) == 2 and input[1] != "=":
-            input = input[0]
+        op = input[pos : pos + 2]
+        if len(op) == 2 and op[1] != "=":
+            op = op[0]
         try:
-            result = cls(input)
+            result = cls(op)
         except ValueError as e:
             raise ParseError(cls, input[pos :]) from e
-        pos = cls._lstrip(input, pos + len(input))
+        pos = cls._lstrip(input, pos + len(op))
         return result, pos
 
     @classmethod
@@ -165,6 +166,12 @@ class RelOp(Parseable, enum.Enum, metaclass=ABCEnumMeta):
         if result is None:
             result = super()._missing_(value)
         return result
+
+
+Value = Optional[Union[bool, str]]
+"""
+The result of reducing a filter.
+"""
 
 
 class Formula(Protocol):
@@ -194,7 +201,7 @@ class Formula(Protocol):
                  *objects: Tuple[Any,
                                  ...],
                  **kwargs: Dict[str,
-                                Any]) -> Union[bool,
+                                Any]) -> Union[Value,
                                                'Formula']:
         """
         Substitute the given objects into the formula and simplify it.
@@ -218,11 +225,6 @@ class Variable(str):
 AssignedVariables = Mapping[str, Union[bool, int, str]]
 
 FormulaT = TypeVar('FormulaT', 'Formula', Parseable)
-
-Value = Optional[Union[bool, str]]
-"""
-The result of reducing a filter.
-"""
 
 
 def value_to_bool(v: Value) -> bool:
