@@ -234,8 +234,6 @@ class ProjectMetadata:
             self.coq_dependencies = self.coq_dependencies
         if None in self.ignore_path_regex:
             self.ignore_path_regex.remove(None)
-        if 'null' in self.ignore_path_regex:
-            self.ignore_path_regex.remove('null')
 
     def __getattribute__(self, attr: str) -> Any:  # noqa: D105
         if attr == "coq_dependencies":
