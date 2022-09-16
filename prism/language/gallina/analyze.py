@@ -485,7 +485,6 @@ class SexpAnalyzer:
                 "VernacCheckGuard",
                 "VernacProof",
                 "VernacProofMode",
-                "VernacExtend",
                 "VernacEndProof"
             ]))
     _ltac_exclude_regex: re.Pattern = re.compile(
@@ -497,6 +496,7 @@ class SexpAnalyzer:
                 "VernacLocateLtac",
                 "VernacPrintLtacs"
             ]))
+    _vernac_extend_regex: re.Pattern = re.compile("VernacExtend")
 
     @classmethod
     def analyze_vernac(cls, sexp: SexpNode) -> SexpInfo.Vernac:
@@ -1255,15 +1255,15 @@ class SexpAnalyzer:
         sentence that would occur while in proof mode (such as
         ``Proof.``, ``Qed.``, or a brace/bullet).
 
-        The `_ltac_regex` and `_ltac_exclude_regex` lists were derived
-        from the notation defined at
+        The `_ltac_regex`, `_ltac_exclude_regex`, and `_vernac_extend`
+        patterns were derived from the notation defined at
         https://github.com/coq/coq/blob/cbe681ab1a9db43e28327716a76db4dee5adc2e2/plugins/ltac/g_ltac.mlg
         and the documentation at
         https://coq.inria.fr/refman/proof-engine/ltac.html#print-identity-tactic-idtac
         """  # noqa: B950
         sexp_str = str(sexp)
-        if cls._ltac_regex.search(sexp_str) is not None:
-            # The sexp is ltac-related
+        if cls._vernac_extend_regex.search(sexp_str) is not None:
+            # The sexp has a VernacExtend command
             if cls._ltac_exclude_regex.search(sexp_str) is not None:
                 # The sexp is defining new tactics or otherwise not
                 # part of a proof
@@ -1271,6 +1271,9 @@ class SexpAnalyzer:
             else:
                 # The sexp is part of a proof
                 return True
+        elif cls._ltac_regex.search(sexp_str) is not None:
+            # The sexp is part of a proof
+            return True
         else:
-            # The sexp is not ltac-related
+            # The sexp is not ltac-related and not part of a proof
             return False
