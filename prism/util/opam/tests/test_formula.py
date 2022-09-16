@@ -467,6 +467,12 @@ class TestPackageFormula(unittest.TestCase):
             "dune" {>= "2.8.0"} &
             "menhirLib" {= version} &
             "menhirSdk" {= version}
+            """,
+            """
+            "ocaml" {>= "5.03.0" | (?build | ?debug)} &
+            "dune" {>= "2.8.0" & !?with-test} &
+            "menhirLib" {?version} &
+            "menhirSdk" {?build}
             """
         ]
         self.packages = {
@@ -520,67 +526,124 @@ class TestPackageFormula(unittest.TestCase):
         Examples demonstrate simplification to Booleans, removal of
         logical operations, short-circuiting, and variable substitution.
         """
-        expected_simplifications = [
-            'True',
-            normalize_spaces(
-                """
-            "ocaml-base-compiler" { = "4.08.1" } |
-            "ocaml-variants" { >= "4.08.1" & < "4.08.2~" } |
-            "ocaml-system" { >= "4.08.1" & < "4.08.2~" }
-            """),
-            normalize_spaces(
-                """
-            "dune" { >= "1.4" } &
-            "menhir" { >= "20181113" } &
-            "ANSITerminal" &
-            "logs" &
-            "conf-freetype" &
-            "conf-pkg-config" &
-            "conf-cairo" &
-            "cairo2" &
-            "easy-format"
-            """),
-            normalize_spaces(
-                """
-            (("ocamlfind-secondary")) &
-            "base-unix"
-            """),
-            normalize_spaces(
-                """
-            "odoc-parser" { >= "0.9.0" & < "2.0.0" } &
-            "cppo" { >= "1.1.0" } &
-            "dune" { >= "2.9.1" } &
-            "fpath" &
-            ("sexplib0") &
-            "conf-jq" &
-            "ppx_expect" &
-            "bos" &
-            "bisect_ppx" { dev & > "2.5.0" } &
-            ("ocaml" { < "4.03.0" & dev } | "mdx" { dev })
-            """),
-            # demonstrates a dep being removed by a filter evaluating to
-            # False
-            normalize_spaces(
-                """
-            "ocaml" { = "5.0.0" & post } &
-            "base-unix" { post } &
-            "base-bigarray" { post } &
-            "base-threads" { post } &
-            "base-domains" { post } &
-            "base-nnp" { post } &
-            "ocaml-options-vanilla" { post }
-            """),
-            normalize_spaces(
-                """
-            "dune" { >= "2.8.0" } &
-            "menhirLib" { = version } &
-            "menhirSdk" { = version }
-            """)
-        ]
-        for formula, expected in zip(self.formulae, expected_simplifications):
-            actual = PackageFormula.parse(formula)
-            actual = actual.simplify(self.packages, self.variables)
-            self.assertEqual(str(actual), expected)
+        with self.subTest("evaluate_undefined"):
+            expected_simplifications = [
+                'True',
+                normalize_spaces(
+                    """
+                "ocaml-base-compiler" { = "4.08.1" } |
+                "ocaml-variants" { >= "4.08.1" & < "4.08.2~" } |
+                "ocaml-system" { >= "4.08.1" & < "4.08.2~" }
+                """),
+                normalize_spaces(
+                    """
+                "dune" { >= "1.4" } &
+                "menhir" { >= "20181113" } &
+                "ANSITerminal" &
+                "logs" &
+                "conf-freetype" &
+                "conf-pkg-config" &
+                "conf-cairo" &
+                "cairo2" &
+                "easy-format"
+                """),
+                normalize_spaces(
+                    """
+                (("ocamlfind-secondary")) &
+                "base-unix"
+                """),
+                normalize_spaces(
+                    """
+                "odoc-parser" { >= "0.9.0" & < "2.0.0" } &
+                "cppo" { >= "1.1.0" } &
+                "dune" { >= "2.9.1" } &
+                "fpath" &
+                ("sexplib0") &
+                "conf-jq" &
+                "ppx_expect" &
+                "bos"
+                """),
+                # demonstrates undefined filters removing deps
+                'True',
+                '"dune" { >= "2.8.0" }',
+                '"menhirSdk"'
+            ]
+            for formula, expected in zip(self.formulae, expected_simplifications):
+                actual = PackageFormula.parse(formula)
+                actual = actual.simplify(
+                    self.packages,
+                    self.variables,
+                    evaluate_filters=True)
+                self.assertEqual(str(actual), expected)
+        with self.subTest("keep_undefined"):
+            expected_simplifications = [
+                'True',
+                normalize_spaces(
+                    """
+                "ocaml-base-compiler" { = "4.08.1" } |
+                "ocaml-variants" { >= "4.08.1" & < "4.08.2~" } |
+                "ocaml-system" { >= "4.08.1" & < "4.08.2~" }
+                """),
+                normalize_spaces(
+                    """
+                "dune" { >= "1.4" } &
+                "menhir" { >= "20181113" } &
+                "ANSITerminal" &
+                "logs" &
+                "conf-freetype" &
+                "conf-pkg-config" &
+                "conf-cairo" &
+                "cairo2" &
+                "easy-format"
+                """),
+                normalize_spaces(
+                    """
+                (("ocamlfind-secondary")) &
+                "base-unix"
+                """),
+                normalize_spaces(
+                    """
+                "odoc-parser" { >= "0.9.0" & < "2.0.0" } &
+                "cppo" { >= "1.1.0" } &
+                "dune" { >= "2.9.1" } &
+                "fpath" &
+                ("sexplib0") &
+                "conf-jq" &
+                "ppx_expect" &
+                "bos" &
+                "bisect_ppx" { dev & > "2.5.0" } &
+                ("ocaml" { < "4.03.0" & dev } | "mdx" { dev })
+                """),
+                # demonstrates a dep being removed by a filter
+                # evaluating to False
+                normalize_spaces(
+                    """
+                "ocaml" { = "5.0.0" & post } &
+                "base-unix" { post } &
+                "base-bigarray" { post } &
+                "base-threads" { post } &
+                "base-domains" { post } &
+                "base-nnp" { post } &
+                "ocaml-options-vanilla" { post }
+                """),
+                normalize_spaces(
+                    """
+                "dune" { >= "2.8.0" } &
+                "menhirLib" { = version } &
+                "menhirSdk" { = version }
+                """),
+                normalize_spaces(
+                    """
+                "menhirLib" { ?version } & "menhirSdk"
+                """)
+            ]
+            for formula, expected in zip(self.formulae, expected_simplifications):
+                actual = PackageFormula.parse(formula)
+                actual = actual.simplify(
+                    self.packages,
+                    self.variables,
+                    evaluate_filters=False)
+                self.assertEqual(str(actual), expected)
 
     def test_size(self):
         """
