@@ -86,8 +86,9 @@ class TestOpamSwitch(unittest.TestCase):
                                                    10)))),
             LogOp.AND,
             LogicalPF(
-                PackageConstraint("ocamlfind",
-                                  FilterAtom(Variable("build"))),
+                PackageConstraint(
+                    "ocamlfind",
+                    FilterVF(FilterAtom(Variable("build")))),
                 LogOp.AND,
                 LogicalPF(
                     PackageConstraint("num"),
