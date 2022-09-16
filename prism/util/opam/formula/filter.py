@@ -231,6 +231,10 @@ class IsDefined(Filter):
     def __str__(self) -> str:  # noqa: D105
         return f"?{self.formula}"
 
+    @property
+    def variables(self) -> List[str]:  # noqa: D102
+        return self.formula.variables
+
     def evaluate(  # noqa: D102
             self,
             variables: Optional[AssignedVariables] = None
@@ -253,7 +257,7 @@ class IsDefined(Filter):
         begpos = pos
         pos = cls._expect(input, pos, "?", begpos)
         pos = cls._lstrip(input, pos)
-        formula, pos = cls.formula_type()._chain_parse(input, pos)
+        formula, pos = Filter._chain_parse(input, pos)
         return cls(formula), pos
 
 
