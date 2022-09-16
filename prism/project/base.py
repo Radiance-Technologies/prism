@@ -694,7 +694,6 @@ class Project(ABC):
         return_asts: bool, optional
             Return asts with sentences as a list of tuples,
             by default `False`
-
         sentence_extraction_method : SentenceExtractionMethod
             Method by which sentences should be extracted
 
