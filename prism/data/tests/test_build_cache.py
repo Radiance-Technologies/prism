@@ -4,7 +4,7 @@ Test suite for `prism.data.build_cache`.
 import shutil
 import unittest
 from pathlib import Path
-from typing import Set
+from typing import List
 
 from prism.data.build_cache import (
     CoqProjectBuildCache,
@@ -16,9 +16,11 @@ from prism.data.build_cache import (
 from prism.data.dataset import CoqProjectBaseDataset
 from prism.language.gallina.analyze import SexpInfo
 from prism.language.heuristic.util import ParserUtils
-from prism.project import ProjectRepo
-from prism.project.base import SentenceExtractionMethod
+from prism.language.sexp.list import SexpList
+from prism.language.sexp.string import SexpString
+from prism.project.base import SEM, SentenceExtractionMethod
 from prism.project.metadata.storage import MetadataStorage
+from prism.project.repo import ProjectRepo
 from prism.tests import _PROJECT_EXAMPLES_PATH
 from prism.util.opam import OpamAPI
 
@@ -40,34 +42,30 @@ class TestCoqProjectBuildCache(unittest.TestCase):
         environment = ProjectBuildEnvironment(OpamAPI.active_switch.export())
         for project in self.dataset.projects.values():
             command_data = {}
+            project: ProjectRepo
             for filename in project.get_file_list():
-                file_commands: Set[VernacCommandData] = command_data.setdefault(
-                    filename,
-                    set())
+                file_commands: List[
+                    VernacCommandData] = command_data.setdefault(
+                        filename,
+                        list())
                 doc = project.get_file(filename)
-                beg_char_idx = 0
-                end_char_idx = 0
-                for (sentence_idx,
-                     sentence) in enumerate(project.extract_sentences(
-                         doc,
-                         sentence_extraction_method=project
-                         .sentence_extraction_method)):
-                    end_char_idx += len(sentence)
+                for sentence, location in zip(*project.extract_sentences(
+                        doc,
+                        sentence_extraction_method=SEM.HEURISTIC,
+                        return_locations=True,
+                        glom_proofs=False)):
+                    sentence: str
+                    location: SexpInfo.Loc
                     command_type, identifier = ParserUtils.extract_identifier(sentence)
-                    file_commands.add(
+                    file_commands.append(
                         VernacCommandData(
                             identifier,
                             command_type,
-                            SexpInfo.Loc(
-                                filename,
-                                sentence_idx,
-                                0,
-                                sentence_idx,
-                                0,
-                                beg_char_idx,
-                                end_char_idx),
-                            None))
-                    beg_char_idx = end_char_idx
+                            None,
+                            str(sentence),
+                            SexpList([SexpString("foo"),
+                                      SexpString("bar")]),
+                            location))
                 break  # one file is enough to test
             data = ProjectCommitData(
                 project.metadata,

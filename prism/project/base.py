@@ -14,6 +14,7 @@ from subprocess import CalledProcessError
 from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
 
 from prism.data.document import CoqDocument
+from prism.language.gallina.analyze import SexpInfo
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
 from prism.project.exception import ProjectBuildError
 from prism.project.metadata import ProjectMetadata
@@ -668,7 +669,9 @@ class Project(ABC):
             glom_ltac: bool = False,
             return_asts: bool = False,
             sentence_extraction_method: SEM = SEM.SERAPI,
-            **kwargs) -> List[str]:
+            **kwargs) -> Union[List[str],
+                               Tuple[List[str],
+                                     List[SexpInfo.Loc]]]:
         """
         Split the Coq file text by sentences.
 
@@ -691,7 +694,6 @@ class Project(ABC):
         return_asts: bool, optional
             Return asts with sentences as a list of tuples,
             by default `False`
-
         sentence_extraction_method : SentenceExtractionMethod
             Method by which sentences should be extracted
 
@@ -701,6 +703,11 @@ class Project(ABC):
             A list of strings corresponding to Coq source file
             sentences, with proofs glommed (or not) depending on input
             flag.
+        List[SexpInfo.Loc], optional
+            A list of locations corresponding to the returned list of
+            sentences. This list is only returned if certain arguments
+            are passed to certain parsers. With the default args, this
+            is NOT returned.
         """
         return sentence_extraction_method.parser(
         ).parse_sentences_from_document(

@@ -9,7 +9,7 @@ import warnings
 from dataclasses import InitVar, dataclass, field
 from multiprocessing.pool import Pool
 from pathlib import Path
-from typing import ClassVar, Dict, Iterable, List, Optional, Set, Tuple, Union
+from typing import ClassVar, Dict, Iterable, List, Optional, Tuple, Union
 
 import setuptools_scm
 import seutil as su
@@ -17,6 +17,33 @@ import seutil as su
 from prism.language.gallina.analyze import SexpInfo
 from prism.project.metadata import ProjectMetadata
 from prism.util.opam.switch import OpamSwitch
+from prism.util.radpytools.dataclasses import default_field
+
+from ..interface.coq.goals import Goals
+from ..interface.coq.serapi import AbstractSyntaxTree
+
+
+@dataclass
+class ProofSentence:
+    """
+    Type associating individual proof sentences to ASTs and open goals.
+    """
+
+    sentence: str
+    """
+    Text of a sentence from a proof.
+    """
+    ast: AbstractSyntaxTree
+    """
+    The AST derived from the proof sentence.
+    """
+    goals: Optional[Goals] = None
+    """
+    Open goals, if any, associated with this proof sentence.
+    """
+
+
+Proof = List[ProofSentence]
 
 
 @dataclass
@@ -36,19 +63,37 @@ class VernacCommandData:
     """
     The type of command, e.g., Theorem, Inductive, etc.
     """
-    location: SexpInfo.Loc
-    """
-    The location of the command within a project.
-    """
     command_error: Optional[str]
     """
     The error, if any, that results when trying to execute the command
     (e.g., within the ``sertop``). If there is no error, then None.
     """
+    sentence: str
+    """
+    The whitespace-normalized sentence text.
+    """
+    sexp: AbstractSyntaxTree
+    """
+    The serialized s-expression of this sentence.
+    """
+    location: SexpInfo.Loc
+    """
+    The location of this vernacular command.
+    """
+    proofs: List[Proof] = default_field(list())
+    """
+    Associated proofs, if any. Proofs are considered to be a list of
+    strings. Each contained `ProofSentence` object contains a proof
+    sentence, a proof sentence AST, and any open goals associated with
+    the proof.
+    """
 
     def __hash__(self) -> int:  # noqa: D105
         # do not include the error
         return hash((self.identifier, self.command_type, self.location))
+
+
+VernacDict = Dict[str, List[VernacCommandData]]
 
 
 @dataclass
@@ -141,7 +186,7 @@ class ProjectCommitData:
     Metadata that identifies the project name, commit, Coq version, and
     other relevant data for reproduction and of the cache.
     """
-    command_data: Dict[str, Set[VernacCommandData]]
+    command_data: VernacDict
     """
     A map from file names relative to the root of the project to the set
     of command results.

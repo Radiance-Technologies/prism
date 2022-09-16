@@ -2,7 +2,7 @@
 Module for storing cache extraction functions.
 """
 from functools import reduce
-from typing import Callable, Dict, List, Optional, Set, Union
+from typing import Callable, List, Optional, Union
 
 from prism.data.build_cache import (
     CoqProjectBuildCache,
@@ -10,12 +10,11 @@ from prism.data.build_cache import (
     ProjectBuildResult,
     ProjectCommitData,
     VernacCommandData,
+    VernacDict,
 )
-from prism.language.gallina.analyze import SexpInfo
-from prism.language.gallina.parser import CoqParser
+from prism.interface.coq.serapi import SerAPI
 from prism.language.heuristic.util import ParserUtils
-from prism.language.id import LanguageId
-from prism.project.base import Project
+from prism.project.base import SEM, Project
 from prism.project.exception import ProjectBuildError
 from prism.project.repo import ProjectRepo
 from prism.util.opam import PackageFormula
@@ -24,7 +23,7 @@ from prism.util.opam.version import Version
 from prism.util.radpytools.os import pushd
 from prism.util.swim import SwitchManager
 
-VernacDict = Dict[str, Set[VernacCommandData]]
+from ..language.gallina.analyze import SexpAnalyzer, SexpInfo
 
 
 def get_dependency_formula(
@@ -69,41 +68,33 @@ def extract_vernac_commands(
         serapi_options = project.serapi_options
     command_data = {}
     for filename in project.get_file_list():
-        file_commands: Set[VernacCommandData] = command_data.setdefault(
+        file_commands: List[VernacCommandData] = command_data.setdefault(
             filename,
-            set())
-        beg_char_idx = 0
-        end_char_idx = 0
+            list())
         with pushd(project.dir_abspath):
-            sentences_enumerated = enumerate(
-                CoqParser.parse_sentences(
-                    filename,
-                    project.serapi_options,
-                    project.opam_switch))
-        for (sentence_idx, vernac_sentence) in sentences_enumerated:
-            sentence = str(vernac_sentence)
-            end_char_idx += len(sentence)
-            vs_lid = vernac_sentence.classify_lid()
-            if (vs_lid == LanguageId.Vernac
-                    or vs_lid == LanguageId.VernacMixedWithGallina):
-                command_type, identifier = ParserUtils.extract_identifier(sentence)
-                file_commands.add(
-                    VernacCommandData(
-                        identifier,
-                        command_type,
-                        SexpInfo.Loc(
-                            filename,
-                            sentence_idx,
-                            0,
-                            sentence_idx,
-                            0,
-                            beg_char_idx,
-                            end_char_idx),
-                        None))
-            else:
-                # This is where we would handle Ltac, aka proofs
-                pass
-            beg_char_idx = end_char_idx
+            with SerAPI(project.serapi_options) as serapi:
+                for sentence, location in zip(*project.extract_sentences(
+                        project.get_file(filename),
+                        sentence_extraction_method=SEM.HEURISTIC,
+                        return_locations=True,
+                        glom_proofs=False)):
+                    sentence: str
+                    location: SexpInfo.Loc
+                    _, _, sexp = serapi.execute(sentence, True)
+                    if SexpAnalyzer.is_ltac(sexp):
+                        # This is where we would handle proofs
+                        ...
+                    else:
+                        command_type, identifier = \
+                            ParserUtils.extract_identifier(sentence)
+                        file_commands.append(
+                            VernacCommandData(
+                                identifier,
+                                command_type,
+                                None,
+                                sentence,
+                                sexp,
+                                location))
     return command_data
 
 
