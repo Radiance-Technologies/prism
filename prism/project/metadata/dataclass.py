@@ -217,6 +217,8 @@ class ProjectMetadata:
                      ('opam_dependencies',
                       lambda x: list(dict.fromkeys(x))),
                      ('coq_dependencies',
+                      set),
+                     ('ignore_path_regex',
                       set)]:
             if getattr(self, attr) is None:
                 if attr != 'opam_dependencies':
@@ -232,8 +234,6 @@ class ProjectMetadata:
         if self.coq_dependencies:
             # transfer to opam_dependencies as side-effect
             self.coq_dependencies = self.coq_dependencies
-        if None in self.ignore_path_regex:
-            self.ignore_path_regex.remove(None)
 
     def __getattribute__(self, attr: str) -> Any:  # noqa: D105
         if attr == "coq_dependencies":
