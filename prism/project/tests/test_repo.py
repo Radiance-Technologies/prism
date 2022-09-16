@@ -323,7 +323,7 @@ class TestProjectRepoLambda(unittest.TestCase):
         Ensure files are extracted in topological order.
         """
         with prism.util.radpytools.os.pushd(self.repo_path):
-            ordered = self.project.get_ordered_file_list()
+            ordered = self.project.get_file_list(dependency_order=True)
             files = os.listdir("./")
             files = [
                 os.path.join(self.repo_path,

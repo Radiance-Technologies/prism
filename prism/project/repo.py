@@ -6,7 +6,7 @@ from __future__ import annotations
 import os
 import pathlib
 import random
-import re
+import warnings
 from enum import Enum
 from typing import List, Optional
 
@@ -17,7 +17,7 @@ from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
 from prism.project.base import MetadataArgs, Project
 from prism.project.metadata.storage import MetadataStorage
-from prism.util.build_tools.coqdep import order_dependencies
+from prism.util.radpytools.os import pushd
 
 
 class CommitTraversalStrategy(Enum):
@@ -378,6 +378,10 @@ class ProjectRepo(Repo, Project):
         ValueError
             If given `filename` does not end in ".v"
         """
+        if commit_name is not None:
+            warnings.warn(
+                "Querying files of a non-checked out commit is deprecated",
+                DeprecationWarning)
         commit = self.commit(commit_name)
         self.git.checkout(commit_name)
         # Compute relative path
@@ -409,22 +413,40 @@ class ProjectRepo(Repo, Project):
 
         This function may change the git repo HEAD on disk.
         """
-        commit = self.commit(self.current_commit_name)
+        if self.current_commit_name is not None:
+            warnings.warn(
+                "Querying files of a non-checked out commit is deprecated",
+                DeprecationWarning)
         self.git.checkout(self.current_commit_name)
-        files = [f for f in commit.tree.traverse() if f.abspath.endswith(".v")]
-        return [
-            CoqDocument(
-                f.path,
-                project_path=self.path,
-                source_code=CoqParser.parse_source(f.abspath)) for f in files
-        ]
+        with pushd(self.path):
+            return [
+                CoqDocument(
+                    f,
+                    project_path=self.path,
+                    source_code=CoqParser.parse_source(f))
+                for f in self.get_file_list(relative=True)
+            ]
 
-    def get_file_list(self, commit_name: Optional[str] = None) -> List[str]:
+    def get_file_list(
+            self,
+            relative: bool = False,
+            dependency_order: bool = False,
+            commit_name: Optional[str] = None) -> List[str]:
         """
         Return a list of all Coq files associated with this project.
 
         Parameters
         ----------
+        relative : bool, optional
+            Whether to return absolute file paths or paths relative to
+            the root of the project, by default False.
+        dependency_order : bool, optional
+            Whether to return the files in dependency order or not, by
+            default False.
+            Dependency order means that if one file ``foo`` depends
+            upon another file ``bar``, then ``bar`` will appear
+            before ``foo`` in the returned list.
+            If False, then the files are sorted lexicographically.
         commit_name : str or None, optional
             A commit hash, branch name, or tag name from which to get
             the file list. This is HEAD by default.
@@ -432,41 +454,20 @@ class ProjectRepo(Repo, Project):
         Returns
         -------
         List[str]
-            The list of absolute paths to all Coq files in the project
+            The list of absolute (or `relative`) paths to all Coq files
+            in the project sorted according to `dependency_order`, not
+            including those ignored by `ignore_path_regex`.
         """
-        commit = self.commit(commit_name)
-        files = []
-        regex_strs = self.metadata.ignore_path_regex
-        ignore_regexes = [re.compile(x) for x in regex_strs]
-        for f in commit.tree.traverse():
-            filename = str(f.abspath)
-            if filename.endswith(".v"):
-                success = True
-                for regex in ignore_regexes:
-                    if regex.match(filename):
-                        success = False
-                if success:
-                    files.append(filename)
-        return sorted(files)
-
-    def get_ordered_file_list(self,
-                              commit_name: Optional[str] = None) -> List[str]:
-        """
-        Return a topologically sort of all the project's Coq files.
-
-        Parameters
-        ----------
-        commit_name : str or None, optional
-            A commit hash, branch name, or tag name from which to get
-            the file list. This is HEAD by default.
-
-        Returns
-        -------
-        List[str]
-            The list of absolute paths to all Coq files in the project
-        """
-        files = self.get_file_list()
-        return order_dependencies(files, self.opam_switch)
+        if commit_name is not None:
+            warnings.warn(
+                "Querying files of a non-checked out commit is deprecated",
+                DeprecationWarning)
+            return self.filter_files(
+                self.commit(commit_name).tree.traverse(),
+                relative,
+                dependency_order)
+        else:
+            return super().get_file_list(relative, dependency_order)
 
     def get_random_commit(self) -> Commit:
         """

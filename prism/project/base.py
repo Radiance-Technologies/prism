@@ -6,6 +6,7 @@ import logging
 import os
 import pathlib
 import random
+import re
 from abc import ABC, abstractmethod
 from dataclasses import fields
 from enum import Enum, auto
@@ -20,9 +21,12 @@ from prism.project.exception import ProjectBuildError
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.strace import IQR, strace_build
+from prism.util.build_tools.coqdep import order_dependencies
 from prism.util.logging import default_log_level
 from prism.util.opam import OpamSwitch, PackageFormula
 from prism.util.opam.formula.package import LogicalPF
+from prism.util.path import get_relative_path
+from prism.util.re import regex_from_options
 
 logger: logging.Logger = logging.getLogger(__name__)
 logger.setLevel(default_log_level())
@@ -153,6 +157,13 @@ class Project(ABC):
         Get the version of OCaml installed in the project's switch.
         """
         return self._coq_version
+
+    @property
+    def ignore_path_regex(self) -> re.Pattern:
+        """
+        Get the regular expression that matches Coq filepaths to ignore.
+        """
+        return regex_from_options(self.metadata.ignore_path_regex, True, True)
 
     @property
     def install_cmd(self) -> List[str]:
@@ -416,6 +427,52 @@ class Project(ABC):
         self._clean()
         return r
 
+    def filter_files(
+            self,
+            files: Iterable[os.PathLike],
+            relative: bool = False,
+            dependency_order: bool = False) -> List[str]:
+        """
+        Filter and sort the given files relative to this project.
+
+        Parameters
+        ----------
+        files : Iterable[os.PathLike]
+            A collection of files, presumed to belong to this project.
+        relative : bool, optional
+            Whether to return absolute file paths or paths relative to
+            the root of the project, by default False.
+        dependency_order : bool, optional
+            Whether to return the files in dependency order or not, by
+            default False.
+            Dependency order means that if one file ``foo`` depends
+            upon another file ``bar``, then ``bar`` will appear
+            before ``foo`` in the returned list.
+            If False, then the files are sorted lexicographically.
+
+        Returns
+        -------
+        List[str]
+            The list of absolute (or `relative`) paths to all Coq files
+            in the project sorted according to `dependency_order`, not
+            including those ignored by `ignore_path_regex`.
+        """
+        root = self.path
+        ignore_regex = self.ignore_path_regex
+        filtered = []
+        for file in files:
+            file = get_relative_path(file, root)
+            file_str = str(file)
+            if ignore_regex.match(file_str) is None:
+                # file should be kept
+                filtered.append(
+                    str(file.resolve()) if not relative else file_str)
+        if dependency_order:
+            filtered = order_dependencies(filtered, self.opam_switch)
+        else:
+            filtered = sorted(filtered)
+        return filtered
+
     def get_file(self, filename: str, *args, **kwargs) -> CoqDocument:
         """
         Return a specific Coq source file.
@@ -439,17 +496,21 @@ class Project(ABC):
             raise ValueError("filename must end in .v")
         return self._get_file(filename, *args, **kwargs)
 
-    @abstractmethod
-    def get_file_list(self, **kwargs) -> List[str]:
+    def get_file_list(
+            self,
+            relative: bool = False,
+            dependency_order: bool = False) -> List[str]:
         """
         Return a list of all Coq files associated with this project.
 
-        Returns
-        -------
-        List[str]
-            The list of absolute paths to all Coq files in the project
+        See Also
+        --------
+        filter_files : For details on the parameters and return value.
         """
-        pass
+        return self.filter_files(
+            pathlib.Path(self.path).rglob("*.v"),
+            relative,
+            dependency_order)
 
     def get_random_file(self, **kwargs) -> CoqDocument:
         """

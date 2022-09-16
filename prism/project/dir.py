@@ -100,18 +100,3 @@ class ProjectDir(Project):
                     project_path=self.path,
                     source_code=CoqParser.parse_source(file)))
         return out_files
-
-    def get_file_list(self, **kwargs) -> List[str]:
-        """
-        Return a list of all Coq files associated with this project.
-
-        Returns
-        -------
-        List[str]
-            The list of absolute paths to all Coq files in the project
-        """
-        files = [
-            str(i.resolve())
-            for i in pathlib.Path(self.working_dir).rglob("*.v")
-        ]
-        return sorted(files)
