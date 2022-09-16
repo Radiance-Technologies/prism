@@ -6,7 +6,7 @@ import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import partial
-from typing import Iterable, List, Optional, Tuple, Type, Union
+from typing import Iterable, List, Optional, Set, Tuple, Type, Union
 
 from prism.util.opam.formula.negate import Not
 from prism.util.opam.version import Version
@@ -51,7 +51,7 @@ class VersionFormula(Parseable, ABC):
 
     @property
     @abstractmethod
-    def variables(self) -> List[str]:
+    def variables(self) -> Set[str]:
         """
         Get a list of the variable names that appear in this formula.
         """
@@ -156,10 +156,8 @@ class LogicalVF(Logical[VersionFormula], VersionFormula):
     """
 
     @property
-    def variables(self) -> List[str]:  # noqa: D102
-        variables = []
-        variables.extend(self.left.variables)
-        variables.extend(self.right.variables)
+    def variables(self) -> Set[str]:  # noqa: D102
+        variables = self.left.variables.union(self.right.variables)
         return variables
 
     def simplify(
@@ -261,7 +259,7 @@ class NotVF(Not[VersionFormula], VersionFormula):
     """
 
     @property
-    def variables(self) -> List[str]:  # noqa: D102
+    def variables(self) -> Set[str]:  # noqa: D102
         return self.formula.variables
 
     @classmethod
@@ -276,7 +274,7 @@ class ParensVF(Parens[VersionFormula], VersionFormula):
     """
 
     @property
-    def variables(self) -> List[str]:  # noqa: D102
+    def variables(self) -> Set[str]:  # noqa: D102
         return self.formula.variables
 
     @classmethod
@@ -297,8 +295,8 @@ class VersionConstraint(VersionFormula):
         return f'{self.relop} "{self.version}"'
 
     @property
-    def variables(self) -> List[str]:  # noqa: D102
-        return []
+    def variables(self) -> Set[str]:  # noqa: D102
+        return set()
 
     def is_satisfied(
             self,
@@ -357,7 +355,7 @@ class FilterVF(VersionFormula):
         return f"{self.filter}"
 
     @property
-    def variables(self) -> List[str]:  # noqa: D102
+    def variables(self) -> Set[str]:  # noqa: D102
         return self.filter.variables
 
     def is_satisfied(  # noqa: D102
@@ -411,7 +409,7 @@ class FilterConstraint(VersionFormula):
         return f'{self.relop} {self.filter}'
 
     @property
-    def variables(self) -> List[str]:  # noqa: D102
+    def variables(self) -> Set[str]:  # noqa: D102
         return self.filter.variables
 
     def is_satisfied(

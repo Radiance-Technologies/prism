@@ -8,9 +8,12 @@ from prism.util.opam.formula import (
     FilterAtom,
     FilterConstraint,
     FilterVF,
+    IsDefined,
+    LogicalF,
     LogicalPF,
     LogicalVF,
     LogOp,
+    NotF,
     NotVF,
     PackageFormula,
     ParensF,
@@ -275,6 +278,13 @@ class TestVersionFormula(unittest.TestCase):
                                            7,
                                            1,
                                            "pre")))
+        self.assertEqual(
+            VersionFormula.parse('version >= "0.1.0"'),
+            FilterVF(
+                RelationalF(
+                    FilterAtom(Variable("version")),
+                    RelOp.GEQ,
+                    FilterAtom("0.1.0"))))
         with self.subTest("operator_precedence"):
             self.assertEqual(
                 VersionFormula.parse(
@@ -324,12 +334,31 @@ class TestVersionFormula(unittest.TestCase):
                     VersionConstraint(RelOp.EQ,
                                       OpamVersion.parse("4.0+dev"))))
             self.assertEqual(
-                VersionFormula.parse('version >= "0.1.0"'),
-                FilterVF(
-                    RelationalF(
-                        FilterAtom(Variable("version")),
-                        RelOp.GEQ,
-                        FilterAtom("0.1.0"))))
+                VersionFormula.parse(
+                    '>= "2.7.3" | build & version < "8.9.0~pre" & (!debug | ?debug)'
+                ),
+                LogicalVF(
+                    VersionConstraint(RelOp.GEQ,
+                                      Version.parse("2.7.3")),
+                    LogOp("|"),
+                    FilterVF(
+                        LogicalF(
+                            FilterAtom(Variable('build')),
+                            LogOp("&"),
+                            LogicalF(
+                                RelationalF(
+                                    FilterAtom(Variable("version")),
+                                    RelOp("<"),
+                                    FilterAtom("8.9.0~pre")),
+                                LogOp.AND,
+                                ParensF(
+                                    LogicalF(
+                                        NotF(FilterAtom(Variable("debug"))),
+                                        LogOp.OR,
+                                        IsDefined(
+                                            FilterAtom(
+                                                Variable("debug"))))))))))
+
         self.assertEqual(
             VersionFormula.parse(
                 '!= ("2.0.pre") | !(< "3") & <= "3.9.0" | ="4.0+dev"'),
@@ -472,7 +501,8 @@ class TestPackageFormula(unittest.TestCase):
             "ocaml" {>= "5.03.0" | (?build | ?debug)} &
             "dune" {>= "2.8.0" & !?with-test} &
             "menhirLib" {?version} &
-            "menhirSdk" {?build}
+            "menhirSdk" {?build} &
+            "bisect_ppx" { < "3" | undefined }
             """
         ]
         self.packages = {
@@ -513,10 +543,27 @@ class TestPackageFormula(unittest.TestCase):
         self.packages['ocaml-variants'] = Version.parse('4.08.1')
         self.variables['dev'] = False
         self.variables['version'] = 20181113
-        expected_satisfactions = [True, True, False, True, False, True, True]
+        expected_satisfactions = [
+            True,
+            True,
+            False,
+            True,
+            False,
+            True,
+            True,
+            True
+        ]
         for formula, expected in zip(self.formulae, expected_satisfactions):
             actual = PackageFormula.parse(formula)
             actual = actual.is_satisfied(self.packages, self.variables)
+            self.assertEqual(actual, expected)
+        # test each clause of last example independently
+        expected_satisfactions = [True, False, True, True]
+        clauses = PackageFormula.parse(self.formulae[-1]).to_conjunctive_list()
+        for clause, expected in zip(clauses, expected_satisfactions):
+            actual = clause.version_constraint.is_satisfied(
+                self.packages[clause.package_name],
+                self.variables)
             self.assertEqual(actual, expected)
 
     def test_simplify(self):
@@ -649,7 +696,7 @@ class TestPackageFormula(unittest.TestCase):
         """
         Verify calculation of the size property is correct.
         """
-        expected_sizes = [4, 1, 14, 3, 18, 8, 4]
+        expected_sizes = [4, 1, 14, 3, 18, 8, 4, 5]
         for formula, size in zip(self.formulae, expected_sizes):
             self.assertEqual(PackageFormula.parse(formula).size, size)
 
@@ -734,10 +781,44 @@ class TestPackageFormula(unittest.TestCase):
             "dune" { >= "2.8.0" } &
             "menhirLib" { = version } &
             "menhirSdk" { = version }
+            """),
+            normalize_spaces(
+                """
+            "ocaml" { >= "5.03.0" | (?build | ?debug) } &
+            "dune" { >= "2.8.0" & !?with-test } &
+            "menhirLib" { ?version } &
+            "menhirSdk" { ?build } &
+            "bisect_ppx" { < "3" | undefined }
             """)
         ]
         for formula, expected in zip(self.formulae, expected_formulae):
             self.assertEqual(str(PackageFormula.parse(formula)), expected)
+
+    def test_variables(self):
+        """
+        Verify that the variables in a formula can be retrieved.
+        """
+        expected_variables = [
+            {'build'},
+            set(),
+            set(),
+            set(),
+            {'build',
+             'with-test',
+             'dev'},
+            {'post',
+             'opam-version'},
+            {'version'},
+            {'build',
+             'debug',
+             'with-test',
+             'version',
+             'undefined'}
+        ]
+        for formula, expected in zip(self.formulae, expected_variables):
+            actual = PackageFormula.parse(formula)
+            actual = actual.variables
+            self.assertEqual(actual, expected)
 
 
 if __name__ == '__main__':

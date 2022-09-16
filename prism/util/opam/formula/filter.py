@@ -5,7 +5,7 @@ Defines classes for parsing and expressing version constraint filters.
 import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, Type, Union
+from typing import Optional, Set, Tuple, Type, Union
 
 from prism.util.opam.formula.negate import Not
 from prism.util.opam.formula.relational import Relational
@@ -54,7 +54,7 @@ class Filter(Parseable, ABC):
 
     @property
     @abstractmethod
-    def variables(self) -> List[str]:
+    def variables(self) -> Set[str]:
         """
         Get a list of the variable names that appear in this formula.
         """
@@ -159,10 +159,8 @@ class LogicalF(Logical[Filter], Filter):
     """
 
     @property
-    def variables(self) -> List[str]:  # noqa: D102
-        variables = []
-        variables.extend(self.left.variables)
-        variables.extend(self.right.variables)
+    def variables(self) -> Set[str]:  # noqa: D102
+        variables = self.left.variables.union(self.right.variables)
         return variables
 
     def evaluate(  # noqa: D102
@@ -198,7 +196,7 @@ class NotF(Not[Filter], Filter):
     """
 
     @property
-    def variables(self) -> List[str]:  # noqa: D102
+    def variables(self) -> Set[str]:  # noqa: D102
         return self.formula.variables
 
     def evaluate(  # noqa: D102
@@ -232,7 +230,7 @@ class IsDefined(Filter):
         return f"?{self.formula}"
 
     @property
-    def variables(self) -> List[str]:  # noqa: D102
+    def variables(self) -> Set[str]:  # noqa: D102
         return self.formula.variables
 
     def evaluate(  # noqa: D102
@@ -268,7 +266,7 @@ class ParensF(Parens[Filter], Filter):
     """
 
     @property
-    def variables(self) -> List[str]:  # noqa: D102
+    def variables(self) -> Set[str]:  # noqa: D102
         return self.formula.variables
 
     def evaluate(  # noqa: D102
@@ -289,10 +287,8 @@ class RelationalF(Relational[Filter], Filter):
     """
 
     @property
-    def variables(self) -> List[str]:  # noqa: D102
-        variables = []
-        variables.extend(self.left.variables)
-        variables.extend(self.right.variables)
+    def variables(self) -> Set[str]:  # noqa: D102
+        variables = self.left.variables.union(self.right.variables)
         return variables
 
     def evaluate(  # noqa: D102
@@ -371,11 +367,11 @@ class FilterAtom(Filter):
         return result
 
     @property
-    def variables(self) -> List[str]:  # noqa: D102
+    def variables(self) -> Set[str]:  # noqa: D102
         if isinstance(self.term, Variable):
-            return [self.term]
+            return {self.term}
         else:
-            return []
+            return set()
 
     def evaluate(  # noqa: D102
             self,

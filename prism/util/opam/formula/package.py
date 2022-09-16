@@ -4,7 +4,7 @@ Defines classes for parsing and expressing package dependencies.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Mapping, Optional, Tuple, Type, Union
+from typing import List, Mapping, Optional, Set, Tuple, Type, Union
 
 from prism.util.opam.version import Version
 from prism.util.parse import Parseable, ParseError
@@ -43,7 +43,7 @@ class PackageFormula(Parseable, ABC):
 
     @property
     @abstractmethod
-    def packages(self) -> List[str]:
+    def packages(self) -> Set[str]:
         """
         Get a list of the names of packages contained in the formula.
         """
@@ -177,10 +177,8 @@ class LogicalPF(Logical[PackageFormula], PackageFormula):
     """
 
     @property
-    def packages(self) -> List[str]:  # noqa: D102
-        packages = []
-        packages.extend(self.left.packages)
-        packages.extend(self.right.packages)
+    def packages(self) -> Set[str]:  # noqa: D102
+        packages = self.left.packages.union(self.right.packages)
         return packages
 
     @property
@@ -191,10 +189,8 @@ class LogicalPF(Logical[PackageFormula], PackageFormula):
             return min(self.left.size, self.right.size)
 
     @property
-    def variables(self) -> List[str]:  # noqa: D102
-        variables = []
-        variables.extend(self.left.variables)
-        variables.extend(self.right.variables)
+    def variables(self) -> Set[str]:  # noqa: D102
+        variables = self.left.variables.union(self.right.variables)
         return variables
 
     @classmethod
@@ -209,7 +205,7 @@ class ParensPF(Parens[PackageFormula], PackageFormula):
     """
 
     @property
-    def packages(self) -> List[str]:  # noqa: D102
+    def packages(self) -> Set[str]:  # noqa: D102
         return self.formula.packages
 
     @property
@@ -249,19 +245,19 @@ class PackageConstraint(PackageFormula):
         return result
 
     @property
-    def packages(self) -> List[str]:  # noqa: D102
-        return [self.package_name]
+    def packages(self) -> Set[str]:  # noqa: D102
+        return {self.package_name}
 
     @property
     def size(self) -> int:  # noqa: D102
         return 1
 
     @property
-    def variables(self) -> List[str]:  # noqa: D102
+    def variables(self) -> Set[str]:  # noqa: D102
         if isinstance(self.version_constraint, VersionFormula):
             return self.version_constraint.variables
         else:
-            return []
+            return set()
 
     def is_satisfied(
             self,
