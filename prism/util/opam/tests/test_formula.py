@@ -5,13 +5,23 @@ import unittest
 
 from prism.util.opam import OCamlVersion, OpamVersion, Version
 from prism.util.opam.formula import (
+    FilterAtom,
+    FilterConstraint,
+    FilterVF,
+    IsDefined,
+    LogicalF,
     LogicalPF,
     LogicalVF,
     LogOp,
-    Not,
+    NotF,
+    NotVF,
+    PackageConstraint,
     PackageFormula,
+    ParensF,
     ParensVF,
+    RelationalF,
     RelOp,
+    Variable,
     VersionConstraint,
     VersionFormula,
 )
@@ -115,28 +125,28 @@ class TestVersionFormula(unittest.TestCase):
             OCamlVersion(8,
                          10,
                          2),
-            Not(VersionConstraint(RelOp.GT,
-                                  OCamlVersion(8,
-                                               10,
-                                               2))))
+            NotVF(VersionConstraint(RelOp.GT,
+                                    OCamlVersion(8,
+                                                 10,
+                                                 2))))
         self.assertNotIn(
             OCamlVersion(8,
                          10,
                          2),
-            Not(VersionConstraint(RelOp.GEQ,
-                                  OCamlVersion(8,
-                                               10,
-                                               2))))
+            NotVF(VersionConstraint(RelOp.GEQ,
+                                    OCamlVersion(8,
+                                                 10,
+                                                 2))))
         self.assertNotIn(
             OCamlVersion(8,
                          10,
                          2),
-            Not(
+            NotVF(
                 ParensVF(
-                    Not(VersionConstraint(RelOp.GT,
-                                          OCamlVersion(8,
-                                                       10,
-                                                       2))))))
+                    NotVF(VersionConstraint(RelOp.GT,
+                                            OCamlVersion(8,
+                                                         10,
+                                                         2))))))
         complex_formula = VersionFormula.parse(
             '!= "2.0.pre" & !(<= "3") & <= "3.9.0" | ="4.0+dev"')
         self.assertIn(OCamlVersion(3, 2, 0), complex_formula)
@@ -227,20 +237,20 @@ class TestVersionFormula(unittest.TestCase):
         Verify simple constraints can be parsed.
         """
         self.assertEqual(
-            # TODO: Remove build; it is supposed to be a variable, not a
-            # version. If we do encounter variables, other machinery
-            # must be added.
-            VersionFormula.parse('>= "0.7.1" & < "1.0.0"'),
+            VersionFormula.parse('>= "0.7.1" & < "1.0.0" & build'),
             LogicalVF(
                 VersionConstraint(RelOp.GEQ,
                                   OCamlVersion(0,
                                                7,
                                                1)),
                 LogOp.AND,
-                VersionConstraint(RelOp.LT,
-                                  OCamlVersion(1,
-                                               0,
-                                               0))))
+                LogicalVF(
+                    VersionConstraint(RelOp.LT,
+                                      OCamlVersion(1,
+                                                   0,
+                                                   0)),
+                    LogOp.AND,
+                    FilterVF(FilterAtom(Variable("build"))))))
         self.assertEqual(
             VersionFormula.parse('<= "1.0.0" | !> "0.7.1+extra"'),
             LogicalVF(
@@ -249,7 +259,7 @@ class TestVersionFormula(unittest.TestCase):
                                                0,
                                                0)),
                 LogOp.OR,
-                Not(
+                NotVF(
                     VersionConstraint(
                         RelOp.GT,
                         OCamlVersion(0,
@@ -269,6 +279,13 @@ class TestVersionFormula(unittest.TestCase):
                                            7,
                                            1,
                                            "pre")))
+        self.assertEqual(
+            VersionFormula.parse('version >= "0.1.0"'),
+            FilterVF(
+                RelationalF(
+                    FilterAtom(Variable("version")),
+                    RelOp.GEQ,
+                    FilterAtom("0.1.0"))))
         with self.subTest("operator_precedence"):
             self.assertEqual(
                 VersionFormula.parse(
@@ -279,7 +296,7 @@ class TestVersionFormula(unittest.TestCase):
                     LogOp.OR,
                     LogicalVF(
                         LogicalVF(
-                            Not(
+                            NotVF(
                                 ParensVF(
                                     VersionConstraint(
                                         RelOp.LT,
@@ -304,7 +321,7 @@ class TestVersionFormula(unittest.TestCase):
                                     RelOp.NEQ,
                                     OpamVersion.parse("2.0.pre")),
                                 LogOp.OR,
-                                Not(
+                                NotVF(
                                     ParensVF(
                                         VersionConstraint(
                                             RelOp.LT,
@@ -317,9 +334,53 @@ class TestVersionFormula(unittest.TestCase):
                     LogOp.OR,
                     VersionConstraint(RelOp.EQ,
                                       OpamVersion.parse("4.0+dev"))))
-        with self.assertRaises(ParseError):
+            self.assertEqual(
+                VersionFormula.parse(
+                    '>= "2.7.3" | build & version < "8.9.0~pre" & (!debug | ?debug)'
+                ),
+                LogicalVF(
+                    VersionConstraint(RelOp.GEQ,
+                                      Version.parse("2.7.3")),
+                    LogOp("|"),
+                    FilterVF(
+                        LogicalF(
+                            FilterAtom(Variable('build')),
+                            LogOp("&"),
+                            LogicalF(
+                                RelationalF(
+                                    FilterAtom(Variable("version")),
+                                    RelOp("<"),
+                                    FilterAtom("8.9.0~pre")),
+                                LogOp.AND,
+                                ParensF(
+                                    LogicalF(
+                                        NotF(FilterAtom(Variable("debug"))),
+                                        LogOp.OR,
+                                        IsDefined(
+                                            FilterAtom(
+                                                Variable("debug"))))))))))
+
+        self.assertEqual(
             VersionFormula.parse(
-                '!= ("2.0.pre") | !(< "3") & <= "3.9.0" | ="4.0+dev"')
+                '!= ("2.0.pre") | !(< "3") & <= "3.9.0" | ="4.0+dev"'),
+            LogicalVF(
+                FilterConstraint(RelOp.NEQ,
+                                 ParensF(FilterAtom('2.0.pre'))),
+                LogOp.OR,
+                LogicalVF(
+                    LogicalVF(
+                        NotVF(
+                            ParensVF(
+                                VersionConstraint(
+                                    RelOp.LT,
+                                    OpamVersion.parse("3")))),
+                        LogOp.AND,
+                        VersionConstraint(
+                            RelOp.LEQ,
+                            OCamlVersion.parse("3.9.0"))),
+                    LogOp.OR,
+                    VersionConstraint(RelOp.EQ,
+                                      OCamlVersion.parse("4.0+dev")))))
         # assert not raises
         VersionFormula.parse(
             '(!= "2.0.pre") | !(< "3") & <= "3.9.0" | ="4.0+dev"')
@@ -421,23 +482,29 @@ class TestPackageFormula(unittest.TestCase):
             "bisect_ppx" {dev & > "2.5.0"} &
             ("ocaml" {< "4.03.0" & dev} | "mdx" {dev})
             """,
-            # TODO: Fully support filters and uncomment these formulas
-            # """
-            # "ocaml" {= "5.0.0" & post} &
-            # "base-unix" {post} &
-            # "base-bigarray" {post} &
-            # "base-threads" {post} &
-            # "base-domains" {post} &
-            # "base-nnp" {post} &
-            # "ocaml-options-vanilla" {post} &
-            # "ocaml-beta" {opam-version < "2.1.0"}
-            # """,
-            # """
-            # "ocaml" {>= "4.03.0"} &
-            # "dune" {>= "2.8.0"} &
-            # "menhirLib" {= version} &
-            # "menhirSdk" {= version}
-            # """
+            """
+            "ocaml" {= "5.0.0" & post} &
+            "base-unix" {post} &
+            "base-bigarray" {post} &
+            "base-threads" {post} &
+            "base-domains" {post} &
+            "base-nnp" {post} &
+            "ocaml-options-vanilla" {post} &
+            "ocaml-beta" {opam-version < "2.1.0"}
+            """,
+            """
+            "ocaml" {>= "4.03.0"} &
+            "dune" {>= "2.8.0"} &
+            "menhirLib" {= version} &
+            "menhirSdk" {= version}
+            """,
+            """
+            "ocaml" {>= "5.03.0" | (?build | ?debug)} &
+            "dune" {>= "2.8.0" & !?with-test} &
+            "menhirLib" {?version} &
+            "menhirSdk" {?build} &
+            "bisect_ppx" { < "3" | undefined }
+            """
         ]
         self.packages = {
             'astring': "1.0",
@@ -460,7 +527,8 @@ class TestPackageFormula(unittest.TestCase):
                          v in self.packages.items()}
         self.variables = {
             'build': True,
-            'with-test': True
+            'with-test': True,
+            'opam-version': "2.2.0"
         }
 
     def test_is_satisfied(self):
@@ -469,6 +537,7 @@ class TestPackageFormula(unittest.TestCase):
         """
         self.packages['dune'] = Version.parse('2.9.1')
         self.packages['menhirLib'] = Version.parse('20181113')
+        self.packages['menhirSdk'] = Version.parse('20181113')
         self.packages['base-unix'] = Version.parse('1')
         self.packages['ocamlfind-secondary'] = Version.parse('1')
         self.packages['ocaml-system'] = Version.parse('4.07.1')
@@ -481,14 +550,73 @@ class TestPackageFormula(unittest.TestCase):
             False,
             True,
             False,
-            # TODO:
-            # False,
-            # True
+            True,
+            True,
+            True
         ]
         for formula, expected in zip(self.formulae, expected_satisfactions):
             actual = PackageFormula.parse(formula)
             actual = actual.is_satisfied(self.packages, self.variables)
             self.assertEqual(actual, expected)
+        # test each clause of last example independently
+        expected_satisfactions = [True, False, True, True]
+        clauses = PackageFormula.parse(self.formulae[-1]).to_conjunctive_list()
+        for clause, expected in zip(clauses, expected_satisfactions):
+            actual = clause.version_constraint.is_satisfied(
+                self.packages[clause.package_name],
+                self.variables)
+            self.assertEqual(actual, expected)
+
+    def test_map(self):
+        """
+        Replace a version constraint with another.
+        """
+        formula = PackageFormula.parse(
+            """
+            "odoc-parser" {>= "0.9.0" & < "2.0.0"} &
+            "astring" &
+            "cmdliner" {>= "1.0.0"} &
+            "cppo" {build & >= "1.1.0"} &
+            "dune" {>= "2.9.1"} &
+            "fpath" &
+            "ocaml" {>= "4.02.0"} &
+            "result" &
+            "tyxml" {>= "4.3.0"} &
+            "fmt" &
+            "ocamlfind" {with-test} &
+            "yojson" {< "2.0.0" & with-test} &
+            ("ocaml" {< "4.04.1" & with-test} | "sexplib0" {with-test}) &
+            "conf-jq" {with-test} &
+            "ppx_expect" {with-test} &
+            "bos" {with-test} &
+            "bisect_ppx" {dev & > "2.5.0"} &
+            ("ocaml" {< "4.03.0" & dev} | "mdx" {dev})
+            """)
+        expected = normalize_spaces(
+            """
+            "odoc-parser" &
+            "astring" &
+            "cmdliner"  &
+            "cppo"  &
+            "dune"  &
+            "fpath" &
+            "ocaml"  &
+            "result" &
+            "tyxml" &
+            "fmt" &
+            "ocamlfind"  &
+            "yojson"  &
+            ("ocaml" | "sexplib0") &
+            "conf-jq"  &
+            "ppx_expect"  &
+            "bos" &
+            "bisect_ppx"  &
+            ("ocaml" | "mdx")
+            """)
+        actual = formula.map(
+            lambda pc: PackageConstraint(pc.package_name,
+                                         None))
+        self.assertEqual(str(actual), expected)
 
     def test_simplify(self):
         """
@@ -497,71 +625,130 @@ class TestPackageFormula(unittest.TestCase):
         Examples demonstrate simplification to Booleans, removal of
         logical operations, short-circuiting, and variable substitution.
         """
-        expected_simplifications = [
-            'True',
-            normalize_spaces(
-                """
-            "ocaml-base-compiler" { = "4.08.1" } |
-            "ocaml-variants" { >= "4.08.1" & < "4.08.2~" } |
-            "ocaml-system" { >= "4.08.1" & < "4.08.2~" }
-            """),
-            normalize_spaces(
-                """
-            "dune" { >= "1.4" } &
-            "menhir" { >= "20181113" } &
-            "ANSITerminal" &
-            "logs" &
-            "conf-freetype" &
-            "conf-pkg-config" &
-            "conf-cairo" &
-            "cairo2" &
-            "easy-format"
-            """),
-            normalize_spaces(
-                """
-            (("ocamlfind-secondary")) &
-            "base-unix"
-            """),
-            normalize_spaces(
-                """
-            "odoc-parser" { >= "0.9.0" & < "2.0.0" } &
-            "cppo" { >= "1.1.0" } &
-            "dune" { >= "2.9.1" } &
-            "fpath" &
-            ("sexplib0") &
-            "conf-jq" &
-            "ppx_expect" &
-            "bos" &
-            "bisect_ppx" { dev } &
-            ("mdx" { dev })
-            """),
-            # TODO: Fully support filters and uncomment these formulas
-            # 'False',
-            # """
-            # "dune" { >= "2.8.0" } &
-            # "menhirLib" { = version } &
-            # "menhirSdk" { = version }
-            # """
-        ]
-        for formula, expected in zip(self.formulae, expected_simplifications):
-            actual = PackageFormula.parse(formula)
-            actual = actual.simplify(self.packages, self.variables)
-            self.assertEqual(str(actual), expected)
+        with self.subTest("evaluate_undefined"):
+            expected_simplifications = [
+                'True',
+                normalize_spaces(
+                    """
+                "ocaml-base-compiler" { = "4.08.1" } |
+                "ocaml-variants" { >= "4.08.1" & < "4.08.2~" } |
+                "ocaml-system" { >= "4.08.1" & < "4.08.2~" }
+                """),
+                normalize_spaces(
+                    """
+                "dune" { >= "1.4" } &
+                "menhir" { >= "20181113" } &
+                "ANSITerminal" &
+                "logs" &
+                "conf-freetype" &
+                "conf-pkg-config" &
+                "conf-cairo" &
+                "cairo2" &
+                "easy-format"
+                """),
+                normalize_spaces(
+                    """
+                (("ocamlfind-secondary")) &
+                "base-unix"
+                """),
+                normalize_spaces(
+                    """
+                "odoc-parser" { >= "0.9.0" & < "2.0.0" } &
+                "cppo" { >= "1.1.0" } &
+                "dune" { >= "2.9.1" } &
+                "fpath" &
+                ("sexplib0") &
+                "conf-jq" &
+                "ppx_expect" &
+                "bos"
+                """),
+                # demonstrates undefined filters removing deps
+                'True',
+                '"dune" { >= "2.8.0" }',
+                '"menhirSdk"'
+            ]
+            for formula, expected in zip(self.formulae, expected_simplifications):
+                actual = PackageFormula.parse(formula)
+                actual = actual.simplify(
+                    self.packages,
+                    self.variables,
+                    evaluate_filters=True)
+                self.assertEqual(str(actual), expected)
+        with self.subTest("keep_undefined"):
+            expected_simplifications = [
+                'True',
+                normalize_spaces(
+                    """
+                "ocaml-base-compiler" { = "4.08.1" } |
+                "ocaml-variants" { >= "4.08.1" & < "4.08.2~" } |
+                "ocaml-system" { >= "4.08.1" & < "4.08.2~" }
+                """),
+                normalize_spaces(
+                    """
+                "dune" { >= "1.4" } &
+                "menhir" { >= "20181113" } &
+                "ANSITerminal" &
+                "logs" &
+                "conf-freetype" &
+                "conf-pkg-config" &
+                "conf-cairo" &
+                "cairo2" &
+                "easy-format"
+                """),
+                normalize_spaces(
+                    """
+                (("ocamlfind-secondary")) &
+                "base-unix"
+                """),
+                normalize_spaces(
+                    """
+                "odoc-parser" { >= "0.9.0" & < "2.0.0" } &
+                "cppo" { >= "1.1.0" } &
+                "dune" { >= "2.9.1" } &
+                "fpath" &
+                ("sexplib0") &
+                "conf-jq" &
+                "ppx_expect" &
+                "bos" &
+                "bisect_ppx" { dev & > "2.5.0" } &
+                ("ocaml" { < "4.03.0" & dev } | "mdx" { dev })
+                """),
+                # demonstrates a dep being removed by a filter
+                # evaluating to False
+                normalize_spaces(
+                    """
+                "ocaml" { = "5.0.0" & post } &
+                "base-unix" { post } &
+                "base-bigarray" { post } &
+                "base-threads" { post } &
+                "base-domains" { post } &
+                "base-nnp" { post } &
+                "ocaml-options-vanilla" { post }
+                """),
+                normalize_spaces(
+                    """
+                "dune" { >= "2.8.0" } &
+                "menhirLib" { = version } &
+                "menhirSdk" { = version }
+                """),
+                normalize_spaces(
+                    """
+                "menhirLib" { ?version } & "menhirSdk"
+                """)
+            ]
+            for formula, expected in zip(self.formulae, expected_simplifications):
+                actual = PackageFormula.parse(formula)
+                actual = actual.simplify(
+                    self.packages,
+                    self.variables,
+                    evaluate_filters=False)
+                self.assertEqual(str(actual), expected)
 
     def test_size(self):
         """
         Verify calculation of the size property is correct.
         """
-        expected_sizes = [
-            4,
-            1,
-            14,
-            3,
-            18,
-            # TODO: Fully support filters and uncomment these sizes
-            # 7,
-            # 4
-        ]
+        expected_sizes = [4, 1, 14, 3, 18, 8, 4, 5]
         for formula, size in zip(self.formulae, expected_sizes):
             self.assertEqual(PackageFormula.parse(formula).size, size)
 
@@ -629,26 +816,61 @@ class TestPackageFormula(unittest.TestCase):
             "bisect_ppx" { dev & > "2.5.0" } &
             ("ocaml" { < "4.03.0" & dev } | "mdx" { dev })
             """),
-            # TODO: Fully support filters and uncomment these formulas
-            # normalize_spaces("""
-            # "ocaml" { = "5.0.0" & post } &
-            # "base-unix" { post } &
-            # "base-bigarray" { post } &
-            # "base-threads" { post } &
-            # "base-domains" { post } &
-            # "base-nnp" { post } &
-            # "ocaml-options-vanilla" { post } &
-            # "ocaml-beta" { opam-version < "2.1.0" }
-            # """),
-            # normalize_spaces("""
-            # "ocaml" { >= "4.03.0" } &
-            # "dune" { >= "2.8.0" } &
-            # "menhirLib" { = version } &
-            # "menhirSdk" { = version }
-            # """)
+            normalize_spaces(
+                """
+            "ocaml" { = "5.0.0" & post } &
+            "base-unix" { post } &
+            "base-bigarray" { post } &
+            "base-threads" { post } &
+            "base-domains" { post } &
+            "base-nnp" { post } &
+            "ocaml-options-vanilla" { post } &
+            "ocaml-beta" { opam-version < "2.1.0" }
+            """),
+            normalize_spaces(
+                """
+            "ocaml" { >= "4.03.0" } &
+            "dune" { >= "2.8.0" } &
+            "menhirLib" { = version } &
+            "menhirSdk" { = version }
+            """),
+            normalize_spaces(
+                """
+            "ocaml" { >= "5.03.0" | (?build | ?debug) } &
+            "dune" { >= "2.8.0" & !?with-test } &
+            "menhirLib" { ?version } &
+            "menhirSdk" { ?build } &
+            "bisect_ppx" { < "3" | undefined }
+            """)
         ]
         for formula, expected in zip(self.formulae, expected_formulae):
             self.assertEqual(str(PackageFormula.parse(formula)), expected)
+
+    def test_variables(self):
+        """
+        Verify that the variables in a formula can be retrieved.
+        """
+        expected_variables = [
+            {'build'},
+            set(),
+            set(),
+            set(),
+            {'build',
+             'with-test',
+             'dev'},
+            {'post',
+             'opam-version'},
+            {'version'},
+            {'build',
+             'debug',
+             'with-test',
+             'version',
+             'undefined'}
+        ]
+        for formula, expected in zip(self.formulae, expected_variables):
+            actual = PackageFormula.parse(formula)
+            actual = actual.variables
+            self.assertEqual(actual, expected)
 
 
 if __name__ == '__main__':

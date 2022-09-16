@@ -2,11 +2,13 @@
 Defines classes for parsing and expressing version constraints.
 """
 
+import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import partial
-from typing import Iterable, List, Optional, Tuple, Type, Union
+from typing import Iterable, List, Optional, Set, Tuple, Type, Union
 
+from prism.util.opam.formula.negate import Not
 from prism.util.opam.version import Version
 from prism.util.parse import Parseable, ParseError
 
@@ -14,12 +16,10 @@ from .common import (
     AssignedVariables,
     LogOp,
     RelOp,
-    Variable,
-    _bool_syntax,
-    _int_syntax,
-    _string_syntax,
-    _varident_syntax,
+    value_to_bool,
+    value_to_string,
 )
+from .filter import Filter, FilterAtom
 from .logical import Logical
 from .parens import Parens
 
@@ -33,12 +33,15 @@ class VersionFormula(Parseable, ABC):
     except for basic atomic filters.
     """
 
-    def __contains__(
+    # TODO: let version formulas evaluate to empty, which means they
+    # are not applied in package formulas
+
+    def __contains__(  # noqa: D105
         self,
         version: Union[Version,
                        Tuple[Version,
                              AssignedVariables]]
-    ) -> bool:  # noqa: D105
+    ) -> bool:
         if isinstance(version, tuple):
             variables = version[1]
             version = version[0]
@@ -48,7 +51,7 @@ class VersionFormula(Parseable, ABC):
 
     @property
     @abstractmethod
-    def variables(self) -> List[str]:
+    def variables(self) -> Set[str]:
         """
         Get a list of the variable names that appear in this formula.
         """
@@ -83,11 +86,11 @@ class VersionFormula(Parseable, ABC):
 
     @abstractmethod
     def simplify(
-        self,
-        version: Optional[Version],
-        variables: Optional[AssignedVariables] = None
-    ) -> Union[bool,
-               'VersionFormula']:
+            self,
+            version: Optional[Version],
+            variables: Optional[AssignedVariables] = None,
+            evaluate_filters: bool = False) -> Union[bool,
+                                                     'VersionFormula']:
         """
         Substitute the given version and variables into the formula.
 
@@ -100,30 +103,49 @@ class VersionFormula(Parseable, ABC):
     def _chain_parse(cls, input: str, pos: int) -> Tuple['VersionFormula', int]:
         begpos = pos
         try:
-            formula, pos = FilterAtom._chain_parse(input, pos)
+            formula, pos = FilterVF._chain_parse(input, pos)
         except ParseError:
             try:
                 formula, pos = VersionConstraint._chain_parse(input, pos)
             except ParseError:
                 try:
-                    formula, pos = ParensVF._chain_parse(input, pos)
+                    formula, pos = FilterConstraint._chain_parse(input, pos)
                 except ParseError:
-                    formula, pos = Not._chain_parse(input, pos)
+                    try:
+                        formula, pos = ParensVF._chain_parse(input, pos)
+                    except ParseError:
+                        formula, pos = NotVF._chain_parse(input, pos)
         # attempt some left recursion
         # lookback to check that the previous term is not a negation
         if cls._lookback(input, begpos, 1)[0] != "!":
-            left = formula
             try:
-                logop, pos = LogOp._chain_parse(input, pos)
+                formula, pos = cls._lookahead_parse(begpos, formula, input, pos)
             except ParseError:
                 pass
+        return formula, pos
+
+    @classmethod
+    def _lookahead_parse(
+            cls,
+            begpos: int,
+            left: 'VersionFormula',
+            input: str,
+            pos: int) -> Tuple['VersionFormula',
+                               int]:
+        """
+        Parse a binary relation by speculatively looking ahead.
+        """
+        try:
+            logop, pos = LogOp._chain_parse(input, pos)
+        except ParseError:
+            formula = left
+        else:
+            try:
+                right, pos = VersionFormula._chain_parse(input, pos)
+            except ParseError as e:
+                raise ParseError(LogicalVF, input[begpos :]) from e
             else:
-                try:
-                    right, pos = VersionFormula._chain_parse(input, pos)
-                except ParseError as e:
-                    raise ParseError(LogicalVF, input[begpos :]) from e
-                else:
-                    formula = LogicalVF(left, logop, right)
+                formula = LogicalVF(left, logop, right)
         return formula, pos
 
 
@@ -134,11 +156,96 @@ class LogicalVF(Logical[VersionFormula], VersionFormula):
     """
 
     @property
-    def variables(self) -> List[str]:  # noqa: D102
-        variables = []
-        variables.extend(self.left.variables)
-        variables.extend(self.right.variables)
+    def variables(self) -> Set[str]:  # noqa: D102
+        variables = self.left.variables.union(self.right.variables)
         return variables
+
+    def simplify(
+            self,
+            version: Optional[Version],
+            variables: Optional[AssignedVariables] = None,
+            evaluate_filters: bool = False) -> Union[bool,
+                                                     VersionFormula]:
+        """
+        Simplify the logical formula.
+
+        Note that an undefined filter prohibits simplification of
+        versions bound to the filter's resolution. In other words, if a
+        logical operator is applied to a filter, then versions in the
+        other branch of the logical formula cannot be simplified unless
+        the filter is defined. Otherwise, one may receive incorrect
+        results when testing the simplified formula for satisfaction.
+        """
+        # NOTE: this is mainly necessary because we used None to reflect
+        # undefined filter formulas versus a wrapper around the
+        # undefined formula as in the source OCaml.
+        if evaluate_filters or self.logop == LogOp.OR:
+            return super().simplify(version, variables, evaluate_filters=True)
+        else:
+            # filters that retain undefined variables cannot be
+            # simplified away
+            if (isinstance(self.left,
+                           (FilterVF,
+                            FilterConstraint)) and self.left.variables):
+                left_simplified = self.left.simplify(
+                    version,
+                    variables,
+                    evaluate_filters=False)
+                if isinstance(left_simplified, (FilterVF, FilterConstraint)):
+                    # still a filter with undefined variables,
+                    # cannot remove logop
+                    return type(self)(
+                        left_simplified,
+                        self.logop,
+                        self.right.simplify(
+                            None,
+                            variables,
+                            evaluate_filters=False))
+                else:
+                    # filter is defined
+                    if isinstance(left_simplified, (bool, int, str)):
+                        # ensure formula is well-typed
+                        left_simplified = FilterVF(FilterAtom(left_simplified))
+                    return type(self)(left_simplified,
+                                      self.logop,
+                                      self.right).simplify(
+                                          version,
+                                          variables,
+                                          evaluate_filters=False)
+            elif (isinstance(self.right,
+                             (FilterVF,
+                              FilterConstraint)) and self.right.variables):
+                right_simplified = self.right.simplify(
+                    version,
+                    variables,
+                    evaluate_filters=False)
+                if isinstance(right_simplified, (FilterVF, FilterConstraint)):
+                    # still a filter with undefined variables,
+                    # cannot remove logop
+                    return type(self)(
+                        self.left.simplify(
+                            None,
+                            variables,
+                            evaluate_filters=False),
+                        self.logop,
+                        right_simplified)
+                else:
+                    # filter is defined
+                    if isinstance(right_simplified, (bool, int, str)):
+                        # ensure formula is well-typed
+                        right_simplified = FilterVF(
+                            FilterAtom(right_simplified))
+                    return type(self)(self.left,
+                                      self.logop,
+                                      right_simplified).simplify(
+                                          version,
+                                          variables,
+                                          evaluate_filters=False)
+            else:
+                return super().simplify(
+                    version,
+                    variables,
+                    evaluate_filters=False)
 
     @classmethod
     def formula_type(cls) -> Type[VersionFormula]:  # noqa: D102
@@ -146,60 +253,28 @@ class LogicalVF(Logical[VersionFormula], VersionFormula):
 
 
 @dataclass(frozen=True)
-class Not(VersionFormula):
+class NotVF(Not[VersionFormula], VersionFormula):
     """
     A logical negation of a version formula.
     """
 
-    formula: VersionFormula
-
-    def __str__(self) -> str:  # noqa: D105
-        return f"!{self.formula}"
-
     @property
-    def variables(self) -> List[str]:  # noqa: D102
+    def variables(self) -> Set[str]:  # noqa: D102
         return self.formula.variables
 
-    def is_satisfied(
-            self,
-            version: Version,
-            variables: Optional[AssignedVariables] = None) -> bool:
-        """
-        Test whether the version does not satisfy the internal formula.
-        """
-        return not self.formula.is_satisfied(version, variables)
-
-    def simplify(
-            self,
-            version: Optional[Version],
-            variables: Optional[AssignedVariables] = None) -> Union[bool,
-                                                                    'Not']:
-        """
-        Substitute the given version and variables and simplify.
-        """
-        formula_simplified = self.formula.simplify(version, variables)
-        if isinstance(formula_simplified, bool):
-            return not formula_simplified
-        else:
-            return type(self)(formula_simplified)
-
     @classmethod
-    def _chain_parse(cls, input: str, pos: int) -> Tuple['Not', int]:
-        begpos = pos
-        pos = cls._expect(input, pos, "!", begpos)
-        pos = cls._lstrip(input, pos)
-        formula, pos = VersionFormula._chain_parse(input, pos)
-        return cls(formula), pos
+    def formula_type(cls) -> Type[VersionFormula]:  # noqa: D102
+        return VersionFormula
 
 
 @dataclass(frozen=True)
-class ParensVF(Parens[VersionFormula]):
+class ParensVF(Parens[VersionFormula], VersionFormula):
     """
     A parenthetical around a package formula.
     """
 
     @property
-    def variables(self) -> List[str]:  # noqa: D102
+    def variables(self) -> Set[str]:  # noqa: D102
         return self.formula.variables
 
     @classmethod
@@ -220,8 +295,8 @@ class VersionConstraint(VersionFormula):
         return f'{self.relop} "{self.version}"'
 
     @property
-    def variables(self) -> List[str]:  # noqa: D102
-        return []
+    def variables(self) -> Set[str]:  # noqa: D102
+        return set()
 
     def is_satisfied(
             self,
@@ -230,26 +305,14 @@ class VersionConstraint(VersionFormula):
         """
         Test whether the version satisfies the binary relation.
         """
-        if self.relop == RelOp.EQ:
-            result = version == self.version
-        elif self.relop == RelOp.NEQ:
-            result = version != self.version
-        elif self.relop == RelOp.LT:
-            result = version < self.version
-        elif self.relop == RelOp.LEQ:
-            result = version <= self.version
-        elif self.relop == RelOp.GT:
-            result = version > self.version
-        elif self.relop == RelOp.GEQ:
-            result = version >= self.version
-        return result
+        return self.relop(version, self.version)
 
     def simplify(
-        self,
-        version: Optional[Version],
-        variables: Optional[AssignedVariables] = None
-    ) -> Union[bool,
-               'VersionConstraint']:
+            self,
+            version: Optional[Version],
+            variables: Optional[AssignedVariables] = None,
+            evaluate_filters: bool = False) -> Union[bool,
+                                                     'VersionConstraint']:
         """
         Test whether the version satisfies the binary relation.
 
@@ -281,104 +344,129 @@ class VersionConstraint(VersionFormula):
 
 
 @dataclass(frozen=True)
-class FilterAtom(VersionFormula):
+class FilterVF(VersionFormula):
     """
-    Placeholder for full filter functionality.
-
-    See https://opam.ocaml.org/doc/Manual.html#Filters for more
-    information.
+    A raw filter.
     """
 
-    term: Union[Variable, str, int, bool]
+    filter: Filter
 
-    def __str__(self) -> str:
-        """
-        Print the atom.
-        """
-        return str(self.term)
+    def __str__(self) -> str:  # noqa: D105
+        return f"{self.filter}"
 
     @property
-    def variables(self) -> List[str]:  # noqa: D102
-        if isinstance(self.term, Variable):
-            return [self.term]
+    def variables(self) -> Set[str]:  # noqa: D102
+        return self.filter.variables
+
+    def is_satisfied(  # noqa: D102
+            self,
+            version: Version,
+            variables: Optional[AssignedVariables] = None) -> bool:
+        return value_to_bool(self.filter.evaluate(variables))
+
+    def simplify(  # noqa: D102
+        self,
+        version: Optional[Version],
+        variables: Optional[AssignedVariables] = None,
+        evaluate_filters : bool = False
+    ) -> Union[bool,
+               'FilterVF']:
+        if evaluate_filters:
+            return self.is_satisfied(version, variables)
         else:
-            return []
+            simplified_filter = self.filter.simplify(variables)
+            if isinstance(simplified_filter, Filter):
+                return type(self)(simplified_filter)
+            else:
+                return value_to_bool(simplified_filter)
+
+    @classmethod
+    def _chain_parse(cls,
+                     input: str,
+                     pos: int) -> Tuple['FilterConstraint',
+                                        int]:
+        """
+        Parse a filter constraint.
+
+        A filter constraint has the following grammar::
+
+            <FilterConstraint> ::= <RelOp> <Filter>
+        """
+        filter, pos = Filter._chain_parse(input, pos)
+        return cls(filter), pos
+
+
+@dataclass(frozen=True)
+class FilterConstraint(VersionFormula):
+    """
+    A constraint relative to a specific filter.
+    """
+
+    relop: RelOp
+    filter: Filter
+
+    def __str__(self) -> str:  # noqa: D105
+        return f'{self.relop} {self.filter}'
+
+    @property
+    def variables(self) -> Set[str]:  # noqa: D102
+        return self.filter.variables
 
     def is_satisfied(
             self,
             version: Version,
             variables: Optional[AssignedVariables] = None) -> bool:
         """
-        Evaluate Boolean filters as-is, others as True.
-
-        If the filter is an undefined variable, return False. In normal
-        circumstances, this function is not expected to be called since
-        only Boolean variables are truth-values.
+        Test whether the version satisfies the binary relation.
         """
-        if isinstance(self.term, Variable):
-            if variables is None:
-                return False
-            try:
-                value = variables[self.term]
-            except KeyError:
-                return False
-            else:
-                if isinstance(value, bool):
-                    return value
-                else:
-                    # nothing to satisfy
-                    return True
-        elif isinstance(self.term, bool):
-            return self.term
-        else:
-            # nothing to satisfy
-            return True
+        target = value_to_string(self.filter.evaluate(variables))
+        target = Version.parse(target, check_syntax=False, require_quotes=False)
+        return self.relop(version, target)
 
     def simplify(
-        self,
-        version: Optional[Version],
-        variables: Optional[AssignedVariables] = None) -> Union[bool,
-                                                                'FilterAtom']:
+            self,
+            version: Optional[Version],
+            variables: Optional[AssignedVariables] = None,
+            evaluate_filters: bool = False) -> Union[bool,
+                                                     VersionFormula]:
         """
-        Return a copy of this atom with variable substituted if given.
+        Test whether the version satisfies the binary relation.
+
+        If the version is not None, a Boolean will be returned.
+        Otherwise, this instance is returned.
         """
-        if isinstance(self.term, Variable):
-            if variables is None:
-                return self
-            try:
-                value = variables[self.term]
-            except KeyError:
-                return self
-            else:
-                if isinstance(value, bool):
-                    return value
-                else:
-                    return type(self)(value)
-        elif isinstance(self.term, bool):
-            return self.term
+        if evaluate_filters:
+            simplified_filter = self.filter.evaluate(variables)
         else:
-            return self
+            simplified_filter = self.filter.simplify(variables)
+        if isinstance(simplified_filter, Filter):
+            simplified = type(self)(self.relop, simplified_filter)
+        else:
+            try:
+                version = Version.parse(value_to_string(simplified_filter))
+            except ParseError:
+                warnings.warn(f"Ignoring version constraint {self}")
+                simplified = False
+            else:
+                simplified = VersionConstraint(self.relop, version)
+        if version is not None:
+            simplified = simplified.is_satisfied(version, variables)
+        return simplified
 
     @classmethod
-    def _chain_parse(cls, input: str, pos: int) -> Tuple['FilterAtom', int]:
-        term = input[pos :]
-        match = _bool_syntax.match(term)
-        for (regex,
-             p) in [(_bool_syntax,
-                     bool),
-                    (_int_syntax,
-                     int),
-                    (_string_syntax,
-                     str),
-                    (_varident_syntax,
-                     Variable)]:
-            match = regex.match(term)
-            if match is not None:
-                parser = p
-        if match is None:
-            raise ParseError(FilterAtom, term)
-        else:
-            term = parser(term[: match.end()])
-            pos += match.end()
+    def _chain_parse(cls,
+                     input: str,
+                     pos: int) -> Tuple['FilterConstraint',
+                                        int]:
+        """
+        Parse a filter constraint.
+
+        A filter constraint has the following grammar::
+
+            <FilterConstraint> ::= <RelOp> <Filter>
+        """
+        relop, pos = RelOp._chain_parse(input, pos)
         pos = cls._lstrip(input, pos)
-        return cls(term), pos
+        filter, pos = Filter._chain_parse(input, pos)
+        pos = cls._lstrip(input, pos)
+        return cls(relop, filter), pos
