@@ -2,6 +2,7 @@
 Defines classes for parsing and expressing version constraints.
 """
 
+import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import partial
@@ -161,12 +162,25 @@ class LogicalVF(Logical[VersionFormula], VersionFormula):
         variables.extend(self.right.variables)
         return variables
 
-    def simplify(  # noqa: D102
+    def simplify(
             self,
             version: Optional[Version],
             variables: Optional[AssignedVariables] = None,
             evaluate_filters: bool = False) -> Union[bool,
                                                      VersionFormula]:
+        """
+        Simplify the logical formula.
+
+        Note that an undefined filter prohibits simplification of
+        versions bound to the filter's resolution. In other words, if a
+        logical operator is applied to a filter, then versions in the
+        other branch of the logical formula cannot be simplified unless
+        the filter is defined. Otherwise, one may receive incorrect
+        results when testing the simplified formula for satisfaction.
+        """
+        # NOTE: this is mainly necessary because we used None to reflect
+        # undefined filter formulas versus a wrapper around the
+        # undefined formula as in the source OCaml.
         if evaluate_filters:
             return super().simplify(version, variables, evaluate_filters=True)
         else:
@@ -430,9 +444,13 @@ class FilterConstraint(VersionFormula):
         if isinstance(simplified_filter, Filter):
             simplified = type(self)(self.relop, simplified_filter)
         else:
-            simplified = VersionConstraint(
-                self.relop,
-                Version.parse(value_to_string(simplified_filter)))
+            try:
+                version = Version.parse(value_to_string(simplified_filter))
+            except ParseError:
+                warnings.warn(f"Ignoring version constraint {self}")
+                simplified = False
+            else:
+                simplified = VersionConstraint(self.relop, version)
         if version is not None:
             simplified = simplified.is_satisfied(version, variables)
         return simplified
