@@ -4,7 +4,7 @@ Defines classes for parsing and expressing package dependencies.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Mapping, Optional, Set, Tuple, Type, Union
+from typing import Callable, List, Mapping, Optional, Set, Tuple, Type, Union
 
 from prism.util.opam.version import Version
 from prism.util.parse import Parseable, ParseError
@@ -89,6 +89,27 @@ class PackageFormula(Parseable, ABC):
         bool
             Whether the given packages satisfy the constraints of the
             formula.
+        """
+        ...
+
+    @abstractmethod
+    def map(
+        self,
+        f: Callable[['PackageConstraint'],
+                    'PackageConstraint']
+    ) -> 'PackageFormula':
+        """
+        Map a function over the package constraints in the formula.
+
+        Parameters
+        ----------
+        f : Callable[[PackageConstraint], PackageConstraint]
+            A function that modifies the constraints in this formula.
+
+        Returns
+        -------
+        PackageFormula
+            A new formula with the results of the mapped constraints
         """
         ...
 
@@ -193,6 +214,13 @@ class LogicalPF(Logical[PackageFormula], PackageFormula):
         variables = self.left.variables.union(self.right.variables)
         return variables
 
+    def map(  # noqa: D102
+        self,
+        f: Callable[['PackageConstraint'],
+                    'PackageConstraint']
+    ) -> 'LogicalPF':
+        return type(self)(self.left.map(f), self.logop, self.right.map(f))
+
     @classmethod
     def formula_type(cls) -> Type[PackageFormula]:  # noqa: D102
         return PackageFormula
@@ -215,6 +243,13 @@ class ParensPF(Parens[PackageFormula], PackageFormula):
     @property
     def variables(self) -> List[str]:  # noqa: D102
         return self.formula.variables
+
+    def map(  # noqa: D102
+        self,
+        f: Callable[['PackageConstraint'],
+                    'PackageConstraint']
+    ) -> 'ParensPF':
+        return type(self)(self.formula.map(f))
 
     @classmethod
     def formula_type(cls) -> Type[PackageFormula]:  # noqa: D102
@@ -303,6 +338,13 @@ class PackageConstraint(PackageFormula):
                 return version == constraint
             else:
                 return constraint.is_satisfied(version, variables)
+
+    def map(  # noqa: D102
+        self,
+        f: Callable[['PackageConstraint'],
+                    'PackageConstraint']
+    ) -> 'PackageFormula':
+        return f(self)
 
     def simplify(
             self,

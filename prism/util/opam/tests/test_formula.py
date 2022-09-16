@@ -15,6 +15,7 @@ from prism.util.opam.formula import (
     LogOp,
     NotF,
     NotVF,
+    PackageConstraint,
     PackageFormula,
     ParensF,
     ParensVF,
@@ -565,6 +566,57 @@ class TestPackageFormula(unittest.TestCase):
                 self.packages[clause.package_name],
                 self.variables)
             self.assertEqual(actual, expected)
+
+    def test_map(self):
+        """
+        Replace a version constraint with another.
+        """
+        formula = PackageFormula.parse(
+            """
+            "odoc-parser" {>= "0.9.0" & < "2.0.0"} &
+            "astring" &
+            "cmdliner" {>= "1.0.0"} &
+            "cppo" {build & >= "1.1.0"} &
+            "dune" {>= "2.9.1"} &
+            "fpath" &
+            "ocaml" {>= "4.02.0"} &
+            "result" &
+            "tyxml" {>= "4.3.0"} &
+            "fmt" &
+            "ocamlfind" {with-test} &
+            "yojson" {< "2.0.0" & with-test} &
+            ("ocaml" {< "4.04.1" & with-test} | "sexplib0" {with-test}) &
+            "conf-jq" {with-test} &
+            "ppx_expect" {with-test} &
+            "bos" {with-test} &
+            "bisect_ppx" {dev & > "2.5.0"} &
+            ("ocaml" {< "4.03.0" & dev} | "mdx" {dev})
+            """)
+        expected = normalize_spaces(
+            """
+            "odoc-parser" &
+            "astring" &
+            "cmdliner"  &
+            "cppo"  &
+            "dune"  &
+            "fpath" &
+            "ocaml"  &
+            "result" &
+            "tyxml" &
+            "fmt" &
+            "ocamlfind"  &
+            "yojson"  &
+            ("ocaml" | "sexplib0") &
+            "conf-jq"  &
+            "ppx_expect"  &
+            "bos" &
+            "bisect_ppx"  &
+            ("ocaml" | "mdx")
+            """)
+        actual = formula.map(
+            lambda pc: PackageConstraint(pc.package_name,
+                                         None))
+        self.assertEqual(str(actual), expected)
 
     def test_simplify(self):
         """
