@@ -6,7 +6,7 @@ import traceback
 from functools import partial, reduce
 from multiprocessing import Pool
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Set, Union
+from typing import Callable, Dict, Iterable, List, Optional, Set, Union
 
 import tqdm
 from seutil import io
@@ -27,7 +27,7 @@ from prism.project.base import SEM, Project, SentenceExtractionMethod
 from prism.project.exception import ProjectBuildError
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
-from prism.util.opam import PackageFormula
+from prism.util.opam import OpamSwitch, PackageFormula
 from prism.util.opam.formula import LogicalPF, LogOp
 from prism.util.opam.version import Version
 from prism.util.radpytools.os import pushd
@@ -255,28 +255,51 @@ class CacheExtractor:
     Class for managing a broad Coq project cache extraction process.
     """
 
-    @staticmethod
-    def get_project(
-            root_path: str,
-            metadata_storage: MetadataStorage,
-            project_name: str) -> ProjectRepo:
+    _avail_cache_kwargs = ["fmt_ext", "num_workers"]
+    _avail_swim_kwargs = ["variables"]
+    _avail_mds_kwargs = ["fmt"]
+
+    def __init__(
+            self,
+            cache_dir: str,
+            metadata_storage_file: str,
+            initial_switches: Optional[Iterable[OpamSwitch]] = None,
+            **kwargs):
+        cache_kwargs = {
+            k: v for k,
+            v in kwargs.items() if k in self._avail_cache_kwargs
+        }
+        swim_kwargs = {
+            k: v for k,
+            v in kwargs.items() if k in self._avail_swim_kwargs
+        }
+        mds_kwargs = {
+            k: v for k,
+            v in kwargs.items() if k in self._avail_mds_kwargs
+        }
+        self.cache = CoqProjectBuildCache(cache_dir, **cache_kwargs)
+        self.swim = SwitchManager(initial_switches, **swim_kwargs)
+        self.md_storage = MetadataStorage.load(
+            metadata_storage_file,
+            **mds_kwargs)
+
+    def get_project(self, root_path: str, project_name: str) -> ProjectRepo:
         """
         Get the identified project's `ProjectRepo` representation.
         """
         repo_path = Path(root_path) / project_name
         return ProjectRepo(
             repo_path,
-            metadata_storage,
+            self.md_storage,
             sentence_extraction_method=SentenceExtractionMethod.SERAPI)
 
-    @staticmethod
     def get_project_func(  # noqa: D103, D102
-            root_path: str,
-            metadata_storage: MetadataStorage) -> Callable[[str],
-                                                           ProjectRepo]:
+            self,
+            root_path: str) -> Callable[[str],
+                                        ProjectRepo]:
         from seutil import io
         io.dump()
-        return partial(CacheExtractor.get_project, root_path, metadata_storage)
+        return partial(CacheExtractor.get_project, root_path, self.md_storage)
 
     @staticmethod
     def get_commit_iterator(
