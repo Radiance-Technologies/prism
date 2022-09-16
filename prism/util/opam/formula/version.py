@@ -181,7 +181,7 @@ class LogicalVF(Logical[VersionFormula], VersionFormula):
         # NOTE: this is mainly necessary because we used None to reflect
         # undefined filter formulas versus a wrapper around the
         # undefined formula as in the source OCaml.
-        if evaluate_filters:
+        if evaluate_filters or self.logop == LogOp.OR:
             return super().simplify(version, variables, evaluate_filters=True)
         else:
             # filters that retain undefined variables cannot be
