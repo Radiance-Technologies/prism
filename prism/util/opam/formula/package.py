@@ -94,12 +94,12 @@ class PackageFormula(Parseable, ABC):
 
     @abstractmethod
     def simplify(
-        self,
-        packages: Mapping[str,
-                          Version],
-        variables: Optional[AssignedVariables] = None
-    ) -> Union[bool,
-               'PackageFormula']:
+            self,
+            packages: Mapping[str,
+                              Version],
+            variables: Optional[AssignedVariables] = None,
+            evaluate_filters: bool = True) -> Union[bool,
+                                                    'PackageFormula']:
         """
         Substitute the packagse into the formula and simplify it.
 
@@ -109,6 +109,9 @@ class PackageFormula(Parseable, ABC):
             A map from package names to versions.
         variables : AssignedVariables
             A map from formula variable names to their values.
+        evaluate_filters : bool, optional
+            Whether to evaluate undefined filter variables or leave them
+            in the simplified formula, by default True.
 
         Returns
         -------
@@ -306,12 +309,12 @@ class PackageConstraint(PackageFormula):
                 return constraint.is_satisfied(version, variables)
 
     def simplify(
-        self,
-        packages: Mapping[str,
-                          Version],
-        variables: Optional[AssignedVariables] = None
-    ) -> Union[bool,
-               'PackageFormula']:
+            self,
+            packages: Mapping[str,
+                              Version],
+            variables: Optional[AssignedVariables] = None,
+            evaluate_filters: bool = True) -> Union[bool,
+                                                    'PackageFormula']:
         """
         Substitute the given package versions into the formula.
 
@@ -321,6 +324,9 @@ class PackageConstraint(PackageFormula):
             A map from package names to versions.
         variables : AssignedVariables
             A map from formula variable names to their values.
+        evaluate_filters : bool, optional
+            Whether to evaluate undefined filter variables or leave them
+            in the simplified formula, by default True.
 
         Returns
         -------
@@ -330,7 +336,10 @@ class PackageConstraint(PackageFormula):
         """
         constraint = self.version_constraint
         if isinstance(constraint, VersionFormula):
-            constraint = constraint.simplify(None, variables)
+            constraint = constraint.simplify(
+                None,
+                variables,
+                evaluate_filters=evaluate_filters)
             if isinstance(constraint, bool):
                 if constraint:
                     constraint = None
