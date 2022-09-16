@@ -36,23 +36,30 @@ class Binary(Parseable, Generic[FormulaT, Op], ABC):
         op = self.op
         right = self.right
         if isinstance(op, LogOp):
-            if isinstance(left,
-                          Binary) and (op == LogOp.AND or op == LogOp.OR
-                                       and left.op == LogOp.OR):
-                # A | B & C incorrectly represented as (A | B) & C
-                # or
-                # A & B & C inefficiently represented as (A & B) & C
-                # or
-                # A | B | C inefficiently represented as (A | B) | C
-                # (less efficient short-circuiting during evaluations)
-                # Pivot!
-                object.__setattr__(self, 'left', left.left)
-                object.__setattr__(self, 'op', left.op)
-                object.__setattr__(self, 'right', cls(left.right, op, right))
-                self.__post_init__()
+            if isinstance(left, Binary):
+                if (op == LogOp.AND and isinstance(left.op,
+                                                   LogOp)
+                        or op == LogOp.OR and left.op == LogOp.OR):
+                    # A | B & C incorrectly represented as (A | B) & C
+                    # or
+                    # A & B & C inefficiently represented as (A & B) & C
+                    # or
+                    # A | B | C inefficiently represented as (A | B) | C
+                    # (less efficient short-circuiting during
+                    # evaluations)
+                    # Pivot!
+                    object.__setattr__(self, 'left', left.left)
+                    object.__setattr__(self, 'op', left.op)
+                    object.__setattr__(
+                        self,
+                        'right',
+                        cls(left.right,
+                            op,
+                            right))
+                    self.__post_init__()
             elif isinstance(
                     right,
-                    Binary) and op == LogOp.AND and self.right.op == LogOp.OR:
+                    Binary) and op == LogOp.AND and right.op == LogOp.OR:
                 # A & B | C incorrectly represented as A & (B | C)
                 # Pivot!
                 object.__setattr__(self, 'left', cls(left, op, right.left))
@@ -69,6 +76,7 @@ class Binary(Parseable, Generic[FormulaT, Op], ABC):
                 object.__setattr__(self, 'left', left.left)
                 object.__setattr__(self, 'op', left.op)
                 object.__setattr__(self, 'right', cls(left.right, op, right))
+                object.__setattr__(self, '__class__', type(left))
                 self.__post_init__()
             elif isinstance(right, Binary) and isinstance(right.op, LogOp):
                 # A <relop> B <logop> C incorrectly represented as
@@ -79,7 +87,7 @@ class Binary(Parseable, Generic[FormulaT, Op], ABC):
                 object.__setattr__(self, 'right', right.right)
                 # This object changes from Binary[FormulaT, RelOp] to
                 # Binary[FormulaT, LogOp]
-                self.__class__ = type(left)
+                object.__setattr__(self, '__class__', type(right))
                 self.__post_init__()
 
     def __str__(self) -> str:  # noqa: D105
