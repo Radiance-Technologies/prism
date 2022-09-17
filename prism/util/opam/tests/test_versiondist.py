@@ -64,7 +64,7 @@ class TestVersionDist(unittest.TestCase):
         Check that we can find versions specified as "package.version".
         """
         # force a checkout of recent date for test
-        VersionDistribution.search("coq",date=datetime(2022,9,10))
+        VersionDistribution.search("coq", date=datetime(2022, 9, 10))
 
         p = Path(
             versiondist.REPO_DIRECTORY.name
@@ -101,7 +101,7 @@ url {
         """)
 
         # have to use unique date so caching doesn't ruin the test.
-        search = VersionDistribution.search("coq",date=datetime(2022,9,17))
+        search = VersionDistribution.search("coq", date=datetime(2022, 9, 17))
         self.assertTrue(OpamVersion.parse("not.a.real.version") in search)
 
 
