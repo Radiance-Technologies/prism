@@ -18,9 +18,10 @@ from prism.data.document import CoqDocument
 from prism.language.gallina.analyze import SexpInfo
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
 from prism.project.exception import ProjectBuildError
+from prism.project.iqr import IQR
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
-from prism.project.strace import IQR, strace_build
+from prism.project.strace import strace_build
 from prism.util.build_tools.coqdep import order_dependencies
 from prism.util.logging import default_log_level
 from prism.util.opam import OpamSwitch, PackageFormula
