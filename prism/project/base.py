@@ -465,8 +465,7 @@ class Project(ABC):
             file_str = str(file)
             if ignore_regex.match(file_str) is None:
                 # file should be kept
-                filtered.append(
-                    str(file.resolve()) if not relative else file_str)
+                filtered.append(str(root / file) if not relative else file_str)
         if dependency_order:
             filtered = order_dependencies(filtered, self.opam_switch)
         else:
