@@ -95,6 +95,7 @@ class VersionDistribution:
             ])
         if (commit == ""):
             # time given must predate entire repository!
+            REPO_LOCK.release()
             raise ValueError("time given predates opam-coq repo")
 
         repo.git.checkout(commit)
@@ -118,13 +119,13 @@ class VersionDistribution:
                     default=None) for x in all_packages))
 
         # build a regex to find our version constraint
-        single_dep_regex = r'"[^\"]+"\s*(\{[^\}]+\})?\s*'
+        single_dep_regex = r'"([^\"]+)"\s*(\{[^\}]+\})?\s*'
 
         dep_regex = re.compile(
             r'depends:\s*\[\s*(' + single_dep_regex + ')*('
             + single_dep_regex.replace(r'[^\"]+',
-                                       package) + ')(' + single_dep_regex
-            + ')*]',
+                                       package + r"(\.[^\"]+)?") + ')('
+            + single_dep_regex + ')*]',
             flags=re.MULTILINE)
 
         count = Counter()
@@ -136,13 +137,16 @@ class VersionDistribution:
                 # circa 2018 some packages had different structures
                 # so we will exclude those
                 continue
-            if (m and m.group(4)):
+            if (m and m.group(7)):
                 try:
-                    constraint = VersionFormula.parse(m.group(4)[1 :-1])
-                    count.update(constraint.filter(versions))
-                except ParseError as e:
-                    print(e)
+                    constraint = VersionFormula.parse(m.group(7)[1 :-1])
+                    count.update(VersionFormula.filter(constraint, versions))
+                except ParseError:
+                    # TODO: maybe these should be warnings?
                     pass
+            elif (m and m.group(6)):
+                # version was explicitly specified.
+                count[OpamVersion.parse(m.group(6)[1 :])] += 1
 
         REPO_LOCK.release()
 

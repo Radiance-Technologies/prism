@@ -207,7 +207,7 @@ class OpamVersion(Version):
     with a non-digit sequence even if empty.
     """
     _version_syntax: ClassVar[re.Pattern] = re.compile(
-            r"^[a-zA-Z0-9\-_\+\.\/:~]+$")
+        r"^[a-zA-Z0-9\-_\+\.\/:~]+$")
     _sequence_syntax: ClassVar[re.Pattern] = re.compile(r"([^0-9]+)?([0-9]+)")
     _digit_re: ClassVar[re.Pattern] = re.compile(r'\d')
 

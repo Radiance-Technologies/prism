@@ -4,12 +4,14 @@ Test suite for prism.util.opam.
 import multiprocessing as mp
 import unittest
 from datetime import datetime
+from pathlib import Path
 
+import prism.util.opam.versiondist as versiondist
 from prism.util.opam import OpamVersion
 from prism.util.opam.versiondist import VersionDistribution
 
 
-class TestVersion(unittest.TestCase):
+class TestVersionDist(unittest.TestCase):
     """
     Test suite for `VersionDistribution`.
     """
@@ -56,6 +58,50 @@ class TestVersion(unittest.TestCase):
         self.assertTrue(new[v] == max(new.values()))
         # "8.10.2" not in top 10 most common keys
         self.assertTrue(v not in list(zip(*old.most_common(10)))[0])
+
+    def test_explicit_versions(self):
+        """
+        Check that we can find versions specified as "package.version".
+        """
+        # force a checkout of recent date for test
+        VersionDistribution.search("coq")
+
+        p = Path(
+            versiondist.REPO_DIRECTORY.name
+        ) / "released/packages/coq-ltac2/coq-ltac2.999999"
+
+        p.mkdir()
+
+        # depending on the order the tests are run in,
+        # this can show up in other test, which isn't great
+        # but shouldn't negatively affect them
+        (p / "opam").write_text(
+            """
+opam-version: "2.0"
+name: "coq-ltac2"
+maintainer: "Pierre-Marie Pédrot <pierre-marie.pedrot@irif.fr>"
+license: "LGPL 2.1"
+homepage: "https://github.com/coq/ltac2"
+dev-repo: "git+https://github.com/coq/ltac2.git"
+bug-reports: "https://github.com/coq/ltac2/issues"
+build: [
+  [make "COQBIN=\"\"" "-j%{jobs}%"]
+]
+install: [make "install"]
+depends: [
+  "ocaml"
+  "coq.not.a.real.version"
+]
+synopsis: "A tactic language for Coq"
+authors: "Pierre-Marie Pédrot <pierre-marie.pedrot@irif.fr>"
+url {
+  src: "https://github.com/coq/ltac2/archive/0.3.tar.gz"
+  checksum: "sha256=e759198cd7bf1145f822bc7dfad7f47a4c682b28bdd67376026276ae88d55feb"
+}
+        """)
+
+        search = VersionDistribution.search("coq")
+        self.assertTrue(OpamVersion.parse("not.a.real.version") in search)
 
 
 if __name__ == '__main__':
