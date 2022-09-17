@@ -80,6 +80,31 @@ class TestVersion(unittest.TestCase):
             for j in range(i + 1, len(versions)):
                 self.assertLess(v, versions[j])
 
+    def test_filter_versions(self):
+        """
+        Verify that a list may be filtered by a version.
+        """
+        versions = [
+            '0.1.2',
+            '0.1.1',
+            '1.0',
+            '1.0~pre',
+            '1.0.0',
+            '1.0',
+            '2',
+            '0.99',
+            '1'
+        ]
+        versions = [Version.parse(v) for v in versions]
+        self.assertEqual(
+            Version.parse('1.0').filter_versions(versions),
+            [versions[2],
+             versions[5]])
+        self.assertEqual(
+            Version.parse('1.0~pre').filter_versions(versions),
+            [versions[3]])
+        self.assertEqual(Version.parse('3').filter_versions(versions), [])
+
     def test_init(self):
         """
         Test error checking on direct initialization (i.e., not parsed).

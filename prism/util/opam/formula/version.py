@@ -67,7 +67,7 @@ class VersionFormula(Parseable, ABC):
         """
         ...
 
-    def filter(
+    def filter_versions(
             self,
             versions: Iterable[Version],
             variables: Optional[AssignedVariables] = None) -> List[Version]:

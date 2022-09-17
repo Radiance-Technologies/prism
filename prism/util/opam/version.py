@@ -8,7 +8,7 @@ from abc import abstractmethod, abstractproperty
 from dataclasses import dataclass
 from functools import cached_property, total_ordering
 from importlib import import_module
-from typing import ClassVar, List, Optional, Tuple, Union
+from typing import ClassVar, Iterable, List, Optional, Tuple, Union
 
 from prism.util.compare import Bottom, Top
 from prism.util.parse import Parseable, ParseError
@@ -78,6 +78,17 @@ class Version(Parseable, abc.ABC):
             one version supercedes another.
         """
         ...
+
+    def filter_versions(self, versions: Iterable['Version']) -> List['Version']:
+        """
+        Return only the versions that are equal to this version.
+
+        Notes
+        -----
+        This function simply provides some parity with the
+        `VersionFormula` interface.
+        """
+        return list(filter(lambda v: self == v, versions))
 
     def serialize(self) -> str:
         """

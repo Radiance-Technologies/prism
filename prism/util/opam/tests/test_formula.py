@@ -155,7 +155,7 @@ class TestVersionFormula(unittest.TestCase):
         self.assertNotIn(Version.parse("4.0+de"), complex_formula)
         self.assertIn(Version.parse("4.0+dev"), complex_formula)
 
-    def test_filter(self):
+    def test_filter_versions(self):
         """
         Verify that a list of versions can be reduced to a feasible set.
         """
@@ -207,30 +207,30 @@ class TestVersionFormula(unittest.TestCase):
         ]
         with self.subTest("lower_closed_upper_closed"):
             expected = [OCamlVersion.parse(v) for v in expected]
-            self.assertEqual(vc.filter(versions), expected)
+            self.assertEqual(vc.filter_versions(versions), expected)
         with self.subTest("lower_open_upper_closed"):
             object.__setattr__(vc.left, 'relop', RelOp.GT)
-            self.assertEqual(vc.filter(versions), expected[1 :])
+            self.assertEqual(vc.filter_versions(versions), expected[1 :])
         with self.subTest("lower_open_upper_open"):
             object.__setattr__(vc.right, 'relop', RelOp.LT)
-            self.assertEqual(vc.filter(versions), expected[1 :-1])
+            self.assertEqual(vc.filter_versions(versions), expected[1 :-1])
         with self.subTest("lower_closed_upper_open"):
             object.__setattr__(vc.left, 'relop', RelOp.GEQ)
-            self.assertEqual(vc.filter(versions), expected[:-1])
+            self.assertEqual(vc.filter_versions(versions), expected[:-1])
         with self.subTest("upper_open"):
             self.assertEqual(
-                vc.right.filter(versions),
+                vc.right.filter_versions(versions),
                 versions[: versions.index(OCamlVersion(5,
                                                        1,
                                                        2))])
         with self.subTest("lower_closed"):
             self.assertEqual(
-                vc.left.filter(versions),
+                vc.left.filter_versions(versions),
                 versions[versions.index(OCamlVersion(4,
                                                      2)):])
         with self.subTest("unsatisfiable"):
             unsatisfiable = VersionFormula.parse('< "2.0" & > "2.0"')
-            self.assertEqual(unsatisfiable.filter(versions), [])
+            self.assertEqual(unsatisfiable.filter_versions(versions), [])
 
     def test_parse(self):
         """

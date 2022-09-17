@@ -87,7 +87,8 @@ class VersionInfo:
                     coq_constraint = dependency.version_constraint
                     break
             assert coq_constraint is not None
-            for coq_version in coq_constraint.filter(sorted_coq_versions):
+            for coq_version in coq_constraint.filter_versions(
+                    sorted_coq_versions):
                 coq_version = str(coq_version)
                 if coq_version not in serapi_coq_compat:
                     serapi_coq_compat[coq_version] = set()
@@ -110,7 +111,8 @@ class VersionInfo:
                     ocaml_constraint = dependency.version_constraint
                     break
             assert ocaml_constraint is not None
-            for ocaml_version in ocaml_constraint.filter(sorted_ocaml_versions):
+            for ocaml_version in ocaml_constraint.filter_versions(
+                    sorted_ocaml_versions):
                 ocaml_version = str(ocaml_version)
                 coq_ocaml_compat[coq_version].add(ocaml_version)
 
