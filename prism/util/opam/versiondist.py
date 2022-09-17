@@ -17,6 +17,9 @@ from prism.util.opam.formula.version import VersionFormula
 from prism.util.opam.version import OpamVersion
 from prism.util.parse import ParseError
 
+from prism.util.radpytools import cachedmethod
+
+
 REPO_URL = "https://github.com/coq/opam-coq-archive.git"
 
 # storage for the opam repos,
@@ -48,7 +51,8 @@ class VersionDistribution:
     """
     Class for information about the usage of versions of packages.
     """
-
+    
+    @cachedmethod
     @classmethod
     def search(cls, package, date=None):
         """
