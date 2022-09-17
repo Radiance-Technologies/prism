@@ -17,7 +17,6 @@ from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
 from prism.project.base import MetadataArgs, Project
 from prism.project.metadata.storage import MetadataStorage
-from prism.util.radpytools.os import pushd
 
 
 class CommitTraversalStrategy(Enum):
@@ -418,14 +417,7 @@ class ProjectRepo(Repo, Project):
                 "Querying files of a non-checked out commit is deprecated",
                 DeprecationWarning)
         self.git.checkout(self.current_commit_name)
-        with pushd(self.path):
-            return [
-                CoqDocument(
-                    f,
-                    project_path=self.path,
-                    source_code=CoqParser.parse_source(f))
-                for f in self.get_file_list(relative=True)
-            ]
+        return super()._traverse_file_tree()
 
     def get_file_list(
             self,

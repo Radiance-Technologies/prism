@@ -16,6 +16,7 @@ from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
 
 from prism.data.document import CoqDocument
 from prism.language.gallina.analyze import SexpInfo
+from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
 from prism.project.exception import ProjectBuildError
 from prism.project.iqr import IQR
@@ -27,6 +28,7 @@ from prism.util.logging import default_log_level
 from prism.util.opam import OpamSwitch, PackageFormula
 from prism.util.opam.formula.package import LogicalPF
 from prism.util.path import get_relative_path
+from prism.util.radpytools.os import pushd
 from prism.util.re import regex_from_options
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -402,12 +404,18 @@ class Project(ABC):
         for name, value in kwargs.items():
             setattr(self.metadata, name, value)
 
-    @abstractmethod
     def _traverse_file_tree(self) -> List[CoqDocument]:
         """
         Traverse the file tree and return a list of Coq file objects.
         """
-        pass
+        with pushd(self.path):
+            return [
+                CoqDocument(
+                    f,
+                    project_path=self.path,
+                    source_code=CoqParser.parse_source(f))
+                for f in self.get_file_list(relative=True)
+            ]
 
     def build(self) -> Tuple[int, str, str]:
         """
