@@ -1,5 +1,5 @@
 """
-Test suite for prism.util.opam.
+Test suite for `prism.util.build_tools.coqdep`.
 """
 import os
 import shutil
@@ -18,9 +18,9 @@ from prism.util.build_tools.coqdep import (
 from prism.util.opam import OpamAPI
 
 
-class TestOpamCoqDepAPI(unittest.TestCase):
+class TestCoqDep(unittest.TestCase):
     """
-    Test suite for `CoqDepAPI`.
+    Test suite for `coqdep` utility function wrappers.
     """
 
     def test_check_valid_topological_sort(self):
