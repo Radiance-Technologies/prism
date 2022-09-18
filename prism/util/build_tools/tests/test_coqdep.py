@@ -9,8 +9,8 @@ import git
 import networkx as nx
 
 from prism.util.build_tools.coqdep import (
-    check_valid_topological_sort,
     get_dependencies,
+    is_valid_topological_sort,
     make_dependency_graph,
     order_dependencies,
 )
@@ -23,7 +23,7 @@ class TestCoqDep(unittest.TestCase):
     Test suite for `coqdep` utility function wrappers.
     """
 
-    def test_check_valid_topological_sort(self):
+    def test_is_valid_topological_sort(self):
         """
         Test that topological sorts can be verified.
         """
@@ -39,7 +39,7 @@ class TestCoqDep(unittest.TestCase):
         dg = nx.DiGraph(edges)
 
         expected = ["Test.v", "Terms.v", "Reduction.v", "Redexes.v"]
-        self.assertTrue(check_valid_topological_sort(dg, expected))
+        self.assertTrue(is_valid_topological_sort(dg, expected))
 
     def test_get_dependencies(self):
         """
@@ -98,7 +98,7 @@ class TestCoqDep(unittest.TestCase):
             files = [x for x in files if x.endswith('.v')]
             ordered = order_dependencies(files, OpamAPI.active_switch)
             graph = make_dependency_graph(files, OpamAPI.active_switch)
-            self.assertTrue(check_valid_topological_sort(graph, ordered))
+            self.assertTrue(is_valid_topological_sort(graph, ordered))
 
     @classmethod
     def setUpClass(cls):

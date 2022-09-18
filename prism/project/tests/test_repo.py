@@ -22,7 +22,7 @@ from prism.project.repo import (
 )
 from prism.tests import _MINIMAL_METADATA, _MINIMAL_METASTORAGE
 from prism.util.build_tools.coqdep import (
-    check_valid_topological_sort,
+    is_valid_topological_sort,
     make_dependency_graph,
 )
 
@@ -337,7 +337,7 @@ class TestProjectRepoLambda(unittest.TestCase):
             ]
             graph = make_dependency_graph(files, self.project.opam_switch)
             self.assertTrue(len(list(nx.simple_cycles(graph))) == 0)
-            self.assertTrue(check_valid_topological_sort(graph, ordered))
+            self.assertTrue(is_valid_topological_sort(graph, ordered))
 
     @classmethod
     def tearDownClass(cls):

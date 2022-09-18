@@ -14,9 +14,7 @@ from prism.util.path import get_relative_path
 _coq_file_regex = re.compile(r"(.*\.v)o{0,1}")
 
 
-def check_valid_topological_sort(
-        G: nx.DiGraph,
-        dep_list: List[Hashable]) -> bool:
+def is_valid_topological_sort(G: nx.DiGraph, dep_list: List[Hashable]) -> bool:
     """
     Determine whether the given topological sort of a graph is valid.
 
