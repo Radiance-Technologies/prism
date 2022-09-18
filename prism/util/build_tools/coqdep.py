@@ -1,37 +1,49 @@
 """
 Provides an object-oriented abstraction of OPAM switches.
 """
+import os
 import re
 from os import PathLike
-from typing import List
+from typing import Hashable, List
 
 import networkx as nx
-from networkx.algorithms.dag import all_topological_sorts
 
 from prism.util.opam.switch import OpamSwitch
+from prism.util.path import get_relative_path
 
 _coq_file_regex = re.compile(r"(.*\.v)o{0,1}")
 
 
 def check_valid_topological_sort(
-        dep_graph: nx.DiGraph,
-        dep_list: List[str]) -> bool:
+        G: nx.DiGraph,
+        dep_list: List[Hashable]) -> bool:
     """
-    Determine whether the given topological sort of files is valid.
+    Determine whether the given topological sort of a graph is valid.
 
     Parameters
     ----------
-    dep_graph : networkx.DiGraph
-        Graph representing the dependencies within some set of files.
-    dep_list : List[str]
-        A particular ordering of the nodes in the dependency graph.
+    G : networkx.DiGraph
+        A directed acyclic graph.
+    dep_list : List[Hashable]
+        A particular ordering of the nodes in `G`.
 
     Returns
     -------
     bool
         Whether the ordering represents a topological sort.
     """
-    return dep_list in list(all_topological_sorts(dep_graph))
+    # Validate based on definition of topological sort:
+    # if there exists an edge (or path) from one node to another, then
+    # the former appears in the list before the latter.
+    # Memoize sorted indices for constant-time verification of edge
+    # order instead of linear in the number of vertices.
+    # Final algorithmic complexity is O(V + E)
+    node_indices = {v: i for (i,
+                              v) in enumerate(dep_list)}
+    for u, v in G.edges():
+        if node_indices[v] < node_indices[u]:
+            return False
+    return True
 
 
 def make_dependency_graph(
@@ -63,22 +75,23 @@ def make_dependency_graph(
         Networkx directed graph representing the dependencies between
         the given files where each node in the graph is a filepath and
         an edge exists from one node to another if the latter depends
-        upon the former.
+        upon the former. Note that the nodes are paths relative to the
+        current directory.
 
     See Also
     --------
     prism.project.iqr : For more about `IQR` flags.
     """
     dep_graph_dict = {}
+    cwd = os.getcwd()
     for file in files:
-        if file[-3 :] == ".vo":
+        file = str(get_relative_path(file, cwd))
+        if file.endswith(".vo"):
             file = file[:-1]
-        deps = []
         deps = get_dependencies(file, switch, IQR, boot)
-
-        deps = [_coq_file_regex.match(x).groups()[0] for x in deps]
-
-        dep_graph_dict[file] = deps
+        dep_graph_dict[file] = [
+            _coq_file_regex.match(x).groups()[0] for x in deps
+        ]
     dep_graph = nx.DiGraph(dep_graph_dict)
     return dep_graph.reverse()
 
@@ -87,7 +100,7 @@ def get_dependencies(
         file: PathLike,
         switch: OpamSwitch,
         IQR: str = '',
-        boot: bool = False) -> List[PathLike]:
+        boot: bool = False) -> List[str]:
     """
     Return dependencies for the given file using `coqdep`.
 
@@ -106,9 +119,10 @@ def get_dependencies(
 
     Returns
     -------
-    file_deps : List[PathLike]
-        List of Coq files whose build artifacts (``.vo`` file) the
-        supplied file depends upon.
+    file_deps : List[str]
+        List of absolute Coq file paths whose build artifacts (``.vo``
+        file) the supplied file depends upon relative to the current
+        working directory.
 
     See Also
     --------
@@ -132,7 +146,7 @@ def order_dependencies(
         files: List[PathLike],
         switch: OpamSwitch,
         IQR: str = '',
-        boot: bool = False) -> List[PathLike]:
+        boot: bool = False) -> List[str]:
     """
     Sort the given files in dependency order using `coqdep`.
 
@@ -151,15 +165,14 @@ def order_dependencies(
 
     Returns
     -------
-    file_deps : List[PathLike]
-        List of Coq files whose build artifacts (``.vo`` file) the
-        supplied file depends upon.
+    file_deps : List[str]
+        The given filepaths in dependency order.
 
     See Also
     --------
     prism.project.iqr : For more about `IQR` flags.
     """
-    files = ' '.join(files)
+    files = ' '.join([str(f) for f in files])
     if boot:
         boot = '-boot'
     else:

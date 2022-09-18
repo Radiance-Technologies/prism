@@ -8,7 +8,6 @@ import unittest
 import git
 import networkx as nx
 
-import prism.util.radpytools.os
 from prism.util.build_tools.coqdep import (
     check_valid_topological_sort,
     get_dependencies,
@@ -16,6 +15,7 @@ from prism.util.build_tools.coqdep import (
     order_dependencies,
 )
 from prism.util.opam import OpamAPI
+from prism.util.radpytools.os import pushd
 
 
 class TestCoqDep(unittest.TestCase):
@@ -45,7 +45,7 @@ class TestCoqDep(unittest.TestCase):
         """
         Verify that dependencies can be sorted.
         """
-        with prism.util.radpytools.os.pushd(self.repo_paths["lambda"]):
+        with pushd(self.repo_paths["lambda"]):
             files = os.listdir("./")
             files = [x for x in files if x[-2 :] == '.v']
             deps = get_dependencies("Redexes.v", OpamAPI.active_switch)
@@ -85,7 +85,7 @@ class TestCoqDep(unittest.TestCase):
             'Marks.v',
             'Substitution.v'
         ]
-        with prism.util.radpytools.os.pushd(self.repo_paths["lambda"]):
+        with pushd(self.repo_paths["lambda"]):
             dg = make_dependency_graph(files, OpamAPI.active_switch)
         self.assertTrue(nx.utils.misc.edges_equal(dg.edges, expected.edges))
 
@@ -93,9 +93,9 @@ class TestCoqDep(unittest.TestCase):
         """
         Verify that dependencies can be sorted.
         """
-        with prism.util.radpytools.os.pushd(self.repo_paths["lambda"]):
+        with pushd(self.repo_paths["lambda"]):
             files = os.listdir("./")
-            files = [x for x in files if x[-2 :] == '.v']
+            files = [x for x in files if x.endswith('.v')]
             ordered = order_dependencies(files, OpamAPI.active_switch)
             graph = make_dependency_graph(files, OpamAPI.active_switch)
             self.assertTrue(check_valid_topological_sort(graph, ordered))
