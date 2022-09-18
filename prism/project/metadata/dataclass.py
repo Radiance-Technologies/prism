@@ -217,6 +217,8 @@ class ProjectMetadata:
                      ('opam_dependencies',
                       lambda x: list(dict.fromkeys(x))),
                      ('coq_dependencies',
+                      set),
+                     ('ignore_path_regex',
                       set)]:
             if getattr(self, attr) is None:
                 if attr != 'opam_dependencies':

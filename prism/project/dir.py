@@ -4,7 +4,6 @@ Module providing Coq project directory class representations.
 import os
 import pathlib
 import warnings
-from typing import List
 
 from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
@@ -86,32 +85,3 @@ class ProjectDir(Project):
         Do nothing.
         """
         pass
-
-    def _traverse_file_tree(self) -> List[CoqDocument]:
-        """
-        Traverse the file tree and return a list of Coq file objects.
-        """
-        files = pathlib.Path(self.working_dir).rglob("*.v")
-        out_files = []
-        for file in files:
-            out_files.append(
-                CoqDocument(
-                    file.relative_to(self.path),
-                    project_path=self.path,
-                    source_code=CoqParser.parse_source(file)))
-        return out_files
-
-    def get_file_list(self, **kwargs) -> List[str]:
-        """
-        Return a list of all Coq files associated with this project.
-
-        Returns
-        -------
-        List[str]
-            The list of absolute paths to all Coq files in the project
-        """
-        files = [
-            str(i.resolve())
-            for i in pathlib.Path(self.working_dir).rglob("*.v")
-        ]
-        return sorted(files)

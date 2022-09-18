@@ -6,6 +6,7 @@ import logging
 import os
 import pathlib
 import random
+import re
 from abc import ABC, abstractmethod
 from dataclasses import fields
 from enum import Enum, auto
@@ -15,14 +16,20 @@ from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
 
 from prism.data.document import CoqDocument
 from prism.language.gallina.analyze import SexpInfo
+from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
 from prism.project.exception import ProjectBuildError
+from prism.project.iqr import IQR
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
-from prism.project.strace import IQR, strace_build
+from prism.project.strace import strace_build
+from prism.util.build_tools.coqdep import order_dependencies
 from prism.util.logging import default_log_level
 from prism.util.opam import OpamSwitch, PackageFormula
 from prism.util.opam.formula.package import LogicalPF
+from prism.util.path import get_relative_path
+from prism.util.radpytools.os import pushd
+from prism.util.re import regex_from_options
 
 logger: logging.Logger = logging.getLogger(__name__)
 logger.setLevel(default_log_level())
@@ -153,6 +160,13 @@ class Project(ABC):
         Get the version of OCaml installed in the project's switch.
         """
         return self._coq_version
+
+    @property
+    def ignore_path_regex(self) -> re.Pattern:
+        """
+        Get the regular expression that matches Coq filepaths to ignore.
+        """
+        return regex_from_options(self.metadata.ignore_path_regex, True, True)
 
     @property
     def install_cmd(self) -> List[str]:
@@ -390,12 +404,18 @@ class Project(ABC):
         for name, value in kwargs.items():
             setattr(self.metadata, name, value)
 
-    @abstractmethod
     def _traverse_file_tree(self) -> List[CoqDocument]:
         """
         Traverse the file tree and return a list of Coq file objects.
         """
-        pass
+        with pushd(self.path):
+            return [
+                CoqDocument(
+                    f,
+                    project_path=self.path,
+                    source_code=CoqParser.parse_source(f))
+                for f in self.get_file_list(relative=True)
+            ]
 
     def build(self) -> Tuple[int, str, str]:
         """
@@ -415,6 +435,66 @@ class Project(ABC):
         # ensure removal of Coq library files
         self._clean()
         return r
+
+    def filter_files(
+            self,
+            files: Iterable[os.PathLike],
+            relative: bool = False,
+            dependency_order: bool = False) -> List[str]:
+        """
+        Filter and sort the given files relative to this project.
+
+        Parameters
+        ----------
+        files : Iterable[os.PathLike]
+            A collection of files, presumed to belong to this project.
+        relative : bool, optional
+            Whether to return absolute file paths or paths relative to
+            the root of the project, by default False.
+        dependency_order : bool, optional
+            Whether to return the files in dependency order or not, by
+            default False.
+            Dependency order means that if one file ``foo`` depends
+            upon another file ``bar``, then ``bar`` will appear
+            before ``foo`` in the returned list.
+            If False, then the files are sorted lexicographically.
+
+        Returns
+        -------
+        List[str]
+            The list of absolute (or `relative`) paths to all Coq files
+            in the project sorted according to `dependency_order`, not
+            including those ignored by `ignore_path_regex`.
+
+        Raises
+        ------
+        RuntimeError
+            If `dependency_order` is True but `serapi_options` is None.
+        """
+        root = self.path
+        ignore_regex = self.ignore_path_regex
+        filtered = []
+        for file in files:
+            file = get_relative_path(file, root)
+            file_str = str(file)
+            if ignore_regex.match(file_str) is None:
+                # file should be kept
+                filtered.append(str(root / file) if not relative else file_str)
+        if dependency_order:
+            iqr = self.serapi_options
+            if iqr is None:
+                raise RuntimeError(
+                    f"The `serapi_options` for {self.name} are not set; "
+                    "cannot return files in dependency order. "
+                    "Please try rebuilding the project.")
+            filtered = order_dependencies(
+                filtered,
+                self.opam_switch,
+                iqr.replace(",",
+                            " "))
+        else:
+            filtered = sorted(filtered)
+        return filtered
 
     def get_file(self, filename: str, *args, **kwargs) -> CoqDocument:
         """
@@ -439,17 +519,21 @@ class Project(ABC):
             raise ValueError("filename must end in .v")
         return self._get_file(filename, *args, **kwargs)
 
-    @abstractmethod
-    def get_file_list(self, **kwargs) -> List[str]:
+    def get_file_list(
+            self,
+            relative: bool = False,
+            dependency_order: bool = False) -> List[str]:
         """
         Return a list of all Coq files associated with this project.
 
-        Returns
-        -------
-        List[str]
-            The list of absolute paths to all Coq files in the project
+        See Also
+        --------
+        filter_files : For details on the parameters and return value.
         """
-        pass
+        return self.filter_files(
+            pathlib.Path(self.path).rglob("*.v"),
+            relative,
+            dependency_order)
 
     def get_random_file(self, **kwargs) -> CoqDocument:
         """

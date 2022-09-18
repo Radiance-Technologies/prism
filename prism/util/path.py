@@ -9,8 +9,9 @@ def get_relative_path(path: os.PathLike, other: os.PathLike) -> Path:
     """
     Return the relative path of one path to another.
     """
+    path = Path(path).resolve()
     try:
-        return Path(path).relative_to(other)
+        return path.relative_to(other)
     except ValueError:
         # target does not start with origin
         return ".." / get_relative_path(path, Path(other).parent)
