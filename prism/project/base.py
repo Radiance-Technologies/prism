@@ -465,6 +465,11 @@ class Project(ABC):
             The list of absolute (or `relative`) paths to all Coq files
             in the project sorted according to `dependency_order`, not
             including those ignored by `ignore_path_regex`.
+
+        Raises
+        ------
+        RuntimeError
+            If `dependency_order` is True but `serapi_options` is None.
         """
         root = self.path
         ignore_regex = self.ignore_path_regex
@@ -476,7 +481,17 @@ class Project(ABC):
                 # file should be kept
                 filtered.append(str(root / file) if not relative else file_str)
         if dependency_order:
-            filtered = order_dependencies(filtered, self.opam_switch)
+            iqr = self.serapi_options
+            if iqr is None:
+                raise RuntimeError(
+                    f"The `serapi_options` for {self.name} are not set; "
+                    "cannot return files in dependency order. "
+                    "Please try rebuilding the project.")
+            filtered = order_dependencies(
+                filtered,
+                self.opam_switch,
+                iqr.replace(",",
+                            " "))
         else:
             filtered = sorted(filtered)
         return filtered

@@ -317,17 +317,23 @@ class TestProjectRepoLambda(unittest.TestCase):
             cls.repo_path,
             metadata_storage=cls.meta_storage,
             sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
+        # HACK: stick some filler metadata in the storage for `lambda`
+        cls.meta_storage.insert(cls.project.metadata)
+        cls.meta_storage.update(cls.project.metadata, serapi_options="")
+        cls.project._metadata = cls.project._get_fresh_metadata()
 
     def test_get_ordered_files(self):
         """
         Ensure files are extracted in topological order.
         """
         with prism.util.radpytools.os.pushd(self.repo_path):
-            ordered = self.project.get_file_list(dependency_order=True)
+            ordered = self.project.get_file_list(
+                relative=True,
+                dependency_order=True)
             files = os.listdir("./")
             files = [
                 os.path.join(self.repo_path,
-                             x) for x in files if x[-2 :] == '.v'
+                             x) for x in files if x.endswith('.v')
             ]
             graph = make_dependency_graph(files, self.project.opam_switch)
             self.assertTrue(len(list(nx.simple_cycles(graph))) == 0)
