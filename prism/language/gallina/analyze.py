@@ -222,6 +222,58 @@ class SexpInfo:
             else:
                 return False
 
+        def offset_byte_to_char(
+                self,
+                unicode_offsets: List[int]) -> 'SexpInfo.Loc':
+            """
+            Offset byte-relative character indices to unicode indices..
+
+            Parameters
+            ----------
+            unicode_offsets : List[int]
+                Offsets of unicode (non-ASCII) characters from the start
+                of the file.
+
+            Returns
+            -------
+            SexpInfo.Loc
+                The offset location.
+            """
+            kwargs = asdict(self)
+            kwargs['beg_charno'] = ParserUtils.coq_charno_to_actual_charno(
+                kwargs['beg_charno'],
+                unicode_offsets)
+            kwargs['end_charno'] = ParserUtils.coq_charno_to_actual_charno(
+                kwargs['end_charno'],
+                unicode_offsets)
+            return SexpInfo.Loc(**kwargs)
+
+        def offset_char_to_byte(
+                self,
+                unicode_offsets: List[int]) -> 'SexpInfo.Loc':
+            """
+            Offset byte-relative character indices to unicode indices..
+
+            Parameters
+            ----------
+            unicode_offsets : List[int]
+                Offsets of unicode (non-ASCII) characters from the start
+                of the file.
+
+            Returns
+            -------
+            SexpInfo.Loc
+                The offset location.
+            """
+            kwargs = asdict(self)
+            kwargs['beg_charno'] = ParserUtils.actual_charno_to_coq_charno_bp(
+                kwargs['beg_charno'],
+                unicode_offsets)
+            kwargs['end_charno'] = ParserUtils.actual_charno_to_coq_charno_ep(
+                kwargs['end_charno'],
+                unicode_offsets)
+            return SexpInfo.Loc(**kwargs)
+
         def shift(self, offset: int) -> SexpInfo.Loc:
             """
             Shift the character positions of this location.
@@ -1319,3 +1371,57 @@ class SexpAnalyzer:
         else:
             # The sexp is not ltac-related and not part of a proof
             return False
+
+    @classmethod
+    def offset_locs(
+            cls,
+            sexp: SexpNode,
+            unicode_offsets: List[int],
+            byte_to_char: bool = True) -> SexpNode:
+        """
+        Offset the locations in an s-expression based on encoding.
+
+        Locations are translated between indices of a bytestring and
+        indices of UTF-8 characters in a Python `str`.
+
+        Parameters
+        ----------
+        sexp : SexpNode
+            An s-expression, presumed to be correspond to a valid AST
+            with locations relative to either bytestring indices or
+            UTF-8 characters as appropriate for the `byte_to_char`
+        unicode_offsets : List[int]
+            Offsets of unicode (non-ASCII) characters from the start of
+            the file.
+        byte_to_char : bool, optional
+            The direction of the offset process, by default True.
+            If True, then the locations are interpreted to contain the
+            indices of bytes in a UTF-8-encoded bytestring and are to
+            be converted to the indices of UTF-8 unicode characters in a
+            string.
+            If False, then the reverse interpretation and transformation
+            is applied.
+
+        Returns
+        -------
+        SexpNode
+            The given `sexp` with locations offset according to the
+            provided arguments.
+        """
+        if sexp.is_list():
+            if sexp.head() == "loc" and sexp[1].children:
+                if not byte_to_char:
+                    unicode_offsets = None
+                loc: SexpInfo.Loc = cls.analyze_loc(sexp, unicode_offsets)
+                if not byte_to_char:
+                    loc = loc.offset_char_to_byte(unicode_offsets)
+                sexp = loc.to_sexp()
+            else:
+                sexp = SexpList(
+                    [
+                        cls.offset_locs(c,
+                                        unicode_offsets,
+                                        byte_to_char)
+                        for c in sexp.get_children()
+                    ])
+        return sexp
