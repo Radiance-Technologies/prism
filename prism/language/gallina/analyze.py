@@ -1234,6 +1234,48 @@ class SexpAnalyzer:
             raise SexpAnalyzingException(sexp)
 
     @classmethod
+    def get_locs(
+            cls,
+            sexp: SexpNode,
+            unicode_offsets: Optional[List[int]] = None) -> List[SexpInfo.Loc]:
+        """
+        Get all of the locations in the given s-expression.
+
+        Parameters
+        ----------
+        sexp : SexpNode
+            An s-expression, presumed to be correspond to a valid AST.
+        unicode_offsets : list of int | None, optional
+            Offsets of unicode (non-ASCII) characters from the start of
+            the file, by default None.
+
+        Returns
+        -------
+        List[SexpInfo.Loc]
+            A list of all of the locations encountered in the given
+            s-expression.
+
+        Raises
+        ------
+        SexpAnalyzingException
+            If a malformed location is encountered.
+        """
+        locs = []
+        if sexp.is_list():
+            if sexp.head() == "loc" and sexp[1].children:
+                locs.append(cls.analyze_loc(sexp, unicode_offsets))
+            else:
+                locs.extend(
+                    sum(
+                        [
+                            cls.get_locs(c,
+                                         unicode_offsets)
+                            for c in sexp.get_children()
+                        ],
+                        start=[]))
+        return locs
+
+    @classmethod
     def is_ltac(cls, sexp: SexpNode) -> bool:
         """
         Determine whether the given sexp contains Ltac (see below).
