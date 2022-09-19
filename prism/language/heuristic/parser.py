@@ -928,8 +928,8 @@ class SerAPIParser(HeuristicParser):
             If False, then the locations in the ASTs will instead match
             the indices of bytes in an encoded bytestring of the file.
         kwargs : Dict[str, Any]
-            Optional keyword arguments to `CoqParser.parse_all`, such as
-            `opam_switch` or `serapi_options`.
+            Optional keyword arguments to `CoqParser.parse_asts`, such
+            as `opam_switch` or `serapi_options`.
 
         Returns
         -------
