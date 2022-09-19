@@ -5,6 +5,7 @@ Adapted from `roosterize.parser.CoqParser`
 at https://github.com/EngineeringSoftware/roosterize/.
 """
 import logging
+import os
 from typing import List, Optional, Set, Tuple, Union
 
 from prism.data.document import CoqDocument, VernacularSentence
@@ -938,7 +939,7 @@ class CoqParser:
     @classmethod
     def parse_document(
             cls,
-            file_path: str,
+            file_path: os.PathLike,
             serapi_options: str = "",
             opam_switch: Optional[OpamSwitch] = None) -> CoqDocument:
         """
@@ -971,7 +972,7 @@ class CoqParser:
              opam_switch)
 
         return CoqDocument(
-            file_path,
+            str(file_path),
             source_code,
             sentences=sentences,
             ast_sexp_list=ast_sexp_list,
@@ -981,7 +982,7 @@ class CoqParser:
     @classmethod
     def parse_sentences(
             cls,
-            file_path: str,
+            file_path: os.PathLike,
             serapi_options: str = "",
             opam_switch: Optional[OpamSwitch] = None
     ) -> List[VernacularSentence]:
@@ -1195,7 +1196,7 @@ class CoqParser:
         return vernac_sentences
 
     @classmethod
-    def parse_source(cls, file_path: str) -> SourceCode:
+    def parse_source(cls, file_path: os.PathLike) -> SourceCode:
         """
         Parse the raw source code from the indicated document.
 
@@ -1216,7 +1217,7 @@ class CoqParser:
     @classmethod
     def parse_tokens(
             cls,
-            file_path: str,
+            file_path: os.PathLike,
             sertok_options: str = "",
             opam_switch: Optional[OpamSwitch] = None) -> List[SexpNode]:
         """
