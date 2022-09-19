@@ -279,8 +279,7 @@ class Project(ABC):
             for lib in pathlib.Path(self.path).rglob(ext):
                 lib.unlink()
 
-    @abstractmethod
-    def _get_file(self, filename: str, *args, **kwargs) -> CoqDocument:
+    def _get_file(self, filename: str) -> CoqDocument:
         """
         Return a specific Coq source file.
 
@@ -288,7 +287,11 @@ class Project(ABC):
         --------
         Project.get_file : For public API.
         """
-        pass
+        return CoqDocument(
+            get_relative_path(filename,
+                              self.path),
+            project_path=self.path,
+            source_code=CoqParser.parse_source(filename))
 
     def _get_fresh_metadata(self) -> ProjectMetadata:
         """

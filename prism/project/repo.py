@@ -14,7 +14,6 @@ import git
 from git import Commit, Repo
 
 from prism.data.document import CoqDocument
-from prism.language.gallina.parser import CoqParser
 from prism.project.base import MetadataArgs, Project
 from prism.project.metadata.storage import MetadataStorage
 
@@ -381,15 +380,9 @@ class ProjectRepo(Repo, Project):
             warnings.warn(
                 "Querying files of a non-checked out commit is deprecated",
                 DeprecationWarning)
-        commit = self.commit(commit_name)
-        self.git.checkout(commit_name)
+            self.git.checkout(commit_name)
         # Compute relative path
-        rel_filename = filename.replace(commit.tree.abspath, "")[1 :]
-        return CoqDocument(
-            rel_filename,
-            project_path=self.path,
-            source_code=CoqParser.parse_source(
-                (commit.tree / rel_filename).abspath))
+        return super()._get_file(filename)
 
     def _pre_get_file(self, **kwargs):
         """
