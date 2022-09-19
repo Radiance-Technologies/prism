@@ -3,7 +3,9 @@ Module providing Coq project directory class representations.
 """
 import os
 import pathlib
+import warnings
 
+from prism.data.document import CoqDocument
 from prism.project.base import MetadataArgs, Project
 from prism.project.exception import DirHasNoCoqFiles
 
@@ -36,6 +38,37 @@ class ProjectDir(Project):
     @property
     def path(self) -> os.PathLike:  # noqa: D102
         return self.working_dir
+
+    def _get_file(self, filename: str, *args, **kwargs) -> CoqDocument:
+        """
+        Get specific Coq file and return the corresponding CoqDocument.
+
+        Parameters
+        ----------
+        filename : str
+            The absolute path to the file
+
+        Returns
+        -------
+        CoqDocument
+            The corresponding CoqDocument
+
+        Raises
+        ------
+        ValueError
+            If given `filename` does not end in ".v"
+
+        Warns
+        -----
+        UserWarning
+            If either of `args` or `kwargs` is nonempty.
+        """
+        if args or kwargs:
+            warnings.warn(
+                f"Unexpected additional arguments to Project[{self.name}]._get_file.\n"
+                f"    args: {args}\n"
+                f"    kwargs: {kwargs}")
+        return super()._get_file(filename)
 
     def _pre_get_file(self, **kwargs):
         """
