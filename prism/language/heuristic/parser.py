@@ -9,6 +9,7 @@ from typing import List, Set, Tuple, Union
 
 from seutil import io
 
+import prism.language.gallina.util as gu
 from prism.data.document import CoqDocument
 from prism.language.gallina.analyze import SexpAnalyzer, SexpInfo
 from prism.language.gallina.parser import CoqParser
@@ -17,7 +18,6 @@ from prism.util.iterable import CallableIterator, CompareIterator
 from prism.util.radpytools.dataclasses import default_field
 from prism.util.radpytools.os import pushd
 
-from ...data.vernac_sentence import VernacularSentence
 from ..sexp.list import SexpList
 from ..sexp.node import SexpNode
 from ..sexp.string import SexpString
@@ -836,16 +836,16 @@ class SerAPIParser(HeuristicParser):
     @classmethod
     def _glom_ltac(
         cls,
-        vernac_sentences: List[VernacularSentence],
+        vernac_sentences: List[str],
         sexp_asts: List[SexpNode],
-    ) -> Tuple[List[VernacularSentence],
+    ) -> Tuple[List[str],
                List[SexpNode]]:
         """
         Combine contiguous Ltac sentences together.
 
         Parameters
         ----------
-        vernac_sentences : List[VernacularSentence]
+        vernac_sentences : List[str]
             List of vernacular sentences from a document.
         sexp_asts : List[SexpNode]
             List of s-expression ASTs for each vernacular sentence
@@ -853,10 +853,13 @@ class SerAPIParser(HeuristicParser):
 
         Returns
         -------
-        List[VernacularSentence]
+        List[str]
             The given list of vernacular sentences with contiguous
             spans of Ltac sentences combined into one "sentence".
         List[SexpNode]
+            The given list of ASTs with contiguous spans of Ltac ASTs
+            combined into a single "AST" under a placeholder
+            ``"glommed_ltac"`` type (node).
         """
         sentences = []
         asts = []
@@ -874,8 +877,7 @@ class SerAPIParser(HeuristicParser):
             else:
                 if in_ltac_region:
                     # Join sentences by a space
-                    ltac_sentences = VernacularSentence().concat(
-                        *ltac_sentences)
+                    ltac_sentences = ' '.join(ltac_sentences)
                     # Create a single node containing all
                     # contigous Ltac asts.
                     ltac_asts = SexpList(ltac_asts)
@@ -897,6 +899,7 @@ class SerAPIParser(HeuristicParser):
             return_locations: bool = False,
             glom_ltac: bool = False,
             return_asts: bool = False,
+            offset_locs: bool = True,
             **kwargs) -> Union[List[str],
                                Tuple[List[str],
                                      List[SexpNode]]]:
@@ -917,8 +920,13 @@ class SerAPIParser(HeuristicParser):
         glom_ltac : bool, optional
             Glom together contiguous regions of Ltac code,
             by default `False`.
-        return_asts: bool, optional
+        return_asts : bool, optional
             If True, then also return asts. By default `False`.
+        offset_locs : bool, optional
+            If True, then offset the locations in the returned ASTs to
+            match the indices of characters in the returned sentences.
+            If False, then the locations in the ASTs will instead match
+            the indices of bytes in an encoded bytestring of the file.
         kwargs : Dict[str, Any]
             Optional keyword arguments to `CoqParser.parse_all`, such as
             `opam_switch` or `serapi_options`.
@@ -948,6 +956,7 @@ class SerAPIParser(HeuristicParser):
             raise NotImplementedError(
                 "Location returning is not currently supported.")
         source_code = document.source_code
+        unicode_offsets = gu.ParserUtils.get_unicode_offsets(source_code)
         coq_file = document.abspath
         serapi_options = kwargs.pop('serapi_options', None)
         if serapi_options is None:
@@ -972,19 +981,24 @@ class SerAPIParser(HeuristicParser):
             else:
                 serapi_options = ""
         with pushd(document.project_path):
-            vernac_sentences, asts, _ = CoqParser.parse_all(
-                coq_file,
-                source_code,
-                serapi_options,
-                **kwargs)
+            asts = CoqParser.parse_asts(coq_file, serapi_options, **kwargs)
+        # get raw sentences
+        sentences = []
+        for ast in asts:
+            loc: SexpInfo.Loc = SexpInfo.Loc.span(
+                *SexpAnalyzer.get_locs(ast,
+                                       unicode_offsets))
+            sentences.append(source_code[loc.beg_charno : loc.end_charno])
         if glom_ltac:
-            vernac_sentences, asts = cls._glom_ltac(vernac_sentences, asts)
-            sentences = [vs.str_with_space() for vs in vernac_sentences]
-        else:
-            sentences = [vs.str_minimal_whitespace() for vs in vernac_sentences]
+            sentences, asts = cls._glom_ltac(sentences, asts)
         if glom_proofs:
             stats = cls._compute_sentence_statistics(sentences)
             sentences = cls._glom_proofs(document.index, sentences, stats)
         if return_asts:
+            if offset_locs:
+                asts = [
+                    SexpAnalyzer.offset_locs(ast,
+                                             unicode_offsets) for ast in asts
+                ]
             sentences = sentences, asts
         return sentences

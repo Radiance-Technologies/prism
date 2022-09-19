@@ -48,7 +48,7 @@
         "Check n.",
         "Proof. induction s...",
         "Print length.",
-        "- trivial. -+{*{{ simpl. rewrite IHs; reflexivity... } }} Qed.",
+        "- trivial. - + { * { { simpl. rewrite IHs; reflexivity... } } } Qed.",
         "Check length_corr.",
         "Notation \"n .+1\" := (S n)(at level 2, left associativity, format \"n .+1\"): nat_scope.",
         "Coercion b2Prop (x : bool) := x = true."
