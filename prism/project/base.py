@@ -496,14 +496,14 @@ class Project(ABC):
             filtered = sorted(filtered)
         return filtered
 
-    def get_file(self, filename: str, *args, **kwargs) -> CoqDocument:
+    def get_file(self, filename: os.PathLike, *args, **kwargs) -> CoqDocument:
         """
         Return a specific Coq source file.
 
         Parameters
         ----------
-        filename : str
-            The absolute path to the file to return.
+        filename : os.PathLike
+            The path to a file within the project.
 
         Returns
         -------
@@ -515,6 +515,8 @@ class Project(ABC):
         ValueError
             If given `filename` does not end in ".v"
         """
+        if not isinstance(filename, str):
+            filename = str(filename)
         if not filename.endswith(".v"):
             raise ValueError("filename must end in .v")
         return self._get_file(filename, *args, **kwargs)
@@ -620,6 +622,54 @@ class Project(ABC):
             counter += 1
         first_sentence_idx = random.randint(0, len(sentences) - 2)
         return sentences[first_sentence_idx : first_sentence_idx + 2]
+
+    def get_sentences(
+            self,
+            filename: os.PathLike,
+            sentence_extraction_method: Optional[
+                SentenceExtractionMethod] = None,
+            **kwargs) -> Union[List[str],
+                               Tuple[List[str],
+                                     List[SexpInfo.Loc]]]:
+        r"""
+        Get the sentences of a Coq file within the project.
+
+        By default, proofs are then re-glommed into their own entries.
+        This behavior can be switched off via ``glom_proofs = False``.
+
+        Parameters
+        ----------
+        filename : os.PathLike
+            The path to a file in the project.
+        sentence_extraction_method : Optional[\
+                                         SentenceExtractionMethod],\
+                                     optional
+            Method by which sentences should be extracted
+        kwargs : Dict[str, Any]
+            Optional keyword arguments to `Project.extract_sentences`.
+
+        Returns
+        -------
+        List[str]
+            A list of strings corresponding to Coq source file
+            sentences, with proofs glommed (or not) depending on input
+            flag.
+        List[SexpInfo.Loc], optional
+            A list of locations corresponding to the returned list of
+            sentences. This list is only returned if certain arguments
+            are passed to certain parsers. With the default args, this
+            is NOT returned.
+
+        See Also
+        --------
+        extract_sentences : For expected keyword arguments.
+        """
+        if sentence_extraction_method is None:
+            sentence_extraction_method = self.sentence_extraction_method
+        document = self.get_file(filename)
+        kwargs['sentence_extraction_method'] = sentence_extraction_method
+        kwargs['opam_switch'] = self.opam_switch
+        return self.extract_sentences(document, **kwargs)
 
     def infer_metadata(
             self,
@@ -761,6 +811,12 @@ class Project(ABC):
 
         By default, proofs are then re-glommed into their own entries.
         This behavior can be switched off.
+
+        .. warning::
+            If the sentence extraction method relies upon an OCaml
+            package such as `coq-serapi`, then an
+            ``opam_switch : OpamSwitch`` keyword argument should be
+            provided to set the environment of execution
 
         Parameters
         ----------

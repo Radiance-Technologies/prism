@@ -48,9 +48,8 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                     VernacCommandData] = command_data.setdefault(
                         filename,
                         list())
-                doc = project.get_file(filename)
-                for sentence, location in zip(*project.extract_sentences(
-                        doc,
+                for sentence, location in zip(*project.get_sentences(
+                        filename,
                         sentence_extraction_method=SEM.HEURISTIC,
                         return_locations=True,
                         glom_proofs=False)):

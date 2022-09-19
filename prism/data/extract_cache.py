@@ -73,8 +73,8 @@ def extract_vernac_commands(
             list())
         with pushd(project.dir_abspath):
             with SerAPI(project.serapi_options) as serapi:
-                for sentence, location in zip(*project.extract_sentences(
-                        project.get_file(filename),
+                for sentence, location in zip(*project.get_sentences(
+                        filename,
                         sentence_extraction_method=SEM.HEURISTIC,
                         return_locations=True,
                         glom_proofs=False)):
