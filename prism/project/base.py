@@ -279,20 +279,6 @@ class Project(ABC):
             for lib in pathlib.Path(self.path).rglob(ext):
                 lib.unlink()
 
-    def _get_file(self, filename: str) -> CoqDocument:
-        """
-        Return a specific Coq source file.
-
-        See Also
-        --------
-        Project.get_file : For public API.
-        """
-        return CoqDocument(
-            get_relative_path(filename,
-                              self.path),
-            project_path=self.path,
-            source_code=CoqParser.parse_source(filename))
-
     def _get_fresh_metadata(self) -> ProjectMetadata:
         """
         Get refreshed metadata from the storage.
@@ -499,7 +485,7 @@ class Project(ABC):
             filtered = sorted(filtered)
         return filtered
 
-    def get_file(self, filename: os.PathLike, *args, **kwargs) -> CoqDocument:
+    def get_file(self, filename: os.PathLike) -> CoqDocument:
         """
         Return a specific Coq source file.
 
@@ -522,7 +508,11 @@ class Project(ABC):
             filename = str(filename)
         if not filename.endswith(".v"):
             raise ValueError("filename must end in .v")
-        return self._get_file(filename, *args, **kwargs)
+        return CoqDocument(
+            get_relative_path(filename,
+                              self.path),
+            project_path=self.path,
+            source_code=CoqParser.parse_source(filename))
 
     def get_file_list(
             self,

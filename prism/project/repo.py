@@ -349,41 +349,6 @@ class ProjectRepo(Repo, Project):
     def remote_url(self) -> str:  # noqa: D102
         return self.remote().url
 
-    def _get_file(
-            self,
-            filename: str,
-            commit_name: Optional[str] = None) -> CoqDocument:
-        """
-        Return a specific Coq source file from a specific commit.
-
-        This function may change the git repo HEAD on disk.
-
-        Parameters
-        ----------
-        filename : str
-            The absolute path to the file to return.
-        commit_name : str or None, optional
-            A commit hash, branch name, or tag name from which to fetch
-            the file. Defaults to HEAD.
-
-        Returns
-        -------
-        CoqDocument
-            A CoqDocument corresponding to the selected Coq source file
-
-        Raises
-        ------
-        ValueError
-            If given `filename` does not end in ".v"
-        """
-        if commit_name is not None:
-            warnings.warn(
-                "Querying files of a non-checked out commit is deprecated",
-                DeprecationWarning)
-            self.git.checkout(commit_name)
-        # Compute relative path
-        return super()._get_file(filename)
-
     def _pre_get_file(self, **kwargs):
         """
         Set the current commit; use HEAD if none given.
@@ -411,6 +376,40 @@ class ProjectRepo(Repo, Project):
                 DeprecationWarning)
         self.git.checkout(self.current_commit_name)
         return super()._traverse_file_tree()
+
+    def get_file(
+            self,
+            filename: os.PathLike,
+            commit_name: Optional[str] = None) -> CoqDocument:
+        """
+        Return a specific Coq source file from a specific commit.
+
+        This function may change the git repo HEAD on disk.
+
+        Parameters
+        ----------
+        filename : os.PathLike
+            The path to a file within the project.
+        commit_name : str or None, optional
+            A commit hash, branch name, or tag name from which to fetch
+            the file. Defaults to HEAD.
+
+        Returns
+        -------
+        CoqDocument
+            A CoqDocument corresponding to the selected Coq source file
+
+        Raises
+        ------
+        ValueError
+            If given `filename` does not end in ".v"
+        """
+        if commit_name is not None:
+            warnings.warn(
+                "Querying files of a non-checked out commit is deprecated",
+                DeprecationWarning)
+            self.git.checkout(commit_name)
+        return super().get_file(filename)
 
     def get_file_list(
             self,
