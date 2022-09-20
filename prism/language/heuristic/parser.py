@@ -832,7 +832,7 @@ class HeuristicParser:
                     document.abspath,
                     start_idx,
                     newlines_so_far)
-                located_sentences.append(CoqSentence(ls, loc))
+                located_sentences.append(CoqSentence(str(ls), loc))
                 start_idx = loc.end_charno
                 newlines_so_far = loc.lineno_last
             sentences = located_sentences
