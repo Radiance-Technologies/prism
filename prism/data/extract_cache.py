@@ -319,11 +319,11 @@ class CacheExtractor:
         return partial(CacheExtractor.get_commit_iterator, default_commits)
 
     @staticmethod
-    def process_commit(
+    def build_commit(
             switch_manager: SwitchManager,
             project: ProjectRepo,
             commit: str,
-            results: None) -> None:
+            results: None) -> str:
         """
         Build the project at the given commit.
         """
@@ -362,6 +362,18 @@ class CacheExtractor:
         finally:
             switch_manager.release_switch(project.opam_switch)
             project.opam_switch = original_switch
+        return coq_version
+
+    @staticmethod
+    def recache(
+            build_cache: CoqProjectBuildCache,
+            project: ProjectRepo,
+            commit_sha: str,
+            coq_version: str) -> bool:
+        """
+        Provide a placeholder function for now.
+        """
+        return False
 
     @staticmethod
     def get_process_commit_func(  # noqa: D103, D102
@@ -369,10 +381,10 @@ class CacheExtractor:
                                                     str,
                                                     None],
                                                    None]:
-        return partial(CacheExtractor.process_commit, switch_manager)
+        return partial(CacheExtractor.build_commit, switch_manager)
 
-    @staticmethod
-    def main(
+    def run(
+            self,
             root_path: str,
             storage_path: str,
             default_commits_path: str) -> None:
