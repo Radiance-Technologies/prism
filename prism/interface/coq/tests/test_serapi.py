@@ -70,9 +70,10 @@ class TestSerAPI(unittest.TestCase):
         cls.sentences: Dict[str, List[str]]
         cls.sentences = {}
         for filename in ['simple', 'nested', 'Alphabet']:
-            cls.sentences[filename] = HeuristicParser.parse_sentences_from_file(
+            sentences = HeuristicParser.parse_sentences_from_file(
                 _COQ_EXAMPLES_PATH / f"{filename}.v",
                 glom_proofs=False)
+            cls.sentences[filename] = [str(s) for s in sentences]
 
     def test_execute(self):
         """
