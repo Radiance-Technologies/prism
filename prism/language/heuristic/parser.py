@@ -5,7 +5,7 @@ import pathlib
 import re
 import warnings
 from dataclasses import dataclass, field
-from typing import List, Set, Tuple, Union
+from typing import List, Optional, Set, Tuple
 
 from seutil import io
 
@@ -23,6 +23,34 @@ from ..sexp.node import SexpNode
 from ..sexp.string import SexpString
 from .assertion import Assertion
 from .util import ParserUtils
+
+
+@dataclass
+class CoqSentence:
+    """
+    A sentence in a Coq document.
+    """
+
+    text: str
+    """
+    The raw text of the sentence.
+
+    Note that whitespace may not be preserved.
+    """
+    location: Optional[SexpInfo.Loc] = None
+    """
+    The location of the sentence in the original document.
+    """
+    ast: Optional[SexpNode] = None
+    """
+    The abstract syntax tree of the sentence.
+    """
+
+    def __len__(self) -> int:  # noqa: D105
+        return len(self.text)
+
+    def __str__(self) -> str:  # noqa: D105
+        return self.text
 
 
 class HeuristicParser:
@@ -705,9 +733,7 @@ class HeuristicParser:
             glom_proofs: bool = True,
             project_path: str = "",
             return_locations: bool = False,
-            **kwargs) -> Union[Tuple[List[str],
-                                     List[SexpInfo.Loc]],
-                               List[str]]:
+            **kwargs) -> List[CoqSentence]:
         """
         Split the Coq file text by sentences.
 
@@ -737,13 +763,8 @@ class HeuristicParser:
 
         Returns
         -------
-        List[str]
-            A list of strings corresponding to Coq source file
-            sentences, with proofs glommed (or not) depending on input
-            flag.
-        List[SexpInfo.Loc]
-            Fully-qualified sentence locations, returned only if
-            `return_locations` is set to True
+        List[CoqSentence]
+            A list of the sentences in the file.
         """
         document = CoqDocument(
             file_path,
@@ -763,9 +784,7 @@ class HeuristicParser:
             encoding: str = 'utf-8',
             glom_proofs: bool = True,
             return_locations: bool = False,
-            **kwargs) -> Union[Tuple[List[str],
-                                     SexpInfo.Loc],
-                               List[str]]:
+            **kwargs) -> List[CoqSentence]:
         """
         Split the Coq file text by sentences.
 
@@ -793,37 +812,36 @@ class HeuristicParser:
 
         Returns
         -------
-        List[str]
-            A list of strings corresponding to Coq source file
-            sentences, with proofs glommed (or not) depending on input
-            flag.
-        List[SexpInfo.Loc]
-            Fully-qualified sentence locations, returned only if
-            `return_locations` is set to True
+        List[CoqSentence]
+            A list of the sentences in the `document`.
         """
+        if glom_proofs and return_locations:
+            raise NotImplementedError(
+                "Returning locations alongside glommed proofs "
+                "is not currently supported.")
         file_contents = document.source_code
-        located_sentences = cls._get_sentences(file_contents)
-        sentences = [str(s) for s in located_sentences]
-        if glom_proofs:
-            stats = cls._compute_sentence_statistics(sentences)
-            return cls._glom_proofs(document.index, sentences, stats)
+        sentences = cls._get_sentences(file_contents)
+        if return_locations:
+            start_idx = 0
+            newlines_so_far = 0
+            located_sentences: List[CoqSentence] = []
+            for ls in sentences:
+                loc = ls.get_location(
+                    file_contents,
+                    document.abspath,
+                    start_idx,
+                    newlines_so_far)
+                located_sentences.append(CoqSentence(ls, loc))
+                start_idx = loc.end_charno
+                newlines_so_far = loc.lineno_last
+            sentences = located_sentences
         else:
-            if return_locations:
-                start_idx = 0
-                newlines_so_far = 0
-                locs: List[SexpInfo.Loc] = []
-                for ls in located_sentences:
-                    loc = ls.get_location(
-                        file_contents,
-                        document.abspath,
-                        start_idx,
-                        newlines_so_far)
-                    locs.append(loc)
-                    start_idx = loc.end_charno
-                    newlines_so_far = loc.lineno_last
-                return sentences, locs
-            else:
-                return sentences
+            sentences = [str(s) for s in sentences]
+            if glom_proofs:
+                stats = cls._compute_sentence_statistics(sentences)
+                sentences = cls._glom_proofs(document.index, sentences, stats)
+            sentences = [CoqSentence(s) for s in sentences]
+        return sentences
 
 
 class SerAPIParser(HeuristicParser):
@@ -838,8 +856,10 @@ class SerAPIParser(HeuristicParser):
         cls,
         vernac_sentences: List[str],
         sexp_asts: List[SexpNode],
+        locations: List[SexpInfo.Loc],
     ) -> Tuple[List[str],
-               List[SexpNode]]:
+               List[SexpNode],
+               List[SexpInfo.Loc]]:
         """
         Combine contiguous Ltac sentences together.
 
@@ -850,6 +870,8 @@ class SerAPIParser(HeuristicParser):
         sexp_asts : List[SexpNode]
             List of s-expression ASTs for each vernacular sentence
             in `vernac_sentences`.
+        locations : List[SexpInfo.Loc]
+            List of locations for each sentence in `vernac_sentences`.
 
         Returns
         -------
@@ -860,20 +882,26 @@ class SerAPIParser(HeuristicParser):
             The given list of ASTs with contiguous spans of Ltac ASTs
             combined into a single "AST" under a placeholder
             ``"glommed_ltac"`` type (node).
+        List[SexpInfo.Loc]
+            The given list of locations with contiguous spans of Ltac
+            sentence locations merged into one location.
         """
         sentences = []
         asts = []
+        locs = []
         in_ltac_region = False
-        for sentence, ast in zip(vernac_sentences, sexp_asts):
+        for sentence, ast, loc in zip(vernac_sentences, sexp_asts, locations):
             if SexpAnalyzer.is_ltac(ast):
                 if not in_ltac_region:
                     # Enter ltac region and create empty buffers
                     in_ltac_region = True
                     ltac_sentences = []
                     ltac_asts = [SexpString("glommed_ltac")]
+                    ltac_locs = []
                 # Add Ltac sentence and ast to buffers
                 ltac_sentences.append(sentence)
                 ltac_asts.append(ast)
+                ltac_locs.append(loc)
             else:
                 if in_ltac_region:
                     # Join sentences by a space
@@ -881,14 +909,44 @@ class SerAPIParser(HeuristicParser):
                     # Create a single node containing all
                     # contigous Ltac asts.
                     ltac_asts = SexpList(ltac_asts)
+                    # Merge the contiguous sentence locations
+                    ltac_locs = SexpInfo.Loc.span(*ltac_locs)
                     # Exit ltac region
                     in_ltac_region = False
                     sentences.append(ltac_sentences)
                     asts.append(ltac_asts)
+                    locs.append(ltac_locs)
                 # pair sentence with ast node.
                 sentences.append(sentence)
                 asts.append(ast)
-        return sentences, asts
+                locs.append(loc)
+        return sentences, asts, locs
+
+    @classmethod
+    def _infer_serapi_options(cls, document: CoqDocument) -> str:
+        """
+        Try to infer SerAPI options from a _CoqProject file if present.
+        """
+        coq_project_files = [
+            pathlib.Path(document.project_path) / "_CoqProject",
+            pathlib.Path(document.project_path) / "Make"
+        ]
+        possible_serapi_options = []
+        for coq_project_file in coq_project_files:
+            if coq_project_file.exists():
+                coq_project = io.load(coq_project_file, io.Fmt.txt)
+                for line in coq_project.splitlines():
+                    match = cls.RE_SERAPI_OPTIONS.fullmatch(line.strip())
+                    if match is not None:
+                        possible_serapi_options.append(
+                            f"-R {match.group('src')},{match.group('tgt')}")
+                break
+
+        if len(possible_serapi_options) > 0:
+            serapi_options = " ".join(possible_serapi_options)
+        else:
+            serapi_options = ""
+        return serapi_options
 
     @classmethod
     def parse_sentences_from_document(
@@ -900,9 +958,7 @@ class SerAPIParser(HeuristicParser):
             glom_ltac: bool = False,
             return_asts: bool = False,
             offset_locs: bool = True,
-            **kwargs) -> Union[List[str],
-                               Tuple[List[str],
-                                     List[SexpNode]]]:
+            **kwargs) -> List[CoqSentence]:
         """
         Extract sentences from a Coq document using SerAPI.
 
@@ -933,11 +989,8 @@ class SerAPIParser(HeuristicParser):
 
         Returns
         -------
-        sentences : List[str]
+        sentences : List[CoqSentence]
             The resulting sentences from the document.
-        asts : List[SexpNode], optional
-            The ASTs for each of the returned `sentences` if
-            `return_asts` is True.
 
         Raises
         ------
@@ -952,53 +1005,40 @@ class SerAPIParser(HeuristicParser):
             raise NotImplementedError(
                 "Returning ASTs alongside glommed proofs is not currently supported."
             )
-        if return_locations:
+        if glom_proofs and return_locations:
             raise NotImplementedError(
-                "Location returning is not currently supported.")
+                "Returning locations alongside glommed proofs "
+                "is not currently supported.")
         source_code = document.source_code
         unicode_offsets = gu.ParserUtils.get_unicode_offsets(source_code)
         coq_file = document.abspath
         serapi_options = kwargs.pop('serapi_options', None)
         if serapi_options is None:
             # Try to infer from _CoqProject
-            coq_project_files = [
-                pathlib.Path(document.project_path) / "_CoqProject",
-                pathlib.Path(document.project_path) / "Make"
-            ]
-            possible_serapi_options = []
-            for coq_project_file in coq_project_files:
-                if coq_project_file.exists():
-                    coq_project = io.load(coq_project_file, io.Fmt.txt)
-                    for line in coq_project.splitlines():
-                        match = cls.RE_SERAPI_OPTIONS.fullmatch(line.strip())
-                        if match is not None:
-                            possible_serapi_options.append(
-                                f"-R {match.group('src')},{match.group('tgt')}")
-                    break
-
-            if len(possible_serapi_options) > 0:
-                serapi_options = " ".join(possible_serapi_options)
-            else:
-                serapi_options = ""
+            serapi_options = cls._infer_serapi_options(document)
         with pushd(document.project_path):
             asts = CoqParser.parse_asts(coq_file, serapi_options, **kwargs)
         # get raw sentences
         sentences = []
+        locs = []
         for ast in asts:
             loc: SexpInfo.Loc = SexpInfo.Loc.span(
                 *SexpAnalyzer.get_locs(ast,
                                        unicode_offsets))
             sentences.append(source_code[loc.beg_charno : loc.end_charno])
+            locs.append(loc)
         if glom_ltac:
-            sentences, asts = cls._glom_ltac(sentences, asts)
+            sentences, asts, locs = cls._glom_ltac(sentences, asts, locs)
         if glom_proofs:
             stats = cls._compute_sentence_statistics(sentences)
             sentences = cls._glom_proofs(document.index, sentences, stats)
+        sentences = [CoqSentence(s) for s in sentences]
         if return_asts:
-            if offset_locs:
-                asts = [
-                    SexpAnalyzer.offset_locs(ast,
-                                             unicode_offsets) for ast in asts
-                ]
-            sentences = sentences, asts
+            for s, ast in zip(sentences, asts):
+                if offset_locs:
+                    ast = SexpAnalyzer.offset_locs(ast, unicode_offsets)
+                s.ast = ast
+        if return_locations:
+            for s, loc in zip(sentences, locs):
+                s.location = loc
         return sentences

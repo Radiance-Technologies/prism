@@ -15,9 +15,12 @@ from subprocess import CalledProcessError
 from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
 
 from prism.data.document import CoqDocument
-from prism.language.gallina.analyze import SexpInfo
 from prism.language.gallina.parser import CoqParser
-from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
+from prism.language.heuristic.parser import (
+    CoqSentence,
+    HeuristicParser,
+    SerAPIParser,
+)
 from prism.project.exception import ProjectBuildError
 from prism.project.iqr import IQR
 from prism.project.metadata import ProjectMetadata
@@ -291,7 +294,7 @@ class Project(ABC):
             self,
             filename: Optional[str],
             glom_proofs: bool,
-            **kwargs):
+            **kwargs) -> List[CoqSentence]:
         if filename is None:
             obj = self.get_random_file(**kwargs)
         else:
@@ -572,13 +575,14 @@ class Project(ABC):
             glom_proofs,
             **kwargs)
         sentence = random.choice(sentences)
-        return sentence
+        return str(sentence)
 
     def get_random_sentence_pair_adjacent(
             self,
             filename: Optional[str] = None,
             glom_proofs: bool = True,
-            **kwargs) -> List[str]:
+            **kwargs) -> Tuple[str,
+                               str]:
         """
         Return a random adjacent sentence pair from the project.
 
@@ -595,9 +599,9 @@ class Project(ABC):
 
         Returns
         -------
-        List of str
-            A list of two adjacent sentences from the project, with the
-            first sentence chosen at random
+        tuple of str
+            A pair of adjacent sentences from the project, with the
+            first sentence chosen at random.
         """
         sentences: List[str] = []
         counter = 0
@@ -614,16 +618,15 @@ class Project(ABC):
                 **kwargs)
             counter += 1
         first_sentence_idx = random.randint(0, len(sentences) - 2)
-        return sentences[first_sentence_idx : first_sentence_idx + 2]
+        first, second = sentences[first_sentence_idx : first_sentence_idx + 2]
+        return str(first), str(second)
 
     def get_sentences(
             self,
             filename: os.PathLike,
             sentence_extraction_method: Optional[
                 SentenceExtractionMethod] = None,
-            **kwargs) -> Union[List[str],
-                               Tuple[List[str],
-                                     List[SexpInfo.Loc]]]:
+            **kwargs) -> List[CoqSentence]:
         r"""
         Get the sentences of a Coq file within the project.
 
@@ -643,15 +646,8 @@ class Project(ABC):
 
         Returns
         -------
-        List[str]
-            A list of strings corresponding to Coq source file
-            sentences, with proofs glommed (or not) depending on input
-            flag.
-        List[SexpInfo.Loc], optional
-            A list of locations corresponding to the returned list of
-            sentences. This list is only returned if certain arguments
-            are passed to certain parsers. With the default args, this
-            is NOT returned.
+        List[CoqSentence]
+            The list of sentences extracted from the indicated file.
 
         See Also
         --------
@@ -796,9 +792,7 @@ class Project(ABC):
             glom_ltac: bool = False,
             return_asts: bool = False,
             sentence_extraction_method: SEM = SEM.SERAPI,
-            **kwargs) -> Union[List[str],
-                               Tuple[List[str],
-                                     List[SexpInfo.Loc]]]:
+            **kwargs) -> List[CoqSentence]:
         """
         Split the Coq file text by sentences.
 
@@ -832,15 +826,8 @@ class Project(ABC):
 
         Returns
         -------
-        List[str]
-            A list of strings corresponding to Coq source file
-            sentences, with proofs glommed (or not) depending on input
-            flag.
-        List[SexpInfo.Loc], optional
-            A list of locations corresponding to the returned list of
-            sentences. This list is only returned if certain arguments
-            are passed to certain parsers. With the default args, this
-            is NOT returned.
+        List[CoqSentence]
+            A list of Coq sentences extracted from the given `document`.
         """
         return sentence_extraction_method.parser(
         ).parse_sentences_from_document(

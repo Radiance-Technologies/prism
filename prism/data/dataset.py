@@ -18,6 +18,7 @@ from typing import (
 from git import InvalidGitRepositoryError
 
 from prism.data.document import CoqDocument
+from prism.language.heuristic.parser import CoqSentence
 from prism.project import DirHasNoCoqFiles, Project, ProjectDir, ProjectRepo
 from prism.project.metadata.storage import MetadataStorage
 
@@ -443,7 +444,7 @@ class CoqProjectBaseDataset:
                                         str]] = None,
             glom_proofs: bool = True,
             glom_ltac: bool = False,
-            return_asts: bool = False) -> Generator[str,
+            return_asts: bool = False) -> Generator[CoqSentence,
                                                     None,
                                                     None]:
         """
@@ -457,7 +458,7 @@ class CoqProjectBaseDataset:
 
         Yields
         ------
-        str
+        CoqSentence
             A single sentence, which might be a glommed proof if
             `glom_proofs` is True, from a Coq file within the group of
             projects in the dataset

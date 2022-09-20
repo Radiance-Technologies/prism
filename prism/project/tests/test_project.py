@@ -114,6 +114,7 @@ class TestProject(unittest.TestCase):
                     document,
                     glom_proofs=False,
                     sentence_extraction_method=SEM.HEURISTIC)
+                actual_outcome = [str(s) for s in actual_outcome]
                 self.assertEqual(actual_outcome, self.test_list[coq_file])
 
     def test_extract_sentences_heuristic_glom(self):
@@ -126,6 +127,7 @@ class TestProject(unittest.TestCase):
                     document,
                     glom_proofs=True,
                     sentence_extraction_method=SEM.HEURISTIC)
+                actual_outcome = [str(s) for s in actual_outcome]
                 self.assertEqual(actual_outcome, self.test_glom_list[coq_file])
 
     def test_extract_sentences_serapi(self):
@@ -153,6 +155,7 @@ class TestProject(unittest.TestCase):
             document,
             sentence_extraction_method=SentenceExtractionMethod.SERAPI,
             glom_proofs=False)
+        sentences = [str(s) for s in sentences]
         for sentence in sentences:
             self.assertTrue(
                 sentence.endswith('.') or sentence == '{' or sentence == "}"
@@ -173,7 +176,9 @@ class TestProject(unittest.TestCase):
                     document,
                     glom_proofs=False,
                     sentence_extraction_method=SEM.SERAPI)
-                actual_outcome = [' '.join(s.split()) for s in actual_outcome]
+                actual_outcome = [
+                    ' '.join(str(s).split()) for s in actual_outcome
+                ]
                 self.assertEqual(actual_outcome, self.test_list[coq_file])
 
     def test_extract_sentences_serapi_simple_glom(self):
@@ -186,7 +191,9 @@ class TestProject(unittest.TestCase):
                     document,
                     glom_proofs=True,
                     sentence_extraction_method=SEM.SERAPI)
-                actual_outcome = [' '.join(s.split()) for s in actual_outcome]
+                actual_outcome = [
+                    ' '.join(str(s).split()) for s in actual_outcome
+                ]
                 self.assertEqual(actual_outcome, self.test_glom_list[coq_file])
 
     def test_extract_sentences_serapi_glom_nested(self):
@@ -224,6 +231,7 @@ class TestProject(unittest.TestCase):
             document,
             sentence_extraction_method=SentenceExtractionMethod.SERAPI,
             glom_proofs=True)
+        actual_outcome = [str(s) for s in actual_outcome]
         for sentence in actual_outcome:
             self.assertTrue(sentence.endswith('.'))
         # Clean up
