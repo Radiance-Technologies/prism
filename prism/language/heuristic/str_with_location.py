@@ -337,7 +337,8 @@ class StrWithLocation(str):
             cls,
             pattern: Union[str,
                            re.Pattern],
-            repl: str,
+            repl: Union[str,
+                        Iterable[str]],
             string: 'StrWithLocation',
             count: int = 0,
             flags: Union[int,
@@ -354,8 +355,9 @@ class StrWithLocation(str):
         ----------
         pattern : Union[str, re.Pattern]
             Pattern to match for split
-        repl : str
-            String to substitute in when pattern is found
+        repl : Union[str, Iterable[str]]
+            String to substitute in when pattern is found or an iterable
+            from which to sequentially draw substitution strings.
         string : StrWithLocation
             The string to perform the substitution on
         count : int, optional

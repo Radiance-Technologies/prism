@@ -633,6 +633,7 @@ class HeuristicParser:
         # Now perform further splitting of braces, bullets, and ellipses
         i = 0
         notation_it = iter(notations)
+        # re.sub will pull from this automatically to make substitutions
         string_it = CallableIterator(strings)
         processed_sentences: List[StrWithLocation] = []
         while i < len(sentences):  # `sentences` length may change
