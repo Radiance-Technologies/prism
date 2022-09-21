@@ -13,7 +13,6 @@ import tqdm
 from seutil import io
 
 from prism.data.commit_map import Except, ProjectCommitUpdateMapper
-from prism.data.extract_cache import get_dependency_formula
 from prism.data.setup import create_default_switches
 from prism.project.base import SentenceExtractionMethod
 from prism.project.metadata.storage import MetadataStorage
@@ -84,10 +83,9 @@ def process_commit(
         print(f'Choosing "coq.{coq_version}" for {project.name}')
         # get a switch
         project.infer_opam_dependencies()  # force inference
-        dependency_formula = get_dependency_formula(
-            project.opam_dependencies,
-            project.ocaml_version,
-            coq_version)
+        dependency_formula = project.get_dependency_formula(
+            coq_version,
+            project.ocaml_version)
         original_switch = project.opam_switch
         project.opam_switch = switch_manager.get_switch(
             dependency_formula,

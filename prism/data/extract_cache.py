@@ -1,8 +1,7 @@
 """
 Module for storing cache extraction functions.
 """
-from functools import reduce
-from typing import Callable, List, Optional, Union
+from typing import Callable, List, Optional
 
 from prism.data.build_cache import (
     CoqProjectBuildCache,
@@ -17,40 +16,10 @@ from prism.language.heuristic.util import ParserUtils
 from prism.project.base import SEM, Project
 from prism.project.exception import ProjectBuildError
 from prism.project.repo import ProjectRepo
-from prism.util.opam import PackageFormula
-from prism.util.opam.formula import LogicalPF, LogOp
-from prism.util.opam.version import Version
 from prism.util.radpytools.os import pushd
 from prism.util.swim import SwitchManager
 
 from ..language.gallina.analyze import SexpAnalyzer
-
-
-def get_dependency_formula(
-        opam_dependencies: List[str],
-        ocaml_version: Optional[Union[str,
-                                      Version]],
-        coq_version: str) -> PackageFormula:
-    """
-    Get the dependency formula for the given constraints.
-
-    This formula can then be used to retrieve an appropriate switch.
-    """
-    formula = []
-    formula.append(PackageFormula.parse(f'"coq.{coq_version}"'))
-    formula.append(PackageFormula.parse('"coq-serapi"'))
-    if ocaml_version is not None:
-        formula.append(PackageFormula.parse(f'"ocaml.{ocaml_version}"'))
-    for dependency in opam_dependencies:
-        formula.append(PackageFormula.parse(dependency))
-    formula = reduce(
-        lambda l,
-        r: LogicalPF(l,
-                     LogOp.AND,
-                     r),
-        formula[1 :],
-        formula[0])
-    return formula
 
 
 def extract_vernac_commands(
@@ -207,10 +176,7 @@ def extract_cache_new(
     """
     project.git.checkout(commit_sha)
     # get a switch
-    dependency_formula = get_dependency_formula(
-        project.opam_dependencies,  # infers dependencies as side-effect
-        project.ocaml_version,
-        coq_version)
+    dependency_formula = project.get_dependency_formula(coq_version)
     original_switch = project.opam_switch
     project.opam_switch = switch_manager.get_switch(
         dependency_formula,
