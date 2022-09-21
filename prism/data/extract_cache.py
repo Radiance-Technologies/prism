@@ -19,7 +19,7 @@ from prism.project.exception import ProjectBuildError
 from prism.project.repo import ProjectRepo
 from prism.util.opam import PackageFormula
 from prism.util.opam.formula import LogicalPF, LogOp
-from prism.util.opam.version import Version
+from prism.util.opam.version import OCamlVersion, Version
 from prism.util.radpytools.os import pushd
 from prism.util.swim import SwitchManager
 
@@ -37,9 +37,22 @@ def get_dependency_formula(
     This formula can then be used to retrieve an appropriate switch.
     """
     formula = []
+    # Loosen restriction to matching major.minor~prerelease
+    coq_version = Version.parse(coq_version)
+    if isinstance(coq_version, OCamlVersion):
+        coq_version = OCamlVersion(
+            coq_version.major,
+            coq_version.minor,
+            prerelease=coq_version.prerelease)
     formula.append(PackageFormula.parse(f'"coq.{coq_version}"'))
     formula.append(PackageFormula.parse('"coq-serapi"'))
     if ocaml_version is not None:
+        if not isinstance(ocaml_version, Version):
+            ocaml_version = Version.parse(ocaml_version)
+        ocaml_version = OCamlVersion(
+            ocaml_version.major,
+            ocaml_version.minor,
+            prerelease=ocaml_version.prerelease)
         formula.append(PackageFormula.parse(f'"ocaml.{ocaml_version}"'))
     for dependency in opam_dependencies:
         formula.append(PackageFormula.parse(dependency))
