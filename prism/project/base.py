@@ -15,9 +15,12 @@ from subprocess import CalledProcessError
 from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
 
 from prism.data.document import CoqDocument
-from prism.language.gallina.analyze import SexpInfo
 from prism.language.gallina.parser import CoqParser
-from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
+from prism.language.heuristic.parser import (
+    CoqSentence,
+    HeuristicParser,
+    SerAPIParser,
+)
 from prism.project.exception import ProjectBuildError
 from prism.project.iqr import IQR
 from prism.project.metadata import ProjectMetadata
@@ -279,17 +282,6 @@ class Project(ABC):
             for lib in pathlib.Path(self.path).rglob(ext):
                 lib.unlink()
 
-    @abstractmethod
-    def _get_file(self, filename: str, *args, **kwargs) -> CoqDocument:
-        """
-        Return a specific Coq source file.
-
-        See Also
-        --------
-        Project.get_file : For public API.
-        """
-        pass
-
     def _get_fresh_metadata(self) -> ProjectMetadata:
         """
         Get refreshed metadata from the storage.
@@ -302,7 +294,7 @@ class Project(ABC):
             self,
             filename: Optional[str],
             glom_proofs: bool,
-            **kwargs):
+            **kwargs) -> List[CoqSentence]:
         if filename is None:
             obj = self.get_random_file(**kwargs)
         else:
@@ -496,14 +488,14 @@ class Project(ABC):
             filtered = sorted(filtered)
         return filtered
 
-    def get_file(self, filename: str, *args, **kwargs) -> CoqDocument:
+    def get_file(self, filename: os.PathLike) -> CoqDocument:
         """
         Return a specific Coq source file.
 
         Parameters
         ----------
-        filename : str
-            The absolute path to the file to return.
+        filename : os.PathLike
+            The path to a file within the project.
 
         Returns
         -------
@@ -515,9 +507,15 @@ class Project(ABC):
         ValueError
             If given `filename` does not end in ".v"
         """
+        if not isinstance(filename, str):
+            filename = str(filename)
         if not filename.endswith(".v"):
             raise ValueError("filename must end in .v")
-        return self._get_file(filename, *args, **kwargs)
+        return CoqDocument(
+            get_relative_path(filename,
+                              self.path),
+            project_path=self.path,
+            source_code=CoqParser.parse_source(filename))
 
     def get_file_list(
             self,
@@ -577,13 +575,14 @@ class Project(ABC):
             glom_proofs,
             **kwargs)
         sentence = random.choice(sentences)
-        return sentence
+        return str(sentence)
 
     def get_random_sentence_pair_adjacent(
             self,
             filename: Optional[str] = None,
             glom_proofs: bool = True,
-            **kwargs) -> List[str]:
+            **kwargs) -> Tuple[str,
+                               str]:
         """
         Return a random adjacent sentence pair from the project.
 
@@ -600,9 +599,9 @@ class Project(ABC):
 
         Returns
         -------
-        List of str
-            A list of two adjacent sentences from the project, with the
-            first sentence chosen at random
+        tuple of str
+            A pair of adjacent sentences from the project, with the
+            first sentence chosen at random.
         """
         sentences: List[str] = []
         counter = 0
@@ -619,7 +618,47 @@ class Project(ABC):
                 **kwargs)
             counter += 1
         first_sentence_idx = random.randint(0, len(sentences) - 2)
-        return sentences[first_sentence_idx : first_sentence_idx + 2]
+        first, second = sentences[first_sentence_idx : first_sentence_idx + 2]
+        return str(first), str(second)
+
+    def get_sentences(
+            self,
+            filename: os.PathLike,
+            sentence_extraction_method: Optional[
+                SentenceExtractionMethod] = None,
+            **kwargs) -> List[CoqSentence]:
+        r"""
+        Get the sentences of a Coq file within the project.
+
+        By default, proofs are then re-glommed into their own entries.
+        This behavior can be switched off via ``glom_proofs = False``.
+
+        Parameters
+        ----------
+        filename : os.PathLike
+            The path to a file in the project.
+        sentence_extraction_method : Optional[\
+                                         SentenceExtractionMethod],\
+                                     optional
+            Method by which sentences should be extracted
+        kwargs : Dict[str, Any]
+            Optional keyword arguments to `Project.extract_sentences`.
+
+        Returns
+        -------
+        List[CoqSentence]
+            The list of sentences extracted from the indicated file.
+
+        See Also
+        --------
+        extract_sentences : For expected keyword arguments.
+        """
+        if sentence_extraction_method is None:
+            sentence_extraction_method = self.sentence_extraction_method
+        document = self.get_file(filename)
+        kwargs['sentence_extraction_method'] = sentence_extraction_method
+        kwargs['opam_switch'] = self.opam_switch
+        return self.extract_sentences(document, **kwargs)
 
     def infer_metadata(
             self,
@@ -753,14 +792,18 @@ class Project(ABC):
             glom_ltac: bool = False,
             return_asts: bool = False,
             sentence_extraction_method: SEM = SEM.SERAPI,
-            **kwargs) -> Union[List[str],
-                               Tuple[List[str],
-                                     List[SexpInfo.Loc]]]:
+            **kwargs) -> List[CoqSentence]:
         """
         Split the Coq file text by sentences.
 
         By default, proofs are then re-glommed into their own entries.
         This behavior can be switched off.
+
+        .. warning::
+            If the sentence extraction method relies upon an OCaml
+            package such as `coq-serapi`, then an
+            ``opam_switch : OpamSwitch`` keyword argument should be
+            provided to set the environment of execution
 
         Parameters
         ----------
@@ -783,15 +826,8 @@ class Project(ABC):
 
         Returns
         -------
-        List[str]
-            A list of strings corresponding to Coq source file
-            sentences, with proofs glommed (or not) depending on input
-            flag.
-        List[SexpInfo.Loc], optional
-            A list of locations corresponding to the returned list of
-            sentences. This list is only returned if certain arguments
-            are passed to certain parsers. With the default args, this
-            is NOT returned.
+        List[CoqSentence]
+            A list of Coq sentences extracted from the given `document`.
         """
         return sentence_extraction_method.parser(
         ).parse_sentences_from_document(

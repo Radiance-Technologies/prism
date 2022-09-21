@@ -236,8 +236,7 @@ class TestProjectRepo(unittest.TestCase):
         file_object = self.project.get_file(
             os.path.join(self.repo_path,
                          "cfrontend",
-                         "Ctypes.v"),
-            self.master_hash)
+                         "Ctypes.v"))
         self.assertEqual(
             file_object.abspath,
             os.path.join(self.repo_path,

@@ -217,6 +217,7 @@ class TestCoqProjectBaseDataset(unittest.TestCase):
         """
         csg = self.dataset.sentences()
         for sentence in csg:
+            sentence = str(sentence)
             self.assertGreater(len(sentence), 0)
             self.assertTrue(
                 sentence.endswith('.') or sentence == '{' or sentence == "}"

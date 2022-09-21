@@ -23,7 +23,7 @@ from prism.util.opam.version import Version
 from prism.util.radpytools.os import pushd
 from prism.util.swim import SwitchManager
 
-from ..language.gallina.analyze import SexpAnalyzer, SexpInfo
+from ..language.gallina.analyze import SexpAnalyzer
 
 
 def get_dependency_formula(
@@ -73,13 +73,13 @@ def extract_vernac_commands(
             list())
         with pushd(project.dir_abspath):
             with SerAPI(project.serapi_options) as serapi:
-                for sentence, location in zip(*project.extract_sentences(
-                        project.get_file(filename),
+                for sentence in project.get_sentences(
+                        filename,
                         sentence_extraction_method=SEM.HEURISTIC,
                         return_locations=True,
-                        glom_proofs=False)):
-                    sentence: str
-                    location: SexpInfo.Loc
+                        glom_proofs=False):
+                    location = sentence.location
+                    sentence = sentence.text
                     _, _, sexp = serapi.execute(sentence, True)
                     if SexpAnalyzer.is_ltac(sexp):
                         # This is where we would handle proofs

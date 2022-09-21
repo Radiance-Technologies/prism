@@ -572,8 +572,8 @@ class ProjectNodeGraph(nx.MultiDiGraph):
                 requirement=LogicalName(req))
 
         def extract(path):
-            file = project.get_file(path)
-            sentences = project.__class__.extract_sentences(file, **extract_kw)
+            sentences = project.get_sentences(path, **extract_kw)
+            sentences = [str(s) for s in sentences]
             stats = parser._compute_sentence_statistics(sentences)
             return stats.requirements
 
