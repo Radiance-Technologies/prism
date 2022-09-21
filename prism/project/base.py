@@ -28,8 +28,13 @@ from prism.project.metadata.storage import MetadataStorage
 from prism.project.strace import strace_build
 from prism.util.build_tools.coqdep import order_dependencies
 from prism.util.logging import default_log_level
-from prism.util.opam import OpamSwitch, PackageFormula
-from prism.util.opam.formula.package import LogicalPF
+from prism.util.opam import (
+    OpamSwitch,
+    PackageFormula,
+    Version,
+    major_minor_version_bound,
+)
+from prism.util.opam.formula import LogicalPF, LogOp
 from prism.util.path import get_relative_path
 from prism.util.radpytools.os import pushd
 from prism.util.re import regex_from_options
@@ -487,6 +492,49 @@ class Project(ABC):
         else:
             filtered = sorted(filtered)
         return filtered
+
+    def get_dependency_formula(
+            self,
+            coq_version: Optional[Union[str,
+                                        Version]] = None,
+            ocaml_version: Optional[Union[str,
+                                          Version]] = None) -> PackageFormula:
+        """
+        Get a formula for this project's dependencies.
+
+        Parameters
+        ----------
+        coq_version : Optional[Union[str, Version]], optional
+            If given, then include a dependency on Coq that matches the
+            given major and minor components of `coq_version`.
+        ocaml_version : Optional[Union[str, Version]], optional
+            If given, then include a dependency on OCaml that matches
+            the given major and minor components of `ocaml_version`.
+
+        Returns
+        -------
+        PackageFormula
+            A formula that can be used to retrieve an appropriate
+            switch from a pool of existing switches or used to install
+            required dependencies in a given switch.
+        """
+        formula = []
+        # Loosen restriction to matching major.minor~prerelease
+        if coq_version is not None:
+            formula.append(major_minor_version_bound("coq", coq_version))
+        formula.append(PackageFormula.parse('"coq-serapi"'))
+        if ocaml_version is not None:
+            formula.append(major_minor_version_bound("ocaml", ocaml_version))
+        for dependency in self.opam_dependencies:
+            formula.append(PackageFormula.parse(dependency))
+        formula = reduce(
+            lambda l,
+            r: LogicalPF(l,
+                         LogOp.AND,
+                         r),
+            formula[1 :],
+            formula[0])
+        return formula
 
     def get_file(self, filename: os.PathLike) -> CoqDocument:
         """
