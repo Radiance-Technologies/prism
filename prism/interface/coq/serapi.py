@@ -26,7 +26,10 @@ from prism.interface.coq.environ import (
 from prism.interface.coq.exception import CoqExn, CoqTimeout
 from prism.interface.coq.goals import Goal, Goals, Hypothesis
 from prism.interface.coq.names import mod_path_file, print_ker_name
-from prism.interface.coq.re_patterns import ADDED_STATE_PATTERN
+from prism.interface.coq.re_patterns import (
+    ADDED_STATE_PATTERN,
+    NEW_IDENT_PATTERN,
+)
 from prism.language.sexp import SexpNode
 from prism.language.sexp.exception import IllegalSexpOperationException
 from prism.language.sexp.list import SexpList
@@ -326,7 +329,8 @@ class SerAPI:
     def execute(
         self,
         cmd: str,
-        return_ast: bool = False
+        return_ast: bool = False,
+        verbose: bool = True
     ) -> Union[Tuple[List[SexpNode],
                      List[str]],
                Tuple[List[SexpNode],
@@ -342,6 +346,10 @@ class SerAPI:
         return_ast : bool, optional
             Whether to return the AST of the command or not, by default
             False.
+        verbose : bool, optional
+            Whether to return verbose feedback for the command.
+            For example, verbose feedback may indicate the names of
+            newly introduced constants.
 
         Returns
         -------
@@ -354,8 +362,9 @@ class SerAPI:
             If `return_ast` is True, then the AST of `cmd` is also
             returned.
         """
-        state_id, ast = self.send_add(cmd, return_ast)
-        responses, feedback, _ = self.send(f"(Exec {state_id})")
+        state_id, ast, feedback = self.send_add(cmd, return_ast, verbose)
+        responses, exec_feedback, _ = self.send(f"(Exec {state_id})")
+        feedback.extend(exec_feedback)
         if return_ast:
             return responses, feedback, ast.pretty_format() if ast is not None else ast
         else:
@@ -1077,10 +1086,14 @@ class SerAPI:
             responses.append(parsed_item)
         return responses, feedback, raw_responses
 
-    def send_add(self,
-                 cmd: str,
-                 return_ast: bool) -> Tuple[int,
-                                            Optional[AbstractSyntaxTree]]:
+    def send_add(
+        self,
+        cmd: str,
+        return_ast: bool,
+        verbose: bool = True
+    ) -> Tuple[int,
+               Optional[AbstractSyntaxTree],
+               List[str]]:
         """
         Add a command to the SerAPI buffer and optionally get its AST.
 
@@ -1090,6 +1103,9 @@ class SerAPI:
             A command (i.e., a sentence).
         return_ast : bool
             Whether to return the AST or not.
+        verbose : bool, optional
+            Whether to provide verbose feedback for the added command
+            when it is executed.
 
         Returns
         -------
@@ -1098,8 +1114,11 @@ class SerAPI:
         ast : Optional[AbstractSyntaxTree]
             The AST of the added command or None if `return_ast` is
             False.
+        feedback : List[str]
+            Feedback from the
         """
-        _, _, raw_responses = self.send(f'(Add () "{escape(cmd)}")')
+        verbose = "(verb true)" if verbose else ""
+        _, feedback, raw_responses = self.send(f'(Add ({verbose}) "{escape(cmd)}")')
         state_ids = [
             int(sid) for sid in ADDED_STATE_PATTERN.findall(raw_responses)
         ]
@@ -1110,7 +1129,9 @@ class SerAPI:
             ast = self.query_ast(cmd)
         else:
             ast = None
-        return state_id, ast
+        if not verbose:
+            feedback = []
+        return state_id, ast, feedback
 
     def shutdown(self) -> None:
         """
@@ -1127,3 +1148,26 @@ class SerAPI:
             pass
         self._proc.wait()
         self._dead = True
+
+    @classmethod
+    def parse_new_identifiers(cls, feedback: List[str]) -> List[str]:
+        """
+        Get the identifiers, if any, introduced by the given feedback.
+
+        Parameters
+        ----------
+        feedback : str
+            A single feedback message from a Coq Vernacular command.
+
+        Returns
+        -------
+        List[str]
+            The identifiers introduced in the given feedback message.
+        """
+        idents = []
+        for msg_info in feedback:
+            match = NEW_IDENT_PATTERN.search(msg_info)
+            if match is not None:
+                idents.extend(
+                    [m.strip() for m in match.groups("idents")[0].split(",")])
+        return idents

@@ -723,6 +723,38 @@ class TestSerAPI(unittest.TestCase):
             """)
             self.assertEqual(normalize_spaces(actual[0]), expected)
 
+    def test_parse_new_identifiers(self):
+        """
+        Verify that new identifiers can be parsed from feedback.
+        """
+        with SerAPI() as serapi:
+            _, feedback = serapi.execute(
+                "Inductive nat : Type := O : nat | S (n : nat) : nat.")
+            actual_idents = serapi.parse_new_identifiers(feedback)
+            expected_idents = [
+                "nat",
+                "nat_rect",
+                "nat_ind",
+                "nat_rec",
+                "nat_sind"
+            ]
+            self.assertEqual(actual_idents, expected_idents)
+            _, feedback = serapi.execute("Module foo.")
+            actual_idents = serapi.parse_new_identifiers(feedback)
+            self.assertEqual(actual_idents, ['foo'])
+            _, feedback = serapi.execute("End foo.")
+            actual_idents = serapi.parse_new_identifiers(feedback)
+            self.assertEqual(actual_idents, ['foo'])
+            _, feedback = serapi.execute("Lemma foobar : unit.")
+            actual_idents = serapi.parse_new_identifiers(feedback)
+            self.assertEqual(actual_idents, [])
+            _, feedback = serapi.execute("intros.")
+            actual_idents = serapi.parse_new_identifiers(feedback)
+            self.assertEqual(actual_idents, [])
+            _, feedback = serapi.execute("Admitted.")
+            actual_idents = serapi.parse_new_identifiers(feedback)
+            self.assertEqual(actual_idents, ['foobar'])
+
 
 if __name__ == '__main__':
     unittest.main()
