@@ -18,7 +18,7 @@ from seutil import bash
 from prism.util.bash import escape
 
 from .file import OpamFile
-from .formula import LogicalPF, LogOp, PackageFormula
+from .formula import LogicalPF, LogOp, PackageConstraint, PackageFormula
 from .version import OCamlVersion, OpamVersion, Version
 
 __all__ = ['OpamSwitch']
@@ -33,6 +33,7 @@ _allow_unsafe_clone = []
 # Very hacky and ugly.
 
 Package = Tuple[str, Optional[Version]]
+PackageMetadata = Tuple[str, str]
 
 
 @dataclass(frozen=True)
@@ -254,7 +255,10 @@ class OpamSwitch:
         command = f'bwrap --dev-bind / / --bind {src} {dest} -- bash -c "{command}"'
         return command, src, dest
 
-    def export(self, include_id: bool = True) -> 'OpamSwitch.Configuration':
+    def export(
+            self,
+            include_id: bool = True,
+            include_metadata: bool = False) -> 'OpamSwitch.Configuration':
         """
         Export the switch configuration.
 
@@ -267,19 +271,26 @@ class OpamSwitch:
             Whether to include the switch root, name, and if it is a
             clone alongside the usual output of ``opam switch export``,
             by default True.
+        include_metadata : bool, optional
+            If True, then include the metadata of all installed
+            packages.
 
         Returns
         -------
         OpamSwitch.Configuration
             The switch configuration.
         """
+        include_metadata = "--full" if include_metadata else ""
         with tempfile.NamedTemporaryFile('r') as f:
-            self.run(f"opam switch export {f.name}")
+            self.run(f"opam switch export {include_metadata} {f.name}")
             # Contents are so close but not quite yaml or json.
             # Custom parsing is required.
             contents: str = f.read()
         # strip package strings of quotes before tokenizing
-        tokens = contents.replace('"', ' ').split()
+        contents = contents.split("\npackage ")
+        package_metadata = contents[1 :]
+        contents = contents[0]
+        tokens = contents.split()
         kwargs = {}
         field = None
         # identify fields and their raw values
@@ -292,15 +303,13 @@ class OpamSwitch:
                 if token.startswith("["):
                     kwargs[field] = []
                     token = token[1 :]
-                    if token:
-                        kwargs[field].append(token)
-                elif field in kwargs:
+                if field in kwargs:
                     if token.endswith("]"):
                         token = token[:-1]
                         if token:
                             kwargs[field].append(token)
                         field = None
-                    else:
+                    elif token:
                         kwargs[field].append(token)
                 else:
                     kwargs[field] = token
@@ -309,15 +318,22 @@ class OpamSwitch:
         for field, value in kwargs.items():
             # safe to modify dict since keys are not added or removed
             if field == "opam_version":
-                kwargs[field] = OpamVersion.parse(value)
+                kwargs[field] = Version.parse(value, require_quotes=True)
             else:
                 packages = []
                 for package in value:
-                    package: str
-                    name, version = package.split(".", maxsplit=1)
-                    version = OpamVersion.parse(version)
-                    packages.append((name, version))
+                    package: PackageConstraint = PackageConstraint.parse(
+                        package)
+                    packages.append(
+                        (package.package_name,
+                         package.version_constraint))
                 kwargs[field] = packages
+        all_metadata = []
+        for pm in package_metadata:
+            name, metadata = pm.split(" ", maxsplit=1)
+            all_metadata.append((name.strip('"'), metadata))
+        if package_metadata:
+            kwargs['package_metadata'] = all_metadata
         if include_id:
             kwargs['opam_root'] = self.root
             kwargs['switch_name'] = self.name
@@ -666,6 +682,7 @@ class OpamSwitch:
         roots: Optional[List[Package]] = None
         installed: Optional[List[Package]] = None
         pinned: Optional[List[Package]] = None
+        package_metadata: Optional[List[PackageMetadata]] = None
         opam_root: Optional[str] = None
         switch_name: Optional[str] = None
         is_clone: Optional[str] = None
@@ -680,15 +697,19 @@ class OpamSwitch:
                 field_value = getattr(self, field_name)
                 if field_value is None:
                     continue
-                s.append(field_name.replace("_", "-"))
-                s.append(": ")
-                if isinstance(field_value, list):
-                    packages = ["["]
-                    for name, version in field_value:
-                        packages.append(f'"{name}.{version}"')
-                    s.append("\n  ".join(packages))
-                    s.append("\n]")
+                if field_name != "package_metadata":
+                    s.append(field_name.replace("_", "-"))
+                    s.append(": ")
+                    if isinstance(field_value, list):
+                        packages = ["["]
+                        for name, version in field_value:
+                            packages.append(f'"{name}.{version}"')
+                        s.append("\n  ".join(packages))
+                        s.append("\n]")
+                    else:
+                        s.append(f'"{field_value}"')
+                    s.append("\n")
                 else:
-                    s.append(f'"{field_value}"')
-                s.append("\n")
+                    for name, metadata in field_value:
+                        s.append(f'package "{name}"{metadata}\n')
             return ''.join(s)

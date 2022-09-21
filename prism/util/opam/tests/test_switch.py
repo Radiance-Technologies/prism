@@ -34,10 +34,11 @@ class TestOpamSwitch(unittest.TestCase):
         """
         Verify that exported switch configurations match file exports.
         """
-        config = self.test_switch.export()
+        config = self.test_switch.export(include_metadata=True)
         self.assertEqual(config.switch_name, self.test_switch_name)
         self.assertEqual(config.opam_root, self.test_switch.root)
         self.assertFalse(config.is_clone)
+        self.assertTrue(config.package_metadata)
         # Compare against actual export file
         with tempfile.NamedTemporaryFile('r', dir=TEST_DIR) as f:
             self.test_switch.run(f"opam switch export {f.name}")
@@ -46,6 +47,7 @@ class TestOpamSwitch(unittest.TestCase):
         config.switch_name = None
         config.opam_root = None
         config.is_clone = None
+        config.package_metadata = None
         # normalize whitespace
         actual = actual.replace("[", "[ ").replace("]", " ]")
         actual = ' '.join(actual.split())
