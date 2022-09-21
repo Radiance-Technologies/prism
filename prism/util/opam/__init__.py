@@ -10,6 +10,7 @@ from .formula import (  # noqa: F401
     VersionFormula,
 )
 from .switch import OpamSwitch  # noqa: F401
+from .util import major_minor_version_bound  # noqa: F401
 from .version import (  # noqa: F401
     OCamlVersion,
     OpamVersion,
