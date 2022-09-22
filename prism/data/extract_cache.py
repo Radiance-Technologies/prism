@@ -56,7 +56,11 @@ def _extract_vernac_commands(
                 identifier = None
             if SexpAnalyzer.is_ltac(sexp):
                 assert proof_stack and proof_stack[-1]
-                proof_stack[-1].extend((sentence, serapi.query_goals(), None))
+                proof_stack[-1].extend(
+                    (sentence,
+                     serapi.query_goals(),
+                     None,
+                     None))
                 if identifier is not None:
                     # a proof has concluded
                     # pop proof stack until we reach the lemma
