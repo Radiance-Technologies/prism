@@ -163,6 +163,9 @@ class ControlFlag(enum.Enum):
 class SexpInfo:
     """
     Defines varies structs that may be results of SexpAnalyzer.
+
+    .. warning::     Many of the methods in this class have not been
+    updated to be     compatible with versions of Coq newer than 8.10.2.
     """
 
     @dataclass
