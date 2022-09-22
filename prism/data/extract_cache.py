@@ -1,25 +1,161 @@
 """
 Module for storing cache extraction functions.
 """
-from typing import Callable, List, Optional
+import re
+from typing import Callable, Iterable, List, Optional, Tuple
 
 from prism.data.build_cache import (
     CoqProjectBuildCache,
     ProjectBuildEnvironment,
     ProjectBuildResult,
     ProjectCommitData,
+    ProofSentence,
     VernacCommandData,
     VernacDict,
 )
+from prism.interface.coq.goals import Goals
 from prism.interface.coq.serapi import SerAPI
+from prism.language.heuristic.parser import CoqSentence
 from prism.language.heuristic.util import ParserUtils
 from prism.project.base import SEM, Project
 from prism.project.exception import ProjectBuildError
 from prism.project.repo import ProjectRepo
+from prism.util.radpytools import unzip
 from prism.util.radpytools.os import pushd
 from prism.util.swim import SwitchManager
 
 from ..language.gallina.analyze import SexpAnalyzer
+
+
+def _extract_vernac_commands(
+        sentences: Iterable[CoqSentence],
+        serapi_options: Optional[str] = None) -> List[VernacCommandData]:
+    file_commands: List[VernacCommandData] = []
+    proof_stack: List[List[Tuple[CoqSentence,
+                                 Goals,
+                                 Optional[str],
+                                 Optional[str]]]] = []
+    # """
+    # A partitioned list of sentences that occur at the beginning or
+    # in the middle of a proof each paired with the goals that
+    # result after the sentence is executed and the type and the
+    # identifier of the command.
+    # The beginning of each partition is a Vernacular command that
+    # is not Ltac-related.
+    # """
+    with SerAPI(serapi_options) as serapi:
+        for sentence in sentences:
+            location = sentence.location
+            sentence = sentence.text
+            _, feedback, sexp = serapi.execute(sentence, True)
+            sentence.ast = sexp
+            ids = serapi.parse_new_identifiers(feedback)
+            if ids:
+                identifier = ids[0]
+            else:
+                identifier = None
+            if SexpAnalyzer.is_ltac(sexp):
+                assert proof_stack and proof_stack[-1]
+                proof_stack[-1].extend((sentence, serapi.query_goals(), None))
+                if identifier is not None:
+                    # a proof has concluded
+                    # pop proof stack until we reach the lemma
+                    lemma = None
+                    for i in range(len(proof_stack) - 1, -1, -1):
+                        (lemma,
+                         goal,
+                         command_type,
+                         identifier_) = proof_stack[i][0]
+                        if re.search(f" {identifier} ", lemma) is not None:
+                            # The newly defined term appears in the
+                            # candidate lemma,
+                            # which has an identifiable type
+                            assert command_type is not None
+                            # but not an identifier returned in feedback
+                            assert identifier_ is None
+                            break
+                    # Get the partitions corresponding to the lemma
+                    proof = proof_stack[i :]
+                    # Pop them from the stack of unresolved proof terms
+                    proof_stack = proof_stack[: i]
+                    # Record vernacular commands that were in the middle
+                    # of the proof.
+                    # They will appear before the lemma in the final
+                    # list; we also unfold nested proofs in this way.
+                    commands = [part[0] for part in proof[1 :]]
+                    for other_command in commands:
+                        file_commands.append(
+                            VernacCommandData(
+                                other_command[3],
+                                other_command[2],
+                                None,
+                                other_command[0].text,
+                                other_command[0].ast,
+                                other_command[0].location))
+                    # Aggregate the proof components
+                    tactics = sum([part[1 :] for part in proof], start=[])
+                    tactics, goals, _, _ = unzip(proof)
+                    # Get goals of first tactic
+                    goals = [goal]
+                    # Pop post-goals of Qed
+                    goals.pop()
+                    # Combine all goals
+                    goals.extend(goals)
+                    # Partition by obligations, if any
+                    proof = []
+                    for tactic, goal in zip(tactics, goals):
+                        tactic: CoqSentence
+                        sentence = tactic.text
+                        tactic_sans_control = ParserUtils.strip_control(
+                            sentence)
+                        tactic_sans_attributes = ParserUtils.strip_attributes(
+                            tactic_sans_control)
+                        if (not proof or ParserUtils.is_obligation_starter(
+                                tactic_sans_attributes)):
+                            proof.append([])
+                        proof[-1].append(
+                            ProofSentence(sentence,
+                                          tactic.ast,
+                                          goal))
+                    # Record the lemma
+                    file_commands.append(
+                        VernacCommandData(
+                            identifier,
+                            command_type,
+                            None,
+                            lemma.text,
+                            lemma.ast,
+                            lemma.location,
+                            proof))
+            else:
+                # NOTE: Identification of command type and
+                # identifier could be improved using AST with
+                # Coq-version-dependent logic. However, the
+                # command type would no longer be human-readable
+                # but the name of an internal Coq type
+                # constructor, namely a variant of vernac_expr
+                command_type, _ = ParserUtils.extract_identifier(sentence.text)
+                if serapi.is_in_proof_mode:
+                    # Not Ltac but in proof mode.
+                    # Might be a lemma.
+                    proof_stack.append(
+                        [
+                            (
+                                sentence,
+                                serapi.query_goals(),
+                                command_type,
+                                identifier)
+                        ])
+                else:
+                    file_commands.append(
+                        VernacCommandData(
+                            identifier,
+                            command_type,
+                            None,
+                            sentence,
+                            sexp,
+                            location))
+    return file_commands
 
 
 def extract_vernac_commands(
@@ -32,38 +168,24 @@ def extract_vernac_commands(
     ----------
     project : ProjectRepo
         The project from which to extract the vernac commands
+    serapi_options : Optional[str], optional
+        Arguments with which to initialize `sertop`, namely IQR flags.
+
+    See Also
+    --------
+    prism.project.iqr : For more information about IQR flags.
     """
     if serapi_options is None:
         serapi_options = project.serapi_options
     command_data = {}
-    for filename in project.get_file_list():
-        file_commands: List[VernacCommandData] = command_data.setdefault(
-            filename,
-            list())
-        with pushd(project.dir_abspath):
-            with SerAPI(project.serapi_options) as serapi:
-                for sentence in project.get_sentences(
-                        filename,
-                        sentence_extraction_method=SEM.HEURISTIC,
-                        return_locations=True,
-                        glom_proofs=False):
-                    location = sentence.location
-                    sentence = sentence.text
-                    _, _, sexp = serapi.execute(sentence, True)
-                    if SexpAnalyzer.is_ltac(sexp):
-                        # This is where we would handle proofs
-                        ...
-                    else:
-                        command_type, identifier = \
-                            ParserUtils.extract_identifier(sentence)
-                        file_commands.append(
-                            VernacCommandData(
-                                identifier,
-                                command_type,
-                                None,
-                                sentence,
-                                sexp,
-                                location))
+    with pushd(project.dir_abspath):
+        for filename in project.get_file_list():
+            command_data[filename] = _extract_vernac_commands(
+                project.get_sentences(
+                    filename,
+                    SEM.HEURISTIC,
+                    return_locations=True,
+                    glom_proofs=False))
     return command_data
 
 
