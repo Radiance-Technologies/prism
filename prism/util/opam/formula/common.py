@@ -17,7 +17,7 @@ _bool_syntax: re.Pattern = re.compile("true|false")
 _string_syntax: re.Pattern = re.compile(r'"([^\s"]+)"|"""(\S*)"""')
 _empty_string_syntax: re.Pattern = re.compile('""')
 _identchar_syntax: re.Pattern = re.compile(
-    rf"(?:{_letter_syntax.pattern}|{_digit_syntax.pattern}|\-|_)")
+    rf"(?:{_letter_syntax.pattern}|{_digit_syntax.pattern}|\-|_|\+)")
 _ident_syntax: re.Pattern = re.compile(
     f"{_identchar_syntax.pattern}*[a-zA-Z]{_identchar_syntax.pattern}*")
 _varident_syntax: re.Pattern = re.compile(
