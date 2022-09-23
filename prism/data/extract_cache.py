@@ -17,6 +17,7 @@ from prism.interface.coq.goals import Goals
 from prism.interface.coq.serapi import SerAPI
 from prism.language.heuristic.parser import CoqSentence
 from prism.language.heuristic.util import ParserUtils
+from prism.language.sexp import SexpParser
 from prism.project.base import SEM, Project
 from prism.project.exception import ProjectBuildError
 from prism.project.repo import ProjectRepo
@@ -65,7 +66,7 @@ def _extract_vernac_commands(
             location = sentence.location
             text = sentence.text
             _, feedback, sexp = serapi.execute(text, True)
-            sentence.ast = sexp
+            sentence.ast = SexpParser.parse(sexp)
             ids = serapi.parse_new_identifiers(feedback)
             if ids:
                 identifier = ids[0]
@@ -73,7 +74,7 @@ def _extract_vernac_commands(
                 identifier = None
             if SexpAnalyzer.is_ltac(sexp):
                 assert proof_stack and proof_stack[-1]
-                proof_stack[-1].extend(
+                proof_stack[-1].append(
                     (sentence,
                      serapi.query_goals(),
                      None,
@@ -87,7 +88,7 @@ def _extract_vernac_commands(
                          goal,
                          command_type,
                          identifier_) = proof_stack[i][0]
-                        if re.search(f" {identifier} ", lemma) is not None:
+                        if re.search(f" {identifier} ", lemma.text) is not None:
                             # The newly defined term appears in the
                             # candidate lemma,
                             # which has an identifiable type
@@ -115,13 +116,12 @@ def _extract_vernac_commands(
                                 other_command[0].location))
                     # Aggregate the proof components
                     tactics = sum([part[1 :] for part in proof], start=[])
-                    tactics, subgoals, _, _ = unzip(proof)
+                    tactics, subgoals, _, _ = unzip(tactics)
                     # Get goals of first tactic
                     goals = [goal]
-                    # Pop post-goals of Qed
-                    subgoals.pop()
                     # Combine all goals
-                    goals.extend(subgoals)
+                    # Pop post-goals of Qed
+                    goals.extend(subgoals[:-1])
                     # Partition by obligations, if any
                     proof = []
                     for tactic, goal in zip(tactics, goals):
@@ -129,7 +129,7 @@ def _extract_vernac_commands(
                         text = tactic.text
                         tactic_sans_control = ParserUtils.strip_control(text)
                         tactic_sans_attributes = ParserUtils.strip_attributes(
-                            tactic_sans_control)
+                            tactic_sans_control)[0]
                         if (not proof or ParserUtils.is_obligation_starter(
                                 tactic_sans_attributes)):
                             proof.append([])
@@ -175,9 +175,7 @@ def _extract_vernac_commands(
     return file_commands
 
 
-def extract_vernac_commands(
-        project: ProjectRepo,
-        serapi_options: str = "") -> VernacDict:
+def extract_vernac_commands(project: ProjectRepo) -> VernacDict:
     """
     Compile vernac commands from a project into a dict.
 
@@ -185,20 +183,12 @@ def extract_vernac_commands(
     ----------
     project : ProjectRepo
         The project from which to extract the vernac commands
-    serapi_options : str, optional
-        Arguments with which to initialize `sertop`, namely IQR flags.
 
     Returns
     -------
     VernacDict
         A map from file names to their extracted commands.
-
-    See Also
-    --------
-    prism.project.iqr : For more information about IQR flags.
     """
-    if serapi_options is None:
-        serapi_options = project.serapi_options
     command_data = {}
     with pushd(project.dir_abspath):
         for filename in project.get_file_list():
@@ -207,7 +197,8 @@ def extract_vernac_commands(
                     filename,
                     SEM.HEURISTIC,
                     return_locations=True,
-                    glom_proofs=False))
+                    glom_proofs=False),
+                serapi_options=project.serapi_options)
     return command_data
 
 
@@ -337,7 +328,7 @@ def extract_cache_new(
         build_result = (pbe.return_code, pbe.stdout, pbe.stderr)
         command_data = process_project(project)
     else:
-        command_data = extract_vernac_commands(project, metadata.serapi_options)
+        command_data = extract_vernac_commands(project)
     data = ProjectCommitData(
         metadata,
         command_data,
