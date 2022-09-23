@@ -298,7 +298,6 @@ class SerAPI:
         s = []
         s.append(repr(self._proc))
         s.append('command: ' + str(self._proc.proc.args))
-        s.append(f'args: {self._proc.args}')
         buffer = self._proc.buffer[-last_str_chars :]
         s.append(f'buffer (last {last_str_chars} chars): {buffer}')
         before = self._proc.before[
@@ -322,6 +321,7 @@ class SerAPI:
         s.append('ignorecase: ' + str(self._proc.ignorecase))
         s.append('searchwindowsize: ' + str(self._proc.searchwindowsize))
         s.append('delaybeforesend: ' + str(self._proc.delaybeforesend))
+        s.append('delayafterread: ' + str(self._proc.delayafterread))
         s.append('delayafterclose: ' + str(self._proc.delayafterclose))
         s.append('delayafterterminate: ' + str(self._proc.delayafterterminate))
         return '\n'.join(s)
