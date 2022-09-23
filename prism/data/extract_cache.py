@@ -29,25 +29,42 @@ from ..language.gallina.analyze import SexpAnalyzer
 
 def _extract_vernac_commands(
         sentences: Iterable[CoqSentence],
-        serapi_options: Optional[str] = None) -> List[VernacCommandData]:
+        serapi_options: str = "") -> List[VernacCommandData]:
+    """
+    Compile vernac commands from a sequence of sentences.
+
+    Parameters
+    ----------
+    sentences : Iterable[CoqSentence]
+        A sequence of sentences derived from a document.
+    serapi_options : str, optional
+        Arguments with which to initialize `sertop`, namely IQR flags.
+
+    Returns
+    -------
+    List[VernacCommandData]
+        The compiled vernacular commands.
+
+    See Also
+    --------
+    prism.project.iqr : For more information about IQR flags.
+    """
     file_commands: List[VernacCommandData] = []
     proof_stack: List[List[Tuple[CoqSentence,
                                  Goals,
                                  Optional[str],
                                  Optional[str]]]] = []
-    # """
     # A partitioned list of sentences that occur at the beginning or
     # in the middle of a proof each paired with the goals that
     # result after the sentence is executed and the type and the
     # identifier of the command.
     # The beginning of each partition is a Vernacular command that
     # is not Ltac-related.
-    # """
     with SerAPI(serapi_options) as serapi:
         for sentence in sentences:
             location = sentence.location
-            sentence = sentence.text
-            _, feedback, sexp = serapi.execute(sentence, True)
+            text = sentence.text
+            _, feedback, sexp = serapi.execute(text, True)
             sentence.ast = sexp
             ids = serapi.parse_new_identifiers(feedback)
             if ids:
@@ -98,29 +115,25 @@ def _extract_vernac_commands(
                                 other_command[0].location))
                     # Aggregate the proof components
                     tactics = sum([part[1 :] for part in proof], start=[])
-                    tactics, goals, _, _ = unzip(proof)
+                    tactics, subgoals, _, _ = unzip(proof)
                     # Get goals of first tactic
                     goals = [goal]
                     # Pop post-goals of Qed
-                    goals.pop()
+                    subgoals.pop()
                     # Combine all goals
-                    goals.extend(goals)
+                    goals.extend(subgoals)
                     # Partition by obligations, if any
                     proof = []
                     for tactic, goal in zip(tactics, goals):
                         tactic: CoqSentence
-                        sentence = tactic.text
-                        tactic_sans_control = ParserUtils.strip_control(
-                            sentence)
+                        text = tactic.text
+                        tactic_sans_control = ParserUtils.strip_control(text)
                         tactic_sans_attributes = ParserUtils.strip_attributes(
                             tactic_sans_control)
                         if (not proof or ParserUtils.is_obligation_starter(
                                 tactic_sans_attributes)):
                             proof.append([])
-                        proof[-1].append(
-                            ProofSentence(sentence,
-                                          tactic.ast,
-                                          goal))
+                        proof[-1].append(ProofSentence(text, tactic.ast, goal))
                     # Record the lemma
                     file_commands.append(
                         VernacCommandData(
@@ -156,7 +169,7 @@ def _extract_vernac_commands(
                             identifier,
                             command_type,
                             None,
-                            sentence,
+                            text,
                             sexp,
                             location))
     return file_commands
@@ -164,7 +177,7 @@ def _extract_vernac_commands(
 
 def extract_vernac_commands(
         project: ProjectRepo,
-        serapi_options: Optional[str] = None) -> VernacDict:
+        serapi_options: str = "") -> VernacDict:
     """
     Compile vernac commands from a project into a dict.
 
@@ -172,8 +185,13 @@ def extract_vernac_commands(
     ----------
     project : ProjectRepo
         The project from which to extract the vernac commands
-    serapi_options : Optional[str], optional
+    serapi_options : str, optional
         Arguments with which to initialize `sertop`, namely IQR flags.
+
+    Returns
+    -------
+    VernacDict
+        A map from file names to their extracted commands.
 
     See Also
     --------
