@@ -14,7 +14,7 @@ from prism.data.build_cache import (
     ProjectCommitData,
 )
 from prism.data.dataset import CoqProjectBaseDataset
-from prism.data.extract_cache import extract_cache, extract_vernac_commands
+from prism.data.extract_cache import CacheExtractor
 from prism.project.base import SentenceExtractionMethod
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
@@ -111,7 +111,7 @@ class TestExtractCache(unittest.TestCase):
                 self.logger.debug(f"Project folder: {project.dir_abspath}")
                 continue
             project: ProjectRepo
-            extract_cache(
+            CacheExtractor.extract_cache(
                 self.cache,
                 self.swim,
                 project,
@@ -137,7 +137,8 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract vernac commands from a project.
         """
-        output = extract_vernac_commands(self.dataset.projects['lambda'])
+        output = CacheExtractor._extract_vernac_commands(
+            self.dataset.projects['lambda'])
         self.assertTrue(output)
 
 
