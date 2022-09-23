@@ -706,6 +706,7 @@ class Project(ABC):
         document = self.get_file(filename)
         kwargs['sentence_extraction_method'] = sentence_extraction_method
         kwargs['opam_switch'] = self.opam_switch
+        kwargs['serapi_options'] = self.serapi_options
         return self.extract_sentences(document, **kwargs)
 
     def infer_metadata(
