@@ -40,29 +40,29 @@ class ControlFlag(enum.Enum):
     for more information.
     """  # noqa: W505, B950
 
-    Time: enum.auto()
+    Time = enum.auto()
     """
     Executes a sentence and displays the time needed to execute it.
     """
-    Redirect: enum.auto()
+    Redirect = enum.auto()
     """
     Executes sentence, redirecting its output to an indicated file.
 
     The name of the file is stored in the ``filename`` attribute.
     """
-    Timeout: enum.auto()
+    Timeout = enum.auto()
     """
     Raise an error if the sentence does not finish in a given limit.
 
     The limit is stored in the ``limit`` attribute.
     """
-    Fail: enum.auto()
+    Fail = enum.auto()
     """
     Expects the sentence to fail and raise an error if it does not.
 
     The proof state is not altered.
     """
-    Succeed: enum.auto()
+    Succeed = enum.auto()
     """
     Expects the sentence to succeed and raises an error if it does not.
 
@@ -695,20 +695,22 @@ class SexpAnalyzer:
         """
         attributes = []
         for vernac_flag in sexp:
-            attribute = vernac_flag[0]
+            attribute = vernac_flag[0].content
             vernac_flag_value = vernac_flag[1]
-            if vernac_flag_value.is_string():
-                # VernacFlagEmpty
-                continue
-            elif vernac_flag_value[0] == "VernacFlagLeaf":
-                vernac_flag_type = vernac_flag_value[1]
-                if vernac_flag_type.is_list():
-                    # Coq version > 8.10.2
-                    vernac_flag_type = vernac_flag_type[1]
-                attribute += f"={vernac_flag_type}"
-            elif vernac_flag_value[0] == "VernacFlagList":
-                args = ",".join(cls._analyze_vernac_flags(vernac_flag_value[1]))
-                attribute = f'{attribute} ({args})'
+            if vernac_flag_value.is_list():
+                # not VernacFlagEmpty
+                vernac_flag_type = vernac_flag_value[0].content
+                if vernac_flag_type == "VernacFlagLeaf":
+                    vernac_flag_type = vernac_flag_value[1]
+                    if vernac_flag_type.is_list():
+                        # Coq version > 8.10.2
+                        vernac_flag_type = vernac_flag_type[1]
+                    attribute += f"={vernac_flag_type}"
+                elif vernac_flag_type == "VernacFlagList":
+                    args = ",".join(
+                        cls._analyze_vernac_flags(vernac_flag_value[1]))
+                    attribute = f'{attribute} ({args})'
+            attributes.append(attribute)
         return attributes
 
     @classmethod
@@ -769,12 +771,7 @@ class SexpAnalyzer:
 
             if v_child[0].content:
                 vernac_control = v_child[1]
-                if vernac_control[0].content == "VernacExpr":
-                    # Coq version <= 8.10.2
-                    attributes = cls._analyze_vernac_flags(vernac_control[1])
-                    vernac = cls._analyze_vernac_expr(vernac_control[2])
-                    vernac.attributes = attributes
-                elif vernac_control.head == "control":
+                if vernac_control.head() == "control":
                     # Coq version > 8.10.2
                     control = vernac_control[0][1]
                     attributes = cls._analyze_vernac_flags(vernac_control[1][1])
@@ -782,21 +779,23 @@ class SexpAnalyzer:
                     vernac.attributes = attributes
                     control_flags = []
                     for c in control:
-                        flag_arg = None
-                        if c.is_list():
-                            flag_arg = c[1].content
-                            c = c[0]
                         try:
-                            c = ControlFlag(c.content)
+                            control_flag = ControlFlag(c.head())
                         except ValueError as e:
                             raise SexpAnalyzingException(control) from e
-                        c._flag_arg = flag_arg
-                        control_flags.append(c)
+                        if control_flag != ControlFlag.Fail:
+                            control_flag._flag_arg = c[1].content
+                        control_flags.append(control_flag)
                     vernac.control_flags = control_flags
+                elif vernac_control[0].content == "VernacExpr":
+                    # Coq version <= 8.10.2
+                    attributes = cls._analyze_vernac_flags(vernac_control[1])
+                    vernac = cls._analyze_vernac_expr(vernac_control[2])
+                    vernac.attributes = attributes
                 else:
                     # Coq version <= 8.10.2
                     try:
-                        control_flag = ControlFlag(vernac_control[0])
+                        control_flag = ControlFlag(vernac_control[0].content)
                     except ValueError as e:
                         raise SexpAnalyzingException(sexp) from e
                     else:
@@ -806,6 +805,7 @@ class SexpAnalyzer:
                         else:
                             sub_vernac_control = vernac_control[1]
                         vernac = cls.analyze_vernac(sub_vernac_control)
+                        vernac.control_flags.insert(0, control_flag)
             else:
                 raise SexpAnalyzingException(sexp)
 

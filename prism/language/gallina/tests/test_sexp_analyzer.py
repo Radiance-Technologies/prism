@@ -3,9 +3,10 @@ Tests for prism.language.gallina.analyze.SexpAnalyzer.
 """
 import unittest
 
-from prism.language.gallina.analyze import SexpAnalyzer
+from prism.language.gallina.analyze import ControlFlag, SexpAnalyzer, SexpInfo
+from prism.language.gallina.exception import SexpAnalyzingException
 from prism.language.gallina.parser import CoqParser
-from prism.language.sexp import SexpParser
+from prism.language.sexp import SexpList, SexpParser, SexpString
 from prism.tests import _COQ_EXAMPLES_PATH
 
 
@@ -13,6 +14,58 @@ class TestSexpAnalyzer(unittest.TestCase):
     """
     Tests for prism.language.gallina.analyze.SexpAnalyzer.
     """
+
+    def test_analyze_vernac(self):
+        """
+        Verify that control flags and attributes can be extracted.
+        """
+        with self.subTest("pre-8.11"):
+            example_sexp = SexpParser.parse(
+                '((v(VernacTime((v(VernacFail((v(VernacExpr((local VernacFlagEmpty))'
+                '(VernacExtend(Set_Solver 0)((GenArg raw(ExtraArg tactic)'
+                '(TacAtom((v(TacIntroPattern false(((v(IntroForthcoming false))'
+                '(loc("[LOC]"))))))(loc("[LOC]")))))))))(loc("[LOC]")))))'
+                '(loc("[LOC]")))))(loc("[LOC]")))')
+            with self.assertRaises(SexpAnalyzingException):
+                # missing bool attribute for VernacTime
+                vernac = SexpAnalyzer.analyze_vernac(example_sexp)
+            # add the missing bool attribute
+            vernac_time: SexpList = example_sexp[0][1]
+            vernac_time.children.insert(1, SexpString("false"))
+            vernac = SexpAnalyzer.analyze_vernac(example_sexp)
+            expected_vernac = SexpInfo.Vernac(
+                "VernacExtend",
+                "Set_Solver",
+                [ControlFlag.Time,
+                 ControlFlag.Fail],
+                ["local"],
+                example_sexp[0][1])
+            self.assertEqual(vernac, expected_vernac)
+        with self.subTest("post-8.11"):
+            example_sexp = SexpParser.parse(
+                '((v('
+                '(control (ControlTime ControlFail))'
+                '(attrs ((local VernacFlagEmpty)))'
+                '(expr '
+                '(VernacExtend(Set_Solver 0)((GenArg raw(ExtraArg tactic)'
+                '(TacAtom((v(TacIntroPattern false(((v(IntroForthcoming false))'
+                '(loc("[LOC]"))))))(loc("[LOC]"))))))))))'
+                '(loc("[LOC]")))')
+            with self.assertRaises(SexpAnalyzingException):
+                # missing bool attribute for VernacTime
+                vernac = SexpAnalyzer.analyze_vernac(example_sexp)
+            # add the missing bool attribute
+            control: SexpList = example_sexp[0][1][0][1]
+            control.children[0] = SexpList([control[0], SexpString("false")])
+            vernac = SexpAnalyzer.analyze_vernac(example_sexp)
+            expected_vernac = SexpInfo.Vernac(
+                "VernacExtend",
+                "Set_Solver",
+                [ControlFlag.Time,
+                 ControlFlag.Fail],
+                ["local"],
+                example_sexp[0][1])
+            self.assertEqual(vernac, expected_vernac)
 
     def test_is_ltac(self):
         """
