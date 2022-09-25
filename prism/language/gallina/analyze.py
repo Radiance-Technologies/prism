@@ -689,9 +689,27 @@ class SexpAnalyzer:
     _vernac_extend_regex: re.Pattern = re.compile("VernacExtend")
 
     @classmethod
-    def _analyze_vernac_flags(cls, sexp: SexpNode) -> List[str]:
+    def analyze_vernac_flags(cls, sexp: SexpNode) -> List[str]:
         """
         Analyze the attribute flags of a Vernacular command.
+
+        Parameters
+        ----------
+        sexp : SexpNode
+            The s-expression of a `vernac_flags` object as defined in
+            https://github.com/coq/coq/blob/master/vernac/attributes.ml.
+
+        Returns
+        -------
+        List[str]
+            The list of attributes or flags defined by the given
+            s-expression.
+
+        Raises
+        ------
+        SexpAnalyzingException
+            If the s-expression does not conform to the expected
+            structure of a `vernac_flags`.
         """
         attributes = []
         try:
@@ -709,7 +727,7 @@ class SexpAnalyzer:
                         attribute += f"={vernac_flag_type}"
                     elif vernac_flag_type == "VernacFlagList":
                         args = ",".join(
-                            cls._analyze_vernac_flags(vernac_flag_value[1]))
+                            cls.analyze_vernac_flags(vernac_flag_value[1]))
                         attribute = f'{attribute} ({args})'
                 attributes.append(attribute)
         except IllegalSexpOperationException as e:
@@ -777,7 +795,7 @@ class SexpAnalyzer:
                 if vernac_control.head() == "control":
                     # Coq version > 8.10.2
                     control = vernac_control[0][1]
-                    attributes = cls._analyze_vernac_flags(vernac_control[1][1])
+                    attributes = cls.analyze_vernac_flags(vernac_control[1][1])
                     vernac = cls._analyze_vernac_expr(vernac_control[2][1])
                     vernac.attributes = attributes
                     control_flags = []
@@ -792,7 +810,7 @@ class SexpAnalyzer:
                     vernac.control_flags = control_flags
                 elif vernac_control[0].content == "VernacExpr":
                     # Coq version <= 8.10.2
-                    attributes = cls._analyze_vernac_flags(vernac_control[1])
+                    attributes = cls.analyze_vernac_flags(vernac_control[1])
                     vernac = cls._analyze_vernac_expr(vernac_control[2])
                     vernac.attributes = attributes
                 else:

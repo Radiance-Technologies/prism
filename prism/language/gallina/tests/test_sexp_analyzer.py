@@ -30,7 +30,7 @@ class TestSexpAnalyzer(unittest.TestCase):
             "program",
             "global (local=leaf_example,program=flag_type_example)"
         ]
-        actual = SexpAnalyzer._analyze_vernac_flags(example_sexp)
+        actual = SexpAnalyzer.analyze_vernac_flags(example_sexp)
         self.assertEqual(actual, expected)
 
     def test_analyze_vernac(self):
