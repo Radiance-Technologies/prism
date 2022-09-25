@@ -15,6 +15,24 @@ class TestSexpAnalyzer(unittest.TestCase):
     Tests for prism.language.gallina.analyze.SexpAnalyzer.
     """
 
+    def test_analyze_vernac_flags(self):
+        """
+        Verify that vernac flag trees can be turned into strings.
+        """
+        # nonsense sexp just to test structure
+        # mixture of pre- and post-changes to vernac/attributes.ml
+        example_sexp = SexpParser.parse(
+            '((program VernacFlagEmpty)'
+            '(global (VernacFlagList ('
+            '  (local (VernacFlagLeaf leaf_example))'
+            '  (program (VernacFlagLeaf (FlagIdent flag_type_example)))))))')
+        expected = [
+            "program",
+            "global (local=leaf_example,program=flag_type_example)"
+        ]
+        actual = SexpAnalyzer._analyze_vernac_flags(example_sexp)
+        self.assertEqual(actual, expected)
+
     def test_analyze_vernac(self):
         """
         Verify that control flags and attributes can be extracted.

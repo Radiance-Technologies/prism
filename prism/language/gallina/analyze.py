@@ -694,23 +694,26 @@ class SexpAnalyzer:
         Analyze the attribute flags of a Vernacular command.
         """
         attributes = []
-        for vernac_flag in sexp:
-            attribute = vernac_flag[0].content
-            vernac_flag_value = vernac_flag[1]
-            if vernac_flag_value.is_list():
-                # not VernacFlagEmpty
-                vernac_flag_type = vernac_flag_value[0].content
-                if vernac_flag_type == "VernacFlagLeaf":
-                    vernac_flag_type = vernac_flag_value[1]
-                    if vernac_flag_type.is_list():
-                        # Coq version > 8.10.2
-                        vernac_flag_type = vernac_flag_type[1]
-                    attribute += f"={vernac_flag_type}"
-                elif vernac_flag_type == "VernacFlagList":
-                    args = ",".join(
-                        cls._analyze_vernac_flags(vernac_flag_value[1]))
-                    attribute = f'{attribute} ({args})'
-            attributes.append(attribute)
+        try:
+            for vernac_flag in sexp:
+                attribute = vernac_flag[0].content
+                vernac_flag_value = vernac_flag[1]
+                if vernac_flag_value.is_list():
+                    # not VernacFlagEmpty
+                    vernac_flag_type = vernac_flag_value[0].content
+                    if vernac_flag_type == "VernacFlagLeaf":
+                        vernac_flag_type = vernac_flag_value[1]
+                        if vernac_flag_type.is_list():
+                            # Coq version > 8.10.2
+                            vernac_flag_type = vernac_flag_type[1]
+                        attribute += f"={vernac_flag_type}"
+                    elif vernac_flag_type == "VernacFlagList":
+                        args = ",".join(
+                            cls._analyze_vernac_flags(vernac_flag_value[1]))
+                        attribute = f'{attribute} ({args})'
+                attributes.append(attribute)
+        except IllegalSexpOperationException as e:
+            raise SexpAnalyzingException(sexp) from e
         return attributes
 
     @classmethod
