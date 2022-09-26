@@ -58,9 +58,9 @@ class CacheExtractor:
             cache_dir: str,
             metadata_storage_file: str,
             swim: SwitchManager,
+            default_commits_path: str,
             commit_iterator_cls: Type[
                 CommitIterator] = ChangedCoqCommitIterator,
-            default_commits_path: str = "/workspace/pearls/cache/msp/repos",
             coq_version_iterator: Optional[Callable[[Project,
                                                      str],
                                                     Iterable[Union[
