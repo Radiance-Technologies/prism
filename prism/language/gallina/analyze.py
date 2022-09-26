@@ -14,7 +14,11 @@ from dataclasses import asdict, dataclass
 from typing import Any, Callable, List, Optional, Set, Tuple, Union
 
 from prism.language.gallina.util import ParserUtils
-from prism.language.sexp import IllegalSexpOperationException, SexpNode
+from prism.language.sexp import (
+    IllegalSexpOperationException,
+    SexpNode,
+    SexpParser,
+)
 from prism.language.sexp.list import SexpList
 from prism.language.sexp.string import SexpString
 from prism.language.token import TokenConsts
@@ -779,56 +783,56 @@ class SexpAnalyzer:
             malformed or not representative of a Vernacular command.
         """
         try:
-            if len(sexp) != 2:
-                raise SexpAnalyzingException(sexp)
+            if (len(sexp) == 2 and sexp.head() == "v"
+                    and sexp[1].head() == "loc" and sexp[1][1].children):
+                v_child = sexp[0]
+                loc_child = sexp[1]
 
-            v_child = sexp[0]
-            loc_child = sexp[1]
+                try:
+                    loc = cls.analyze_loc(loc_child)
+                except SexpAnalyzingException:
+                    loc = None
 
-            try:
-                loc = cls.analyze_loc(loc_child)
-            except SexpAnalyzingException:
-                loc = None
-
-            if v_child[0].content:
-                vernac_control = v_child[1]
-                if vernac_control.head() == "control":
-                    # Coq version > 8.10.2
-                    control = vernac_control[0][1]
-                    attributes = cls.analyze_vernac_flags(vernac_control[1][1])
-                    vernac = cls._analyze_vernac_expr(vernac_control[2][1])
-                    vernac.attributes = attributes
-                    control_flags = []
-                    for c in control:
-                        try:
-                            control_flag = ControlFlag(c.head())
-                        except ValueError as e:
-                            raise SexpAnalyzingException(control) from e
-                        if control_flag != ControlFlag.Fail:
-                            control_flag._flag_arg = c[1].content
-                        control_flags.append(control_flag)
-                    vernac.control_flags = control_flags
-                elif vernac_control[0].content == "VernacExpr":
-                    # Coq version <= 8.10.2
-                    attributes = cls.analyze_vernac_flags(vernac_control[1])
-                    vernac = cls._analyze_vernac_expr(vernac_control[2])
-                    vernac.attributes = attributes
-                else:
-                    # Coq version <= 8.10.2
-                    try:
-                        control_flag = ControlFlag(vernac_control[0].content)
-                    except ValueError as e:
-                        raise SexpAnalyzingException(sexp) from e
-                    else:
-                        if control_flag != ControlFlag.Fail:
-                            control_flag._flag_arg = vernac_control[1].content
-                            sub_vernac_control = vernac_control[2]
-                        else:
-                            sub_vernac_control = vernac_control[1]
-                        vernac = cls.analyze_vernac(sub_vernac_control)
-                        vernac.control_flags.insert(0, control_flag)
+                if v_child[0].content:
+                    vernac_control = v_child[1]
             else:
-                raise SexpAnalyzingException(sexp)
+                vernac_control = sexp
+                loc = None
+            if vernac_control.head() == "control":
+                # Coq version > 8.10.2
+                control = vernac_control[0][1]
+                attributes = cls.analyze_vernac_flags(vernac_control[1][1])
+                vernac = cls._analyze_vernac_expr(vernac_control[2][1])
+                vernac.attributes = attributes
+                control_flags = []
+                for c in control:
+                    try:
+                        control_flag = ControlFlag(c.head())
+                    except ValueError as e:
+                        raise SexpAnalyzingException(control) from e
+                    if control_flag != ControlFlag.Fail:
+                        control_flag._flag_arg = c[1].content
+                    control_flags.append(control_flag)
+                vernac.control_flags = control_flags
+            elif vernac_control[0].content == "VernacExpr":
+                # Coq version <= 8.10.2
+                attributes = cls.analyze_vernac_flags(vernac_control[1])
+                vernac = cls._analyze_vernac_expr(vernac_control[2])
+                vernac.attributes = attributes
+            else:
+                # Coq version <= 8.10.2
+                try:
+                    control_flag = ControlFlag(vernac_control[0].content)
+                except ValueError as e:
+                    raise SexpAnalyzingException(sexp) from e
+                else:
+                    if control_flag != ControlFlag.Fail:
+                        control_flag._flag_arg = vernac_control[1].content
+                        sub_vernac_control = vernac_control[2]
+                    else:
+                        sub_vernac_control = vernac_control[1]
+                    vernac = cls.analyze_vernac(sub_vernac_control)
+                    vernac.control_flags.insert(0, control_flag)
 
             vernac.loc = loc
             vernac.vernac_sexp = vernac_control
@@ -1538,19 +1542,29 @@ class SexpAnalyzer:
         return locs
 
     @classmethod
-    def is_ltac(cls, sexp: SexpNode) -> bool:
+    def is_ltac(cls, sexp: Union[str, SexpNode]) -> bool:
         """
         Determine whether the given sexp contains Ltac (see below).
 
         Parameters
         ----------
-        sexp : SexpNode
-            An s-expression, presumed to be correspond to a valid AST.
+        sexp : str or SexpNode
+            An s-expression, presumed to be correspond to a valid AST of
+            a Vernacular command.
+            If a string is given, then it is implicitly parsed to an
+            s-expression.
 
         Returns
         -------
         bool
             True if the s-expression contains Ltac, False otherwise.
+
+        Raises
+        ------
+        IllegalSexpOperationException
+            If `sexp` is not a `SexpNode` and fails to parse to one.
+        SexpAnalyzingException
+            If `sexp` does nto conform .
 
         Notes
         -----
@@ -1559,8 +1573,8 @@ class SexpAnalyzer:
         sentence that would occur while in proof mode (such as
         ``Proof.``, ``Qed.``, or a brace/bullet).
         """  # noqa: B950
-        # TODO: update analyze_vernac to be compatible with newer
-        # versions of Coq and test a `SexpInfo.Vernac` instead
+        if not isinstance(sexp, SexpNode):
+            sexp = SexpParser.parse(sexp)
         vernac = cls.analyze_vernac(sexp)
         if vernac.extend_type is not None:
             # The sexp has a VernacExtend command
