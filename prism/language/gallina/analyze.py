@@ -754,7 +754,8 @@ class SexpAnalyzer:
     @classmethod
     def analyze_vernac(  # noqa: C901
             cls,
-            sexp: SexpNode) -> SexpInfo.Vernac:
+            sexp: SexpNode,
+            with_flags: bool = True) -> SexpInfo.Vernac:
         """
         Analyze an s-expression representing a Vernacular command.
 
@@ -766,10 +767,21 @@ class SexpAnalyzer:
         sexp : SexpNode
             A parsed s-expression node representing a Vernacular command
             term.
-            The structure should conform to the following format:
+            The structure should conform to the following format in Coq
+            8.10.2 and lower:
             <sexp_vernac> = ( ( v (VernacExpr (...) ( <TYPE>  ... )) )
                                 ^----------vernac_sexp-----------^
                             <sexp_loc> )
+            In Coq 8.11 and higher, the structure should be
+            <sexp_vernac> = ( ( v ((control ...)
+                                   (attrs ...)
+                                   (expr (VernacExpr (...)
+                                         ( <TYPE>  ... )) ))
+                                ^----------vernac_sexp-----------^
+                            <sexp_loc> )
+        with_flags : bool, optional
+            Whether to extract control and attribute flags in addition
+            to the location and Vernacular type.
 
         Returns
         -------
@@ -800,39 +812,44 @@ class SexpAnalyzer:
                 loc = None
             if vernac_control.head() == "control":
                 # Coq version > 8.10.2
-                control = vernac_control[0][1]
-                attributes = cls.analyze_vernac_flags(vernac_control[1][1])
                 vernac = cls._analyze_vernac_expr(vernac_control[2][1])
-                vernac.attributes = attributes
-                control_flags = []
-                for c in control:
-                    try:
-                        control_flag = ControlFlag(c.head())
-                    except ValueError as e:
-                        raise SexpAnalyzingException(control) from e
-                    if control_flag != ControlFlag.Fail:
-                        control_flag._flag_arg = c[1].content
-                    control_flags.append(control_flag)
-                vernac.control_flags = control_flags
+                if with_flags:
+                    attributes = cls.analyze_vernac_flags(vernac_control[1][1])
+                    vernac.attributes = attributes
+                    control = vernac_control[0][1]
+                    control_flags = []
+                    for c in control:
+                        try:
+                            control_flag = ControlFlag(c.head())
+                        except ValueError as e:
+                            raise SexpAnalyzingException(control) from e
+                        if control_flag != ControlFlag.Fail:
+                            control_flag._flag_arg = c[1].content
+                        control_flags.append(control_flag)
+                    vernac.control_flags = control_flags
             elif vernac_control[0].content == "VernacExpr":
                 # Coq version <= 8.10.2
-                attributes = cls.analyze_vernac_flags(vernac_control[1])
                 vernac = cls._analyze_vernac_expr(vernac_control[2])
-                vernac.attributes = attributes
+                if with_flags:
+                    attributes = cls.analyze_vernac_flags(vernac_control[1])
+                    vernac.attributes = attributes
             else:
                 # Coq version <= 8.10.2
-                try:
-                    control_flag = ControlFlag(vernac_control[0].content)
-                except ValueError as e:
-                    raise SexpAnalyzingException(sexp) from e
-                else:
-                    if control_flag != ControlFlag.Fail:
-                        control_flag._flag_arg = vernac_control[1].content
-                        sub_vernac_control = vernac_control[2]
+                if with_flags:
+                    try:
+                        control_flag = ControlFlag(vernac_control[0].content)
+                    except ValueError as e:
+                        raise SexpAnalyzingException(sexp) from e
                     else:
-                        sub_vernac_control = vernac_control[1]
-                    vernac = cls.analyze_vernac(sub_vernac_control)
-                    vernac.control_flags.insert(0, control_flag)
+                        if control_flag != ControlFlag.Fail:
+                            control_flag._flag_arg = vernac_control[1].content
+                            sub_vernac_control = vernac_control[2]
+                        else:
+                            sub_vernac_control = vernac_control[1]
+                        vernac = cls.analyze_vernac(sub_vernac_control)
+                        vernac.control_flags.insert(0, control_flag)
+                else:
+                    vernac = cls.analyze_vernac(vernac_control[-1])
 
             vernac.loc = loc
             vernac.vernac_sexp = vernac_control
@@ -1575,7 +1592,7 @@ class SexpAnalyzer:
         """  # noqa: B950
         if not isinstance(sexp, SexpNode):
             sexp = SexpParser.parse(sexp)
-        vernac = cls.analyze_vernac(sexp)
+        vernac = cls.analyze_vernac(sexp, with_flags=False)
         if vernac.extend_type is not None:
             # The sexp has a VernacExtend command
             if cls._vt_proof_extend_regex.search(
