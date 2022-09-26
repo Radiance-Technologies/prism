@@ -70,9 +70,10 @@ class TestSerAPI(unittest.TestCase):
         cls.sentences: Dict[str, List[str]]
         cls.sentences = {}
         for filename in ['simple', 'nested', 'Alphabet']:
-            cls.sentences[filename] = HeuristicParser.parse_sentences_from_file(
+            sentences = HeuristicParser.parse_sentences_from_file(
                 _COQ_EXAMPLES_PATH / f"{filename}.v",
                 glom_proofs=False)
+            cls.sentences[filename] = [str(s) for s in sentences]
 
     def test_execute(self):
         """
@@ -721,6 +722,38 @@ class TestSerAPI(unittest.TestCase):
                  : forall _ : const, const
             """)
             self.assertEqual(normalize_spaces(actual[0]), expected)
+
+    def test_parse_new_identifiers(self):
+        """
+        Verify that new identifiers can be parsed from feedback.
+        """
+        with SerAPI() as serapi:
+            _, feedback = serapi.execute(
+                "Inductive nat : Type := O : nat | S (n : nat) : nat.")
+            actual_idents = serapi.parse_new_identifiers(feedback)
+            expected_idents = [
+                "nat",
+                "nat_rect",
+                "nat_ind",
+                "nat_rec",
+                "nat_sind"
+            ]
+            self.assertEqual(actual_idents, expected_idents)
+            _, feedback = serapi.execute("Module foo.")
+            actual_idents = serapi.parse_new_identifiers(feedback)
+            self.assertEqual(actual_idents, ['foo'])
+            _, feedback = serapi.execute("End foo.")
+            actual_idents = serapi.parse_new_identifiers(feedback)
+            self.assertEqual(actual_idents, ['foo'])
+            _, feedback = serapi.execute("Lemma foobar : unit.")
+            actual_idents = serapi.parse_new_identifiers(feedback)
+            self.assertEqual(actual_idents, [])
+            _, feedback = serapi.execute("intros.")
+            actual_idents = serapi.parse_new_identifiers(feedback)
+            self.assertEqual(actual_idents, [])
+            _, feedback = serapi.execute("Admitted.")
+            actual_idents = serapi.parse_new_identifiers(feedback)
+            self.assertEqual(actual_idents, ['foobar'])
 
 
 if __name__ == '__main__':

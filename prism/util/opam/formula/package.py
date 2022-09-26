@@ -4,7 +4,7 @@ Defines classes for parsing and expressing package dependencies.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Mapping, Optional, Tuple, Type, Union
+from typing import Callable, List, Mapping, Optional, Set, Tuple, Type, Union
 
 from prism.util.opam.version import Version
 from prism.util.parse import Parseable, ParseError
@@ -43,7 +43,7 @@ class PackageFormula(Parseable, ABC):
 
     @property
     @abstractmethod
-    def packages(self) -> List[str]:
+    def packages(self) -> Set[str]:
         """
         Get a list of the names of packages contained in the formula.
         """
@@ -93,13 +93,34 @@ class PackageFormula(Parseable, ABC):
         ...
 
     @abstractmethod
-    def simplify(
+    def map(
         self,
-        packages: Mapping[str,
-                          Version],
-        variables: Optional[AssignedVariables] = None
-    ) -> Union[bool,
-               'PackageFormula']:
+        f: Callable[['PackageConstraint'],
+                    'PackageConstraint']
+    ) -> 'PackageFormula':
+        """
+        Map a function over the package constraints in the formula.
+
+        Parameters
+        ----------
+        f : Callable[[PackageConstraint], PackageConstraint]
+            A function that modifies the constraints in this formula.
+
+        Returns
+        -------
+        PackageFormula
+            A new formula with the results of the mapped constraints
+        """
+        ...
+
+    @abstractmethod
+    def simplify(
+            self,
+            packages: Mapping[str,
+                              Version],
+            variables: Optional[AssignedVariables] = None,
+            evaluate_filters: bool = True) -> Union[bool,
+                                                    'PackageFormula']:
         """
         Substitute the packagse into the formula and simplify it.
 
@@ -109,6 +130,9 @@ class PackageFormula(Parseable, ABC):
             A map from package names to versions.
         variables : AssignedVariables
             A map from formula variable names to their values.
+        evaluate_filters : bool, optional
+            Whether to evaluate undefined filter variables or leave them
+            in the simplified formula, by default True.
 
         Returns
         -------
@@ -136,11 +160,27 @@ class PackageFormula(Parseable, ABC):
         except ParseError:
             formula, pos = PackageConstraint._chain_parse(input, pos)
         # attempt some left recursion
-        left = formula
+        try:
+            formula, pos = cls._lookahead_parse(begpos, formula, input, pos)
+        except ParseError:
+            pass
+        return formula, pos
+
+    @classmethod
+    def _lookahead_parse(
+            cls,
+            begpos: int,
+            left: 'PackageFormula',
+            input: str,
+            pos: int) -> Tuple['PackageFormula',
+                               int]:
+        """
+        Parse a binary relation by speculatively looking ahead.
+        """
         try:
             logop, pos = LogOp._chain_parse(input, pos)
         except ParseError:
-            pass
+            formula = left
         else:
             try:
                 right, pos = PackageFormula._chain_parse(input, pos)
@@ -158,10 +198,8 @@ class LogicalPF(Logical[PackageFormula], PackageFormula):
     """
 
     @property
-    def packages(self) -> List[str]:  # noqa: D102
-        packages = []
-        packages.extend(self.left.packages)
-        packages.extend(self.right.packages)
+    def packages(self) -> Set[str]:  # noqa: D102
+        packages = self.left.packages.union(self.right.packages)
         return packages
 
     @property
@@ -172,11 +210,16 @@ class LogicalPF(Logical[PackageFormula], PackageFormula):
             return min(self.left.size, self.right.size)
 
     @property
-    def variables(self) -> List[str]:  # noqa: D102
-        variables = []
-        variables.extend(self.left.variables)
-        variables.extend(self.right.variables)
+    def variables(self) -> Set[str]:  # noqa: D102
+        variables = self.left.variables.union(self.right.variables)
         return variables
+
+    def map(  # noqa: D102
+        self,
+        f: Callable[['PackageConstraint'],
+                    'PackageConstraint']
+    ) -> 'LogicalPF':
+        return type(self)(self.left.map(f), self.logop, self.right.map(f))
 
     @classmethod
     def formula_type(cls) -> Type[PackageFormula]:  # noqa: D102
@@ -190,7 +233,7 @@ class ParensPF(Parens[PackageFormula], PackageFormula):
     """
 
     @property
-    def packages(self) -> List[str]:  # noqa: D102
+    def packages(self) -> Set[str]:  # noqa: D102
         return self.formula.packages
 
     @property
@@ -200,6 +243,13 @@ class ParensPF(Parens[PackageFormula], PackageFormula):
     @property
     def variables(self) -> List[str]:  # noqa: D102
         return self.formula.variables
+
+    def map(  # noqa: D102
+        self,
+        f: Callable[['PackageConstraint'],
+                    'PackageConstraint']
+    ) -> 'ParensPF':
+        return type(self)(self.formula.map(f))
 
     @classmethod
     def formula_type(cls) -> Type[PackageFormula]:  # noqa: D102
@@ -230,19 +280,19 @@ class PackageConstraint(PackageFormula):
         return result
 
     @property
-    def packages(self) -> List[str]:  # noqa: D102
-        return [self.package_name]
+    def packages(self) -> Set[str]:  # noqa: D102
+        return {self.package_name}
 
     @property
     def size(self) -> int:  # noqa: D102
         return 1
 
     @property
-    def variables(self) -> List[str]:  # noqa: D102
+    def variables(self) -> Set[str]:  # noqa: D102
         if isinstance(self.version_constraint, VersionFormula):
             return self.version_constraint.variables
         else:
-            return []
+            return set()
 
     def is_satisfied(
             self,
@@ -264,12 +314,24 @@ class PackageConstraint(PackageFormula):
         bool
             If one of the given packages satisfies the constraint.
         """
+        constraint = self.version_constraint
+        if isinstance(constraint, VersionFormula):
+            # perform the equivalent of
+            # opam/src/format/opamFilter.mli:filter_deps
+            constraint = constraint.simplify(
+                None,
+                variables,
+                evaluate_filters=True)
+            if isinstance(constraint, bool):
+                if constraint:
+                    constraint = None
+                else:
+                    return True
         try:
             version = packages[self.package_name]
         except KeyError:
             return False
         else:
-            constraint = self.version_constraint
             if constraint is None:
                 return True
             elif isinstance(constraint, Version):
@@ -277,13 +339,20 @@ class PackageConstraint(PackageFormula):
             else:
                 return constraint.is_satisfied(version, variables)
 
-    def simplify(
+    def map(  # noqa: D102
         self,
-        packages: Mapping[str,
-                          Version],
-        variables: Optional[AssignedVariables] = None
-    ) -> Union[bool,
-               'PackageFormula']:
+        f: Callable[['PackageConstraint'],
+                    'PackageConstraint']
+    ) -> 'PackageFormula':
+        return f(self)
+
+    def simplify(
+            self,
+            packages: Mapping[str,
+                              Version],
+            variables: Optional[AssignedVariables] = None,
+            evaluate_filters: bool = True) -> Union[bool,
+                                                    'PackageFormula']:
         """
         Substitute the given package versions into the formula.
 
@@ -293,6 +362,9 @@ class PackageConstraint(PackageFormula):
             A map from package names to versions.
         variables : AssignedVariables
             A map from formula variable names to their values.
+        evaluate_filters : bool, optional
+            Whether to evaluate undefined filter variables or leave them
+            in the simplified formula, by default True.
 
         Returns
         -------
@@ -301,23 +373,21 @@ class PackageConstraint(PackageFormula):
             Otherwise, the simplification of the version formula.
         """
         constraint = self.version_constraint
+        if isinstance(constraint, VersionFormula):
+            constraint = constraint.simplify(
+                None,
+                variables,
+                evaluate_filters=evaluate_filters)
+            if isinstance(constraint, bool):
+                if constraint:
+                    constraint = None
+                else:
+                    return True
         result = None
         try:
             version = packages[self.package_name]
         except KeyError:
-            if isinstance(constraint, VersionFormula):
-                constraint_simplified = constraint.simplify(None, variables)
-                if isinstance(constraint_simplified, bool):
-                    if constraint_simplified:
-                        result = type(self)(self.package_name, None)
-                    else:
-                        result = False
-                else:
-                    result = type(self)(
-                        self.package_name,
-                        constraint_simplified)
-            else:
-                result = self
+            result = type(self)(self.package_name, constraint)
         else:
             if constraint is None:
                 result = True

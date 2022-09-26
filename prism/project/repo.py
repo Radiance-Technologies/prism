@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 import pathlib
 import random
+import warnings
 from enum import Enum
 from typing import List, Optional
 
@@ -13,7 +14,6 @@ import git
 from git import Commit, Repo
 
 from prism.data.document import CoqDocument
-from prism.language.gallina.parser import CoqParser
 from prism.project.base import MetadataArgs, Project
 from prism.project.metadata.storage import MetadataStorage
 
@@ -349,43 +349,6 @@ class ProjectRepo(Repo, Project):
     def remote_url(self) -> str:  # noqa: D102
         return self.remote().url
 
-    def _get_file(
-            self,
-            filename: str,
-            commit_name: Optional[str] = None) -> CoqDocument:
-        """
-        Return a specific Coq source file from a specific commit.
-
-        This function may change the git repo HEAD on disk.
-
-        Parameters
-        ----------
-        filename : str
-            The absolute path to the file to return.
-        commit_name : str or None, optional
-            A commit hash, branch name, or tag name from which to fetch
-            the file. Defaults to HEAD.
-
-        Returns
-        -------
-        CoqDocument
-            A CoqDocument corresponding to the selected Coq source file
-
-        Raises
-        ------
-        ValueError
-            If given `filename` does not end in ".v"
-        """
-        commit = self.commit(commit_name)
-        self.git.checkout(commit_name)
-        # Compute relative path
-        rel_filename = filename.replace(commit.tree.abspath, "")[1 :]
-        return CoqDocument(
-            rel_filename,
-            project_path=self.path,
-            source_code=CoqParser.parse_source(
-                (commit.tree / rel_filename).abspath))
-
     def _pre_get_file(self, **kwargs):
         """
         Set the current commit; use HEAD if none given.
@@ -407,22 +370,67 @@ class ProjectRepo(Repo, Project):
 
         This function may change the git repo HEAD on disk.
         """
-        commit = self.commit(self.current_commit_name)
+        if self.current_commit_name is not None:
+            warnings.warn(
+                "Querying files of a non-checked out commit is deprecated",
+                DeprecationWarning)
         self.git.checkout(self.current_commit_name)
-        files = [f for f in commit.tree.traverse() if f.abspath.endswith(".v")]
-        return [
-            CoqDocument(
-                f.path,
-                project_path=self.path,
-                source_code=CoqParser.parse_source(f.abspath)) for f in files
-        ]
+        return super()._traverse_file_tree()
 
-    def get_file_list(self, commit_name: Optional[str] = None) -> List[str]:
+    def get_file(
+            self,
+            filename: os.PathLike,
+            commit_name: Optional[str] = None) -> CoqDocument:
+        """
+        Return a specific Coq source file from a specific commit.
+
+        This function may change the git repo HEAD on disk.
+
+        Parameters
+        ----------
+        filename : os.PathLike
+            The path to a file within the project.
+        commit_name : str or None, optional
+            A commit hash, branch name, or tag name from which to fetch
+            the file. Defaults to HEAD.
+
+        Returns
+        -------
+        CoqDocument
+            A CoqDocument corresponding to the selected Coq source file
+
+        Raises
+        ------
+        ValueError
+            If given `filename` does not end in ".v"
+        """
+        if commit_name is not None:
+            warnings.warn(
+                "Querying files of a non-checked out commit is deprecated",
+                DeprecationWarning)
+            self.git.checkout(commit_name)
+        return super().get_file(filename)
+
+    def get_file_list(
+            self,
+            relative: bool = False,
+            dependency_order: bool = False,
+            commit_name: Optional[str] = None) -> List[str]:
         """
         Return a list of all Coq files associated with this project.
 
         Parameters
         ----------
+        relative : bool, optional
+            Whether to return absolute file paths or paths relative to
+            the root of the project, by default False.
+        dependency_order : bool, optional
+            Whether to return the files in dependency order or not, by
+            default False.
+            Dependency order means that if one file ``foo`` depends
+            upon another file ``bar``, then ``bar`` will appear
+            before ``foo`` in the returned list.
+            If False, then the files are sorted lexicographically.
         commit_name : str or None, optional
             A commit hash, branch name, or tag name from which to get
             the file list. This is HEAD by default.
@@ -430,15 +438,20 @@ class ProjectRepo(Repo, Project):
         Returns
         -------
         List[str]
-            The list of absolute paths to all Coq files in the project
+            The list of absolute (or `relative`) paths to all Coq files
+            in the project sorted according to `dependency_order`, not
+            including those ignored by `ignore_path_regex`.
         """
-        commit = self.commit(commit_name)
-        files = [
-            str(f.abspath)
-            for f in commit.tree.traverse()
-            if f.abspath.endswith(".v")
-        ]
-        return sorted(files)
+        if commit_name is not None:
+            warnings.warn(
+                "Querying files of a non-checked out commit is deprecated",
+                DeprecationWarning)
+            return self.filter_files(
+                self.commit(commit_name).tree.traverse(),
+                relative,
+                dependency_order)
+        else:
+            return super().get_file_list(relative, dependency_order)
 
     def get_random_commit(self) -> Commit:
         """

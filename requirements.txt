@@ -1,5 +1,6 @@
 bidict
 GitPython
+networkx
 numpy
 pexpect
 prettytable

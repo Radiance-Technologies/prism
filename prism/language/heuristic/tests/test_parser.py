@@ -400,7 +400,7 @@ class TestHeuristicParser(unittest.TestCase):
         Ensure the heuristic parser can return sentences with locs.
         """
         simple_file = self.test_files['simple']
-        _, locs = HeuristicParser.parse_sentences_from_file(
+        sentences = HeuristicParser.parse_sentences_from_file(
             simple_file,
             project_path=_COQ_EXAMPLES_PATH,
             return_locations=True,
@@ -432,7 +432,7 @@ class TestHeuristicParser(unittest.TestCase):
                 end_charno=1328)
         }
         for i, v in expected_loc_results.items():
-            self.assertEqual(locs[i], v)
+            self.assertEqual(sentences[i].location, v)
 
 
 class TestSerAPIParser(unittest.TestCase):
@@ -466,18 +466,23 @@ class TestSerAPIParser(unittest.TestCase):
         for coq_file, test_file in self.test_files.items():
             expected_glommed = self.test_glom_ltac_list[coq_file]
             with self.subTest(coq_file):
-                (actual_glommed,
-                 glommed_asts) = SerAPIParser.parse_sentences_from_file(
-                     test_file,
-                     project_path=_COQ_EXAMPLES_PATH,
-                     glom_proofs=False,
-                     glom_ltac=True,
-                     return_asts=True)
-                actual_glommed = [" ".join(s.split()) for s in actual_glommed]
-                self.assertEqual(expected_glommed, actual_glommed)
+                actual_glommed = SerAPIParser.parse_sentences_from_file(
+                    test_file,
+                    project_path=_COQ_EXAMPLES_PATH,
+                    glom_proofs=False,
+                    glom_ltac=True,
+                    return_asts=True,
+                    return_locations=True)
+                actual_glommed_sentences = [
+                    " ".join(str(s).split()) for s in actual_glommed
+                ]
+                self.assertEqual(expected_glommed, actual_glommed_sentences)
                 # assert some ltac ASTs got glommed
                 self.assertTrue(
-                    any(ast.head() == "glommed_ltac" for ast in glommed_asts))
+                    any(s.ast.head() == "glommed_ltac" for s in actual_glommed))
+                # assert locations got glommed
+                self.assertTrue(
+                    all(s.location is not None for s in actual_glommed))
 
 
 if __name__ == '__main__':

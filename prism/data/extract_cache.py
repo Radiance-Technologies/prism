@@ -27,7 +27,7 @@ from prism.data.build_cache import (
     VernacDict,
 )
 from prism.data.commit_map import Except, ProjectCommitUpdateMapper
-from prism.data.util import get_dependency_formula, get_project_func
+from prism.data.util import get_project_func
 from prism.interface.coq.serapi import SerAPI
 from prism.language.heuristic.util import ParserUtils
 from prism.project.base import SEM, Project
@@ -42,7 +42,7 @@ from prism.util.opam.version import Version
 from prism.util.radpytools.os import pushd
 from prism.util.swim import SwitchManager
 
-from ..language.gallina.analyze import SexpAnalyzer, SexpInfo
+from ..language.gallina.analyze import SexpAnalyzer
 
 
 def extract_vernac_commands(
@@ -65,13 +65,13 @@ def extract_vernac_commands(
             list())
         with pushd(project.dir_abspath):
             with SerAPI(project.serapi_options) as serapi:
-                for sentence, location in zip(*project.extract_sentences(
-                        project.get_file(filename),
+                for sentence in project.get_sentences(
+                        filename,
                         sentence_extraction_method=SEM.HEURISTIC,
                         return_locations=True,
-                        glom_proofs=False)):
-                    sentence: str
-                    location: SexpInfo.Loc
+                        glom_proofs=False):
+                    location = sentence.location
+                    sentence = sentence.text
                     _, _, sexp = serapi.execute(sentence, True)
                     if SexpAnalyzer.is_ltac(sexp):
                         # This is where we would handle proofs
@@ -200,10 +200,7 @@ def extract_cache_new(
     """
     project.git.checkout(commit_sha)
     # get a switch
-    dependency_formula = get_dependency_formula(
-        project.opam_dependencies,  # infers dependencies as side-effect
-        project.ocaml_version,
-        coq_version)
+    dependency_formula = project.get_dependency_formula(coq_version)
     original_switch = project.opam_switch
     project.opam_switch = switch_manager.get_switch(
         dependency_formula,

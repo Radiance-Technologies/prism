@@ -6,6 +6,7 @@ import logging
 import os
 import pathlib
 import random
+import re
 from abc import ABC, abstractmethod
 from dataclasses import fields
 from enum import Enum, auto
@@ -14,15 +15,29 @@ from subprocess import CalledProcessError
 from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
 
 from prism.data.document import CoqDocument
-from prism.language.gallina.analyze import SexpInfo
-from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
+from prism.language.gallina.parser import CoqParser
+from prism.language.heuristic.parser import (
+    CoqSentence,
+    HeuristicParser,
+    SerAPIParser,
+)
 from prism.project.exception import ProjectBuildError
+from prism.project.iqr import IQR
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
-from prism.project.strace import IQR, strace_build
+from prism.project.strace import strace_build
+from prism.util.build_tools.coqdep import order_dependencies
 from prism.util.logging import default_log_level
-from prism.util.opam import OpamSwitch, PackageFormula
-from prism.util.opam.formula.package import LogicalPF
+from prism.util.opam import (
+    OpamSwitch,
+    PackageFormula,
+    Version,
+    major_minor_version_bound,
+)
+from prism.util.opam.formula import LogicalPF, LogOp
+from prism.util.path import get_relative_path
+from prism.util.radpytools.os import pushd
+from prism.util.re import regex_from_options
 
 logger: logging.Logger = logging.getLogger(__name__)
 logger.setLevel(default_log_level())
@@ -155,6 +170,13 @@ class Project(ABC):
         return self._coq_version
 
     @property
+    def ignore_path_regex(self) -> re.Pattern:
+        """
+        Get the regular expression that matches Coq filepaths to ignore.
+        """
+        return regex_from_options(self.metadata.ignore_path_regex, True, True)
+
+    @property
     def install_cmd(self) -> List[str]:
         """
         Return the list of commands that install the project.
@@ -265,17 +287,6 @@ class Project(ABC):
             for lib in pathlib.Path(self.path).rglob(ext):
                 lib.unlink()
 
-    @abstractmethod
-    def _get_file(self, filename: str, *args, **kwargs) -> CoqDocument:
-        """
-        Return a specific Coq source file.
-
-        See Also
-        --------
-        Project.get_file : For public API.
-        """
-        pass
-
     def _get_fresh_metadata(self) -> ProjectMetadata:
         """
         Get refreshed metadata from the storage.
@@ -288,7 +299,7 @@ class Project(ABC):
             self,
             filename: Optional[str],
             glom_proofs: bool,
-            **kwargs):
+            **kwargs) -> List[CoqSentence]:
         if filename is None:
             obj = self.get_random_file(**kwargs)
         else:
@@ -390,12 +401,18 @@ class Project(ABC):
         for name, value in kwargs.items():
             setattr(self.metadata, name, value)
 
-    @abstractmethod
     def _traverse_file_tree(self) -> List[CoqDocument]:
         """
         Traverse the file tree and return a list of Coq file objects.
         """
-        pass
+        with pushd(self.path):
+            return [
+                CoqDocument(
+                    f,
+                    project_path=self.path,
+                    source_code=CoqParser.parse_source(f))
+                for f in self.get_file_list(relative=True)
+            ]
 
     def build(self) -> Tuple[int, str, str]:
         """
@@ -416,14 +433,117 @@ class Project(ABC):
         self._clean()
         return r
 
-    def get_file(self, filename: str, *args, **kwargs) -> CoqDocument:
+    def filter_files(
+            self,
+            files: Iterable[os.PathLike],
+            relative: bool = False,
+            dependency_order: bool = False) -> List[str]:
+        """
+        Filter and sort the given files relative to this project.
+
+        Parameters
+        ----------
+        files : Iterable[os.PathLike]
+            A collection of files, presumed to belong to this project.
+        relative : bool, optional
+            Whether to return absolute file paths or paths relative to
+            the root of the project, by default False.
+        dependency_order : bool, optional
+            Whether to return the files in dependency order or not, by
+            default False.
+            Dependency order means that if one file ``foo`` depends
+            upon another file ``bar``, then ``bar`` will appear
+            before ``foo`` in the returned list.
+            If False, then the files are sorted lexicographically.
+
+        Returns
+        -------
+        List[str]
+            The list of absolute (or `relative`) paths to all Coq files
+            in the project sorted according to `dependency_order`, not
+            including those ignored by `ignore_path_regex`.
+
+        Raises
+        ------
+        RuntimeError
+            If `dependency_order` is True but `serapi_options` is None.
+        """
+        root = self.path
+        ignore_regex = self.ignore_path_regex
+        filtered = []
+        for file in files:
+            file = get_relative_path(file, root)
+            file_str = str(file)
+            if ignore_regex.match(file_str) is None:
+                # file should be kept
+                filtered.append(str(root / file) if not relative else file_str)
+        if dependency_order:
+            iqr = self.serapi_options
+            if iqr is None:
+                raise RuntimeError(
+                    f"The `serapi_options` for {self.name} are not set; "
+                    "cannot return files in dependency order. "
+                    "Please try rebuilding the project.")
+            filtered = order_dependencies(
+                filtered,
+                self.opam_switch,
+                iqr.replace(",",
+                            " "))
+        else:
+            filtered = sorted(filtered)
+        return filtered
+
+    def get_dependency_formula(
+            self,
+            coq_version: Optional[Union[str,
+                                        Version]] = None,
+            ocaml_version: Optional[Union[str,
+                                          Version]] = None) -> PackageFormula:
+        """
+        Get a formula for this project's dependencies.
+
+        Parameters
+        ----------
+        coq_version : Optional[Union[str, Version]], optional
+            If given, then include a dependency on Coq that matches the
+            given major and minor components of `coq_version`.
+        ocaml_version : Optional[Union[str, Version]], optional
+            If given, then include a dependency on OCaml that matches
+            the given major and minor components of `ocaml_version`.
+
+        Returns
+        -------
+        PackageFormula
+            A formula that can be used to retrieve an appropriate
+            switch from a pool of existing switches or used to install
+            required dependencies in a given switch.
+        """
+        formula = []
+        # Loosen restriction to matching major.minor~prerelease
+        if coq_version is not None:
+            formula.append(major_minor_version_bound("coq", coq_version))
+        formula.append(PackageFormula.parse('"coq-serapi"'))
+        if ocaml_version is not None:
+            formula.append(major_minor_version_bound("ocaml", ocaml_version))
+        for dependency in self.opam_dependencies:
+            formula.append(PackageFormula.parse(dependency))
+        formula = reduce(
+            lambda l,
+            r: LogicalPF(l,
+                         LogOp.AND,
+                         r),
+            formula[1 :],
+            formula[0])
+        return formula
+
+    def get_file(self, filename: os.PathLike) -> CoqDocument:
         """
         Return a specific Coq source file.
 
         Parameters
         ----------
-        filename : str
-            The absolute path to the file to return.
+        filename : os.PathLike
+            The path to a file within the project.
 
         Returns
         -------
@@ -435,21 +555,31 @@ class Project(ABC):
         ValueError
             If given `filename` does not end in ".v"
         """
+        if not isinstance(filename, str):
+            filename = str(filename)
         if not filename.endswith(".v"):
             raise ValueError("filename must end in .v")
-        return self._get_file(filename, *args, **kwargs)
+        return CoqDocument(
+            get_relative_path(filename,
+                              self.path),
+            project_path=self.path,
+            source_code=CoqParser.parse_source(filename))
 
-    @abstractmethod
-    def get_file_list(self, **kwargs) -> List[str]:
+    def get_file_list(
+            self,
+            relative: bool = False,
+            dependency_order: bool = False) -> List[str]:
         """
         Return a list of all Coq files associated with this project.
 
-        Returns
-        -------
-        List[str]
-            The list of absolute paths to all Coq files in the project
+        See Also
+        --------
+        filter_files : For details on the parameters and return value.
         """
-        pass
+        return self.filter_files(
+            pathlib.Path(self.path).rglob("*.v"),
+            relative,
+            dependency_order)
 
     def get_random_file(self, **kwargs) -> CoqDocument:
         """
@@ -493,13 +623,14 @@ class Project(ABC):
             glom_proofs,
             **kwargs)
         sentence = random.choice(sentences)
-        return sentence
+        return str(sentence)
 
     def get_random_sentence_pair_adjacent(
             self,
             filename: Optional[str] = None,
             glom_proofs: bool = True,
-            **kwargs) -> List[str]:
+            **kwargs) -> Tuple[str,
+                               str]:
         """
         Return a random adjacent sentence pair from the project.
 
@@ -516,9 +647,9 @@ class Project(ABC):
 
         Returns
         -------
-        List of str
-            A list of two adjacent sentences from the project, with the
-            first sentence chosen at random
+        tuple of str
+            A pair of adjacent sentences from the project, with the
+            first sentence chosen at random.
         """
         sentences: List[str] = []
         counter = 0
@@ -535,7 +666,47 @@ class Project(ABC):
                 **kwargs)
             counter += 1
         first_sentence_idx = random.randint(0, len(sentences) - 2)
-        return sentences[first_sentence_idx : first_sentence_idx + 2]
+        first, second = sentences[first_sentence_idx : first_sentence_idx + 2]
+        return str(first), str(second)
+
+    def get_sentences(
+            self,
+            filename: os.PathLike,
+            sentence_extraction_method: Optional[
+                SentenceExtractionMethod] = None,
+            **kwargs) -> List[CoqSentence]:
+        r"""
+        Get the sentences of a Coq file within the project.
+
+        By default, proofs are then re-glommed into their own entries.
+        This behavior can be switched off via ``glom_proofs = False``.
+
+        Parameters
+        ----------
+        filename : os.PathLike
+            The path to a file in the project.
+        sentence_extraction_method : Optional[\
+                                         SentenceExtractionMethod],\
+                                     optional
+            Method by which sentences should be extracted
+        kwargs : Dict[str, Any]
+            Optional keyword arguments to `Project.extract_sentences`.
+
+        Returns
+        -------
+        List[CoqSentence]
+            The list of sentences extracted from the indicated file.
+
+        See Also
+        --------
+        extract_sentences : For expected keyword arguments.
+        """
+        if sentence_extraction_method is None:
+            sentence_extraction_method = self.sentence_extraction_method
+        document = self.get_file(filename)
+        kwargs['sentence_extraction_method'] = sentence_extraction_method
+        kwargs['opam_switch'] = self.opam_switch
+        return self.extract_sentences(document, **kwargs)
 
     def infer_metadata(
             self,
@@ -669,14 +840,18 @@ class Project(ABC):
             glom_ltac: bool = False,
             return_asts: bool = False,
             sentence_extraction_method: SEM = SEM.SERAPI,
-            **kwargs) -> Union[List[str],
-                               Tuple[List[str],
-                                     List[SexpInfo.Loc]]]:
+            **kwargs) -> List[CoqSentence]:
         """
         Split the Coq file text by sentences.
 
         By default, proofs are then re-glommed into their own entries.
         This behavior can be switched off.
+
+        .. warning::
+            If the sentence extraction method relies upon an OCaml
+            package such as `coq-serapi`, then an
+            ``opam_switch : OpamSwitch`` keyword argument should be
+            provided to set the environment of execution
 
         Parameters
         ----------
@@ -699,15 +874,8 @@ class Project(ABC):
 
         Returns
         -------
-        List[str]
-            A list of strings corresponding to Coq source file
-            sentences, with proofs glommed (or not) depending on input
-            flag.
-        List[SexpInfo.Loc], optional
-            A list of locations corresponding to the returned list of
-            sentences. This list is only returned if certain arguments
-            are passed to certain parsers. With the default args, this
-            is NOT returned.
+        List[CoqSentence]
+            A list of Coq sentences extracted from the given `document`.
         """
         return sentence_extraction_method.parser(
         ).parse_sentences_from_document(

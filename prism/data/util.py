@@ -3,44 +3,14 @@ Module providing utilities related to data processing.
 """
 import logging
 import traceback
-from functools import partial, reduce
+from functools import partial
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Set, Union
+from typing import Callable, Dict, List, Set
 
 from prism.project.base import SentenceExtractionMethod
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
-from prism.util.opam import PackageFormula
-from prism.util.opam.formula import LogicalPF, LogOp
-from prism.util.opam.version import Version
 from prism.util.swim import SwitchManager
-
-
-def get_dependency_formula(
-        opam_dependencies: List[str],
-        ocaml_version: Optional[Union[str,
-                                      Version]],
-        coq_version: str) -> PackageFormula:
-    """
-    Get the dependency formula for the given constraints.
-
-    This formula can then be used to retrieve an appropriate switch.
-    """
-    formula = []
-    formula.append(PackageFormula.parse(f'"coq.{coq_version}"'))
-    formula.append(PackageFormula.parse('"coq-serapi"'))
-    if ocaml_version is not None:
-        formula.append(PackageFormula.parse(f'"ocaml.{ocaml_version}"'))
-    for dependency in opam_dependencies:
-        formula.append(PackageFormula.parse(dependency))
-    formula = reduce(
-        lambda l,
-        r: LogicalPF(l,
-                     LogOp.AND,
-                     r),
-        formula[1 :],
-        formula[0])
-    return formula
 
 
 def get_project(
@@ -104,7 +74,7 @@ def build_commit(
         print(f'Choosing "coq.{coq_version}" for {project.name}')
         # get a switch
         project.infer_opam_dependencies()  # force inference
-        dependency_formula = get_dependency_formula(
+        dependency_formula = project.get_dependency_formula(
             project.opam_dependencies,
             project.ocaml_version,
             coq_version)

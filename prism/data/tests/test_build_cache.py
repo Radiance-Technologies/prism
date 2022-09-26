@@ -14,7 +14,6 @@ from prism.data.build_cache import (
     VernacCommandData,
 )
 from prism.data.dataset import CoqProjectBaseDataset
-from prism.language.gallina.analyze import SexpInfo
 from prism.language.heuristic.util import ParserUtils
 from prism.language.sexp.list import SexpList
 from prism.language.sexp.string import SexpString
@@ -48,14 +47,13 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                     VernacCommandData] = command_data.setdefault(
                         filename,
                         list())
-                doc = project.get_file(filename)
-                for sentence, location in zip(*project.extract_sentences(
-                        doc,
+                for sentence in project.get_sentences(
+                        filename,
                         sentence_extraction_method=SEM.HEURISTIC,
                         return_locations=True,
-                        glom_proofs=False)):
-                    sentence: str
-                    location: SexpInfo.Loc
+                        glom_proofs=False):
+                    location = sentence.location
+                    sentence = sentence.text
                     command_type, identifier = ParserUtils.extract_identifier(sentence)
                     file_commands.append(
                         VernacCommandData(
