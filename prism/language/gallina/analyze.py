@@ -74,16 +74,50 @@ class ControlFlag(enum.Enum):
     """
 
     @property
+    def is_batch_mode(self) -> bool:
+        """
+        Return whether the ``-time`` command-line flag was set.
+        """
+        if self == ControlFlag.Time:
+            try:
+                return self._is_batch_mode
+            except AttributeError:
+                pass
+        return super().__getattribute__('is_batch_mode')
+
+    @is_batch_mode.setter
+    def is_batch_mode(self, value: bool) -> None:
+        """
+        Set whether the ``-time`` command-line flag is considered set.
+        """
+        if self == ControlFlag.Time:
+            if not isinstance(value, bool):
+                value = value == "true" or value == "True"
+            self._is_batch_mode = value
+        else:
+            raise AttributeError("can't set attribute: is_batch_mode")
+
+    @property
     def filename(self) -> str:
         """
         Get the filename to which a sentence's output is redirected.
         """
         if self == ControlFlag.Redirect:
             try:
-                return self._flag_arg
+                return self._filename
             except AttributeError:
                 pass
         return super().__getattribute__('filename')
+
+    @filename.setter
+    def filename(self, value: str) -> None:
+        """
+        Set the output file for a `Redirect` control flag.
+        """
+        if self == ControlFlag.Redirect:
+            self._filename = str(value)
+        else:
+            raise AttributeError("can't set attribute: filename")
 
     @property
     def limit(self) -> int:
@@ -92,10 +126,20 @@ class ControlFlag(enum.Enum):
         """
         if self == ControlFlag.Timeout:
             try:
-                return int(self._flag_arg)
+                return self._limit
             except AttributeError:
                 pass
         return super().__getattribute__('limit')
+
+    @limit.setter
+    def limit(self, value: int) -> None:
+        """
+        Set the time limit for a `Timeout` control flag.
+        """
+        if self == ControlFlag.Timeout:
+            self._limit = int(value)
+        else:
+            raise AttributeError("can't set attribute: filename")
 
     @classmethod
     def _missing_(cls, value: Any) -> 'ControlFlag':
@@ -823,8 +867,12 @@ class SexpAnalyzer:
                             control_flag = ControlFlag(c.head())
                         except ValueError as e:
                             raise SexpAnalyzingException(control) from e
-                        if control_flag != ControlFlag.Fail:
-                            control_flag._flag_arg = c[1].content
+                        if control_flag == ControlFlag.Redirect:
+                            control_flag.filename = c[1].content
+                        elif control_flag == ControlFlag.Timeout:
+                            control_flag.limit = c[1].content
+                        elif control_flag == ControlFlag.Time:
+                            control_flag.is_batch_mode = c[1].content
                         control_flags.append(control_flag)
                     vernac.control_flags = control_flags
             elif vernac_control[0].content == "VernacExpr":
@@ -842,7 +890,14 @@ class SexpAnalyzer:
                         raise SexpAnalyzingException(sexp) from e
                     else:
                         if control_flag != ControlFlag.Fail:
-                            control_flag._flag_arg = vernac_control[1].content
+                            if control_flag == ControlFlag.Redirect:
+                                control_flag.filename = vernac_control[
+                                    1].content
+                            elif control_flag == ControlFlag.Timeout:
+                                control_flag.limit = vernac_control[1].content
+                            elif control_flag == ControlFlag.Time:
+                                control_flag.is_batch_mode = vernac_control[
+                                    1].content
                             sub_vernac_control = vernac_control[2]
                         else:
                             sub_vernac_control = vernac_control[1]
