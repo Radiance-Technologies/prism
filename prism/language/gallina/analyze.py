@@ -6,6 +6,7 @@ at https://github.com/EngineeringSoftware/roosterize/.
 """
 from __future__ import annotations
 
+import enum
 import functools
 import logging
 import re
@@ -13,13 +14,150 @@ from dataclasses import asdict, dataclass
 from typing import Any, Callable, List, Optional, Set, Tuple, Union
 
 from prism.language.gallina.util import ParserUtils
-from prism.language.sexp import IllegalSexpOperationException, SexpNode
+from prism.language.sexp import (
+    IllegalSexpOperationException,
+    SexpNode,
+    SexpParser,
+)
 from prism.language.sexp.list import SexpList
 from prism.language.sexp.string import SexpString
 from prism.language.token import TokenConsts
+from prism.util.opam import Version
 from prism.util.radpytools.dataclasses import default_field, immutable_dataclass
+from prism.util.re import regex_from_options
 
 from .exception import SexpAnalyzingException
+
+_vernac_change_version = Version.parse("8.10.2")
+"""
+The last Coq version before the `vernac_control` type changed.
+
+See https://github.com/coq/coq/blob/master/vernac/vernacexpr.ml.
+"""
+
+
+class ControlFlag(enum.Enum):
+    """
+    Control flags that may be applied to a vernacular command.
+
+    See https://coq.inria.fr/refman/proof-engine/vernacular-commands.html#quitting-and-debugging
+    for more information.
+    """  # noqa: W505, B950
+
+    Time = enum.auto()
+    """
+    Executes a sentence and displays the time needed to execute it.
+    """
+    Redirect = enum.auto()
+    """
+    Executes sentence, redirecting its output to an indicated file.
+
+    The name of the file is stored in the ``filename`` attribute.
+    """
+    Timeout = enum.auto()
+    """
+    Raise an error if the sentence does not finish in a given limit.
+
+    The limit is stored in the ``limit`` attribute.
+    """
+    Fail = enum.auto()
+    """
+    Expects the sentence to fail and raise an error if it does not.
+
+    The proof state is not altered.
+    """
+    Succeed = enum.auto()
+    """
+    Expects the sentence to succeed and raises an error if it does not.
+
+    The proof state is not altered.
+    """
+
+    @property
+    def is_batch_mode(self) -> bool:
+        """
+        Return whether the ``-time`` command-line flag was set.
+        """
+        if self == ControlFlag.Time:
+            try:
+                return self._is_batch_mode
+            except AttributeError:
+                pass
+        return super().__getattribute__('is_batch_mode')
+
+    @is_batch_mode.setter
+    def is_batch_mode(self, value: bool) -> None:
+        """
+        Set whether the ``-time`` command-line flag is considered set.
+        """
+        if self == ControlFlag.Time:
+            if not isinstance(value, bool):
+                value = value == "true" or value == "True"
+            self._is_batch_mode = value
+        else:
+            raise AttributeError("can't set attribute: is_batch_mode")
+
+    @property
+    def filename(self) -> str:
+        """
+        Get the filename to which a sentence's output is redirected.
+        """
+        if self == ControlFlag.Redirect:
+            try:
+                return self._filename
+            except AttributeError:
+                pass
+        return super().__getattribute__('filename')
+
+    @filename.setter
+    def filename(self, value: str) -> None:
+        """
+        Set the output file for a `Redirect` control flag.
+        """
+        if self == ControlFlag.Redirect:
+            self._filename = str(value)
+        else:
+            raise AttributeError("can't set attribute: filename")
+
+    @property
+    def limit(self) -> int:
+        """
+        Get the time limit for a timed command.
+        """
+        if self == ControlFlag.Timeout:
+            try:
+                return self._limit
+            except AttributeError:
+                pass
+        return super().__getattribute__('limit')
+
+    @limit.setter
+    def limit(self, value: int) -> None:
+        """
+        Set the time limit for a `Timeout` control flag.
+        """
+        if self == ControlFlag.Timeout:
+            self._limit = int(value)
+        else:
+            raise AttributeError("can't set attribute: filename")
+
+    @classmethod
+    def _missing_(cls, value: Any) -> 'ControlFlag':
+        result = None
+        if isinstance(value, str):
+            if value == "ControlTime" or value == "VernacTime":
+                result = ControlFlag.Time
+            elif value == "ControlRedirect" or value == "VernacRedirect":
+                result = ControlFlag.Redirect
+            elif value == "ControlTimeout" or value == "VernacTimeout":
+                result = ControlFlag.Timeout
+            elif value == "ControlFail" or value == "VernacFail":
+                result = ControlFlag.Fail
+            elif value == "ControlSucceed":
+                result = ControlFlag.Succeed
+        if result is None:
+            result = super()._missing_(value)
+        return result
 
 
 class SexpInfo:
@@ -34,7 +172,19 @@ class SexpInfo:
         """
 
         vernac_type: str = ""
-        extend_type: str = ""
+        extend_type: Optional[str] = None
+        control_flags: List[ControlFlag] = default_field(list())
+        """
+        The control flags applied to the command.
+        """
+        attributes: List[str] = default_field(list())
+        """
+        The attributes applied to the command.
+
+        The attributes are strings produced from an in-order walk of
+        the `vernac_flags` tree defined in
+        https://github.com/coq/coq/blob/master/vernac/attributes.mli.
+        """
         vernac_sexp: Optional[SexpNode] = None
         loc: Optional["SexpInfo.Loc"] = None
 
@@ -519,39 +669,137 @@ class SexpAnalyzer:
     logger: logging.Logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
 
-    _ltac_regex: re.Pattern = re.compile(
+    _vt_proof_regex: re.Pattern = re.compile(
         "|".join(
             [
+                # VtStartProof
+                "VernacProof",
+                # VtProofMode
+                "VernacProofMode",  # NOTE: not sure if this belongs
+                # VtQed
                 "VernacAbort",
+                "VernacEndProof",
+                "VernacEndSubproof",
+                "VernacExactProof",
+                # VtProofStep
+                "VernacBullet",
+                "VernacCheckGuard",
+                "VernacFocus",
+                "VernacShow",
+                "VernacSubproof",
+                "VernacUnfocus",
+                "VernacUnfocused",
+                # VtMeta
                 "VernacAbortAll",
                 "VernacRestart",
                 "VernacUndo",
                 "VernacUndoTo",
-                "VernacFocus",
-                "VernacUnfocus",
-                "VernacUnfocused",
-                "VernacBullet",
-                "VernacSubproof",
-                "VernacEndSubproof",
-                "VernacShow",
-                "VernacCheckGuard",
-                "VernacProof",
-                "VernacProofMode",
-                "VernacEndProof"
             ]))
-    _ltac_exclude_regex: re.Pattern = re.compile(
-        "|".join(
-            [
-                "VernacDeclareTacticDefinition",
-                "VernacTacticNotation",
-                "VernacPrintLtac",
-                "VernacLocateLtac",
-                "VernacPrintLtacs"
-            ]))
+    """
+    A white-list of Vernacular commands that are part of a proof.
+
+    These explicitly do not include commands that can strictly instigate
+    proofs (e.g., Lemma, Theorem, Definition, Fixpoint, etc.).
+    Derived from
+    https://github.com/coq/coq/blob/master/vernac/vernac_classifier.ml
+    as well as documentation at
+    https://coq.inria.fr/refman/proofs/writing-proofs/proof-mode.html.
+    """
+    _vt_proof_extend_regex: re.Pattern = regex_from_options(
+        [
+            # from Ltac
+            "Obligations",
+            "OptimizeProof",
+            # from Ltac: Questionable
+            # "Admit_Obligations",
+            # "Solve_Obligation",
+            # "Solve_Obligations",
+            # "Solve_All_Obligations",
+            "Unshelve",
+            "VernacSolve",
+            "VernacSolveParallel",
+            # from Ltac2
+            "VernacLtac2",
+            # from Mtac2
+            "MProofInstr",
+            "MProofCommand",
+        ],
+        False,
+        False)
+    """
+    A white-list of VernacExtend commands that are part of a proof.
+
+    Derived from ``.mlg`` files for plugins shipped with Coq as well as
+    the list of plug-ins at
+    https://github.com/coq-community/awesome-coq by looking for
+    command definitions that classify as ``VtProofStep``.
+    """
     _vernac_extend_regex: re.Pattern = re.compile("VernacExtend")
 
     @classmethod
-    def analyze_vernac(cls, sexp: SexpNode) -> SexpInfo.Vernac:
+    def analyze_vernac_flags(cls, sexp: SexpNode) -> List[str]:
+        """
+        Analyze the attribute flags of a Vernacular command.
+
+        Parameters
+        ----------
+        sexp : SexpNode
+            The s-expression of a `vernac_flags` object as defined in
+            https://github.com/coq/coq/blob/master/vernac/attributes.ml.
+
+        Returns
+        -------
+        List[str]
+            The list of attributes or flags defined by the given
+            s-expression.
+
+        Raises
+        ------
+        SexpAnalyzingException
+            If the s-expression does not conform to the expected
+            structure of a `vernac_flags`.
+        """
+        attributes = []
+        try:
+            for vernac_flag in sexp:
+                attribute = vernac_flag[0].content
+                vernac_flag_value = vernac_flag[1]
+                if vernac_flag_value.is_list():
+                    # not VernacFlagEmpty
+                    vernac_flag_type = vernac_flag_value[0].content
+                    if vernac_flag_type == "VernacFlagLeaf":
+                        vernac_flag_type = vernac_flag_value[1]
+                        if vernac_flag_type.is_list():
+                            # Coq version > 8.10.2
+                            vernac_flag_type = vernac_flag_type[1]
+                        attribute += f"={vernac_flag_type}"
+                    elif vernac_flag_type == "VernacFlagList":
+                        args = ",".join(
+                            cls.analyze_vernac_flags(vernac_flag_value[1]))
+                        attribute = f'{attribute} ({args})'
+                attributes.append(attribute)
+        except IllegalSexpOperationException as e:
+            raise SexpAnalyzingException(sexp) from e
+        return attributes
+
+    @classmethod
+    def _analyze_vernac_expr(cls, sexp: SexpNode) -> SexpInfo.Vernac:
+        """
+        Analyze an s-expression representing a Vernacular expression.
+        """
+        if sexp.is_list():
+            vernac_expr = sexp[0].content
+        else:
+            vernac_expr = sexp.content
+        return SexpInfo.Vernac(
+            vernac_expr,
+            sexp[1][0].content if vernac_expr == "VernacExtend" else None)
+
+    @classmethod
+    def analyze_vernac(  # noqa: C901
+            cls,
+            sexp: SexpNode,
+            with_flags: bool = True) -> SexpInfo.Vernac:
         """
         Analyze an s-expression representing a Vernacular command.
 
@@ -563,10 +811,21 @@ class SexpAnalyzer:
         sexp : SexpNode
             A parsed s-expression node representing a Vernacular command
             term.
-            The structure should conform to the following format:
+            The structure should conform to the following format in Coq
+            8.10.2 and lower:
             <sexp_vernac> = ( ( v (VernacExpr (...) ( <TYPE>  ... )) )
                                 ^----------vernac_sexp-----------^
                             <sexp_loc> )
+            In Coq 8.11 and higher, the structure should be
+            <sexp_vernac> = ( ( v ((control ...)
+                                   (attrs ...)
+                                   (expr (VernacExpr (...)
+                                         ( <TYPE>  ... )) ))
+                                ^----------vernac_sexp-----------^
+                            <sexp_loc> )
+        with_flags : bool, optional
+            Whether to extract control and attribute flags in addition
+            to the location and Vernacular type.
 
         Returns
         -------
@@ -580,49 +839,76 @@ class SexpAnalyzer:
             malformed or not representative of a Vernacular command.
         """
         try:
-            if len(sexp) != 2:
-                raise SexpAnalyzingException(sexp)
+            if (len(sexp) == 2 and sexp.head() == "v"
+                    and sexp[1].head() == "loc" and sexp[1][1].children):
+                v_child = sexp[0]
+                loc_child = sexp[1]
 
-            v_child = sexp[0]
-            loc_child = sexp[1]
+                try:
+                    loc = cls.analyze_loc(loc_child)
+                except SexpAnalyzingException:
+                    loc = None
 
-            loc = cls.analyze_loc(loc_child)
-
-            extend_type = ""
-
-            if v_child[0].content == "v" and v_child[1][
-                    0].content == "VernacExpr":
-                # ( v (VernacExpr()  (   <TYPE>  ... )) )
-                #   0 1  1,0     1,1 1,2 1,2,0
-                # ( v (VernacExpr()  <TYPE> ) )
-                #                    1,2
-                if v_child[1][2].is_list():
-                    vernac_type = v_child[1][2][0].content
-                    if vernac_type == SexpInfo.VernacConsts.type_extend:
-                        # ( v (
-                        #    VernacExpr() (
-                        #      VernacExtend  (
-                        #        <EXTEND_TYPE> ... ) ...
-                        extend_type = v_child[1][2][1][0].content
-                    # end if
-                else:
-                    vernac_type = v_child[1][2].content
-                # end if
-            elif v_child[0].content == "v" and v_child[1][
-                    0].content == "VernacFail":
-                # v_child
-                # ( v (VernacFail ( ( v (VernacExpr () ( ...
-                #   0 1  1,0
-                vernac_type = "VernacFail"
+                if v_child[0].content:
+                    vernac_control = v_child[1]
             else:
-                raise SexpAnalyzingException(sexp)
-            # end if
+                vernac_control = sexp
+                loc = None
+            if vernac_control.head() == "control":
+                # Coq version > 8.10.2
+                vernac = cls._analyze_vernac_expr(vernac_control[2][1])
+                if with_flags:
+                    attributes = cls.analyze_vernac_flags(vernac_control[1][1])
+                    vernac.attributes = attributes
+                    control = vernac_control[0][1]
+                    control_flags = []
+                    for c in control:
+                        try:
+                            control_flag = ControlFlag(c.head())
+                        except ValueError as e:
+                            raise SexpAnalyzingException(control) from e
+                        if control_flag == ControlFlag.Redirect:
+                            control_flag.filename = c[1].content
+                        elif control_flag == ControlFlag.Timeout:
+                            control_flag.limit = c[1].content
+                        elif control_flag == ControlFlag.Time:
+                            control_flag.is_batch_mode = c[1].content
+                        control_flags.append(control_flag)
+                    vernac.control_flags = control_flags
+            elif vernac_control[0].content == "VernacExpr":
+                # Coq version <= 8.10.2
+                vernac = cls._analyze_vernac_expr(vernac_control[2])
+                if with_flags:
+                    attributes = cls.analyze_vernac_flags(vernac_control[1])
+                    vernac.attributes = attributes
+            else:
+                # Coq version <= 8.10.2
+                if with_flags:
+                    try:
+                        control_flag = ControlFlag(vernac_control[0].content)
+                    except ValueError as e:
+                        raise SexpAnalyzingException(sexp) from e
+                    else:
+                        if control_flag != ControlFlag.Fail:
+                            if control_flag == ControlFlag.Redirect:
+                                control_flag.filename = vernac_control[
+                                    1].content
+                            elif control_flag == ControlFlag.Timeout:
+                                control_flag.limit = vernac_control[1].content
+                            elif control_flag == ControlFlag.Time:
+                                control_flag.is_batch_mode = vernac_control[
+                                    1].content
+                            sub_vernac_control = vernac_control[2]
+                        else:
+                            sub_vernac_control = vernac_control[1]
+                        vernac = cls.analyze_vernac(sub_vernac_control)
+                        vernac.control_flags.insert(0, control_flag)
+                else:
+                    vernac = cls.analyze_vernac(vernac_control[-1])
 
-            return SexpInfo.Vernac(
-                vernac_type=vernac_type,
-                extend_type=extend_type,
-                vernac_sexp=v_child[1],
-                loc=loc)
+            vernac.loc = loc
+            vernac.vernac_sexp = vernac_control
+            return vernac
         except IllegalSexpOperationException:
             raise SexpAnalyzingException(sexp)
 
@@ -1328,19 +1614,29 @@ class SexpAnalyzer:
         return locs
 
     @classmethod
-    def is_ltac(cls, sexp: SexpNode) -> bool:
+    def is_ltac(cls, sexp: Union[str, SexpNode]) -> bool:
         """
         Determine whether the given sexp contains Ltac (see below).
 
         Parameters
         ----------
-        sexp : SexpNode
-            An s-expression, presumed to be correspond to a valid AST.
+        sexp : str or SexpNode
+            An s-expression, presumed to be correspond to a valid AST of
+            a Vernacular command.
+            If a string is given, then it is implicitly parsed to an
+            s-expression.
 
         Returns
         -------
         bool
             True if the s-expression contains Ltac, False otherwise.
+
+        Raises
+        ------
+        IllegalSexpOperationException
+            If `sexp` is not a `SexpNode` and fails to parse to one.
+        SexpAnalyzingException
+            If `sexp` does nto conform .
 
         Notes
         -----
@@ -1348,24 +1644,21 @@ class SexpAnalyzer:
         also determines whether the given input corresponds to a
         sentence that would occur while in proof mode (such as
         ``Proof.``, ``Qed.``, or a brace/bullet).
-
-        The `_ltac_regex`, `_ltac_exclude_regex`, and `_vernac_extend`
-        patterns were derived from the notation defined at
-        https://github.com/coq/coq/blob/cbe681ab1a9db43e28327716a76db4dee5adc2e2/plugins/ltac/g_ltac.mlg
-        and the documentation at
-        https://coq.inria.fr/refman/proof-engine/ltac.html#print-identity-tactic-idtac
         """  # noqa: B950
-        sexp_str = str(sexp)
-        if cls._vernac_extend_regex.search(sexp_str) is not None:
+        if not isinstance(sexp, SexpNode):
+            sexp = SexpParser.parse(sexp)
+        vernac = cls.analyze_vernac(sexp, with_flags=False)
+        if vernac.extend_type is not None:
             # The sexp has a VernacExtend command
-            if cls._ltac_exclude_regex.search(sexp_str) is not None:
+            if cls._vt_proof_extend_regex.search(
+                    vernac.extend_type) is not None:
+                # The sexp is part of a proof
+                return True
+            else:
                 # The sexp is defining new tactics or otherwise not
                 # part of a proof
                 return False
-            else:
-                # The sexp is part of a proof
-                return True
-        elif cls._ltac_regex.search(sexp_str) is not None:
+        elif cls._vt_proof_regex.search(vernac.vernac_type) is not None:
             # The sexp is part of a proof
             return True
         else:
