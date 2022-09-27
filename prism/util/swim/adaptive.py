@@ -3,10 +3,9 @@ Defines an adaptive switch manager introduces new switches on demand.
 """
 
 import tempfile
+import time
 from pathlib import Path
 from typing import Optional
-
-import time
 
 from prism.util.compare import Top
 from prism.util.opam import (
@@ -42,7 +41,7 @@ class AdaptiveSwitchManager(SwitchManager):
         formula evaluated by the switch.
     """
 
-    def __init__(self, *args, max_pool_size = 1000, **kwargs) -> None:
+    def __init__(self, *args, max_pool_size=1000, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._temporary_switches = set()
         self._last_used = {}
@@ -129,7 +128,7 @@ class AdaptiveSwitchManager(SwitchManager):
             clone.install_formula(formula)
             self._lock.acquire()
             self.switches.add(clone)
-            if (len(self.switches)>self._max_pool_size):
+            if (len(self.switches) > self._max_pool_size):
                 self._evict()
             switch = clone
         # return a temporary clone
@@ -166,28 +165,25 @@ class AdaptiveSwitchManager(SwitchManager):
 
         Picks by least recently used.
         """
-        
         disqualified_switches = set()
 
         for switch in self._last_used:
-            if (switch not in self.switches or switch in self._temporary_switches or not switch.is_clone):
+            if (switch not in self.switches
+                    or switch in self._temporary_switches
+                    or not switch.is_clone):
                 disqualified_switches.add(switch)
 
         for switch in disqualified_switches:
             del self._last_used[switch]
 
-        if (len(self._last_used)==0):
+        if (len(self._last_used) == 0):
             # nothing to remove
             return
-        
-        lru = sorted(self._last_used,key=lambda x: self._last_used[x])[0]
-    
+
+        lru = sorted(self._last_used, key=lambda x: self._last_used[x])[0]
+
         OpamAPI.remove_switch(lru)
 
         self.switches.remove(lru)
 
         return
-
-            
-
-
