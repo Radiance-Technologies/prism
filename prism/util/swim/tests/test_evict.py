@@ -1,11 +1,6 @@
 """
-Test suite for the global switch manager.
+Test suite for automatic eviction in SwitchManagers.
 """
-
-# disabling test for now--
-# very hard to check that it's working without opening
-# pstree and examining the concurrent builds.
-
 
 import unittest
 from prism.util.swim.auto import AutoSwitchManager
