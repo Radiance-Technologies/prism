@@ -109,7 +109,9 @@ def create_switches(
         switches = process_map(
             _initialize_switch,
             job_list,
-            max_workers=n_procs)
+            max_workers=n_procs,
+            desc="Initializing switches",
+            total=len(input_coq_versions))
     else:
         # do not make a subprocess if no concurrency
         switches = [_initialize_switch(job) for job in job_list]

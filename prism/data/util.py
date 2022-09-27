@@ -31,8 +31,6 @@ def get_project_func(  # noqa: D103
         root_path: str,
         metadata_storage: MetadataStorage) -> Callable[[str],
                                                        ProjectRepo]:
-    from seutil import io
-    io.dump()
     return partial(get_project, root_path, metadata_storage)
 
 
