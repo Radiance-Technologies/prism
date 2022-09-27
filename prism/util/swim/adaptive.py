@@ -13,6 +13,7 @@ from prism.util.opam import (
     OpamSwitch,
     PackageFormula,
 )
+from prism.util.radpytools.multiprocessing import critical
 
 from .base import SwitchManager
 from .exception import UnsatisfiableConstraints
@@ -57,7 +58,7 @@ class AdaptiveSwitchManager(SwitchManager):
     def get_switch(
             self,
             formula: PackageFormula,
-            variables: Optional[AssignedVariables] = {}) -> OpamSwitch:
+            variables: Optional[AssignedVariables] = None) -> OpamSwitch:
         """
         Get a switch that satisfies the given constraints.
 
@@ -89,6 +90,12 @@ class AdaptiveSwitchManager(SwitchManager):
             If it is not possible to extend an existing switch to
             satisfy the formula.
         """
+        self._lock.acquire()
+
+        if (variables is None):
+            # default is no variables
+            variables = {}
+
         closest_switch = None
         minimum_size = Top()
         for switch in self.switches:
@@ -110,15 +117,21 @@ class AdaptiveSwitchManager(SwitchManager):
             raise UnsatisfiableConstraints(formula)
         if minimum_size > 0:
             # add a new switch to the persistent pool
+            self._lock.release()
             clone = self._clone_switch(switch)
             clone.install_formula(formula)
+            self._lock.acquire()
             self.switches.add(clone)
             switch = clone
         # return a temporary clone
+        self._lock.release()
         clone = self._clone_switch(switch)
+        self._lock.acquire()
         self._temporary_switches.add(clone)
+        self._lock.release()
         return clone
 
+    @critical
     def release_switch(self, switch: OpamSwitch) -> None:
         """
         Record that a client is no longer using the given switch.
@@ -136,3 +149,4 @@ class AdaptiveSwitchManager(SwitchManager):
             assert switch.is_clone
             self._temporary_switches.discard(switch)
             OpamAPI.remove_switch(switch)
+
