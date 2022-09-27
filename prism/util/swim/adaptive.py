@@ -57,7 +57,7 @@ class AdaptiveSwitchManager(SwitchManager):
     def get_switch(
             self,
             formula: PackageFormula,
-            variables: Optional[AssignedVariables] = None) -> OpamSwitch:
+            variables: Optional[AssignedVariables] = {}) -> OpamSwitch:
         """
         Get a switch that satisfies the given constraints.
 

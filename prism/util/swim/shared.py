@@ -1,17 +1,28 @@
 """
-Defines an adaptive switch manager that maintains switches across a global state.
+Defines an auto switch manager that maintains switches across a global state.
 """
 
-from prism.util.swim.adaptive import AdaptiveSwitchManager
+from prism.util.swim.auto import AutoSwitchManager
 
-from multiprocessing.managers import BaseManager
+from multiprocessing.managers import BaseManager, Server
+
+from multiprocessing import Lock
+
+# manager starts a process that "manages" an object
+# and takes requests from multiple threads...
+# but it does not serialize these requests!
+# it starts a new thread in the shared process for every request,
+# this makes operations on the shared objects prone to interleaving (non-thread-safe)!
+
+
 
 _MANAGER = BaseManager()
 
-_MANAGER.register("AdaptiveSwitchManager",AdaptiveSwitchManager)
+_MANAGER.register("AutoSwitchManager",AutoSwitchManager)
 
 _MANAGER.start()
 
-SharedSwitchManager = _MANAGER.AdaptiveSwitchManager()
+
+SharedSwitchManager = lambda *args, **kwargs: _MANAGER.AutoSwitchManager(*args,**kwargs)
 
 

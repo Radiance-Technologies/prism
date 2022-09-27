@@ -168,4 +168,5 @@ class SwitchManager(abc.ABC):
         active_variables = dict(self.variables)
         active_variables.update(variables)
         config: OpamSwitch.Configuration = self._get_switch_config(switch)
-        return formula.simplify(dict(config.installed), active_variables)
+        # config.installed can be (and was) None
+        return formula.simplify(dict(config.installed or {}), active_variables)

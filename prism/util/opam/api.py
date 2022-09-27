@@ -175,7 +175,8 @@ class OpamAPI:
         ValueError
             If the indicated switch does not exist.
         """
-        if isinstance(switch, OpamSwitch):
+        if isinstance(switch, OpamSwitch): 
+            opam_root = opam_root or switch.root
             switch = switch.name
         # validate switch exists
         switch = OpamSwitch(switch, opam_root)
