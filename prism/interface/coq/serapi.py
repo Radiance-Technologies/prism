@@ -1016,19 +1016,26 @@ class SerAPI:
         Parameters
         ----------
         cmd : str
-            A Coq command.
+            A command complying with the SerAPI protocol.
 
         Returns
         -------
-        _type_
-            _description_
+        List[SexpNode]
+            A list of responses containing the output of the SerAPI
+            command.
+        List[str]
+            A list of messages obtained from Coq as feedback to the
+            command (such as might be observed in an IDE panel).
+        str
+            The raw uninterpreted response from `sertop`.
 
         Raises
         ------
         CoqTimeout
-            _description_
+            If the time to retrieve the result of the command exceeds
+            the configured `timeout`.
         CoqExn
-            _description_
+            If the command resulted in an error within Coq.
         """
         if self.is_dead:
             raise RuntimeError("This SerAPI session has been terminated.")
