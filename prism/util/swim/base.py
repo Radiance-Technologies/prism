@@ -2,10 +2,12 @@
 Defines the base class and interface for all switch managers.
 """
 import abc
+from multiprocessing import RLock
 from typing import Dict, Iterable, Optional, Set, Union
 
 from prism.util.opam import AssignedVariables, OpamSwitch, PackageFormula
 from prism.util.radpytools import cachedmethod
+from prism.util.radpytools.multiprocessing import critical
 
 from .exception import UnsatisfiableConstraints
 
@@ -38,14 +40,17 @@ class SwitchManager(abc.ABC):
             variables = {}
         self._switches = set(initial_switches)
         self._variables = dict(variables)
+        self._lock = RLock()
 
     @cachedmethod
+    @critical
     def _get_switch_config(
             self,
             switch: OpamSwitch) -> OpamSwitch.Configuration:
         return switch.export()
 
     @property
+    @critical
     def switches(self) -> Set[OpamSwitch]:
         """
         Get the set of switches managed by this instance.
@@ -53,12 +58,14 @@ class SwitchManager(abc.ABC):
         return self._switches
 
     @property
+    @critical
     def variables(self) -> Dict[str, Union[bool, int, str]]:
         """
         Get the set of package variables used to evaluate dependencies.
         """
         return self._variables
 
+    @critical
     def get_switch(
             self,
             formula: PackageFormula,
@@ -93,6 +100,7 @@ class SwitchManager(abc.ABC):
                 return switch
         raise UnsatisfiableConstraints(formula)
 
+    @critical
     def release_switch(self, switch: OpamSwitch) -> None:
         """
         Record that a client is no longer using the given switch.
@@ -106,6 +114,7 @@ class SwitchManager(abc.ABC):
         pass
 
     @cachedmethod
+    @critical
     def satisfies(
             self,
             switch: OpamSwitch,
@@ -136,6 +145,7 @@ class SwitchManager(abc.ABC):
         return formula.is_satisfied(dict(config.installed), active_variables)
 
     @cachedmethod
+    @critical
     def simplify(
             self,
             switch: OpamSwitch,
@@ -169,4 +179,5 @@ class SwitchManager(abc.ABC):
         active_variables.update(variables)
         config: OpamSwitch.Configuration = self._get_switch_config(switch)
         # config.installed can be (and was) None
-        return formula.simplify(dict(config.installed or {}), active_variables)
+        return formula.simplify(dict(config.installed or {}),
+                                active_variables)
