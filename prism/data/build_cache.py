@@ -6,8 +6,8 @@ import re
 import subprocess
 import tempfile
 import warnings
-from dataclasses import InitVar, dataclass, field
-from multiprocessing.pool import Pool
+from dataclasses import dataclass, field
+from multiprocessing import JoinableQueue, Process
 from pathlib import Path
 from typing import ClassVar, Dict, Iterable, List, Optional, Tuple, Union
 
@@ -242,8 +242,37 @@ class ProjectCommitData:
         return su.io.load(filepath, fmt, clz=cls)
 
 
+class CoqProjectBuildCacheClient(JoinableQueue):
+    """
+    Client object for writing build cache.
+
+    Basically, this adds a "write" method to a joinable queue to allow
+    it to (sort of) block on a "put" operation.
+    """
+
+    def write(self, data: ProjectMetadata, block: bool = False) -> None:
+        """
+        Cache the data to disk regardless of whether it already exists.
+
+        Parameters
+        ----------
+        data : ProjectMetadata
+            The object to be cached.
+        """
+        self.put(data)
+        if block:
+            # This will likely add some additional wait time beyond just
+            # waiting for the writing task to conclude, since we are
+            # actually waiting for the q to completely empty.
+            self.join()
+
+    # Aliases
+    insert = write
+    update = write
+
+
 @dataclass
-class CoqProjectBuildCache:
+class CoqProjectBuildCacheServer:
     """
     Object regulating access to repair mining cache on disk.
 
@@ -270,14 +299,14 @@ class CoqProjectBuildCache:
     """
     The extension for the cache files that defines their format.
     """
-    num_workers: InitVar[int] = 1
+    cache_to_write_q: Optional[JoinableQueue] = None
     """
-    The number of workers available for asynchronously writing cache
-    files.
+    Queue for clients to send cache messages to write to this object
+    acting as a cache-writing server.
     """
-    _worker_pool: Pool = field(init=False)
+    _worker_proc: Process = field(init=False)
     """
-    Multiprocessing pool for writing cache files to disk on demand.
+    Consumer process that writes to disk from queue.
     """
 
     def __post_init__(self, num_workers: int):
@@ -287,7 +316,8 @@ class CoqProjectBuildCache:
         self.root = Path(self.root)
         if not self.root.exists():
             os.makedirs(self.root)
-        self._worker_pool = Pool(processes=num_workers)
+        self._worker_proc = Process(target=self._write_loop)
+        self._worker_proc.start()
 
     def __contains__(  # noqa: D105
             self,
@@ -296,10 +326,20 @@ class CoqProjectBuildCache:
                        Tuple[str]]) -> bool:
         return self.contains(obj)
 
-    def __del__(self) -> None:  # noqa: D105
-        # close the multiprocessing pool
-        self._worker_pool.close()
-        self._worker_pool.terminate()
+    def __del__(self) -> None:
+        """
+        Stop the worker process.
+        """
+        if self.cache_to_write_q is not None:
+            # Send poison pill
+            self.cache_to_write_q.put(None)
+            # Allow any remaining writes to complete
+            # Note: if this ends up being buggy, maybe try setting a
+            # timeout for join and then calling self._worker_proc.kill()
+            # after timeout.
+            self._worker_proc.join()
+            # Termination has already happened at this point, so we
+            # don't need to do it manually.
 
     @property
     def fmt(self) -> su.io.Fmt:
@@ -412,98 +452,58 @@ class CoqProjectBuildCache:
             metadata.commit_sha,
             metadata.coq_version)
 
-    def insert(self, data: ProjectCommitData, block: bool = True) -> None:
+    def _write_loop(self) -> None:
         """
-        Cache a new element of data on disk.
-
-        Parameters
-        ----------
-        data : ProjectCommitData
-            The data to be cached.
-        block : bool, optional
-            Whether to wait for the operation to complete or not, by
-            default True.
-
-        Raises
-        ------
-        RuntimeError
-            If the cache file already exists. In this case, `update`
-            should be called instead.
-        """
-        if data in self:
-            raise RuntimeError(
-                "Cache file already exists. Call `update` instead.")
-        else:
-            self.write(data, block)
-
-    def update(self, data: ProjectCommitData, block: bool = True) -> None:
-        """
-        Update an existing cache file on disk.
-
-        Parameters
-        ----------
-        data : ProjectCommitData
-            The object to be re-cached.
-        block : bool, optional
-            Whether to wait for the operation to complete or not, by
-            default True.
-
-        Raises
-        ------
-        RuntimeError
-            If the cache file does not exist, `insert` should be called
-            instead
-        """
-        if data not in self:
-            raise RuntimeError(
-                "Cache file does not exist. Call `insert` instead.")
-        else:
-            self.write(data, block)
-
-    def write(self, data: ProjectMetadata, block: bool = False) -> None:
-        """
-        Cache the data to disk regardless of whether it already exists.
-
-        Parameters
-        ----------
-        data : ProjectMetadata
-            The object to be cached.
-        """
-        kwargs = {
-            'data_path': self.get_path_from_data(data),
-            'data': data,
-            'tmpdir': self.root,
-            'ext': self.fmt_ext
-        }
-        if block:
-            self._worker_pool.apply(self._write, kwds=kwargs)
-        else:
-            self._worker_pool.apply_async(self._write, kwds=kwargs)
-
-    @staticmethod
-    def _write(
-            data: ProjectCommitData,
-            data_path: Path,
-            tmpdir: str,
-            ext: str) -> None:
-        """
-        Write the project commit's data to disk.
+        Write the project commit's data to disk from queue.
 
         This should not in normal circumstances be called directly.
-
-        Parameters
-        ----------
-        data : ProjectCommitData
-            The data to be written to disk.
         """
-        cache_dir = data_path.parent
-        if not cache_dir.exists():
-            os.makedirs(str(cache_dir))
-        # Ensure that we write the cache atomically.
-        # First, we write to a temporary file so that if we get
-        # interrupted, we aren't left with a corrupted cache.
-        with tempfile.NamedTemporaryFile("w", delete=False, dir=tmpdir) as f:
-            pass
-        data.dump(f.name, su.io.infer_fmt_from_ext(ext))
-        # Then, we atomically move the file to the correct, final path.
-        os.replace(f.name, data_path)
+        while True:
+            if self.cache_to_write_q is None:
+                break
+            data = self.cache_to_write_q.get()
+            if data is None:
+                # Break the infinite loop if we get the poison pill
+                break
+            data: ProjectCommitData
+            data_path = self.get_path_from_data(data)
+            cache_dir = data_path.parent
+            if not cache_dir.exists():
+                os.makedirs(str(cache_dir))
+            # Ensure that we write the cache atomically.
+            # First, we write to a temporary file so that if we get
+            # interrupted, we aren't left with a corrupted cache.
+            with tempfile.NamedTemporaryFile("w",
+                                             delete=False,
+                                             dir=self.root) as f:
+                pass
+            data.dump(f.name, su.io.infer_fmt_from_ext(self.fmt_ext))
+            # Then, we atomically move the file to the correct, final
+            # path.
+            os.replace(f.name, data_path)
+            # Signal to joinable queue that the task is done, allowing
+            # for blocking write on client to unblock.
+            self.cache_to_write_q.task_done()
+
+
+def get_client_and_server(root: Path, fmt_ext: str = "yml"):
+    """
+    Create CoqProjectBuildCache client and server objects.
+
+    Parameters
+    ----------
+    root : Path
+        Root folder of repair mining cache structure
+    fmt_ext : str
+        The extension for the cache files that defines their format
+
+    Returns
+    -------
+    CoqProjectBuildCacheClient
+        Build cache client (joinable queue) object
+    CoqProjectBuildCacheServer
+        Build cache server object
+    """
+    client = CoqProjectBuildCacheClient()
+    server = CoqProjectBuildCacheServer(root, fmt_ext, client)
+    return client, server
