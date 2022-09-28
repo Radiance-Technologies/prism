@@ -132,6 +132,37 @@ class TestSerAPI(unittest.TestCase):
         ]
         self.assertEqual(actual_idents, expected_idents)
 
+    def test_get_conjecture_id(self):
+        """
+        Verify that conjecture names can be obtained.
+        """
+        with SerAPI() as serapi:
+            actual_ids = [serapi.get_conjecture_id()]
+            for sentence in self.sentences['nested']:
+                serapi.execute(sentence)
+                actual_ids.append(serapi.get_conjecture_id())
+        expected_ids = [
+            None,
+            None,
+            'foobar',
+            'foobar',
+            'foobar',
+            'foobar',
+            None,
+            None,
+            "foobar'",
+            "aux",
+            "aux",
+            "aux",
+            "aux",
+            "aux",
+            "foobar'",
+            "foobar'",
+            None,
+            None
+        ]
+        self.assertEqual(actual_ids, expected_ids)
+
     def test_has_open_goals(self):
         """
         Test detection of proof modes with simple examples.

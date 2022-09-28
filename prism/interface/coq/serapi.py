@@ -411,6 +411,23 @@ class SerAPI:
                     v for v in match.groupdict().values() if v is not None)
         return idents
 
+    def get_conjecture_id(self) -> Optional[str]:
+        """
+        Get the name of the conjecture currently being proved.
+
+        Returns
+        -------
+        Optional[str]
+            The name of the current conjecture or None if no proof is
+            active.
+        """
+        try:
+            ids = self.query_vernac("Show Conjectures.")
+        except CoqExn:
+            return None
+        ids = '\n'.join(ids)
+        return ids.split()[0]
+
     def has_open_goals(self) -> bool:
         """
         Return whether there are any open goals for the current state.
