@@ -108,6 +108,30 @@ class TestSerAPI(unittest.TestCase):
             self.assertEqual(str(responses[1]), '(Answer 25 Completed)')
             self.assertEqual(SexpParser.parse(ast), expected_ast)
 
+    def test_get_local_ids(self):
+        """
+        Verify that locally defined identifiers can be obtained.
+        """
+        with SerAPI() as serapi:
+            for sentence in self.sentences['simple']:
+                serapi.execute(sentence)
+            serapi.execute("Parameter (A : Set).")
+            actual_idents = serapi.get_local_ids()
+        expected_idents = [
+            'SerTop',
+            'seq',
+            'seq_rect',
+            'seq_ind',
+            'seq_rec',
+            'seq_sind',
+            'length',
+            'm',
+            'length_corr',
+            'b2Prop',
+            'A'
+        ]
+        self.assertEqual(actual_idents, expected_idents)
+
     def test_has_open_goals(self):
         """
         Test detection of proof modes with simple examples.

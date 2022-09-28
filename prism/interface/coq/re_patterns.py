@@ -7,6 +7,8 @@ https://github.com/princeton-vl/CoqGym/blob/master/re_patterns.py
 
 import re
 
+from prism.util.re import regex_from_options
+
 PWD_PATTERN = re.compile(r"\(\*\*PWD\*\* (?P<pwd>.*?) \*\*\)")
 
 ML_PATHS_PATTERN = re.compile(
@@ -71,3 +73,35 @@ starts and when it ends.
 NEW_IDENT_PATTERN = re.compile(
     rf"{_new_ident_prefixes}(?P<idents>(?:\w+,\s+)*\s*\w+\s+){_new_ident_canaries}"
 )
+
+NAMED_DEF_ASSUM_PATTERN = re.compile(r"\*\*\* \[\s*(?P<def_assum>\w+)\s.+\]")
+"""
+Match a named definition or assumption (e.g., a section variable or
+admitted theorem) in the feedback of a ``Print All.`` command.
+"""
+_inductive = r"[A-Z]\w*\s(?P<ind>\w+)\s+:"
+"""
+Match a defined type (e.g., an inductive type) structured as a
+Vernacular statement.
+"""
+_mutual_inductive = r"\s+with\s(?P<mind>\w+)\s+:"
+"""
+Match additional types in a mutually inductive body.
+"""
+_constant = r"(?P<constant>\w+)\s+:\s"
+"""
+Match a constant.
+"""
+_libmodsec = r" >>>>>>> \w+ (?P<libmodsec>\w+)"
+"""
+Match a library, module, or section.
+"""
+
+PRINT_ALL_IDENT_PATTERN = regex_from_options(
+    [_inductive,
+     _mutual_inductive,
+     _constant,
+     _libmodsec],
+    True,
+    False,
+    compile=True)

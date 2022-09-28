@@ -28,13 +28,16 @@ from prism.interface.coq.goals import Goal, Goals, Hypothesis
 from prism.interface.coq.names import mod_path_file, print_ker_name
 from prism.interface.coq.re_patterns import (
     ADDED_STATE_PATTERN,
+    NAMED_DEF_ASSUM_PATTERN,
     NEW_IDENT_PATTERN,
+    PRINT_ALL_IDENT_PATTERN,
 )
 from prism.language.sexp import SexpNode
 from prism.language.sexp.exception import IllegalSexpOperationException
 from prism.language.sexp.list import SexpList
 from prism.language.sexp.parser import SexpParser
 from prism.language.sexp.string import SexpString
+from prism.util.iterable import CallableIterator
 from prism.util.logging import default_log_level
 from prism.util.opam import OpamSwitch
 from prism.util.opam.version import OpamVersion
@@ -369,6 +372,44 @@ class SerAPI:
             return responses, feedback, ast.pretty_format() if ast is not None else ast
         else:
             return responses, feedback
+
+    def get_local_ids(self) -> List[str]:
+        """
+        Get all the in-scope identifiers defined in the current session.
+
+        Returns
+        -------
+        List[str]
+            A list of the in-scope identifiers introduced in this
+            interactive session in the order of their definition.
+
+        Raises
+        ------
+        CoqExn
+            In certain situations where ``Print All.`` may refuse to
+            print due to Coq internal state (such as an opaque proof).
+
+        Notes
+        -----
+        The list of identifiers returned should match that yielded from
+        the ``Print All.`` Vernacular command.
+        """
+        print_all_message = self.query_vernac("Print All.")
+        print_all_message = '\n'.join(print_all_message)
+        idents = []
+        # replace each span covered by a named def or assumption
+        # by a constant-parseable equivalent
+        print_all_message = NAMED_DEF_ASSUM_PATTERN.sub(
+            CallableIterator(
+                f"{m} : "
+                for m in NAMED_DEF_ASSUM_PATTERN.findall(print_all_message)),
+            print_all_message)
+        for line in print_all_message.splitlines():
+            match = PRINT_ALL_IDENT_PATTERN.match(line)
+            if match is not None:
+                idents.extend(
+                    v for v in match.groupdict().values() if v is not None)
+        return idents
 
     def has_open_goals(self) -> bool:
         """
@@ -1176,5 +1217,5 @@ class SerAPI:
             match = NEW_IDENT_PATTERN.search(msg_info)
             if match is not None:
                 idents.extend(
-                    [m.strip() for m in match.groups("idents")[0].split(",")])
+                    [m.strip() for m in match.groupdict()["idents"].split(",")])
         return idents
