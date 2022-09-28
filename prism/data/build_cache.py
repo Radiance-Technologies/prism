@@ -7,7 +7,8 @@ import subprocess
 import tempfile
 import warnings
 from dataclasses import dataclass, field
-from multiprocessing import JoinableQueue, Process
+from multiprocessing import Process, get_context
+from multiprocessing.queues import JoinableQueue
 from pathlib import Path
 from typing import ClassVar, Dict, Iterable, List, Optional, Tuple, Union
 
@@ -250,6 +251,9 @@ class CoqProjectBuildCacheClient(JoinableQueue):
     it to (sort of) block on a "put" operation.
     """
 
+    def __init__(self):
+        super().__init__(ctx=get_context())
+
     def write(self, data: ProjectMetadata, block: bool = False) -> None:
         """
         Cache the data to disk regardless of whether it already exists.
@@ -271,7 +275,6 @@ class CoqProjectBuildCacheClient(JoinableQueue):
     update = write
 
 
-@dataclass
 class CoqProjectBuildCacheServer:
     """
     Object regulating access to repair mining cache on disk.
@@ -291,33 +294,26 @@ class CoqProjectBuildCacheServer:
     └── ...
     """
 
-    root: Path
-    """
-    Root folder of repair mining cache structure
-    """
-    fmt_ext: str = "yml"
-    """
-    The extension for the cache files that defines their format.
-    """
-    cache_to_write_q: Optional[JoinableQueue] = None
-    """
-    Queue for clients to send cache messages to write to this object
-    acting as a cache-writing server.
-    """
-    _worker_proc: Process = field(init=False)
-    """
-    Consumer process that writes to disk from queue.
-    """
-
-    def __post_init__(self, num_workers: int):
+    def __init__(self, root: Path, fmt_ext: str = "yml"):
+        self.root = Path(root)
         """
-        Instantiate object.
+        Root folder of repair mining cache structure
         """
-        self.root = Path(self.root)
-        if not self.root.exists():
-            os.makedirs(self.root)
+        self.fmt_ext: str = "yml"
+        """
+        The extension for the cache files that defines their format.
+        """
+        self._cache_to_write_q: CoqProjectBuildCacheClient = CoqProjectBuildCacheClient(
+        )
+        """
+        Queue for clients to send cache messages to write to this object
+        acting as a cache-writing server.
+        """
+        self._worker_proc: Process = Process(target=self._write_loop)
+        """
+        Consumer process that writes to disk from queue.
+        """
         self._worker_proc = Process(target=self._write_loop)
-        self._worker_proc.start()
 
     def __contains__(  # noqa: D105
             self,
@@ -326,20 +322,35 @@ class CoqProjectBuildCacheServer:
                        Tuple[str]]) -> bool:
         return self.contains(obj)
 
-    def __del__(self) -> None:
+    def __enter__(self):
+        """
+        Enter the context manager.
+        """
+        if not self.root.exists():
+            os.makedirs(self.root)
+        self._worker_proc.start()
+        return self
+
+    def __exit__(self, _exc_type, _exc_value, _exc_traceback):
         """
         Stop the worker process.
         """
-        if self.cache_to_write_q is not None:
-            # Send poison pill
-            self.cache_to_write_q.put(None)
-            # Allow any remaining writes to complete
-            # Note: if this ends up being buggy, maybe try setting a
-            # timeout for join and then calling self._worker_proc.kill()
-            # after timeout.
-            self._worker_proc.join()
-            # Termination has already happened at this point, so we
-            # don't need to do it manually.
+        # Send poison pill
+        self._cache_to_write_q.put(None)
+        # Allow any remaining writes to complete
+        # Note: if this ends up being buggy, maybe try setting a
+        # timeout for join and then calling self._worker_proc.kill()
+        # after timeout.
+        self._worker_proc.join()
+        # Termination has already happened at this point, so we
+        # don't need to do it manually.
+
+    @property
+    def client(self) -> CoqProjectBuildCacheClient:
+        """
+        Get the "client" queue.
+        """
+        return self._cache_to_write_q
 
     @property
     def fmt(self) -> su.io.Fmt:
@@ -459,11 +470,10 @@ class CoqProjectBuildCacheServer:
         This should not in normal circumstances be called directly.
         """
         while True:
-            if self.cache_to_write_q is None:
-                break
-            data = self.cache_to_write_q.get()
+            data = self._cache_to_write_q.get()
             if data is None:
                 # Break the infinite loop if we get the poison pill
+                self._cache_to_write_q.task_done()
                 break
             data: ProjectCommitData
             data_path = self.get_path_from_data(data)
@@ -483,27 +493,4 @@ class CoqProjectBuildCacheServer:
             os.replace(f.name, data_path)
             # Signal to joinable queue that the task is done, allowing
             # for blocking write on client to unblock.
-            self.cache_to_write_q.task_done()
-
-
-def get_client_and_server(root: Path, fmt_ext: str = "yml"):
-    """
-    Create CoqProjectBuildCache client and server objects.
-
-    Parameters
-    ----------
-    root : Path
-        Root folder of repair mining cache structure
-    fmt_ext : str
-        The extension for the cache files that defines their format
-
-    Returns
-    -------
-    CoqProjectBuildCacheClient
-        Build cache client (joinable queue) object
-    CoqProjectBuildCacheServer
-        Build cache server object
-    """
-    client = CoqProjectBuildCacheClient()
-    server = CoqProjectBuildCacheServer(root, fmt_ext, client)
-    return client, server
+            self._cache_to_write_q.task_done()
