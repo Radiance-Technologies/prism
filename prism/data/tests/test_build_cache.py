@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import List
 
 from prism.data.build_cache import (
+    CoqProjectBuildCacheClient,
     CoqProjectBuildCacheServer,
     ProjectBuildEnvironment,
     ProjectBuildResult,
@@ -37,12 +38,17 @@ class TestCoqProjectBuildCache(unittest.TestCase):
         """
         Test all aspects of the cache with subtests.
         """
-        with CoqProjectBuildCacheServer(self.cache_dir) as cache:
-            cache_client = cache.client
+        projects: List[ProjectRepo] = list(self.dataset.projects.values())
+        project_names = [p.name for p in projects]
+        with CoqProjectBuildCacheServer(self.cache_dir, project_names) as cache:
             uneventful_result = ProjectBuildResult(0, "", "")
             environment = ProjectBuildEnvironment(
                 OpamAPI.active_switch.export())
-            for project in self.dataset.projects.values():
+            for project in projects:
+                cache_client = CoqProjectBuildCacheClient(
+                    cache.client_to_server,
+                    cache.server_to_client_dict[project.name],
+                    project.name)
                 command_data = {}
                 project: ProjectRepo
                 for filename in project.get_file_list():

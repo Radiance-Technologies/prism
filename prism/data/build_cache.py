@@ -7,10 +7,9 @@ import subprocess
 import tempfile
 import warnings
 from dataclasses import dataclass, field
-from multiprocessing import Process, get_context
-from multiprocessing.queues import JoinableQueue
+from multiprocessing import Process, Queue
 from pathlib import Path
-from typing import ClassVar, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Any, ClassVar, Dict, Iterable, List, Optional, Tuple, Union
 
 import setuptools_scm
 import seutil as su
@@ -243,16 +242,108 @@ class ProjectCommitData:
         return su.io.load(filepath, fmt, clz=cls)
 
 
-class CoqProjectBuildCacheClient(JoinableQueue):
+@dataclass
+class BuildCacheMsg:
+    """
+    Data class for messages passed between cache server and client.
+    """
+
+    client_id: str
+    """
+    Identifier for client object
+    """
+    type: str
+    """
+    The type of this message. If the message is meant to invoke a
+    function, this should match a key in the receiving object's
+    dispatch table.
+    """
+    args: tuple = field(default_factory=tuple)
+    """
+    Arbitrary tuple of args to be passed to a function on the receiving
+    end
+    """
+    response: Any = None
+    """
+    Response, if any, from any functions that were previously called
+    """
+
+
+class CoqProjectBuildCacheClient:
     """
     Client object for writing build cache.
-
-    Basically, this adds a "write" method to a joinable queue to allow
-    it to (sort of) block on a "put" operation.
     """
 
-    def __init__(self):
-        super().__init__(ctx=get_context())
+    def __init__(
+            self,
+            client_to_server: Queue,
+            server_to_client: Queue,
+            client_id: str):
+        self.client_to_server = client_to_server
+        """
+        This queue is used to send messages and commands from the client
+        to the server. This queue is shared among all clients.
+        """
+        self.server_to_client = server_to_client
+        """
+        This queue is used to receive messages from the server. Each
+        client instance has a unique instance of this queue.
+        """
+        self.client_id = client_id
+        """
+        Identifier for client object.
+        """
+
+    def __contains__(  # noqa: D105
+            self,
+            obj: Union[ProjectCommitData,
+                       ProjectMetadata,
+                       Tuple[str]]) -> bool:
+        msg = BuildCacheMsg(self.client_id, "contains", args=(obj,))
+        self.client_to_server.put(msg)
+        response: BuildCacheMsg = self.server_to_client.get()
+        if not isinstance(response.response, bool):
+            raise TypeError(f"Unexpected response {response.response}")
+        return response.response
+
+    def get(
+            self,
+            project: str,
+            commit: str,
+            coq_version: str) -> ProjectCommitData:
+        """
+        Fetch a data object from the on-disk folder structure.
+
+        Parameters
+        ----------
+        project : str
+            The name of the project
+        commit : str
+            The commit hash to fetch from
+        coq_version : str
+            The Coq version
+
+        Returns
+        -------
+        ProjectCommitData
+            The fetched cache object
+
+        Raises
+        ------
+        TypeError
+            If response from the server is not of the expected type
+        """
+        msg = BuildCacheMsg(
+            self.client_id,
+            "get",
+            args=(project,
+                  commit,
+                  coq_version))
+        self.client_to_server.put(msg)
+        response: BuildCacheMsg = self.server_to_client.get()
+        if not isinstance(response.response, ProjectCommitData):
+            raise TypeError(f"Unexpected response {response.response}")
+        return response.response
 
     def write(self, data: ProjectMetadata, block: bool = False) -> None:
         """
@@ -262,13 +353,18 @@ class CoqProjectBuildCacheClient(JoinableQueue):
         ----------
         data : ProjectMetadata
             The object to be cached.
+
+        Raises
+        ------
+        ValueError
+            If response from server has unexpected contents
         """
-        self.put(data)
+        msg = BuildCacheMsg(self.client_id, "write", args=(data, block))
+        self.client_to_server.put(msg)
         if block:
-            # This will likely add some additional wait time beyond just
-            # waiting for the writing task to conclude, since we are
-            # actually waiting for the q to completely empty.
-            self.join()
+            response: BuildCacheMsg = self.server_to_client.get()
+            if response.response != "write complete":
+                raise ValueError(f"Unexpected response {response.response}.")
 
     # Aliases
     insert = write
@@ -294,26 +390,45 @@ class CoqProjectBuildCacheServer:
     └── ...
     """
 
-    def __init__(self, root: Path, fmt_ext: str = "yml"):
+    def __init__(
+            self,
+            root: Path,
+            client_keys: List[str],
+            fmt_ext: str = "yml"):
         self.root = Path(root)
         """
         Root folder of repair mining cache structure
         """
-        self.fmt_ext: str = "yml"
+        self.fmt_ext = fmt_ext
         """
         The extension for the cache files that defines their format.
         """
-        self._cache_to_write_q: CoqProjectBuildCacheClient = CoqProjectBuildCacheClient(
-        )
+        self.client_keys = client_keys
+        """
+        Keys corresponding to each client.
+        """
+        self.client_to_server = Queue()
         """
         Queue for clients to send cache messages to write to this object
         acting as a cache-writing server.
         """
-        self._worker_proc: Process = Process(target=self._write_loop)
+        self.server_to_client_dict = {k: Queue() for k in self.client_keys}
+        """
+        Dictionary of queues for sending messages from server to client
+        """
+        self._worker_proc: Process = Process(target=self._server_loop)
         """
         Consumer process that writes to disk from queue.
         """
-        self._worker_proc = Process(target=self._write_loop)
+        self.dispatch_table = {
+            "write": self.write,
+            "contains": self.contains,
+            "get": self.get
+        }
+        """
+        Dictionary mapping incoming function calls from the
+        client-to-server queue.
+        """
 
     def __contains__(  # noqa: D105
             self,
@@ -336,7 +451,7 @@ class CoqProjectBuildCacheServer:
         Stop the worker process.
         """
         # Send poison pill
-        self._cache_to_write_q.put(None)
+        self.client_to_server.put(BuildCacheMsg(None, "poison pill"))
         # Allow any remaining writes to complete
         # Note: if this ends up being buggy, maybe try setting a
         # timeout for join and then calling self._worker_proc.kill()
@@ -344,13 +459,6 @@ class CoqProjectBuildCacheServer:
         self._worker_proc.join()
         # Termination has already happened at this point, so we
         # don't need to do it manually.
-
-    @property
-    def client(self) -> CoqProjectBuildCacheClient:
-        """
-        Get the "client" queue.
-        """
-        return self._cache_to_write_q
 
     @property
     def fmt(self) -> su.io.Fmt:
@@ -463,34 +571,59 @@ class CoqProjectBuildCacheServer:
             metadata.commit_sha,
             metadata.coq_version)
 
-    def _write_loop(self) -> None:
+    def write(self, data: ProjectCommitData, block: bool) -> Optional[str]:
         """
-        Write the project commit's data to disk from queue.
+        Write to build cache.
 
-        This should not in normal circumstances be called directly.
+        Parameters
+        ----------
+        data : ProjectCommitData
+            Data to write to build cache
+        block : bool
+            If true, return a "write complete" message
+
+        Returns
+        -------
+        str or None
+            If `block`, return "write complete"; otherwise, return
+            nothing
+        """
+        data_path = self.get_path_from_data(data)
+        cache_dir = data_path.parent
+        if not cache_dir.exists():
+            os.makedirs(str(cache_dir))
+        # Ensure that we write the cache atomically.
+        # First, we write to a temporary file so that if we get
+        # interrupted, we aren't left with a corrupted cache.
+        with tempfile.NamedTemporaryFile("w", delete=False, dir=self.root) as f:
+            pass
+        data.dump(f.name, su.io.infer_fmt_from_ext(self.fmt_ext))
+        # Then, we atomically move the file to the correct, final
+        # path.
+        os.replace(f.name, data_path)
+        if block:
+            return "write complete"
+
+    def _server_loop(self) -> None:
+        """
+        Provide consumer loop for build cache server.
         """
         while True:
-            data = self._cache_to_write_q.get()
-            if data is None:
-                # Break the infinite loop if we get the poison pill
-                self._cache_to_write_q.task_done()
-                break
-            data: ProjectCommitData
-            data_path = self.get_path_from_data(data)
-            cache_dir = data_path.parent
-            if not cache_dir.exists():
-                os.makedirs(str(cache_dir))
-            # Ensure that we write the cache atomically.
-            # First, we write to a temporary file so that if we get
-            # interrupted, we aren't left with a corrupted cache.
-            with tempfile.NamedTemporaryFile("w",
-                                             delete=False,
-                                             dir=self.root) as f:
-                pass
-            data.dump(f.name, su.io.infer_fmt_from_ext(self.fmt_ext))
-            # Then, we atomically move the file to the correct, final
-            # path.
-            os.replace(f.name, data_path)
-            # Signal to joinable queue that the task is done, allowing
-            # for blocking write on client to unblock.
-            self._cache_to_write_q.task_done()
+            msg: BuildCacheMsg = self.client_to_server.get()
+            try:
+                response = self.dispatch_table[msg.type](*msg.args)
+            except (KeyError, AttributeError):
+                if msg.type == "poison pill":
+                    # Break the infinite loop if we get the poison pill
+                    break
+                else:
+                    raise
+            else:
+                response_msg = BuildCacheMsg(
+                    msg.client_id,
+                    "response",
+                    response=response)
+                # Don't put a response in the queue if the client called
+                # "write" with block=False.
+                if msg.type != "write" or (msg.type == "write" and msg.args[1]):
+                    self.server_to_client_dict[msg.client_id].put(response_msg)

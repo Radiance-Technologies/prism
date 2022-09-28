@@ -432,6 +432,8 @@ class CacheExtractor:
                     self.md_storage.projects),
                 desc="Initializing Project instances",
                 total=len(self.md_storage.projects)))
+        # TODO: Create the cache object here, giving it the list of
+        # projects.
         # Create commit mapper
         project_looper = ProjectCommitUpdateMapper[None](
             projects,
