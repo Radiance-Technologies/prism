@@ -153,6 +153,34 @@ class TestExtractCache(unittest.TestCase):
                 serapi_options="")
         self.assertEqual(len(extracted_commands), 37)
         self.assertEqual(len([c for c in extracted_commands if c.proofs]), 9)
+        with self.subTest("delayed_proof"):
+            with pushd(_COQ_EXAMPLES_PATH):
+                extracted_commands = _extract_vernac_commands(
+                    Project.extract_sentences(
+                        CoqDocument(
+                            "delayed_proof.v",
+                            CoqParser.parse_source("delayed_proof.v"),
+                            _COQ_EXAMPLES_PATH),
+                        sentence_extraction_method=SEM.HEURISTIC,
+                        return_locations=True,
+                        glom_proofs=False),
+                    serapi_options="")
+            self.assertEqual(len(extracted_commands), 9)
+            expected_ids = [
+                [],
+                [],
+                [],
+                [],
+                ["p",
+                 "h"],
+                ["foobar"],
+                ["foo_obligation_1",
+                 "foo_obligation_2",
+                 "foo"]
+            ]
+            self.assertEqual(
+                [c.identifier for c in extracted_commands],
+                expected_ids)
 
 
 if __name__ == "__main__":
