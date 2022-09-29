@@ -22,25 +22,50 @@ from prism.util.radpytools.dataclasses import default_field
 from ..interface.coq.goals import Goals
 from ..interface.coq.serapi import AbstractSyntaxTree
 
+CommandType = str
+
 
 @dataclass
-class ProofSentence:
+class VernacSentence:
     """
-    Type associating individual proof sentences to ASTs and open goals.
+    A parsed sentence from a document.
     """
 
-    sentence: str
+    text: str
     """
     Text of a sentence from a proof.
     """
     ast: AbstractSyntaxTree
     """
-    The AST derived from the proof sentence.
+    The AST derived from this sentence.
+
+    Note that locations within this AST are not accurate with respect to
+    the source document.
+    """
+    location: SexpInfo.Loc
+    """
+    The location of this sentence within the source document.
+    """
+    command_type: CommandType
+    """
+    The Vernacular type of command, e.g., VernacInductive.
     """
     goals: Optional[Goals] = None
     """
-    Open goals, if any, associated with this proof sentence.
+    Open goals, if any, prior to the execution of this sentence.
+
+    This is especially useful for capturing the context of commands
+    nested within proofs.
     """
+
+
+@dataclass
+class ProofSentence(VernacSentence):
+    """
+    Type associating individual proof sentences to ASTs and open goals.
+    """
+
+    pass
 
 
 Proof = List[ProofSentence]
@@ -52,45 +77,47 @@ class VernacCommandData:
     The evaluated result for a single Vernacular command.
     """
 
-    identifier: Optional[str]
+    identifier: List[str]
     """
-    Identifier for the command being cached, e.g., the name of the
+    Identifier(s) for the command being cached, e.g., the name of the
     corresponding theorem, lemma, or definition.
     If no identifier exists (for example, if it is an import statement)
-    or can be meaningfully defined, then None.
-    """
-    command_type: str
-    """
-    The type of command, e.g., Theorem, Inductive, etc.
+    or can be meaningfully defined, then an empty list.
     """
     command_error: Optional[str]
     """
     The error, if any, that results when trying to execute the command
-    (e.g., within the ``sertop``). If there is no error, then None.
+    (e.g., within ``sertop``). If there is no error, then None.
     """
-    sentence: str
+    command: VernacSentence
     """
-    The whitespace-normalized sentence text.
-    """
-    sexp: AbstractSyntaxTree
-    """
-    The serialized s-expression of this sentence.
-    """
-    location: SexpInfo.Loc
-    """
-    The location of this vernacular command.
+    The Vernacular command.
     """
     proofs: List[Proof] = default_field(list())
     """
-    Associated proofs, if any. Proofs are considered to be a list of
-    strings. Each contained `ProofSentence` object contains a proof
-    sentence, a proof sentence AST, and any open goals associated with
-    the proof.
+    Associated proofs, if any.
+    Proofs are considered to be a list of proof blocks, each dealing
+    with a separate obligation of the conjecture stated in `command`.
+    Tactics and goals are captured here.
     """
 
     def __hash__(self) -> int:  # noqa: D105
         # do not include the error
         return hash((self.identifier, self.command_type, self.location))
+
+    @property
+    def command_type(self) -> str:
+        """
+        Get the type of the Vernacular command.
+        """
+        return self.command.command_type
+
+    @property
+    def location(self) -> SexpInfo.Loc:
+        """
+        Get the location of the command in the original source document.
+        """
+        return self.command.location
 
 
 VernacDict = Dict[str, List[VernacCommandData]]
