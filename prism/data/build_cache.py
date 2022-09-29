@@ -345,7 +345,7 @@ class CoqProjectBuildCacheClient:
             raise TypeError(f"Unexpected response {response.response}")
         return response.response
 
-    def write(self, data: ProjectMetadata, block: bool = True) -> None:
+    def write(self, data: ProjectMetadata, block: bool = False) -> None:
         """
         Cache the data to disk regardless of whether it already exists.
 
@@ -393,7 +393,7 @@ class CoqProjectBuildCacheServer:
     def __init__(
             self,
             root: Path,
-            client_keys: List[str],
+            client_keys: Optional[List[str]] = None,
             fmt_ext: str = "yml"):
         self.root = Path(root)
         """
@@ -403,9 +403,12 @@ class CoqProjectBuildCacheServer:
         """
         The extension for the cache files that defines their format.
         """
-        self.client_keys = client_keys
+        self.client_keys = client_keys if client_keys else []
         """
-        Keys corresponding to each client.
+        Keys corresponding to each client. If these keys are not
+        provided, the server loop process does not start, and it is
+        expected that this object will be used by a single producer OR
+        in a read-only context.
         """
         self.client_to_server = Queue()
         """
@@ -443,22 +446,24 @@ class CoqProjectBuildCacheServer:
         """
         if not self.root.exists():
             os.makedirs(self.root)
-        self._worker_proc.start()
+        if self.client_keys:
+            self._worker_proc.start()
         return self
 
     def __exit__(self, _exc_type, _exc_value, _exc_traceback):
         """
         Stop the worker process.
         """
-        # Send poison pill
-        self.client_to_server.put(BuildCacheMsg(None, "poison pill"))
-        # Allow any remaining writes to complete
-        # Note: if this ends up being buggy, maybe try setting a
-        # timeout for join and then calling self._worker_proc.kill()
-        # after timeout.
-        self._worker_proc.join()
-        # Termination has already happened at this point, so we
-        # don't need to do it manually.
+        if self.client_keys:
+            # Send poison pill
+            self.client_to_server.put(BuildCacheMsg(None, "poison pill"))
+            # Allow any remaining writes to complete
+            # Note: if this ends up being buggy, maybe try setting a
+            # timeout for join and then calling self._worker_proc.kill()
+            # after timeout.
+            self._worker_proc.join()
+            # Termination has already happened at this point, so we
+            # don't need to do it manually.
 
     @property
     def fmt(self) -> su.io.Fmt:
@@ -570,6 +575,36 @@ class CoqProjectBuildCacheServer:
             metadata.project_name,
             metadata.commit_sha,
             metadata.coq_version)
+
+    def write(self, data: ProjectMetadata, block: bool = False) -> None:
+        """
+        Cache the data to disk regardless of whether it already exists.
+
+        This method cannot be safely used in a multi-producer
+        context. It is meant for use in a single-producer context to
+        remove the need for a `CoqProjectBuildCacheClient` object.
+
+        The `block` argument is inoperative in this function, but it is
+        provided to maintain a uniform signature.
+
+        Parameters
+        ----------
+        data : ProjectMetadata
+            The object to be cached.
+
+        Raises
+        ------
+        RuntimeError
+            If clients can potentially send data to the server,
+            indicating that using this method is not guaranteed to be
+            safe.
+        """
+        if self.client_keys:
+            raise RuntimeError(
+                "It is not safe to use the `write`"
+                " method when clients are connected to the server.")
+        else:
+            self._write(data, block)
 
     def _write(self, data: ProjectCommitData, block: bool) -> Optional[str]:
         """
