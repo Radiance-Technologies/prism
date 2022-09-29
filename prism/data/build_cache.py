@@ -420,7 +420,7 @@ class CoqProjectBuildCacheServer:
         """
         Consumer process that writes to disk from queue.
         """
-        self.dispatch_table = {
+        self._dispatch_table = {
             "write": self._write,
             "contains": self.contains,
             "get": self.get
@@ -615,7 +615,7 @@ class CoqProjectBuildCacheServer:
         while True:
             msg: BuildCacheMsg = self.client_to_server.get()
             try:
-                response = self.dispatch_table[msg.type](*msg.args)
+                response = self._dispatch_table[msg.type](*msg.args)
             except (KeyError, AttributeError):
                 if msg.type == "poison pill":
                     # Break the infinite loop if we get the poison pill
