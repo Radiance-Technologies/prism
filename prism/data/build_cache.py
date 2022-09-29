@@ -345,7 +345,7 @@ class CoqProjectBuildCacheClient:
             raise TypeError(f"Unexpected response {response.response}")
         return response.response
 
-    def write(self, data: ProjectMetadata, block: bool = False) -> None:
+    def write(self, data: ProjectMetadata, block: bool = True) -> None:
         """
         Cache the data to disk regardless of whether it already exists.
 
@@ -421,7 +421,7 @@ class CoqProjectBuildCacheServer:
         Consumer process that writes to disk from queue.
         """
         self.dispatch_table = {
-            "write": self.write,
+            "write": self._write,
             "contains": self.contains,
             "get": self.get
         }
@@ -571,9 +571,13 @@ class CoqProjectBuildCacheServer:
             metadata.commit_sha,
             metadata.coq_version)
 
-    def write(self, data: ProjectCommitData, block: bool) -> Optional[str]:
+    def _write(self, data: ProjectCommitData, block: bool) -> Optional[str]:
         """
         Write to build cache.
+
+        This is a private function. Invoking it outside of the
+        client -> queue -> server route will result in undefined
+        behavior.
 
         Parameters
         ----------
