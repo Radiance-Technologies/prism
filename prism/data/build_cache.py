@@ -475,11 +475,72 @@ class CoqProjectBuildCacheServer:
     def _contains_data(self, data: ProjectCommitData) -> bool:
         return self.get_path_from_data(data).exists()
 
+    def _contains_fields(self, *fields: Tuple[str]) -> bool:
+        return self.get_path_from_fields(*fields).exists()
+
     def _contains_metadata(self, metadata: ProjectMetadata) -> bool:
         return self.get_path_from_metadata(metadata).exists()
 
-    def _contains_fields(self, *fields: Tuple[str]) -> bool:
-        return self.get_path_from_fields(*fields).exists()
+    def _server_loop(self) -> None:
+        """
+        Provide consumer loop for build cache server.
+        """
+        while True:
+            msg: BuildCacheMsg = self.client_to_server.get()
+            try:
+                response = self._dispatch_table[msg.type](*msg.args)
+            except (KeyError, AttributeError):
+                if msg.type == "poison pill":
+                    # Break the infinite loop if we get the poison pill
+                    break
+                else:
+                    raise
+            else:
+                response_msg = BuildCacheMsg(
+                    msg.client_id,
+                    "response",
+                    response=response)
+                # Don't put a response in the queue if the client called
+                # "write" with block=False.
+                if msg.type != "write" or (msg.type == "write" and msg.args[1]):
+                    self.server_to_client_dict[msg.client_id].put(response_msg)
+
+    def _write(self, data: ProjectCommitData, block: bool) -> Optional[str]:
+        """
+        Write to build cache.
+
+        This is a private function. Invoking it outside of the
+        client -> queue -> server route will result in undefined
+        behavior.
+
+        Parameters
+        ----------
+        data : ProjectCommitData
+            Data to write to build cache
+        block : bool
+            If true, return a "write complete" message
+
+        Returns
+        -------
+        str or None
+            If `block`, return "write complete"; otherwise, return
+            nothing
+        """
+        data_path = self.get_path_from_data(data)
+        cache_dir = data_path.parent
+        if not cache_dir.exists():
+            os.makedirs(str(cache_dir))
+        # Ensure that we write the cache atomically.
+        # First, we write to a temporary file so that if we get
+        # interrupted, we aren't left with a corrupted cache.
+        with tempfile.NamedTemporaryFile("w", delete=False, dir=self.root) as f:
+            pass
+        data.dump(f.name, su.io.infer_fmt_from_ext(self.fmt_ext))
+        # Then, we atomically move the file to the correct, final
+        # path.
+        os.replace(f.name, data_path)
+        if block:
+            return "write complete"
 
     def contains(
             self,
@@ -576,7 +637,7 @@ class CoqProjectBuildCacheServer:
             metadata.commit_sha,
             metadata.coq_version)
 
-    def write(self, data: ProjectMetadata, block: bool = False) -> None:
+    def write(self, data: ProjectCommitData, block: bool = False) -> None:
         """
         Cache the data to disk regardless of whether it already exists.
 
@@ -605,64 +666,3 @@ class CoqProjectBuildCacheServer:
                 " method when clients are connected to the server.")
         else:
             self._write(data, block)
-
-    def _write(self, data: ProjectCommitData, block: bool) -> Optional[str]:
-        """
-        Write to build cache.
-
-        This is a private function. Invoking it outside of the
-        client -> queue -> server route will result in undefined
-        behavior.
-
-        Parameters
-        ----------
-        data : ProjectCommitData
-            Data to write to build cache
-        block : bool
-            If true, return a "write complete" message
-
-        Returns
-        -------
-        str or None
-            If `block`, return "write complete"; otherwise, return
-            nothing
-        """
-        data_path = self.get_path_from_data(data)
-        cache_dir = data_path.parent
-        if not cache_dir.exists():
-            os.makedirs(str(cache_dir))
-        # Ensure that we write the cache atomically.
-        # First, we write to a temporary file so that if we get
-        # interrupted, we aren't left with a corrupted cache.
-        with tempfile.NamedTemporaryFile("w", delete=False, dir=self.root) as f:
-            pass
-        data.dump(f.name, su.io.infer_fmt_from_ext(self.fmt_ext))
-        # Then, we atomically move the file to the correct, final
-        # path.
-        os.replace(f.name, data_path)
-        if block:
-            return "write complete"
-
-    def _server_loop(self) -> None:
-        """
-        Provide consumer loop for build cache server.
-        """
-        while True:
-            msg: BuildCacheMsg = self.client_to_server.get()
-            try:
-                response = self._dispatch_table[msg.type](*msg.args)
-            except (KeyError, AttributeError):
-                if msg.type == "poison pill":
-                    # Break the infinite loop if we get the poison pill
-                    break
-                else:
-                    raise
-            else:
-                response_msg = BuildCacheMsg(
-                    msg.client_id,
-                    "response",
-                    response=response)
-                # Don't put a response in the queue if the client called
-                # "write" with block=False.
-                if msg.type != "write" or (msg.type == "write" and msg.args[1]):
-                    self.server_to_client_dict[msg.client_id].put(response_msg)
