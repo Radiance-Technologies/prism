@@ -58,6 +58,31 @@ class VernacSentence:
     nested within proofs.
     """
 
+    @staticmethod
+    def sort_sentences(sentences: List['VernacSentence']) -> List[str]:
+        """
+        Sort the given sentences by their location.
+
+        Parameters
+        ----------
+        located_sentences : List[VernacSentence]
+            A list of sentences presumed to come from the same document.
+
+
+        Returns
+        -------
+        List[str]
+            The sentences sorted by their location in the document in
+            ascending order.
+
+        Notes
+        -----
+        Sorting is done purely based on character numbers, so sentences
+        from different documents can still be sorted together (although
+        the significance of the results may be suspect).
+        """
+        return [s for _, s in sorted([(s.location, s) for s in sentences])]
+
 
 @dataclass
 class ProofSentence(VernacSentence):
@@ -118,6 +143,22 @@ class VernacCommandData:
         Get the location of the command in the original source document.
         """
         return self.command.location
+
+    def sorted_sentences(self) -> List[VernacSentence]:
+        """
+        Get the sentences in this command sorted by their locations.
+
+        A command may possess multiple sentences if it has any
+        associated proofs.
+        """
+        sentences = [self.command]
+        for proof in self.proofs:
+            for sentence in proof:
+                sentences.append(sentence)
+        if len(sentences) > 1:
+            return VernacSentence.sort_sentences(sentences)
+        else:
+            return sentences
 
 
 VernacDict = Dict[str, List[VernacCommandData]]
