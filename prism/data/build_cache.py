@@ -637,7 +637,7 @@ class CoqProjectBuildCacheServer:
             metadata.commit_sha,
             metadata.coq_version)
 
-    def write(self, data: ProjectCommitData, block: bool = False) -> None:
+    def write(self, data: ProjectCommitData, block: bool = True) -> None:
         """
         Cache the data to disk regardless of whether it already exists.
 
@@ -645,13 +645,16 @@ class CoqProjectBuildCacheServer:
         context. It is meant for use in a single-producer context to
         remove the need for a `CoqProjectBuildCacheClient` object.
 
-        The `block` argument is inoperative in this function, but it is
-        provided to maintain a uniform signature.
-
         Parameters
         ----------
-        data : ProjectMetadata
+        data : ProjectCommitData
             The object to be cached.
+        block : bool, optional
+            Whether to wait for the write operation to complete.
+            This argument currently has no effect; the method always
+            blocks.
+            The argument is allowed to maintain a uniform signature 
+            with `CoqProjectBuildCacheClient.write`.
 
         Raises
         ------
