@@ -345,13 +345,13 @@ class CoqProjectBuildCacheClient:
             raise TypeError(f"Unexpected response {response.response}")
         return response.response
 
-    def write(self, data: ProjectMetadata, block: bool = False) -> None:
+    def write(self, data: ProjectCommitData, block: bool = False) -> None:
         """
         Cache the data to disk regardless of whether it already exists.
 
         Parameters
         ----------
-        data : ProjectMetadata
+        data : ProjectCommitData
             The object to be cached.
 
         Raises
