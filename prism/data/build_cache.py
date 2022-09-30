@@ -1,7 +1,6 @@
 """
 Tools for handling repair mining cache.
 """
-import multiprocessing as mp
 import os
 import re
 import subprocess
@@ -9,6 +8,7 @@ import tempfile
 import warnings
 from dataclasses import dataclass, field
 from multiprocessing import Process, Queue
+from multiprocessing.managers import SyncManager
 from pathlib import Path
 from typing import Any, ClassVar, Dict, Iterable, List, Optional, Tuple, Union
 
@@ -375,6 +375,26 @@ class CoqProjectBuildCacheClient:
     update = write
 
 
+def create_cpbcs_qs(manager: SyncManager,
+                    client_keys: List[str]) -> Tuple[Queue,
+                                                     Dict[str,
+                                                          Queue]]:
+    """
+    Create queues for CoqProjectBuildCacheServer objects.
+
+    Parameters
+    ----------
+    manager : SyncManager
+        A sync manager that supplies queues that can be shared among
+        non-inherited processes
+    client_keys : List[str]
+        A list of client keys for the cache server
+    """
+    client_to_server_q = manager.Queue()
+    server_to_client_q_dict = {k: manager.Queue() for k in client_keys}
+    return client_to_server_q, server_to_client_q_dict
+
+
 class CoqProjectBuildCacheServer:
     """
     Object regulating access to repair mining cache on disk.
@@ -398,6 +418,9 @@ class CoqProjectBuildCacheServer:
             self,
             root: Path,
             client_keys: Optional[List[str]] = None,
+            client_to_server_q: Optional[Queue] = None,
+            server_to_client_q_dict: Optional[Dict[str,
+                                                   Queue]] = None,
             fmt_ext: str = "yml"):
         self.root = Path(root)
         """
@@ -414,18 +437,12 @@ class CoqProjectBuildCacheServer:
         expected that this object will be used by a single producer OR
         in a read-only context.
         """
-        self.manager = mp.Manager()
-        """
-        Process manager for queues.
-        """
-        self.client_to_server = self.manager.Queue()
+        self.client_to_server = client_to_server_q
         """
         Queue for clients to send cache messages to write to this object
         acting as a cache-writing server.
         """
-        self.server_to_client_dict = {
-            k: self.manager.Queue() for k in self.client_keys
-        }
+        self.server_to_client_dict = server_to_client_q_dict
         """
         Dictionary of queues for sending messages from server to client
         """

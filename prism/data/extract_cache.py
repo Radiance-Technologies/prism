@@ -1,6 +1,7 @@
 """
 Module for storing cache extraction functions.
 """
+import multiprocessing as mp
 from functools import partial
 from multiprocessing import Pool
 from pathlib import Path
@@ -26,6 +27,7 @@ from prism.data.build_cache import (
     ProjectCommitData,
     VernacCommandData,
     VernacDict,
+    create_cpbcs_qs,
 )
 from prism.data.commit_map import Except, ProjectCommitUpdateMapper
 from prism.data.util import get_project_func
@@ -92,20 +94,20 @@ def extract_vernac_commands(
 
 
 def extract_cache(
-    build_cache_client: CoqProjectBuildCacheClient,
-    switch_manager: SwitchManager,
-    project: ProjectRepo,
-    commit_sha: str,
-    process_project: Callable[[Project],
-                              VernacDict],
-    coq_version: Optional[str] = None,
-    recache: Optional[Callable[
-        [CoqProjectBuildCacheServer,
-         ProjectRepo,
-         str,
-         str],
-        bool]] = None
-) -> None:
+        build_cache_client: CoqProjectBuildCacheClient,
+        switch_manager: SwitchManager,
+        project: ProjectRepo,
+        commit_sha: str,
+        process_project: Callable[[Project],
+                                  VernacDict],
+        coq_version: Optional[str] = None,
+        recache: Optional[Callable[
+            [CoqProjectBuildCacheServer,
+             ProjectRepo,
+             str,
+             str],
+            bool]] = None,
+        block: bool = False) -> None:
     r"""
     Extract data from project commit and insert into `build_cache`.
 
@@ -148,6 +150,8 @@ def extract_cache(
             or None, optional
         A function that for an existing entry in the cache returns
         whether it should be reprocessed or not.
+    block : bool, optional
+        Whether to use blocking cache writes, by default False
 
     See Also
     --------
@@ -170,7 +174,8 @@ def extract_cache(
             project,
             commit_sha,
             process_project,
-            coq_version)
+            coq_version,
+            block)
 
 
 def extract_cache_new(
@@ -180,7 +185,8 @@ def extract_cache_new(
         commit_sha: str,
         process_project: Callable[[Project],
                                   VernacDict],
-        coq_version: str):
+        coq_version: str,
+        block: bool):
     """
     Extract a new cache and insert it into the build cache.
 
@@ -201,6 +207,8 @@ def extract_cache_new(
     coq_version : str or None, optional
         The version of Coq in which to build the project, by default
         None.
+    block : bool
+        Whether to use blocking cache writes
     """
     project.git.checkout(commit_sha)
     # get a switch
@@ -227,7 +235,7 @@ def extract_cache_new(
         command_data,
         ProjectBuildEnvironment(project.opam_switch.export()),
         ProjectBuildResult(*build_result))
-    build_cache_client.insert(data)
+    build_cache_client.insert(data, block)
     # release the switch
     switch_manager.release_switch(project.opam_switch)
     project.opam_switch = original_switch
@@ -438,9 +446,15 @@ class CacheExtractor:
                 desc="Initializing Project instances",
                 total=len(self.md_storage.projects)))
         client_keys = [project.name for project in projects]
+        manager = mp.Manager()
+        client_to_server_q, server_to_client_q_dict = create_cpbcs_qs(
+            manager,
+            client_keys)
         with CoqProjectBuildCacheServer(
                 self.cache_dir,
                 client_keys,
+                client_to_server_q,
+                server_to_client_q_dict,
                 **self.cache_kwargs) as self.cache_server:
             self.cache_clients = {
                 project.name: CoqProjectBuildCacheClient(

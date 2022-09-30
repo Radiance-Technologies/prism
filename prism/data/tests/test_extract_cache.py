@@ -2,6 +2,7 @@
 Module containing tests for the extract_cache module.
 """
 import logging
+import multiprocessing as mp
 import os
 import shutil
 import unittest
@@ -13,6 +14,7 @@ from prism.data.build_cache import (
     ProjectBuildEnvironment,
     ProjectBuildResult,
     ProjectCommitData,
+    create_cpbcs_qs,
 )
 from prism.data.dataset import CoqProjectBaseDataset
 from prism.data.extract_cache import extract_cache, extract_vernac_commands
@@ -79,12 +81,18 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract cache from a project.
         """
+        manager = mp.Manager()
+        client_to_server_q, server_to_client_q_dict = create_cpbcs_qs(
+            manager,
+            self.dataset.projects.keys())
         with CoqProjectBuildCacheServer(self.CACHE_DIR,
-                                        self.dataset.projects.keys()) as cache:
+                                        self.dataset.projects.keys(),
+                                        client_to_server_q,
+                                        server_to_client_q_dict) as cache:
             cache_clients = {
                 project_name: CoqProjectBuildCacheClient(
-                    cache.client_to_server,
-                    cache.server_to_client_dict[project_name],
+                    client_to_server_q,
+                    server_to_client_q_dict[project_name],
                     project_name)
                 for project_name in self.dataset.projects.keys()
             }
@@ -129,7 +137,8 @@ class TestExtractCache(unittest.TestCase):
                     project,
                     head,
                     lambda x: {},
-                    coq_version)
+                    coq_version,
+                    block=True)
                 self.logger.debug(f"Success {project_name}")
             # assert that the other float commit was not checked out
             self.assertEqual(coq_float.commit_sha, coq_float.reset_head)
