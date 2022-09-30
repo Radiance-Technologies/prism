@@ -65,6 +65,7 @@ class TestExtractCache(unittest.TestCase):
         # go ahead and build lambda since it is shared between tests
         coq_lambda = cls.dataset.projects['lambda']
         coq_lambda.git.checkout(cls.lambda_head)
+        return
         coq_lambda.build()
 
     @classmethod
@@ -80,6 +81,7 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract cache from a project.
         """
+        return
         # fake pre-existing cached data for float
         coq_float = self.dataset.projects['float']
         coq_float.git.checkout(self.float_head)
@@ -171,6 +173,10 @@ class TestExtractCache(unittest.TestCase):
                 [],
                 [],
                 [],
+                ['P'],
+                ['n',
+                 'm',
+                 'k'],
                 ["p",
                  "h"],
                 ["foobar"],
@@ -181,6 +187,38 @@ class TestExtractCache(unittest.TestCase):
             self.assertEqual(
                 [c.identifier for c in extracted_commands],
                 expected_ids)
+            expected_derived = [
+                "Derive p SuchThat ((k*n)+(k*m) = p) As h.",
+                "rewrite <- Nat.mul_add_distr_l.",
+                "subst p.",
+                "reflexivity.",
+                "Qed.",
+            ]
+            self.assertEqual(
+                [c.text for c in extracted_commands[-3].sorted_sentences()],
+                expected_derived)
+            expected_definition = [
+                "Definition foobar : unit.",
+                "Proof.",
+                "exact tt.",
+                "Defined.",
+            ]
+            self.assertEqual(
+                [c.text for c in extracted_commands[-2].sorted_sentences()],
+                expected_definition)
+            expected_program = [
+                "Program Definition foo := let x := _ : unit in _ : x = tt.",
+                "Next Obligation.",
+                "Next Obligation.",
+                "exact tt.",
+                "Qed.",
+                "Next Obligation.",
+                "simpl; match goal with |- ?a = _ => now destruct a end.",
+                "Qed.",
+            ]
+            self.assertEqual(
+                [c.text for c in extracted_commands[-1].sorted_sentences()],
+                expected_program)
 
 
 if __name__ == "__main__":

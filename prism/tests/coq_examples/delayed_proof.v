@@ -28,7 +28,7 @@ Next Obligation.
 exact tt.
 Qed.
 (* Finish proof of foobar *)
-Qed.
+Defined.
 (* Start next obligation of foo *)
 Next Obligation.
 simpl; match goal with |- ?a = _ => now destruct a end.

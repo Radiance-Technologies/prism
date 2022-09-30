@@ -105,3 +105,5 @@ PRINT_ALL_IDENT_PATTERN = regex_from_options(
     True,
     False,
     compile=True)
+
+OBLIGATION_ID_PATTERN = re.compile(r"(?P<proof_id>\w+)_obligation_\d+")
