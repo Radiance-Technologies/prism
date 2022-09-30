@@ -450,16 +450,15 @@ class CacheExtractor:
         client_to_server_q, server_to_client_q_dict = create_cpbcs_qs(
             manager,
             client_keys)
-        with CoqProjectBuildCacheServer(
-                self.cache_dir,
-                client_keys,
-                client_to_server_q,
-                server_to_client_q_dict,
-                **self.cache_kwargs) as self.cache_server:
+        with CoqProjectBuildCacheServer(self.cache_dir,
+                                        client_keys,
+                                        client_to_server_q,
+                                        server_to_client_q_dict,
+                                        **self.cache_kwargs) as cache_server:
             self.cache_clients = {
                 project.name: CoqProjectBuildCacheClient(
-                    self.cache_server.client_to_server,
-                    self.cache_server.server_to_client_dict[project.name],
+                    cache_server.client_to_server,
+                    cache_server.server_to_client_dict[project.name],
                     project.name) for project in projects
             }
             # Create commit mapper
