@@ -19,6 +19,7 @@ import tqdm
 from seutil import io
 
 from prism.data.build_cache import (
+    CoqProjectBuildCacheClient,
     CoqProjectBuildCacheServer,
     ProjectBuildEnvironment,
     ProjectBuildResult,
@@ -91,7 +92,7 @@ def extract_vernac_commands(
 
 
 def extract_cache(
-    build_cache: CoqProjectBuildCacheServer,
+    build_cache_client: CoqProjectBuildCacheClient,
     switch_manager: SwitchManager,
     project: ProjectRepo,
     commit_sha: str,
@@ -127,8 +128,9 @@ def extract_cache(
 
     Parameters
     ----------
-    build_cache : CoqProjectBuildCache
-        The build cache in which to insert the build artifacts.
+    build_cache_client : CoqProjectBuildCacheClient
+        The client that can insert the build artifacts into the on-disk
+        build cache.
     switch_manager : SwitchManager
         A source of switches in which to process the project.
     project : ProjectRepo
@@ -157,13 +159,13 @@ def extract_cache(
         coq_version = project.metadata.coq_version
     if ((project.name,
          commit_sha,
-         coq_version) not in build_cache
-            or (recache is not None and recache(build_cache,
+         coq_version) not in build_cache_client
+            or (recache is not None and recache(build_cache_client,
                                                 project,
                                                 commit_sha,
                                                 coq_version))):
         extract_cache_new(
-            build_cache,
+            build_cache_client,
             switch_manager,
             project,
             commit_sha,
@@ -172,7 +174,7 @@ def extract_cache(
 
 
 def extract_cache_new(
-        build_cache: CoqProjectBuildCacheServer,
+        build_cache_client: CoqProjectBuildCacheClient,
         switch_manager: SwitchManager,
         project: ProjectRepo,
         commit_sha: str,
@@ -184,8 +186,9 @@ def extract_cache_new(
 
     Parameters
     ----------
-    build_cache : CoqProjectBuildCache
-        The build cache in which to insert the build artifacts.
+    build_cache_client : CoqProjectBuildCacheClient
+        The client that can communicate the build cache to be written to
+        the build cache server
     switch_manager : SwitchManager
         A source of switches in which to process the project.
     project : ProjectRepo
@@ -224,7 +227,7 @@ def extract_cache_new(
         command_data,
         ProjectBuildEnvironment(project.opam_switch.export()),
         ProjectBuildResult(*build_result))
-    build_cache.insert(data)
+    build_cache_client.insert(data)
     # release the switch
     switch_manager.release_switch(project.opam_switch)
     project.opam_switch = original_switch
@@ -235,7 +238,7 @@ class CacheExtractor:
     Class for managing a broad Coq project cache extraction process.
     """
 
-    _avail_cache_kwargs = ["fmt_ext", "num_workers"]
+    _avail_cache_kwargs = ["fmt_ext"]
     _avail_mds_kwargs = ["fmt"]
 
     def __init__(
@@ -254,7 +257,7 @@ class CacheExtractor:
             process_project: Optional[Callable[[ProjectRepo],
                                                VernacDict]] = None,
             **kwargs):
-        cache_kwargs = {
+        self.cache_kwargs = {
             k: v for k,
             v in kwargs.items() if k in self._avail_cache_kwargs
         }
@@ -262,7 +265,7 @@ class CacheExtractor:
             k: v for k,
             v in kwargs.items() if k in self._avail_mds_kwargs
         }
-        self.cache = CoqProjectBuildCacheServer(cache_dir, **cache_kwargs)
+        self.cache_dir = cache_dir
         self.swim = swim
         self.md_storage = MetadataStorage.load(
             metadata_storage_file,
@@ -315,7 +318,8 @@ class CacheExtractor:
         project: ProjectRepo,
         commit_sha: str,
         _result: None,
-        build_cache: CoqProjectBuildCacheServer,
+        build_cache_client_map: Dict[str,
+                                     CoqProjectBuildCacheClient],
         switch_manager: SwitchManager,
         process_project: Callable[[Project],
                                   VernacDict],
@@ -334,8 +338,9 @@ class CacheExtractor:
             The commit to extract cache from
         _result : None
             Left empty for compatibility with `ProjectCommitMapper`
-        build_cache : CoqProjectBuildCache
-            The build cache to create or add to during extraction
+        build_cache_client_map : Dict[str, CoqProjectbuildCacheClient]
+            A mapping from project name to build cache client, used to
+            write extracted cache to disk
         switch_manager : SwitchManager
             A switch manager to use during extraction
         process_project : Callable[[Project], VernacDict]
@@ -348,7 +353,7 @@ class CacheExtractor:
         """
         for coq_version in coq_version_iterator(project, commit_sha):
             extract_cache(
-                build_cache,
+                build_cache_client_map[project.name],
                 switch_manager,
                 project,
                 commit_sha,
@@ -371,7 +376,7 @@ class CacheExtractor:
         """
         return partial(
             CacheExtractor.extract_cache_func,
-            build_cache=self.cache,
+            build_cache_client_map=self.cache_clients,
             switch_manager=self.swim,
             process_project=self.process_project,
             coq_version_iterator=self.coq_version_iterator)
@@ -432,31 +437,43 @@ class CacheExtractor:
                     self.md_storage.projects),
                 desc="Initializing Project instances",
                 total=len(self.md_storage.projects)))
-        # TODO: Create the cache object here, giving it the list of
-        # projects.
-        # Create commit mapper
-        project_looper = ProjectCommitUpdateMapper[None](
-            projects,
-            self.get_commit_iterator_func(),
-            self.get_extract_cache_func(),
-            "Extracting cache",
-            terminate_on_except=False)
-        # Extract cache in parallel
-        results, metadata_storage = project_looper.update_map(extract_nprocs)
-        # report errors
-        with open(log_dir) as f:
-            for p, result in results.items():
-                if isinstance(result, Except):
-                    print(
-                        f"{type(result.exception)} encountered in project {p}:")
-                    print(result.trace)
-                    f.write(
-                        '\n'.join(
-                            [
-                                "###################################################",
-                                f"{type(result.exception)} encountered in project {p}:",
-                                result.trace
-                            ]))
-        # update metadata
-        metadata_storage.dump(metadata_storage, updated_md_storage_file)
-        print("Done")
+        client_keys = [project.name for project in projects]
+        with CoqProjectBuildCacheServer(
+                self.cache_dir,
+                client_keys,
+                **self.cache_kwargs) as self.cache_server:
+            self.cache_clients = {
+                project.name: CoqProjectBuildCacheClient(
+                    self.cache_server.client_to_server,
+                    self.cache_server.server_to_client_dict[project.name],
+                    project.name) for project in projects
+            }
+            # Create commit mapper
+            project_looper = ProjectCommitUpdateMapper[None](
+                projects,
+                self.get_commit_iterator_func(),
+                self.get_extract_cache_func(),
+                "Extracting cache",
+                terminate_on_except=False)
+            # Extract cache in parallel
+            results, metadata_storage = project_looper.update_map(extract_nprocs)
+            # report errors
+            with open(log_dir) as f:
+                for p, result in results.items():
+                    if isinstance(result, Except):
+                        print(
+                            f"{type(result.exception)} encountered in project {p}:"
+                        )
+                        print(result.trace)
+                        f.write(
+                            '\n'.join(
+                                [
+                                    "##########################################"
+                                    "#########",
+                                    f"{type(result.exception)} encountered in"
+                                    f" project {p}:",
+                                    result.trace
+                                ]))
+            # update metadata
+            metadata_storage.dump(metadata_storage, updated_md_storage_file)
+            print("Done")

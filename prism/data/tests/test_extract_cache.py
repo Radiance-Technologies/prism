@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 from prism.data.build_cache import (
+    CoqProjectBuildCacheClient,
     CoqProjectBuildCacheServer,
     ProjectBuildEnvironment,
     ProjectBuildResult,
@@ -31,7 +32,6 @@ class TestExtractCache(unittest.TestCase):
     TEST_DIR = Path(__file__).parent
     CACHE_DIR = TEST_DIR / "project_build_cache"
 
-    @unittest.skip("Will fix on subsequent MR")
     @classmethod
     def setUpClass(cls):
         """
@@ -64,23 +64,30 @@ class TestExtractCache(unittest.TestCase):
         coq_lambda.git.checkout(cls.lambda_head)
         coq_lambda.build()
 
-    @unittest.skip("Will fix on subsequent MR")
     @classmethod
     def tearDownClass(cls):
         """
         Remove on-disk cache and project directories.
         """
-        shutil.rmtree(cls.CACHE_DIR)
+        if os.path.exists(cls.CACHE_DIR):
+            shutil.rmtree(cls.CACHE_DIR)
         for project_root in cls.dir_list:
-            shutil.rmtree(project_root)
+            if os.path.exists(project_root):
+                shutil.rmtree(project_root)
 
-    @unittest.skip("Will fix on subsequent MR")
     def test_extract_cache(self):
         """
         Test the function to extract cache from a project.
         """
-        with CoqProjectBuildCacheServer(self.CACHE_DIR) as cache:
-            cache_client = cache.client
+        with CoqProjectBuildCacheServer(self.CACHE_DIR,
+                                        self.dataset.projects.keys()) as cache:
+            cache_clients = {
+                project_name: CoqProjectBuildCacheClient(
+                    cache.client_to_server,
+                    cache.server_to_client_dict[project_name],
+                    project_name)
+                for project_name in self.dataset.projects.keys()
+            }
             # fake pre-existing cached data for float
             coq_float = self.dataset.projects['float']
             coq_float.git.checkout(self.float_head)
@@ -92,7 +99,7 @@ class TestExtractCache(unittest.TestCase):
                 ProjectBuildResult(0,
                                    "",
                                    ""))
-            cache_client.insert(dummy_float_data)
+            cache_clients['float'].insert(dummy_float_data)
             coq_float.git.checkout(coq_float.reset_head)
             self.assertEqual(coq_float.commit_sha, coq_float.reset_head)
             # assert that lambda is not already cached
@@ -117,7 +124,7 @@ class TestExtractCache(unittest.TestCase):
                     continue
                 project: ProjectRepo
                 extract_cache(
-                    cache,
+                    cache_clients[project.name],
                     self.swim,
                     project,
                     head,
@@ -138,7 +145,6 @@ class TestExtractCache(unittest.TestCase):
                                 self.lambda_head,
                                 coq_version)))
 
-    @unittest.skip("Will fix on subsequent MR")
     def test_extract_vernac_commands(self):
         """
         Test the function to extract vernac commands from a project.
