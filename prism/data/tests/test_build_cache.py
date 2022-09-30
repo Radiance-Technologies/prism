@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import List
 
 from prism.data.build_cache import (
-    CoqProjectBuildCache,
+    CoqProjectBuildCacheClient,
+    CoqProjectBuildCacheServer,
     ProjectBuildEnvironment,
     ProjectBuildResult,
     ProjectCommitData,
@@ -37,77 +38,82 @@ class TestCoqProjectBuildCache(unittest.TestCase):
         """
         Test all aspects of the cache with subtests.
         """
-        uneventful_result = ProjectBuildResult(0, "", "")
-        environment = ProjectBuildEnvironment(OpamAPI.active_switch.export())
-        for project in self.dataset.projects.values():
-            command_data = {}
-            project: ProjectRepo
-            for filename in project.get_file_list():
-                file_commands: List[
-                    VernacCommandData] = command_data.setdefault(
-                        filename,
-                        list())
-                for sentence in project.get_sentences(
-                        filename,
-                        sentence_extraction_method=SEM.HEURISTIC,
-                        return_locations=True,
-                        glom_proofs=False):
-                    location = sentence.location
-                    sentence = sentence.text
-                    command_type, identifier = ParserUtils.extract_identifier(sentence)
-                    file_commands.append(
-                        VernacCommandData(
-                            identifier,
-                            command_type,
-                            None,
-                            str(sentence),
-                            SexpList([SexpString("foo"),
-                                      SexpString("bar")]),
-                            location))
-                break  # one file is enough to test
-            data = ProjectCommitData(
-                project.metadata,
-                command_data,
-                environment,
-                uneventful_result)
-            expected_path = (
-                self.cache_dir / project.name / data.project_metadata.commit_sha
-                / '.'.join(
-                    [
-                        data.project_metadata.coq_version.replace(".",
-                                                                  "_"),
-                        self.cache.fmt_ext
-                    ]))
-            with self.subTest(f"get_path_{project.name}"):
-                self.assertEqual(
-                    expected_path,
-                    self.cache.get_path_from_data(data))
-            with self.subTest(f"update_{project.name}_fail"):
-                with self.assertRaises(RuntimeError):
-                    self.cache.update(data)
-                self.assertFalse(
-                    Path(self.cache.get_path_from_data(data)).exists())
-            with self.subTest(f"insert_{project.name}"):
-                self.cache.insert(data)
-                with self.assertRaises(RuntimeError):
-                    self.cache.insert(data)
-                self.assertTrue(
-                    Path(self.cache.get_path_from_data(data)).exists())
-            with self.subTest(f"update_{project.name}"):
-                self.cache.update(data)
-            with self.subTest(f"get_{project.name}"):
-                retrieved = self.cache.get(
-                    project.name,
-                    data.project_metadata.commit_sha,
-                    data.project_metadata.coq_version)
-                self.assertEqual(retrieved, data)
+        projects: List[ProjectRepo] = list(self.dataset.projects.values())
+        project_names = [p.name for p in projects]
+        with CoqProjectBuildCacheServer(self.cache_dir, project_names) as cache:
+            uneventful_result = ProjectBuildResult(0, "", "")
+            environment = ProjectBuildEnvironment(
+                OpamAPI.active_switch.export())
+            for project in projects:
+                cache_client = CoqProjectBuildCacheClient(
+                    cache.client_to_server,
+                    cache.server_to_client_dict[project.name],
+                    project.name)
+                command_data = {}
+                project: ProjectRepo
+                for filename in project.get_file_list():
+                    file_commands: List[
+                        VernacCommandData] = command_data.setdefault(
+                            filename,
+                            list())
+                    for sentence in project.get_sentences(
+                            filename,
+                            sentence_extraction_method=SEM.HEURISTIC,
+                            return_locations=True,
+                            glom_proofs=False):
+                        location = sentence.location
+                        sentence = sentence.text
+                        command_type, identifier = \
+                            ParserUtils.extract_identifier(sentence)
+                        file_commands.append(
+                            VernacCommandData(
+                                identifier,
+                                command_type,
+                                None,
+                                str(sentence),
+                                SexpList(
+                                    [SexpString("foo"),
+                                     SexpString("bar")]),
+                                location))
+                    break  # one file is enough to test
+                data = ProjectCommitData(
+                    project.metadata,
+                    command_data,
+                    environment,
+                    uneventful_result)
+                expected_path = (
+                    self.cache_dir / project.name
+                    / data.project_metadata.commit_sha / '.'.join(
+                        [
+                            data.project_metadata.coq_version.replace(".",
+                                                                      "_"),
+                            cache.fmt_ext
+                        ]))
+                with self.subTest(f"get_path_{project.name}"):
+                    self.assertEqual(
+                        expected_path,
+                        cache.get_path_from_data(data))
+                with self.subTest(f"update_{project.name}_fail"):
+                    self.assertFalse(
+                        Path(cache.get_path_from_data(data)).exists())
+                with self.subTest(f"insert_{project.name}"):
+                    cache_client.insert(data, block=True)
+                    self.assertTrue(
+                        Path(cache.get_path_from_data(data)).exists())
+                with self.subTest(f"update_{project.name}"):
+                    cache_client.update(data, block=True)
+                with self.subTest(f"get_{project.name}"):
+                    retrieved = cache.get(
+                        project.name,
+                        data.project_metadata.commit_sha,
+                        data.project_metadata.coq_version)
+                    self.assertEqual(retrieved, data)
 
     @classmethod
     def setUpClass(cls) -> None:
         """
         Set up an on-disk cache to share among all unit tests.
         """
-        cls.cache = CoqProjectBuildCache(cls.cache_dir)
         cls.storage = MetadataStorage.load(
             _PROJECT_EXAMPLES_PATH / "project_metadata.yml")
         cls.dir_list = [

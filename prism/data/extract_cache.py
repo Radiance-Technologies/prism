@@ -19,7 +19,7 @@ import tqdm
 from seutil import io
 
 from prism.data.build_cache import (
-    CoqProjectBuildCache,
+    CoqProjectBuildCacheServer,
     ProjectBuildEnvironment,
     ProjectBuildResult,
     ProjectCommitData,
@@ -91,18 +91,19 @@ def extract_vernac_commands(
 
 
 def extract_cache(
-    build_cache: CoqProjectBuildCache,
+    build_cache: CoqProjectBuildCacheServer,
     switch_manager: SwitchManager,
     project: ProjectRepo,
     commit_sha: str,
     process_project: Callable[[Project],
                               VernacDict],
     coq_version: Optional[str] = None,
-    recache: Optional[Callable[[CoqProjectBuildCache,
-                                ProjectRepo,
-                                str,
-                                str],
-                               bool]] = None
+    recache: Optional[Callable[
+        [CoqProjectBuildCacheServer,
+         ProjectRepo,
+         str,
+         str],
+        bool]] = None
 ) -> None:
     r"""
     Extract data from project commit and insert into `build_cache`.
@@ -171,7 +172,7 @@ def extract_cache(
 
 
 def extract_cache_new(
-        build_cache: CoqProjectBuildCache,
+        build_cache: CoqProjectBuildCacheServer,
         switch_manager: SwitchManager,
         project: ProjectRepo,
         commit_sha: str,
@@ -261,7 +262,7 @@ class CacheExtractor:
             k: v for k,
             v in kwargs.items() if k in self._avail_mds_kwargs
         }
-        self.cache = CoqProjectBuildCache(cache_dir, **cache_kwargs)
+        self.cache = CoqProjectBuildCacheServer(cache_dir, **cache_kwargs)
         self.swim = swim
         self.md_storage = MetadataStorage.load(
             metadata_storage_file,
@@ -314,7 +315,7 @@ class CacheExtractor:
         project: ProjectRepo,
         commit_sha: str,
         _result: None,
-        build_cache: CoqProjectBuildCache,
+        build_cache: CoqProjectBuildCacheServer,
         switch_manager: SwitchManager,
         process_project: Callable[[Project],
                                   VernacDict],
@@ -383,7 +384,7 @@ class CacheExtractor:
 
     @staticmethod
     def recache(
-            build_cache: CoqProjectBuildCache,
+            build_cache: CoqProjectBuildCacheServer,
             project: ProjectRepo,
             commit_sha: str,
             coq_version: str) -> bool:
@@ -431,6 +432,8 @@ class CacheExtractor:
                     self.md_storage.projects),
                 desc="Initializing Project instances",
                 total=len(self.md_storage.projects)))
+        # TODO: Create the cache object here, giving it the list of
+        # projects.
         # Create commit mapper
         project_looper = ProjectCommitUpdateMapper[None](
             projects,

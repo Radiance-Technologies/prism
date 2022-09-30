@@ -7,7 +7,8 @@ from prism.util.swim import AutoSwitchManager
 
 if __name__ == "__main__":
     HOME = "/home/whenderson"
-    default_commits_path = f"{HOME}/projects/PEARLS/prism/pearls/dataset/default_commits.yml"
+    default_commits_path = \
+        f"{HOME}/projects/PEARLS/prism/pearls/dataset/default_commits.yml"
     cache_dir = f"{HOME}/projects/PEARLS/caching"
     mds_file = f"{HOME}/projects/PEARLS/prism/pearls/dataset/agg_coq_repos.yml"
     create_default_switches(7)
