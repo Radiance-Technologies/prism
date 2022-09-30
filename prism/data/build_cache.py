@@ -1,6 +1,7 @@
 """
 Tools for handling repair mining cache.
 """
+import multiprocessing as mp
 import os
 import re
 import subprocess
@@ -413,12 +414,18 @@ class CoqProjectBuildCacheServer:
         expected that this object will be used by a single producer OR
         in a read-only context.
         """
-        self.client_to_server = Queue()
+        self.manager = mp.Manager()
+        """
+        Process manager for queues.
+        """
+        self.client_to_server = self.manager.Queue()
         """
         Queue for clients to send cache messages to write to this object
         acting as a cache-writing server.
         """
-        self.server_to_client_dict = {k: Queue() for k in self.client_keys}
+        self.server_to_client_dict = {
+            k: self.manager.Queue() for k in self.client_keys
+        }
         """
         Dictionary of queues for sending messages from server to client
         """
