@@ -653,7 +653,7 @@ class CoqProjectBuildCacheServer:
             Whether to wait for the write operation to complete.
             This argument currently has no effect; the method always
             blocks.
-            The argument is allowed to maintain a uniform signature 
+            The argument is allowed to maintain a uniform signature
             with `CoqProjectBuildCacheClient.write`.
 
         Raises
