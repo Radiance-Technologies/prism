@@ -353,6 +353,9 @@ class CoqProjectBuildCacheClient:
         ----------
         data : ProjectCommitData
             The object to be cached.
+        block : bool, optional
+            Whether to wait for the write operation to complete, by
+            default False.
 
         Raises
         ------
