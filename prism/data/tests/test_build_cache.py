@@ -1,6 +1,7 @@
 """
 Test suite for `prism.data.build_cache`.
 """
+import multiprocessing as mp
 import shutil
 import unittest
 from pathlib import Path
@@ -13,6 +14,7 @@ from prism.data.build_cache import (
     ProjectBuildResult,
     ProjectCommitData,
     VernacCommandData,
+    create_cpbcs_qs,
 )
 from prism.data.dataset import CoqProjectBaseDataset
 from prism.language.heuristic.util import ParserUtils
@@ -40,14 +42,21 @@ class TestCoqProjectBuildCache(unittest.TestCase):
         """
         projects: List[ProjectRepo] = list(self.dataset.projects.values())
         project_names = [p.name for p in projects]
-        with CoqProjectBuildCacheServer(self.cache_dir, project_names) as cache:
+        manager = mp.Manager()
+        client_to_server, server_to_client_dict = create_cpbcs_qs(
+            manager,
+            project_names)
+        with CoqProjectBuildCacheServer(self.cache_dir,
+                                        project_names,
+                                        client_to_server,
+                                        server_to_client_dict) as cache:
             uneventful_result = ProjectBuildResult(0, "", "")
             environment = ProjectBuildEnvironment(
                 OpamAPI.active_switch.export())
             for project in projects:
                 cache_client = CoqProjectBuildCacheClient(
-                    cache.client_to_server,
-                    cache.server_to_client_dict[project.name],
+                    client_to_server,
+                    server_to_client_dict[project.name],
                     project.name)
                 command_data = {}
                 project: ProjectRepo
