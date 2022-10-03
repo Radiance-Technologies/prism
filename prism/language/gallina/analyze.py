@@ -4,7 +4,6 @@ Provides methods for extracting Gallina terms from parsed s-expressions.
 Adapted from `roosterize.parser.SexpAnalyzer`
 at https://github.com/EngineeringSoftware/roosterize/.
 """
-from __future__ import annotations
 
 import enum
 import functools
@@ -162,7 +161,10 @@ class ControlFlag(enum.Enum):
 
 class SexpInfo:
     """
-    Defines varies structs that may be results of SexpAnalyzer.
+    Defines various structs that may be results of SexpAnalyzer methods.
+
+    Note that many of the methods in this class have not been updated to
+    be compatible with versions of Coq newer than 8.10.2.
     """
 
     @dataclass
@@ -264,7 +266,11 @@ class SexpInfo:
         beg_charno: int
         end_charno: int
 
-        def __contains__(self, other: Union[SexpInfo.Loc, int, float]) -> bool:
+        def __contains__(
+                self,
+                other: Union['SexpInfo.Loc',
+                             int,
+                             float]) -> bool:
             """
             Return whether this location contains another.
 
@@ -280,7 +286,7 @@ class SexpInfo:
             else:
                 return NotImplemented
 
-        def __lt__(self, other: Union[SexpInfo.Loc, int, float]) -> bool:
+        def __lt__(self, other: Union['SexpInfo.Loc', int, float]) -> bool:
             """
             Return whether this location is less than another.
 
@@ -294,7 +300,7 @@ class SexpInfo:
             else:
                 return NotImplemented
 
-        def __gt__(self, other: Union[SexpInfo.Loc, int, float]) -> bool:
+        def __gt__(self, other: Union['SexpInfo.Loc', int, float]) -> bool:
             """
             Return whether this location is greater than another.
 
@@ -310,8 +316,8 @@ class SexpInfo:
 
         def __or__(
             self,
-            other: SexpInfo.Loc,
-        ) -> SexpInfo.Loc:
+            other: 'SexpInfo.Loc',
+        ) -> 'SexpInfo.Loc':
             """
             Generate a location containing union of two locs.
 
@@ -424,7 +430,7 @@ class SexpInfo:
                 unicode_offsets)
             return SexpInfo.Loc(**kwargs)
 
-        def shift(self, offset: int) -> SexpInfo.Loc:
+        def shift(self, offset: int) -> 'SexpInfo.Loc':
             """
             Shift the character positions of this location.
 
@@ -497,7 +503,7 @@ class SexpInfo:
                         ])
                 ])
 
-        def union(self, *others: Tuple[SexpInfo.Loc, ...]) -> SexpInfo.Loc:
+        def union(self, *others: Tuple['SexpInfo.Loc', ...]) -> 'SexpInfo.Loc':
             """
             Get the union of this location and another.
 
@@ -526,9 +532,9 @@ class SexpInfo:
         @classmethod
         def span(
                 cls,
-                loc: SexpInfo.Loc,
-                *others: Tuple[SexpInfo.Loc,
-                               ...]) -> SexpInfo.Loc:
+                loc: 'SexpInfo.Loc',
+                *others: Tuple['SexpInfo.Loc',
+                               ...]) -> 'SexpInfo.Loc':
             """
             Get the union of all given locations.
 
@@ -1614,55 +1620,58 @@ class SexpAnalyzer:
         return locs
 
     @classmethod
-    def is_ltac(cls, sexp: Union[str, SexpNode]) -> bool:
+    def is_ltac(cls, vernac: Union[str, SexpNode, SexpInfo.Vernac]) -> bool:
         """
         Determine whether the given sexp contains Ltac (see below).
 
         Parameters
         ----------
-        sexp : str or SexpNode
+        vernac : str or SexpNode or SexpInfo.Vernac
             An s-expression, presumed to be correspond to a valid AST of
             a Vernacular command.
             If a string is given, then it is implicitly parsed to an
             s-expression.
+            Alternatively, an analyzed Vernacular command may be
+            provided (e.g., as obtained from `analyze_vernac`).
 
         Returns
         -------
         bool
-            True if the s-expression contains Ltac, False otherwise.
+            True if the input comprises Ltac, False otherwise.
 
         Raises
         ------
         IllegalSexpOperationException
-            If `sexp` is not a `SexpNode` and fails to parse to one.
+            If `vernac` is a string and fails to parse to a `SexpNode`.
         SexpAnalyzingException
-            If `sexp` does nto conform .
+            If `vernac` is a string or `SexpNode` and does not conform
+            to the expected structure of a Vernacular command.
 
         Notes
         -----
         This function does not simply detect Ltac in a strict sense but
         also determines whether the given input corresponds to a
-        sentence that would occur while in proof mode (such as
+        sentence that would occur only while in proof mode (such as
         ``Proof.``, ``Qed.``, or a brace/bullet).
         """  # noqa: B950
-        if not isinstance(sexp, SexpNode):
-            sexp = SexpParser.parse(sexp)
-        vernac = cls.analyze_vernac(sexp, with_flags=False)
+        # TODO: Rename function to be more accurate
+        if not isinstance(vernac, SexpInfo.Vernac):
+            if not isinstance(vernac, SexpNode):
+                vernac = SexpParser.parse(vernac)
+            vernac = cls.analyze_vernac(vernac, with_flags=False)
         if vernac.extend_type is not None:
-            # The sexp has a VernacExtend command
-            if cls._vt_proof_extend_regex.search(
-                    vernac.extend_type) is not None:
-                # The sexp is part of a proof
+            if cls._vt_proof_extend_regex.match(vernac.extend_type) is not None:
+                # The sentence is part of a proof
                 return True
             else:
-                # The sexp is defining new tactics or otherwise not
+                # The sentence is defining new tactics or otherwise not
                 # part of a proof
                 return False
-        elif cls._vt_proof_regex.search(vernac.vernac_type) is not None:
-            # The sexp is part of a proof
+        elif cls._vt_proof_regex.match(vernac.vernac_type) is not None:
+            # The sentence is part of a proof
             return True
         else:
-            # The sexp is not ltac-related and not part of a proof
+            # The sentence is not ltac-related and not part of a proof
             return False
 
     @classmethod

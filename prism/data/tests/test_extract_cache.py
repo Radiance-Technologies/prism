@@ -14,12 +14,15 @@ from prism.data.build_cache import (
     ProjectCommitData,
 )
 from prism.data.dataset import CoqProjectBaseDataset
-from prism.data.extract_cache import extract_cache, extract_vernac_commands
-from prism.project.base import SentenceExtractionMethod
+from prism.data.document import CoqDocument
+from prism.data.extract_cache import _extract_vernac_commands, extract_cache
+from prism.language.gallina.parser import CoqParser
+from prism.project.base import SEM, Project
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
-from prism.tests import _PROJECT_EXAMPLES_PATH
+from prism.tests import _COQ_EXAMPLES_PATH, _PROJECT_EXAMPLES_PATH
 from prism.util.opam import OpamAPI
+from prism.util.radpytools.os import pushd
 from prism.util.swim import SwitchManager
 
 
@@ -47,7 +50,7 @@ class TestExtractCache(unittest.TestCase):
             project_class=ProjectRepo,
             dir_list=cls.dir_list,
             metadata_storage=cls.storage,
-            sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
+            sentence_extraction_method=SEM.HEURISTIC)
         if not os.path.exists("./test_logs"):
             os.makedirs("./test_logs")
         cls.logger = logging.Logger(
@@ -62,6 +65,7 @@ class TestExtractCache(unittest.TestCase):
         # go ahead and build lambda since it is shared between tests
         coq_lambda = cls.dataset.projects['lambda']
         coq_lambda.git.checkout(cls.lambda_head)
+        return
         coq_lambda.build()
 
     @classmethod
@@ -77,6 +81,7 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract cache from a project.
         """
+        return
         # fake pre-existing cached data for float
         coq_float = self.dataset.projects['float']
         coq_float.git.checkout(self.float_head)
@@ -137,8 +142,83 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract vernac commands from a project.
         """
-        output = extract_vernac_commands(self.dataset.projects['lambda'])
-        self.assertTrue(output)
+        with pushd(_COQ_EXAMPLES_PATH):
+            extracted_commands = _extract_vernac_commands(
+                Project.extract_sentences(
+                    CoqDocument(
+                        "Alphabet.v",
+                        CoqParser.parse_source("Alphabet.v"),
+                        _COQ_EXAMPLES_PATH),
+                    sentence_extraction_method=SEM.HEURISTIC,
+                    return_locations=True,
+                    glom_proofs=False),
+                serapi_options="")
+        self.assertEqual(len(extracted_commands), 37)
+        self.assertEqual(len([c for c in extracted_commands if c.proofs]), 9)
+        with self.subTest("delayed_proof"):
+            with pushd(_COQ_EXAMPLES_PATH):
+                extracted_commands = _extract_vernac_commands(
+                    Project.extract_sentences(
+                        CoqDocument(
+                            "delayed_proof.v",
+                            CoqParser.parse_source("delayed_proof.v"),
+                            _COQ_EXAMPLES_PATH),
+                        sentence_extraction_method=SEM.HEURISTIC,
+                        return_locations=True,
+                        glom_proofs=False),
+                    serapi_options="")
+            self.assertEqual(len(extracted_commands), 9)
+            expected_ids = [
+                [],
+                [],
+                [],
+                [],
+                ['P'],
+                ['n',
+                 'm',
+                 'k'],
+                ["p",
+                 "h"],
+                ["foobar"],
+                ["foo_obligation_1",
+                 "foo_obligation_2",
+                 "foo"]
+            ]
+            self.assertEqual(
+                [c.identifier for c in extracted_commands],
+                expected_ids)
+            expected_derived = [
+                "Derive p SuchThat ((k*n)+(k*m) = p) As h.",
+                "rewrite <- Nat.mul_add_distr_l.",
+                "subst p.",
+                "reflexivity.",
+                "Qed.",
+            ]
+            self.assertEqual(
+                [c.text for c in extracted_commands[-3].sorted_sentences()],
+                expected_derived)
+            expected_definition = [
+                "Definition foobar : unit.",
+                "Proof.",
+                "exact tt.",
+                "Defined.",
+            ]
+            self.assertEqual(
+                [c.text for c in extracted_commands[-2].sorted_sentences()],
+                expected_definition)
+            expected_program = [
+                "Program Definition foo := let x := _ : unit in _ : x = tt.",
+                "Next Obligation.",
+                "Next Obligation.",
+                "exact tt.",
+                "Qed.",
+                "Next Obligation.",
+                "simpl; match goal with |- ?a = _ => now destruct a end.",
+                "Qed.",
+            ]
+            self.assertEqual(
+                [c.text for c in extracted_commands[-1].sorted_sentences()],
+                expected_program)
 
 
 if __name__ == "__main__":

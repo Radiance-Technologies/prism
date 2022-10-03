@@ -2,7 +2,7 @@
 Utilities for regular expressions.
 """
 import re
-from typing import Iterable
+from typing import Iterable, Union
 
 
 def regex_from_options(
@@ -10,7 +10,9 @@ def regex_from_options(
         must_start: bool,
         must_end: bool,
         group: bool = False,
-        compile: bool = True) -> re.Pattern:
+        compile: bool = True,
+        flags: Union[int,
+                     re.RegexFlag] = 0) -> re.Pattern:
     """
     Make a regular expression for matching mutually exclusive options.
 
@@ -27,6 +29,8 @@ def regex_from_options(
     compile : bool, optional
         Whether to compile the regular expression before returning or
         not, by default True.
+    flags : Union[int, re.RegexFlag], optional
+        Flags to pass when `compile` is True.
 
     Returns
     -------
@@ -38,5 +42,5 @@ def regex_from_options(
         regex = f"({regex})"
     regex = f"{'^' if must_start else ''}{regex}{'$' if must_end else ''}"
     if compile:
-        regex = re.compile(regex)
+        regex = re.compile(regex, flags=flags)
     return regex
