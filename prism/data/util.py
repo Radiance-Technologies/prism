@@ -16,6 +16,7 @@ from prism.util.swim import SwitchManager
 def get_project(
         root_path: str,
         metadata_storage: MetadataStorage,
+        n_build_workers: int,
         project_name: str) -> ProjectRepo:
     """
     Get the identified project's `ProjectRepo` representation.
@@ -24,14 +25,16 @@ def get_project(
     return ProjectRepo(
         repo_path,
         metadata_storage,
-        sentence_extraction_method=SentenceExtractionMethod.SERAPI)
+        sentence_extraction_method=SentenceExtractionMethod.SERAPI,
+        num_cores=n_build_workers)
 
 
 def get_project_func(  # noqa: D103
         root_path: str,
-        metadata_storage: MetadataStorage) -> Callable[[str],
-                                                       ProjectRepo]:
-    return partial(get_project, root_path, metadata_storage)
+        metadata_storage: MetadataStorage,
+        n_build_workers: int = 1) -> Callable[[str],
+                                              ProjectRepo]:
+    return partial(get_project, root_path, metadata_storage, n_build_workers)
 
 
 def get_default_commit_iterator(

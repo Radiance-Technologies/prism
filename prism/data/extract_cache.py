@@ -241,6 +241,14 @@ def extract_cache_new(
     project.opam_switch = original_switch
 
 
+def cache_extract_commit_iterator(iterator: CommitIterator):
+    """
+    Provide default commit iterator for cache extraction.
+    """
+    for item in iterator:
+        yield item.hexsha
+
+
 class CacheExtractor:
     """
     Class for managing a broad Coq project cache extraction process.
@@ -302,8 +310,12 @@ class CacheExtractor:
             default_commits: Dict[str,
                                   List[str]],
             commit_iterator_cls: Type[CommitIterator]) -> Iterator[str]:
-        starting_commit_sha = default_commits[project.metadata.project_name]
-        return commit_iterator_cls(project, starting_commit_sha)
+        for remote in project.remotes:
+            remote.fetch()
+        starting_commit_sha = default_commits[project.metadata.project_name][0]
+        return cache_extract_commit_iterator(
+            commit_iterator_cls(project,
+                                starting_commit_sha))
 
     def get_commit_iterator_func(
             self) -> Callable[[ProjectRepo],
@@ -359,7 +371,9 @@ class CacheExtractor:
             A function that returns an iterable over allowable coq
             versions
         """
-        for coq_version in coq_version_iterator(project, commit_sha):
+        for coq_version in tqdm.tqdm(coq_version_iterator(project,
+                                                          commit_sha),
+                                     desc="Coq version"):
             extract_cache(
                 build_cache_client_map[project.name],
                 switch_manager,
@@ -411,7 +425,9 @@ class CacheExtractor:
             root_path: str,
             log_dir: Optional[str] = None,
             updated_md_storage_file: Optional[str] = None,
-            extract_nprocs: int = 8) -> None:
+            extract_nprocs: int = 8,
+            force_serial: bool = False,
+            n_build_workers: int = 1) -> None:
         """
         Build all projects at `root_path` and save updated metadata.
 
@@ -440,27 +456,39 @@ class CacheExtractor:
         projects = list(
             tqdm.tqdm(
                 Pool(20).imap(
-                    get_project_func(root_path,
-                                     self.md_storage),
+                    get_project_func(
+                        root_path,
+                        self.md_storage,
+                        n_build_workers),
                     self.md_storage.projects),
                 desc="Initializing Project instances",
                 total=len(self.md_storage.projects)))
-        client_keys = [project.name for project in projects]
-        manager = mp.Manager()
-        client_to_server_q, server_to_client_q_dict = create_cpbcs_qs(
-            manager,
-            client_keys)
+        if force_serial:
+            client_keys = None
+            client_to_server_q = None
+            server_to_client_q_dict = None
+        else:
+            client_keys = [project.name for project in projects]
+            manager = mp.Manager()
+            client_to_server_q, server_to_client_q_dict = create_cpbcs_qs(
+                manager,
+                client_keys)
         with CoqProjectBuildCacheServer(self.cache_dir,
                                         client_keys,
                                         client_to_server_q,
                                         server_to_client_q_dict,
                                         **self.cache_kwargs) as cache_server:
-            self.cache_clients = {
-                project.name: CoqProjectBuildCacheClient(
-                    cache_server.client_to_server,
-                    cache_server.server_to_client_dict[project.name],
-                    project.name) for project in projects
-            }
+            if force_serial:
+                self.cache_clients = {
+                    project.name: cache_server for project in projects
+                }
+            else:
+                self.cache_clients = {
+                    project.name: CoqProjectBuildCacheClient(
+                        cache_server.client_to_server,
+                        cache_server.server_to_client_dict[project.name],
+                        project.name) for project in projects
+                }
             # Create commit mapper
             project_looper = ProjectCommitUpdateMapper[None](
                 projects,
@@ -469,7 +497,9 @@ class CacheExtractor:
                 "Extracting cache",
                 terminate_on_except=False)
             # Extract cache in parallel
-            results, metadata_storage = project_looper.update_map(extract_nprocs)
+            results, metadata_storage = project_looper.update_map(
+                extract_nprocs,
+                force_serial)
             # report errors
             with open(log_dir) as f:
                 for p, result in results.items():

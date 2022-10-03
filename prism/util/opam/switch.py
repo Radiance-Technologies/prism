@@ -6,7 +6,7 @@ import os
 import re
 import tempfile
 import warnings
-from dataclasses import InitVar, dataclass, field, fields
+from dataclasses import InitVar, asdict, dataclass, field, fields
 from functools import cached_property, reduce
 from os import PathLike
 from pathlib import Path
@@ -713,3 +713,17 @@ class OpamSwitch:
                     for name, metadata in field_value:
                         s.append(f'package "{name}"{metadata}\n')
             return ''.join(s)
+
+        def serialize(self):
+            """
+            Serialize an instance of this dataclass.
+
+            Otherwise, sometimes `opam_root` is a Path, which cannot be
+            serialized automatically.
+            """
+            output = asdict(self)
+            force_to_str = ["opam_root", "switch_name", "is_clone"]
+            for k, v in output.items():
+                if k in force_to_str and v is not None:
+                    output[k] = str(v)
+            return output

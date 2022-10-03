@@ -55,7 +55,7 @@ class CommitIterator:
     def __init__(
         self,
         repo: ProjectRepo,
-        commit_sha: str,
+        commit_sha: Optional[str] = None,
         march_strategy: Optional[
             CommitTraversalStrategy] = CommitTraversalStrategy.NEW_FIRST):
         """
@@ -65,11 +65,9 @@ class CommitIterator:
         ----------
         repo : ProjectRepo
             Repo, the commits of which we wish to iterate through.
-
         commit_sha : str
             Initial commit which we wish to treat as the starting point
             for the iteration
-
         march_strategy : CommitTraversalStrategy
             The particular method of iterating over the repo which
             we wish to use.
@@ -79,14 +77,16 @@ class CommitIterator:
         # repo when the iterator is constructed) it is assumed that
         # the head of the repo at construction time is the furthest
         # forward that we are interested in traversing.
-        self._repo_initial_head = repo.commit(repo.reset_head)
+        if commit_sha is None:
+            commit_sha = repo.reset_head
+        self._repo_initial_head = repo.commit(commit_sha)
         parent_list = list(repo.commit(self._repo_initial_head).iter_parents())
         self._commits = [self._repo_initial_head] + parent_list
         self._commit_sha = commit_sha
         self._commit_sha_list = [x.hexsha for x in self._commits]
-        self._commit_idx = self._commit_sha_list.index(self._commit_sha)
         if self._commit_sha not in self._commit_sha_list:
             raise KeyError("Commit sha supplied to CommitIterator not in repo")
+        self._commit_idx = self._commit_sha_list.index(self._commit_sha)
 
         self._march_strategy = march_strategy
         nmf = CommitTraversalStrategy.NEW_FIRST

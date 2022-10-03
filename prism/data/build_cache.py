@@ -155,6 +155,7 @@ class ProjectBuildEnvironment:
         """
         self.current_version = setuptools_scm.get_version()
         match = self.SHA_regex.search(self.current_version)
+        self.switch_config = str(self.switch_config)
         if match is not None:
             # replace abbreviated hash with full hash to guarantee
             # the hash remains unambiguous in the future
@@ -459,6 +460,10 @@ class CoqProjectBuildCacheServer:
         Dictionary mapping incoming function calls from the
         client-to-server queue.
         """
+        if client_keys and (self.client_to_server is None
+                            or self.server_to_client_dict is None):
+            raise RuntimeError(
+                "If client keys are provided, queues must be provided as well.")
 
     def __contains__(  # noqa: D105
             self,
@@ -483,7 +488,11 @@ class CoqProjectBuildCacheServer:
         """
         if self.client_keys:
             # Send poison pill
-            self.client_to_server.put(BuildCacheMsg(None, "poison pill"))
+            try:
+                self.client_to_server.put(BuildCacheMsg(None, "poison pill"))
+            except AttributeError:
+                # We shouldn't ever get here, but just in case...
+                self._worker_proc.kill()
             # Allow any remaining writes to complete
             # Note: if this ends up being buggy, maybe try setting a
             # timeout for join and then calling self._worker_proc.kill()
@@ -696,3 +705,6 @@ class CoqProjectBuildCacheServer:
                 " method when clients are connected to the server.")
         else:
             self._write(data, block)
+
+    insert = write
+    apply = write
