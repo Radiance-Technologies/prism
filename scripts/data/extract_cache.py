@@ -14,7 +14,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--root",
         default=str(pathlib.Path.home() / "projects" / "PEARLS"))
-    args = parser.parse_known_args()
+    args, _ = parser.parse_known_args()
     ROOT: str = args.root
     parser.add_argument(
         "--default-commits-path",
@@ -35,10 +35,10 @@ if __name__ == "__main__":
     mds_file: str = args.mds_file
     project_root_path: str = args.project_root_path
     log_dir: str = args.log_dir
-    extract_nprocs: int = args.extract_nprocs
-    n_build_workers: int = args.n_build_workers
-    force_serial: bool = args.force_serial
-    num_switches: int = args.num_switches
+    extract_nprocs: int = int(args.extract_nprocs)
+    n_build_workers: int = int(args.n_build_workers)
+    force_serial: bool = bool(args.force_serial)
+    num_switches: int = int(args.num_switches)
     # Do things
     create_default_switches(num_switches)
     swim = AutoSwitchManager()
