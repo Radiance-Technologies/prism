@@ -2,15 +2,17 @@
 Test suite for automatic eviction in SwitchManagers.
 """
 
-import unittest
-from prism.util.swim.auto import AutoSwitchManager
-from prism.util.opam.formula import PackageFormula
-from prism.util.opam import OpamAPI, OpamSwitch
-import tempfile
-from seutil import bash
-from multiprocessing import Process
-import time
 import os
+import tempfile
+import time
+import unittest
+from multiprocessing import Process
+
+from seutil import bash
+
+from prism.util.opam import OpamAPI, OpamSwitch
+from prism.util.opam.formula import PackageFormula
+from prism.util.swim.auto import AutoSwitchManager
 
 
 class TestEvict(unittest.TestCase):
@@ -28,9 +30,10 @@ class TestEvict(unittest.TestCase):
         self.manager = AutoSwitchManager([self.root.name], max_pool_size=1)
 
     def test_eviction(self):
-        sw = self.manager.get_switch(PackageFormula.parse("\"conf-python-3-7\""))
+        sw = self.manager.get_switch(
+            PackageFormula.parse("\"conf-python-3-7\""))
         self.assertTrue("conf-python-3-7" in sw.run("opam list").stdout)
-        self.manager.release_switch(sw) 
+        self.manager.release_switch(sw)
         sw = self.manager.get_switch(PackageFormula.parse("\"conf-python-3\""))
         self.assertTrue("conf-python-3" in sw.run("opam list").stdout)
         self.manager.release_switch(sw)
@@ -38,7 +41,8 @@ class TestEvict(unittest.TestCase):
         # one original empty switch + 1 pool switch
         # won't remove original, uncloned switch because then
         # opam won't switch to clones using the parent's name...
-        self.assertEqual(len(self.manager.switches),2)
-        
+        self.assertEqual(len(self.manager.switches), 2)
+
+
 if __name__ == '__main__':
     unittest.main()
