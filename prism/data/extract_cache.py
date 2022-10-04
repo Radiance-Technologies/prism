@@ -277,6 +277,7 @@ def _start_proof_block(
         conjectures[post_proof_id] = sentence
         partial_proof_stacks[post_proof_id] = []
 
+
 def expand_idents(serapi, id_cache, ast):
 
     def query_qualid_memo(ident) -> str:
@@ -292,7 +293,7 @@ def expand_idents(serapi, id_cache, ast):
 
     def str_of_qualid(serqualid) -> str:
         dirpath = serqualid[1][1]
-        ident   = serqualid[2][1]
+        ident = serqualid[2][1]
         modules = [mod[1].get_content() for mod in dirpath]
         modules.append(ident.get_content())
         return ".".join(modules)
@@ -300,8 +301,8 @@ def expand_idents(serapi, id_cache, ast):
     def qualid_of_str(qualid_str) -> SexpNode:
         parts = qualid_str.split(".")
         ident = id_of_str(parts[-1])
-        modules = [id_of_str(x) for x in parts[0:-1]]
-        dirpath = SexpList([SexpString("DirPath"),SexpList(modules)])
+        modules = [id_of_str(x) for x in parts[0 :-1]]
+        dirpath = SexpList([SexpString("DirPath"), SexpList(modules)])
         return SexpList([SexpString("Ser_Qualid"), dirpath, ident])
 
     def rewrite_ids(sexp):
@@ -311,7 +312,8 @@ def expand_idents(serapi, id_cache, ast):
             queried = query_qualid_memo(qualid_str)
             result = qualid_str if queried is None else queried
             return (qualid_of_str(result), SexpNode.RecurAction.StopRecursion)
-        is_id = sexp.is_list() and len(sexp) > 0 and sexp[0].get_content() == "Id"
+        is_id = sexp.is_list() and len(sexp) > 0 and sexp[0].get_content(
+        ) == "Id"
         if is_id:
             id_str = sexp[1].get_content()
             if "#" in id_str:
@@ -322,7 +324,6 @@ def expand_idents(serapi, id_cache, ast):
         return (sexp, SexpNode.RecurAction.ContinueRecursion)
 
     ast.modify_recur(pre_children_modify=rewrite_ids)
-
 
 
 def _start_program(
@@ -472,7 +473,8 @@ def _extract_vernac_commands(
     finished_proof_stacks: Dict[str,
                                 List[Tuple[str,
                                            Proof]]] = {}
-    expanded_ids: Dict[str, str] = {}
+    expanded_ids: Dict[str,
+                       str] = {}
     # A partitioned list of sentences that occur at the beginning or
     # in the middle of a proof each paired with the goals that
     # result after the sentence is executed and the type and the
