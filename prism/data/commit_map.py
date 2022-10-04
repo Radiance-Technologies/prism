@@ -95,7 +95,9 @@ def _project_commit_fmap(
     os.chdir(project.path)
     iterator = get_commit_iterator(project)
     result = None
-    for commit in tqdm.tqdm(iterator, desc=f"Commits: {project.name}"):
+    for commit in tqdm.tqdm(iterator,
+                            total=None,
+                            desc=f"Commits: {project.name}"):
         if is_terminated:
             break
         try:
