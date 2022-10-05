@@ -2,6 +2,7 @@
 Script to perform cache extraction.
 """
 import argparse
+import os
 import pathlib
 
 from prism.data.extract_cache import CacheExtractor
@@ -29,6 +30,7 @@ if __name__ == "__main__":
     parser.add_argument("--n-build-workers", default=1)
     parser.add_argument("--force-serial", action="store_true")
     parser.add_argument("--num-switches", default=7)
+    parser.add_argument("--profile", action="store_true")
     args = parser.parse_args()
     default_commits_path: str = args.default_commits_path
     cache_dir: str = args.cache_dir
@@ -39,6 +41,7 @@ if __name__ == "__main__":
     n_build_workers: int = int(args.n_build_workers)
     force_serial: bool = bool(args.force_serial)
     num_switches: int = int(args.num_switches)
+    profile = bool(args.profile)
     # Do things
     create_default_switches(num_switches)
     swim = AutoSwitchManager()
@@ -47,9 +50,28 @@ if __name__ == "__main__":
         mds_file,
         swim,
         default_commits_path)
-    cache_extractor.run(
-        project_root_path,
-        log_dir,
-        extract_nprocs=extract_nprocs,
-        force_serial=force_serial,
-        n_build_workers=n_build_workers)
+    if not profile:
+        cache_extractor.run(
+            project_root_path,
+            log_dir,
+            extract_nprocs=extract_nprocs,
+            force_serial=force_serial,
+            n_build_workers=n_build_workers)
+    else:
+        import cProfile
+        import tracemalloc
+        with cProfile.Profile() as pr:
+            tracemalloc.start()
+            cache_extractor.run(
+                project_root_path,
+                log_dir,
+                extract_nprocs=extract_nprocs,
+                force_serial=force_serial,
+                n_build_workers=n_build_workers,
+                profile=True)
+            pr.dump_stats(os.path.join(log_dir, "profile.out"))
+            snapshot = tracemalloc.take_snapshot()
+            mem_stats = snapshot.statistics('lineno')
+            with open(os.path.join(log_dir, "mem_profile.out"), "wt") as f:
+                for stat in mem_stats:
+                    print(stat, file=f)

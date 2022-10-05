@@ -164,7 +164,7 @@ class CommitIterator:
             tmp_idx = self._newest_commit
             self._newest_commit = self._newest_commit - 1
             return self._commits[tmp_idx]
-        elif self._oldest_commit < len(self._commits):
+        elif self._oldest_commit and self._oldest_commit < len(self._commits):
             tmp_idx = self._oldest_commit
             self._oldest_commit = self._oldest_commit + 1
             return self._commits[tmp_idx]

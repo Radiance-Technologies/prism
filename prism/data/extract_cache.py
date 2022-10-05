@@ -1,7 +1,10 @@
 """
 Module for storing cache extraction functions.
 """
+import calendar
 import multiprocessing as mp
+import os
+from datetime import datetime
 from functools import partial
 from multiprocessing import Pool
 from pathlib import Path
@@ -246,7 +249,12 @@ def cache_extract_commit_iterator(iterator: CommitIterator):
     Provide default commit iterator for cache extraction.
     """
     for item in iterator:
-        yield item.hexsha
+        # Define the minimum date; convert it to seconds since epoch
+        limit_date = datetime(2019, 1, 1, 0, 0, 0)
+        limit_epoch = calendar.timegm(limit_date.timetuple())
+        # committed_date is in seconds since epoch
+        if item.committed_date and item.committed_date >= limit_epoch:
+            yield item.hexsha
 
 
 class CacheExtractor:
@@ -312,7 +320,11 @@ class CacheExtractor:
             commit_iterator_cls: Type[CommitIterator]) -> Iterator[str]:
         for remote in project.remotes:
             remote.fetch()
-        starting_commit_sha = default_commits[project.metadata.project_name][0]
+        try:
+            starting_commit_sha = default_commits[
+                project.metadata.project_name][0]
+        except IndexError:
+            return []
         return cache_extract_commit_iterator(
             commit_iterator_cls(project,
                                 starting_commit_sha))
@@ -427,7 +439,8 @@ class CacheExtractor:
             updated_md_storage_file: Optional[str] = None,
             extract_nprocs: int = 8,
             force_serial: bool = False,
-            n_build_workers: int = 1) -> None:
+            n_build_workers: int = 1,
+            profile: bool = False) -> None:
         """
         Build all projects at `root_path` and save updated metadata.
 
@@ -463,6 +476,8 @@ class CacheExtractor:
                     self.md_storage.projects),
                 desc="Initializing Project instances",
                 total=len(self.md_storage.projects)))
+        if profile and len(projects) > 4:
+            projects = projects[: 3]
         if force_serial:
             client_keys = None
             client_to_server_q = None
@@ -501,7 +516,9 @@ class CacheExtractor:
                 extract_nprocs,
                 force_serial)
             # report errors
-            with open(log_dir) as f:
+            if not os.path.exists(log_dir):
+                os.makedirs(log_dir)
+            with open(os.path.join(log_dir, "extract_cache.log"), "wt") as f:
                 for p, result in results.items():
                     if isinstance(result, Except):
                         print(
