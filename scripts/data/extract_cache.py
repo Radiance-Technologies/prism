@@ -2,10 +2,15 @@
 Script to perform cache extraction.
 """
 import argparse
+import logging
 import os
 import pathlib
+from datetime import datetime
 
-from prism.data.extract_cache import CacheExtractor
+from prism.data.extract_cache import (
+    CacheExtractor,
+    cache_extract_commit_iterator,
+)
 from prism.data.setup import create_default_switches
 from prism.util.swim import AutoSwitchManager
 
@@ -42,6 +47,13 @@ if __name__ == "__main__":
     force_serial: bool = bool(args.force_serial)
     num_switches: int = int(args.num_switches)
     profile = bool(args.profile)
+    # Force redirect the root logger to a file
+    # This might break due to multiprocessing. If so, it should just
+    # be disabled
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_file_name = f"extraction_log_{timestamp}.log"
+    log_file_path = os.path.join(log_dir, log_file_name)
+    logging.basicConfig(filename=log_file_path, force=True)
     # Do things
     create_default_switches(num_switches)
     swim = AutoSwitchManager()
@@ -49,7 +61,8 @@ if __name__ == "__main__":
         cache_dir,
         mds_file,
         swim,
-        default_commits_path)
+        default_commits_path,
+        cache_extract_commit_iterator)
     if not profile:
         cache_extractor.run(
             project_root_path,

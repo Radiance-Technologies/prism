@@ -6,16 +6,17 @@ import multiprocessing as mp
 import os
 from datetime import datetime
 from functools import partial
+from logging import warn
 from multiprocessing import Pool
 from pathlib import Path
 from typing import (
     Callable,
     Dict,
+    Generator,
     Iterable,
     Iterator,
     List,
     Optional,
-    Type,
     Union,
 )
 
@@ -39,11 +40,7 @@ from prism.language.heuristic.util import ParserUtils
 from prism.project.base import SEM, Project
 from prism.project.exception import ProjectBuildError
 from prism.project.metadata.storage import MetadataStorage
-from prism.project.repo import (
-    ChangedCoqCommitIterator,
-    CommitIterator,
-    ProjectRepo,
-)
+from prism.project.repo import ChangedCoqCommitIterator, ProjectRepo
 from prism.util.opam.version import Version
 from prism.util.radpytools.os import pushd
 from prism.util.swim import SwitchManager
@@ -244,10 +241,15 @@ def extract_cache_new(
     project.opam_switch = original_switch
 
 
-def cache_extract_commit_iterator(iterator: CommitIterator):
+def cache_extract_commit_iterator(
+        project: ProjectRepo,
+        starting_commit_sha: str) -> Generator[str,
+                                               None,
+                                               None]:
     """
     Provide default commit iterator for cache extraction.
     """
+    iterator = ChangedCoqCommitIterator(project, starting_commit_sha)
     for item in iterator:
         # Define the minimum date; convert it to seconds since epoch
         limit_date = datetime(2019, 1, 1, 0, 0, 0)
@@ -271,8 +273,9 @@ class CacheExtractor:
             metadata_storage_file: str,
             swim: SwitchManager,
             default_commits_path: str,
-            commit_iterator_cls: Type[
-                CommitIterator] = ChangedCoqCommitIterator,
+            commit_iterator_factory: Callable[[ProjectRepo,
+                                               str],
+                                              Iterator[str]],
             coq_version_iterator: Optional[Callable[[Project,
                                                      str],
                                                     Iterable[Union[
@@ -285,49 +288,88 @@ class CacheExtractor:
             k: v for k,
             v in kwargs.items() if k in self._avail_cache_kwargs
         }
+        """
+        Keyword arguments for constructing the project cache build
+        server
+        """
         mds_kwargs = {
             k: v for k,
             v in kwargs.items() if k in self._avail_mds_kwargs
         }
+        """
+        Keyword arguments for constructing the metadata storage
+        """
         self.cache_dir = cache_dir
+        """
+        Directory the cache will be read from and written to
+        """
         self.swim = swim
+        """
+        The switch manager used for extraction
+        """
         self.md_storage = MetadataStorage.load(
             metadata_storage_file,
             **mds_kwargs)
+        """
+        The project metadata storage object
+        """
         self.md_storage_file = metadata_storage_file
-        self.commit_iterator_cls = commit_iterator_cls
+        """
+        The project metadata storage file
+        """
+        self.commit_iterator_factory = commit_iterator_factory
+        """
+        The factory function that produces a commit iterator given a
+        project and a starting commmit SHA
+        """
         self.default_commits_path = default_commits_path
+        """
+        Path to a file containing default commits for each project.
+        """
         self.default_commits: Dict[str,
                                    List[str]] = io.load(
                                        self.default_commits_path,
                                        clz=dict)
+        """
+        The default commits for each project.
+        """
 
         if coq_version_iterator is None:
-            self.coq_version_iterator = self._default_coq_version_iterator
-        else:
-            self.coq_version_iterator = coq_version_iterator
+            coq_version_iterator = self._default_coq_version_iterator
+        self.coq_version_iterator = coq_version_iterator
+        """
+        An iterator over coq versions
+        """
 
         if process_project is None:
-            self.process_project = self._default_process_project
-        else:
-            self.process_project = process_project
+            process_project = self._default_process_project
+        self.process_project = process_project
+        """
+        Function to process commits for cache extraction if they do not
+        build
+        """
 
     @staticmethod
     def _commit_iterator_func(
-            project: ProjectRepo,
-            default_commits: Dict[str,
-                                  List[str]],
-            commit_iterator_cls: Type[CommitIterator]) -> Iterator[str]:
+        project: ProjectRepo,
+        default_commits: Dict[str,
+                              List[str]],
+        commit_iterator_factory: Callable[[ProjectRepo,
+                                           str],
+                                          Iterator[str]]
+    ) -> Iterator[str]:
+        # Just in case the local repo is out of date
         for remote in project.remotes:
             remote.fetch()
         try:
             starting_commit_sha = default_commits[
                 project.metadata.project_name][0]
         except IndexError:
+            # There's at least one project in the default commits file
+            # without a default commit; skip that one and any others
+            # like it.
             return []
-        return cache_extract_commit_iterator(
-            commit_iterator_cls(project,
-                                starting_commit_sha))
+        return commit_iterator_factory(project, starting_commit_sha)
 
     def get_commit_iterator_func(
             self) -> Callable[[ProjectRepo],
@@ -343,7 +385,7 @@ class CacheExtractor:
         return partial(
             CacheExtractor._commit_iterator_func,
             default_commits=self.default_commits,
-            commit_iterator_cls=self.commit_iterator_cls)
+            commit_iterator_factory=self.commit_iterator_factory)
 
     @staticmethod
     def extract_cache_func(
@@ -440,7 +482,8 @@ class CacheExtractor:
             extract_nprocs: int = 8,
             force_serial: bool = False,
             n_build_workers: int = 1,
-            profile: bool = False) -> None:
+            profile: bool = False,
+            project_names: Optional[List[str]] = None) -> None:
         """
         Build all projects at `root_path` and save updated metadata.
 
@@ -459,6 +502,20 @@ class CacheExtractor:
         extract_nprocs : int, optional
             Number of workers to allow for cache extraction, by default
             8
+        force_serial : bool, optional
+            If this argument is true, disable parallel execution all
+            along the cache extraction pipeline. Useful for debugging.
+            By default False.
+        n_build_workers : int, optional
+            The number of workers to allow per project when executing
+            the `build` function, by default 1.
+        profile : bool, optional
+            If true, only 3 projects are used during extraction to allow
+            for quicker code profiling, by default False.
+        project_names : list of str or None, optional
+            If a list is provided, select only projects with names on
+            the list for extraction. If projects on the given list
+            aren't found, a warning is given. By default None.
         """
         if log_dir is None:
             log_dir = Path(self.md_storage_file).parent
@@ -476,8 +533,19 @@ class CacheExtractor:
                     self.md_storage.projects),
                 desc="Initializing Project instances",
                 total=len(self.md_storage.projects)))
+        # If we're profiling, limit the number of projects
         if profile and len(projects) > 4:
             projects = projects[: 3]
+        # If a list of projects is specified, use only those projects
+        if project_names is not None:
+            projects = [p for p in projects if p.name in project_names]
+            actual_project_set = {p.name for p in projects}
+            requested_project_set = set(project_names)
+            diff = requested_project_set.difference(actual_project_set)
+            if diff:
+                warn(
+                    "The following projects were requested but were not "
+                    f"found: {', '.join(diff)}")
         if force_serial:
             client_keys = None
             client_to_server_q = None
