@@ -28,13 +28,16 @@ from prism.interface.coq.goals import Goal, Goals, Hypothesis
 from prism.interface.coq.names import mod_path_file, print_ker_name
 from prism.interface.coq.re_patterns import (
     ADDED_STATE_PATTERN,
+    NAMED_DEF_ASSUM_PATTERN,
     NEW_IDENT_PATTERN,
+    PRINT_ALL_IDENT_PATTERN,
 )
 from prism.language.sexp import SexpNode
 from prism.language.sexp.exception import IllegalSexpOperationException
 from prism.language.sexp.list import SexpList
 from prism.language.sexp.parser import SexpParser
 from prism.language.sexp.string import SexpString
+from prism.util.iterable import CallableIterator
 from prism.util.logging import default_log_level
 from prism.util.opam import OpamSwitch
 from prism.util.opam.version import OpamVersion
@@ -298,7 +301,6 @@ class SerAPI:
         s = []
         s.append(repr(self._proc))
         s.append('command: ' + str(self._proc.proc.args))
-        s.append(f'args: {self._proc.args}')
         buffer = self._proc.buffer[-last_str_chars :]
         s.append(f'buffer (last {last_str_chars} chars): {buffer}')
         before = self._proc.before[
@@ -322,6 +324,7 @@ class SerAPI:
         s.append('ignorecase: ' + str(self._proc.ignorecase))
         s.append('searchwindowsize: ' + str(self._proc.searchwindowsize))
         s.append('delaybeforesend: ' + str(self._proc.delaybeforesend))
+        s.append('delayafterread: ' + str(self._proc.delayafterread))
         s.append('delayafterclose: ' + str(self._proc.delayafterclose))
         s.append('delayafterterminate: ' + str(self._proc.delayafterterminate))
         return '\n'.join(s)
@@ -369,6 +372,61 @@ class SerAPI:
             return responses, feedback, ast.pretty_format() if ast is not None else ast
         else:
             return responses, feedback
+
+    def get_local_ids(self) -> List[str]:
+        """
+        Get all the in-scope identifiers defined in the current session.
+
+        Returns
+        -------
+        List[str]
+            A list of the in-scope identifiers introduced in this
+            interactive session in the order of their definition.
+
+        Raises
+        ------
+        CoqExn
+            In certain situations where ``Print All.`` may refuse to
+            print due to Coq internal state (such as an opaque proof).
+
+        Notes
+        -----
+        The list of identifiers returned should match that yielded from
+        the ``Print All.`` Vernacular command.
+        """
+        print_all_message = self.query_vernac("Print All.")
+        print_all_message = '\n'.join(print_all_message)
+        idents = []
+        # replace each span covered by a named def or assumption
+        # by a constant-parseable equivalent
+        print_all_message = NAMED_DEF_ASSUM_PATTERN.sub(
+            CallableIterator(
+                f"{m} : "
+                for m in NAMED_DEF_ASSUM_PATTERN.findall(print_all_message)),
+            print_all_message)
+        for line in print_all_message.splitlines():
+            match = PRINT_ALL_IDENT_PATTERN.match(line)
+            if match is not None:
+                idents.extend(
+                    v for v in match.groupdict().values() if v is not None)
+        return idents
+
+    def get_conjecture_id(self) -> Optional[str]:
+        """
+        Get the name of the conjecture currently being proved.
+
+        Returns
+        -------
+        Optional[str]
+            The name of the current conjecture or None if no proof is
+            active.
+        """
+        try:
+            ids = self.query_vernac("Show Conjectures.")
+        except CoqExn:
+            return None
+        ids = '\n'.join(ids)
+        return ids.split()[0]
 
     def has_open_goals(self) -> bool:
         """
@@ -1016,19 +1074,26 @@ class SerAPI:
         Parameters
         ----------
         cmd : str
-            A Coq command.
+            A command complying with the SerAPI protocol.
 
         Returns
         -------
-        _type_
-            _description_
+        List[SexpNode]
+            A list of responses containing the output of the SerAPI
+            command.
+        List[str]
+            A list of messages obtained from Coq as feedback to the
+            command (such as might be observed in an IDE panel).
+        str
+            The raw uninterpreted response from `sertop`.
 
         Raises
         ------
         CoqTimeout
-            _description_
+            If the time to retrieve the result of the command exceeds
+            the configured `timeout`.
         CoqExn
-            _description_
+            If the command resulted in an error within Coq.
         """
         if self.is_dead:
             raise RuntimeError("This SerAPI session has been terminated.")
@@ -1169,5 +1234,5 @@ class SerAPI:
             match = NEW_IDENT_PATTERN.search(msg_info)
             if match is not None:
                 idents.extend(
-                    [m.strip() for m in match.groups("idents")[0].split(",")])
+                    [m.strip() for m in match.groupdict()["idents"].split(",")])
         return idents

@@ -14,9 +14,11 @@ from prism.data.build_cache import (
     ProjectBuildResult,
     ProjectCommitData,
     VernacCommandData,
+    VernacSentence,
     create_cpbcs_qs,
 )
 from prism.data.dataset import CoqProjectBaseDataset
+from prism.interface.coq.goals import Goals
 from prism.language.heuristic.util import ParserUtils
 from prism.language.sexp.list import SexpList
 from prism.language.sexp.string import SexpString
@@ -76,14 +78,19 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                             ParserUtils.extract_identifier(sentence)
                         file_commands.append(
                             VernacCommandData(
-                                identifier,
-                                command_type,
+                                [identifier],
                                 None,
-                                str(sentence),
-                                SexpList(
-                                    [SexpString("foo"),
-                                     SexpString("bar")]),
-                                location))
+                                VernacSentence(
+                                    str(sentence),
+                                    SexpList(
+                                        [SexpString("foo"),
+                                         SexpString("bar")]),
+                                    location,
+                                    command_type,
+                                    Goals([],
+                                          [],
+                                          [],
+                                          []))))
                     break  # one file is enough to test
                 data = ProjectCommitData(
                     project.metadata,
