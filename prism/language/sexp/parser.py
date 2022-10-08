@@ -132,6 +132,7 @@ class SexpParser:
                 elif cur_char == cls.c_quote:
                     # End string literal
                     # Consume the ending quote
+                    quoted.append('"')
                     return_stack[-1].append(SexpString(''.join(quoted)))
                     quoted = None
                 elif cur_char == cls.c_escape:
@@ -157,7 +158,7 @@ class SexpParser:
             elif cur_char == cls.c_quote:
                 # consume the open quote
                 # Start string literal
-                quoted = []
+                quoted = ['"']
             else:
                 # Start a normal token
                 terminal = [cur_char]
