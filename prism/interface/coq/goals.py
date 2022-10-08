@@ -4,6 +4,8 @@ Abstractions of Coq goals and hypotheses.
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
+from prism.util.radpytools.dataclasses import default_field
+
 
 @dataclass
 class Hypothesis:
@@ -96,8 +98,8 @@ class Goals:
     ``coq-serapi/serapi/serapi_goals.mli``.
     """
 
-    foreground_goals: List[Goal]
+    foreground_goals: List[Goal] = default_field([])
     # TODO (AG): Figure out the meaning of the left versus right goals.
-    background_goals: List[Tuple[List[Goal], List[Goal]]]
-    shelved_goals: List[Goal]
-    abandoned_goals: List[Goal]
+    background_goals: List[Tuple[List[Goal], List[Goal]]] = default_field([])
+    shelved_goals: List[Goal] = default_field([])
+    abandoned_goals: List[Goal] = default_field([])

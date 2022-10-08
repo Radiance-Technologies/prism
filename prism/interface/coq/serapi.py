@@ -809,7 +809,7 @@ class SerAPI:
         responses, _, _ = self.send("(Query () Goals)")
         assert responses[1][2][0] == SexpString("ObjList")
         if responses[1][2][1] == SexpList():  # no goals
-            return Goals([], [], [], [])
+            return Goals()
         else:
             assert len(responses[1][2][1]) == 1
 
