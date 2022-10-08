@@ -132,6 +132,7 @@ class SexpParser:
                 elif cur_char == cls.c_quote:
                     # End string literal
                     # Consume the ending quote
+                    quoted.append('"')
                     return_stack[-1].append(SexpString(''.join(quoted)))
                     quoted = None
                 elif cur_char == cls.c_escape:
@@ -157,13 +158,13 @@ class SexpParser:
             elif cur_char == cls.c_quote:
                 # consume the open quote
                 # Start string literal
-                quoted = []
+                quoted = ['"']
             else:
                 # Start a normal token
                 terminal = [cur_char]
             # end if
         if len(return_stack) != 1 or len(return_stack[0]) == 0:
             if len(sexp_str) > 100:
-                sexp_str = sexp_str[: 72] + "..."
-            raise ValueError(f"Malformed sexp: {sexp_str}")
+                sexp_str_err = sexp_str[: 72] + "..."
+            raise ValueError(f"Malformed sexp: {sexp_str_err}")
         return return_stack[0]

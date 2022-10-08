@@ -317,9 +317,9 @@ def _extract_vernac_commands(
     # is not Ltac-related.
     local_ids = {'SerTop'}
     pre_proof_id = None
-    pre_goals = None
+    pre_goals = Goals([], [], [], [])
     post_proof_id = None
-    post_goals = None
+    post_goals = Goals([], [], [], [])
     with SerAPI(serapi_options) as serapi:
         for sentence in sentences:
             # TODO: Optionally filter queries out of results (and

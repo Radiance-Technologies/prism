@@ -321,6 +321,8 @@ class OpamSwitch:
                 kwargs[field] = Version.parse(value, require_quotes=True)
             else:
                 packages = []
+                if not isinstance(value, list):
+                    value = [value]
                 for package in value:
                     package: PackageConstraint = PackageConstraint.parse(
                         package)

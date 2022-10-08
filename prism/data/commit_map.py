@@ -61,15 +61,15 @@ class Except(Generic[T]):
 
 
 def _project_commit_fmap(
-    project: ProjectRepo,
-    get_commit_iterator: Callable[[ProjectRepo],
-                                  Iterator[str]],
-    commit_fmap: Callable[[ProjectRepo,
-                           str,
-                           Optional[T]],
-                          T]
-) -> Union[Optional[T],
-           Except[T]]:
+        project: ProjectRepo,
+        get_commit_iterator: Callable[[ProjectRepo],
+                                      Iterator[str]],
+        commit_fmap: Callable[[ProjectRepo,
+                               str,
+                               Optional[T]],
+                              T],
+        force_serial: bool) -> Union[Optional[T],
+                                     Except[T]]:
     """
     Perform a given action on a project with a given iterator generator.
 
@@ -103,6 +103,8 @@ def _project_commit_fmap(
         try:
             result = commit_fmap(project, commit, result)
         except Exception as e:
+            if force_serial:
+                raise e
             is_terminated = True
             result = Except(result, e, traceback.format_exc())
     return result
@@ -187,7 +189,8 @@ class ProjectCommitMapper(Generic[T]):
         job_list = [
             (p,
              self.get_commit_iterator,
-             self.commit_fmap) for p in self.projects
+             self.commit_fmap,
+             force_serial) for p in self.projects
         ]
         # BUG: Multiprocessing pools may cause an OSError on program
         # exit in Python 3.8 or earlier.
