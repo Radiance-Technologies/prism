@@ -28,11 +28,9 @@ class SexpString(SexpNode):
 
     def __str__(self) -> str:  # noqa: D105
         content = self.content
-        content = content.replace("\\", "\\\\")  # Escape back slash (\)
-        content = content.replace('"', '\\"')  # Escape quote (")
-        if " " in content:
+        if (not (content.startswith('"') and content.endswith('"'))
+                and " " in content):
             content = '"' + content + '"'
-        # end if
         return content
 
     @property
