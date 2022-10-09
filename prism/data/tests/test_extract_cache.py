@@ -81,7 +81,6 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract cache from a project.
         """
-        return
         # fake pre-existing cached data for float
         coq_float = self.dataset.projects['float']
         coq_float.git.checkout(self.float_head)
