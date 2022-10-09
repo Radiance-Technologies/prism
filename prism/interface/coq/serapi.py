@@ -42,7 +42,7 @@ from prism.util.logging import default_log_level
 from prism.util.opam import OpamSwitch
 from prism.util.opam.version import OpamVersion
 from prism.util.radpytools.dataclasses import default_field
-from prism.util.string import escape, normalize_spaces
+from prism.util.string import escape, normalize_spaces, unquote
 
 logger = logging.getLogger(__file__)
 logger.setLevel(default_log_level())
@@ -520,7 +520,8 @@ class SerAPI:
             except IllegalSexpOperationException:
                 constr = responses[0][2][1][0][1]
             assert isinstance(constr, SexpString)
-            self.constr_cache[sexp_str] = normalize_spaces(constr.get_content())
+            self.constr_cache[sexp_str] = normalize_spaces(
+                unquote(constr.get_content()))
         return self.constr_cache[sexp_str]
 
     def pull(self, index: int = -1) -> int:
@@ -1136,7 +1137,7 @@ class SerAPI:
                 assert parsed_item[2][0] == SexpString("CoqExn")
                 assert isinstance(parsed_item[2][1][5][1], SexpString)
                 raise CoqExn(
-                    parsed_item[2][1][5][1].get_content(),
+                    unquote(parsed_item[2][1][5][1].get_content()),
                     str(parsed_item[2]))
             if item.startswith("(Feedback"):
                 try:
@@ -1144,7 +1145,7 @@ class SerAPI:
                     if (msg.is_list() and msg != []
                             and msg[0] == SexpString("Message")):
                         assert msg[4][1].is_string()
-                        feedback.append(msg[4][1].get_content())
+                        feedback.append(unquote(msg[4][1].get_content()))
                 except IndexError:
                     pass
                 continue

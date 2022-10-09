@@ -87,7 +87,7 @@ class TestSerAPI(unittest.TestCase):
                       (
                         (v
                           (ByNotation
-                            (_ ∘ _ ())))
+                            ("_ ∘ _" ())))
                         (loc
                           (
                             (
