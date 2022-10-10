@@ -28,11 +28,6 @@ class OpamAPI:
     This class and its counterpart `OpamSwitch` each maintain the global
     environment as an invariant, i.e., neither ever sets, removes, or
     modifies any environment variables.
-
-    .. warning::
-        This class does not yet fully support the full expressivity of
-        OPAM dependencies as documented at
-        https://opam.ocaml.org/blog/opam-extended-dependencies/.
     """
 
     _SWITCH_INSTALLED_ERROR: ClassVar[
@@ -43,8 +38,8 @@ class OpamAPI:
     def create_switch(
             cls,
             switch_name: str,
-            compiler: Union[str,
-                            Version],
+            compiler: Optional[Union[str,
+                                     Version]],
             opam_root: Optional[PathLike] = None) -> OpamSwitch:
         """
         Create a new switch.
@@ -56,8 +51,9 @@ class OpamAPI:
         ----------
         switch_name : str
             The name of the desired switch.
-        compiler : Union[str, Version]
+        compiler : Union[str, Version] | None
             A version of the OCaml compiler on which to base the switch.
+            If None, then an empty switch is created.
 
         Returns
         -------
@@ -76,10 +72,13 @@ class OpamAPI:
         UserWarning
             If a switch with the given name already exists.
         """
-        if isinstance(compiler, str):
-            # validate string is a version of OCaml
-            compiler = OCamlVersion.parse(compiler)
-        compiler = f"ocaml-base-compiler.{compiler}"
+        if compiler is not None:
+            if isinstance(compiler, str):
+                # validate string is a version of OCaml
+                compiler = OCamlVersion.parse(compiler)
+            compiler = f"ocaml-base-compiler.{compiler}"
+        else:
+            compiler = "--empty"
         command = f'opam switch create {switch_name} {compiler}'
         r = cls.run(command, check=False, opam_root=opam_root)
         if (r.returncode == 2
@@ -147,6 +146,27 @@ class OpamAPI:
         shutil.copytree(origin.path, destination, symlinks=True)
 
         return OpamSwitch(clone_name, opam_root)
+
+    @classmethod
+    def init_root(cls, opam_root: PathLike, bare: bool = True) -> None:
+        """
+        Initialize the Opam state in a new root directory.
+
+        Parameters
+        ----------
+        opam_root : PathLike
+            The root directory of the new Opam installation.
+        bare : bool, optional
+            Whether to not setup a compiler switch or not, by default
+            True (i.e., no compiler switch).
+
+        Raises
+        ------
+        subprocess.CalledProcessError
+            If the ``opam init`` command fails.
+        """
+        command = f"opam init {'--bare' if bare else ''} -y"
+        cls.run(command, check=True, opam_root=opam_root)
 
     @classmethod
     def remove_switch(
