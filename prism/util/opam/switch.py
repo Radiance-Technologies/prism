@@ -16,6 +16,7 @@ from typing import ClassVar, Dict, List, Optional, Tuple, Union
 from seutil import bash
 
 from prism.util.bash import escape
+from prism.util.radpytools.dataclasses import default_field
 
 from .file import OpamFile
 from .formula import LogicalPF, LogOp, PackageConstraint, PackageFormula
@@ -686,11 +687,11 @@ class OpamSwitch:
         """
 
         opam_version: OpamVersion
-        compiler: Optional[List[Package]] = None
-        roots: Optional[List[Package]] = None
-        installed: Optional[List[Package]] = None
-        pinned: Optional[List[Package]] = None
-        package_metadata: Optional[List[PackageMetadata]] = None
+        compiler: List[Package] = default_field([])
+        roots: List[Package] = default_field([])
+        installed: List[Package] = default_field([])
+        pinned: List[Package] = default_field([])
+        package_metadata: List[PackageMetadata] = default_field([])
         opam_root: Optional[str] = None
         switch_name: Optional[str] = None
         is_clone: Optional[str] = None
@@ -703,7 +704,9 @@ class OpamSwitch:
             for f in fields(self):
                 field_name = f.name
                 field_value = getattr(self, field_name)
-                if field_value is None:
+                if (field_value is None
+                        or (isinstance(field_value,
+                                       list) and not field_value)):
                     continue
                 if field_name != "package_metadata":
                     s.append(field_name.replace("_", "-"))
