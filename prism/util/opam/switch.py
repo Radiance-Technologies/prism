@@ -601,7 +601,8 @@ class OpamSwitch:
                     os.rename(dest, tmp)
                     os.rename(src, dest)
                     r = bash.run(
-                        command.split("--")[-1].strip(),
+                        command.split("--",
+                                      maxsplit=3)[-1].strip(),
                         env=env,
                         **kwargs)
                     try:
