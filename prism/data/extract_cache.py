@@ -448,7 +448,21 @@ def extract_vernac_commands(project: ProjectRepo) -> VernacDict:
     """
     command_data = {}
     with pushd(project.dir_abspath):
-        for filename in project.get_file_list():
+        file_list = project.get_file_list()
+        pbar = tqdm.tqdm(
+            file_list,
+            total=len(file_list),
+            desc="extract_vernac_commands")
+        for filename in pbar:
+            # Verify that accompanying vo file exists first
+            pbar.set_description(f"extract_vernac_commands: {filename}")
+            path = Path(filename)
+            vo = path.parent / (path.stem + ".vo")
+            if not os.path.exists(vo):
+                warn(
+                    f"Skipped extraction for file {filename}. "
+                    "No .vo file found.")
+                continue
             command_data[filename] = _extract_vernac_commands(
                 project.get_sentences(
                     filename,
