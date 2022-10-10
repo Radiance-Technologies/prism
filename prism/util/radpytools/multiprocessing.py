@@ -264,7 +264,13 @@ def synchronizedmethod(
         This argument should not be called by keyword and must be
         provided positionally.
     semlock_name : str or None, optional
-        The name of the semaphore/lock
+        The name of the semaphore/lock, by default None.
+        If None, then a name unique to the synchronized method is
+        generated.
+        If it does not already exist, an attribute with the name will be
+        created to store the synchronization primitive.
+        Thus, one may synchronize with an attribute that already exists
+        as an attribute in the class or instance, for example.
     semlock_cls : Callable[..., SemLock], optional
         Nominally, the type of synchronization primitive to associate
         with `semlock_name`.
@@ -341,7 +347,13 @@ def synchronizedproperty(
         This argument should not be called by keyword and must be
         provided positionally.
     semlock_name : str or None, optional
-        The name of the semaphore/lock
+        The name of the semaphore/lock, by default None.
+        If None, then a name unique to the synchronized method is
+        generated.
+        If it does not already exist, an attribute with the name will be
+        created to store the synchronization primitive.
+        Thus, one may synchronize with an attribute that already exists
+        as an attribute in the class or instance, for example.
     semlock_cls : Callable[..., SemLock], optional
         Nominally, the type of synchronization primitive to associate
         with `semlock_name`.
@@ -374,8 +386,19 @@ def synchronizedproperty(
     ...     pool.map(ex.f, tasks)
     [[0, 1, 2, 3, 4], [0, 1, 2, 3, 4, 0, 1, 2, 3, 4]]
     """
-    return synchronizedmethod(
-        property(_func),
-        semlock_name=semlock_name,
-        semlock_cls=semlock_cls,
-        **kwargs)
+
+    def wrap(func):
+        return synchronizedmethod(
+            property(func),
+            semlock_name=semlock_name,
+            semlock_cls=semlock_cls,
+            **kwargs)
+
+    # See if we're called as @synchronizedproperty or
+    # @synchronizedmethod()
+    if _func is None:
+        # called as @synchronizedproperty()
+        return wrap
+
+    # called without parentheses
+    return wrap(_func)
