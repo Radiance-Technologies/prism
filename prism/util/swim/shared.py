@@ -2,9 +2,10 @@
 Defines an auto switch manager accessible from multiple processes.
 """
 
-from multiprocessing.managers import BaseManager
+from multiprocessing.managers import BaseManager, BaseProxy
+from typing import Type
 
-from prism.util.swim.auto import AutoSwitchManager
+from prism.util.swim.base import SwitchManager
 
 # manager starts a process that "manages" an object
 # and takes requests from multiple threads...
@@ -13,21 +14,63 @@ from prism.util.swim.auto import AutoSwitchManager
 # this makes operations on the shared objects prone to
 # interleaving (non-thread-safe)!
 
-_MANAGER = BaseManager()
+SharedSwitchManager = BaseManager
 
-_MANAGER.register("AutoSwitchManager", AutoSwitchManager)
-
-# dies when parent process does, no need to clean up.
-_MANAGER.start()
+SwitchManagerProxy = BaseProxy
 
 
-def SharedSwitchManager(*args, **kwargs):
+def SharedSwitchManagerServer(
+        swim_cls: Type[SwitchManager]) -> SharedSwitchManager:
     """
-    Return a new SharedSwitchManager.
+    Initialize a shared switch manager subprocess.
 
-    Really just an AutoSwitchManager in a shared context.
+    Parameters
+    ----------
+    swim_cls : Type[SwitchManager]
+        The type of `SwitchManager` that will be shared.
 
-    Takes precisely the same args as the
-    AutoSwitchManager constructor.
+    Returns
+    -------
+    SharedSwitchManager
+        A running server that manages requests sent to the shared switch
+        manager.
+
+    See Also
+    --------
+    SharedSwitchManagerClient : To send requests to the shared manager.
     """
-    return _MANAGER.AutoSwitchManager(*args, **kwargs)
+    manager = SharedSwitchManager()
+    manager.register("SwitchManager", swim_cls)
+    # dies when parent process does, no need to clean up.
+    manager.start()
+
+
+def SharedSwitchManagerClient(
+        server: SharedSwitchManager,
+        *args,
+        **kwargs) -> SwitchManagerProxy:
+    """
+    Create a client of the given `SharedSwitchManager` server.
+
+    Parameters
+    ----------
+    server : SharedSwitchManager
+        A switch manager server created by `SharedSwitchManagerServer`.
+    args : Tuple[Any, ...]
+        Positional arguments for the constructor of the switch manager
+        class wich which the `server` was created.
+    kwargs : Dict[str, Any]
+        Keyword arguments for the constructor of the switch manager
+        class wich which the `server` was created.
+
+    Returns
+    -------
+    SwitchManagerProxy
+        A proxy object that behaves outwardly the same as the
+        `SwitchManager` type with which the `server` was created.
+
+    See Also
+    --------
+    SharedSwitchManagerServer : For creation of the shared server.
+    """
+    return server.SwitchManager(*args, **kwargs)
