@@ -46,27 +46,27 @@ class SwitchManager(abc.ABC):
         self._lock = RLock()
 
     @cachedmethod
-    @synchronizedmethod
+    @synchronizedmethod(semlock_name="_lock")
     def _get_switch_config(
             self,
             switch: OpamSwitch) -> OpamSwitch.Configuration:
         return switch.export()
 
-    @synchronizedproperty
+    @synchronizedproperty(semlock_name="_lock")
     def switches(self) -> Set[OpamSwitch]:
         """
         Get the set of switches managed by this instance.
         """
         return self._switches
 
-    @synchronizedproperty
+    @synchronizedproperty(semlock_name="_lock")
     def variables(self) -> Dict[str, Union[bool, int, str]]:
         """
         Get the set of package variables used to evaluate dependencies.
         """
         return self._variables
 
-    @synchronizedmethod
+    @synchronizedmethod(semlock_name="_lock")
     def get_switch(
             self,
             formula: PackageFormula,
@@ -101,7 +101,7 @@ class SwitchManager(abc.ABC):
                 return switch
         raise UnsatisfiableConstraints(formula)
 
-    @synchronizedmethod
+    @synchronizedmethod(semlock_name="_lock")
     def release_switch(self, switch: OpamSwitch) -> None:
         """
         Record that a client is no longer using the given switch.
@@ -115,7 +115,7 @@ class SwitchManager(abc.ABC):
         pass
 
     @cachedmethod
-    @synchronizedmethod
+    @synchronizedmethod(semlock_name="_lock")
     def satisfies(
             self,
             switch: OpamSwitch,
@@ -146,7 +146,7 @@ class SwitchManager(abc.ABC):
         return formula.is_satisfied(dict(config.installed), active_variables)
 
     @cachedmethod
-    @synchronizedmethod
+    @synchronizedmethod(semlock_name="_lock")
     def simplify(
             self,
             switch: OpamSwitch,
