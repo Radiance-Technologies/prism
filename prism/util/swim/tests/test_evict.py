@@ -8,6 +8,7 @@ import unittest
 
 from prism.util.opam import OpamAPI
 from prism.util.opam.formula import PackageFormula
+from prism.util.opam.switch import _allow_unsafe_clone
 from prism.util.swim.auto import AutoSwitchManager
 
 
@@ -38,6 +39,7 @@ class TestEvict(unittest.TestCase):
         """
         Verify that the manager's pool size does not exceed its limit.
         """
+        _allow_unsafe_clone.append(True)
         sw = self.manager.get_switch(
             PackageFormula.parse("\"conf-python-3-7\""))
         self.assertTrue("conf-python-3-7" in sw.run("opam list").stdout)
@@ -50,6 +52,7 @@ class TestEvict(unittest.TestCase):
         # won't remove original, uncloned switch because then
         # opam won't switch to clones using the parent's name...
         self.assertEqual(len(self.manager.switches), 2)
+        _allow_unsafe_clone.pop()
 
 
 if __name__ == '__main__':
