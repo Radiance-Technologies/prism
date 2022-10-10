@@ -4,7 +4,7 @@ Synchronization helpers for multiprocessing.
 
 from multiprocessing import RLock
 from multiprocessing.synchronize import SemLock
-from typing import Any, Callable, Dict, Optional, Type, TypeVar
+from typing import Any, Callable, Dict, Optional, Type, TypeVar, Union
 
 from prism.util.radpytools import descriptor
 
@@ -12,12 +12,35 @@ S = TypeVar('S')
 T = TypeVar('T')
 
 
-def critical(f: Callable[[T],
-                         S] = None,
-             lock: Optional[SemLock] = None) -> Callable[[T],
-                                                         S]:
+def critical(
+    f: Callable[[T],
+                S] = None,
+    lock: Optional[SemLock] = None
+) -> Union[Callable[[Callable[[T],
+                              S]],
+                    Callable[[T],
+                             S]],
+           Callable[[T],
+                    S]]:
     """
-    Wrap a function in a mutex lock/unlock.
+    Wrap a function in a semaphore/lock for thread-safe synchronization.
+
+    Parameters
+    ----------
+    f : Callable[[T], S], optional
+        An arbitrary function.
+        If not provided, then a partially applied wrapper is returned
+        that will synchronize a given function with the given lock.
+    lock : Optional[SemLock], optional
+        A semaphore or lock with which to synchronize `f`.
+        By default, a reentrant lock (`RLock`) is used.
+
+    Returns
+    -------
+    callable
+        Either the given function `f` wrapped with a semaphore/lock or a
+        higher-order function that will synchronize given functions
+        with respect to the given lock.
     """
     if lock is None:
         lock = RLock()
@@ -53,6 +76,10 @@ class _synchronizedmethod(descriptor):
     Synchronization lock for setting semlock attributes on instances
     since semlocks may be shared between methods.
     """
+
+    # NOTE (AG): It looks like I chose a poor example to emulate caching
+    # when basing this on functools.cached_property. Track the
+    # resolution of https://github.com/python/cpython/issues/87634.
 
     def __init__(
             self,
@@ -118,8 +145,8 @@ class _synchronizedmethod(descriptor):
         Notes
         -----
         On first invocation on a given `instance`, a wrapper for the
-        instance's method that manages the mutex is created and assigned
-        to the attribute ``self.wrapper_name``.
+        instance's method that manages the synchronization is created
+        and assigned to the attribute ``self.sync_name``.
         """
         if instance is None and owner is None:
             return self
@@ -201,7 +228,7 @@ class _synchronizedmethod(descriptor):
     @staticmethod
     def get_semlock_name(method_name: str, owner: Type[T]) -> str:
         """
-        Return the canonical name of a method's mutex lock.
+        Return the canonical name of a method's semaphore/lock.
 
         Parameters
         ----------
