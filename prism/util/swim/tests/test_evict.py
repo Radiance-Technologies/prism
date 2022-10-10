@@ -1,35 +1,43 @@
 """
-Test suite for automatic eviction in SwitchManagers.
+Test suite for automatic eviction in `SwitchManager`s.
 """
 
-import os
+import shutil
 import tempfile
-import time
 import unittest
-from multiprocessing import Process
 
-from seutil import bash
-
-from prism.util.opam import OpamAPI, OpamSwitch
+from prism.util.opam import OpamAPI
 from prism.util.opam.formula import PackageFormula
 from prism.util.swim.auto import AutoSwitchManager
 
 
 class TestEvict(unittest.TestCase):
+    """
+    Unit tests for switch eviction.
+    """
 
-    def __init__(self, *args):
-        super().__init__(*args)
-        self.root = tempfile.TemporaryDirectory()
-        # can we do this yet with opam api or does the root need to be set up?
-        bash.run(f"OPAMROOT={self.root.name} opam init --bare -y")
-        # current defaults install things in the switch, which takes forever.
-        # we will do this part manually.
-        #self.sw = OpamAPI.create_switch("test","4.07.1",opam_root=self.root.name)
-        bash.run(f"OPAMROOT={self.root.name} opam switch create test --empty")
+    @classmethod
+    def setUpClass(cls) -> None:
+        """
+        Create a temporary OPAM root with empty (for speed) switch.
+        """
+        cls.root = tempfile.TemporaryDirectory()
+        OpamAPI.init_root(cls.root.name)
+        OpamAPI.create_switch("test", None, opam_root=cls.root.name)
         # give our shared manager the root+switch to play with
-        self.manager = AutoSwitchManager([self.root.name], max_pool_size=1)
+        cls.manager = AutoSwitchManager([cls.root.name], max_pool_size=1)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        """
+        Delete the temporary OPAM root.
+        """
+        shutil.rmtree(cls.root.name)
 
     def test_eviction(self):
+        """
+        Verify that the manager's pool size does not exceed its limit.
+        """
         sw = self.manager.get_switch(
             PackageFormula.parse("\"conf-python-3-7\""))
         self.assertTrue("conf-python-3-7" in sw.run("opam list").stdout)
