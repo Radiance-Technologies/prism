@@ -223,7 +223,7 @@ class ProjectBuildEnvironment:
         """
         self.current_version = setuptools_scm.get_version()
         match = self.SHA_regex.search(self.current_version)
-        self.switch_config = str(self.switch_config)
+        self.switch_config = self.switch_config
         if match is not None:
             # replace abbreviated hash with full hash to guarantee
             # the hash remains unambiguous in the future
