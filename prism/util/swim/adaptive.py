@@ -62,6 +62,38 @@ class AdaptiveSwitchManager(SwitchManager):
         self._last_used[switch] = time.time()
         return clone
 
+    @synchronizedmethod(semlock_name="_lock")
+    def _evict(self) -> None:
+        """
+        Pick a persistent switch to remove and remove it.
+
+        Picks by least recently used. Note that the switch is not simply
+        removed from the managed pool but is instead deleted from the
+        filesystem. This action cannot be undone.
+        """
+        # limit consideration only to switches in the managed pool that
+        # are not clones
+        disqualified_switches = set()
+
+        for switch in self._last_used:
+            if (switch not in self.switches
+                    or switch in self._temporary_switches
+                    or not switch.is_clone):
+                disqualified_switches.add(switch)
+
+        for switch in disqualified_switches:
+            self._last_used.pop(switch)
+
+        if (len(self._last_used) == 0):
+            # nothing to remove
+            return
+
+        lru = sorted(self._last_used, key=lambda x: self._last_used[x])[0]
+
+        OpamAPI.remove_switch(lru)
+
+        self.switches.remove(lru)
+
     def get_switch(
             self,
             formula: PackageFormula,
@@ -158,35 +190,3 @@ class AdaptiveSwitchManager(SwitchManager):
             assert switch.is_clone
             self._temporary_switches.discard(switch)
             OpamAPI.remove_switch(switch)
-
-    @synchronizedmethod(semlock_name="_lock")
-    def _evict(self) -> None:
-        """
-        Pick a persistent switch to remove and remove it.
-
-        Picks by least recently used. Note that the switch is not simply
-        removed from the managed pool but is instead deleted from the
-        filesystem. This action cannot be undone.
-        """
-        # limit consideration only to switches in the managed pool that
-        # are not clones
-        disqualified_switches = set()
-
-        for switch in self._last_used:
-            if (switch not in self.switches
-                    or switch in self._temporary_switches
-                    or not switch.is_clone):
-                disqualified_switches.add(switch)
-
-        for switch in disqualified_switches:
-            self._last_used.pop(switch)
-
-        if (len(self._last_used) == 0):
-            # nothing to remove
-            return
-
-        lru = sorted(self._last_used, key=lambda x: self._last_used[x])[0]
-
-        OpamAPI.remove_switch(lru)
-
-        self.switches.remove(lru)
