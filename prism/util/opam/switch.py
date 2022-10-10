@@ -43,11 +43,6 @@ class OpamSwitch:
 
     Note that OPAM must be installed to use all of the features of this
     class.
-
-    .. warning::
-        This class does not yet fully support the full expressivity of
-        OPAM dependencies as documented at
-        https://opam.ocaml.org/blog/opam-extended-dependencies/.
     """
 
     _whitespace_regex: ClassVar[re.Pattern] = re.compile(r"\s+")
@@ -130,8 +125,21 @@ class OpamSwitch:
         try:
             r = (self.path / '.opam-switch/environment').read_text()
         except FileNotFoundError:
-            raise ValueError(
-                f"No such switch: {self.name} with root {self.root}")
+            # The environment file may not yet exist.
+            # Try to force its creation.
+            r = bash.run(
+                "opam env",
+                env={
+                    "OPAMROOT": self.root,
+                    "OPAMSWITCH": self.name
+                })
+            try:
+                r.check_returncode()
+            except CalledProcessError:
+                raise ValueError(
+                    f"No such switch: {self.name} with root {self.root}")
+            else:
+                r = (self.path / '.opam-switch/environment').read_text()
 
         envs: List[str] = r.split('\n')[::-1]
         for env in envs:
