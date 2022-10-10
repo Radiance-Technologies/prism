@@ -14,7 +14,7 @@ from prism.util.opam import (
     OpamSwitch,
     PackageFormula,
 )
-from prism.util.radpytools.multiprocessing import critical
+from prism.util.radpytools.multiprocessing import synchronizedmethod
 
 from .base import SwitchManager
 from .exception import UnsatisfiableConstraints
@@ -139,7 +139,7 @@ class AdaptiveSwitchManager(SwitchManager):
         self._lock.release()
         return clone
 
-    @critical
+    @synchronizedmethod
     def release_switch(self, switch: OpamSwitch) -> None:
         """
         Record that a client is no longer using the given switch.
@@ -158,7 +158,7 @@ class AdaptiveSwitchManager(SwitchManager):
             self._temporary_switches.discard(switch)
             OpamAPI.remove_switch(switch)
 
-    @critical
+    @synchronizedmethod
     def _evict(self):
         """
         Pick a persistent switch to remove and remove it.

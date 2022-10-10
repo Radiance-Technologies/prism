@@ -7,7 +7,10 @@ from typing import Dict, Iterable, Optional, Set, Union
 
 from prism.util.opam import AssignedVariables, OpamSwitch, PackageFormula
 from prism.util.radpytools import cachedmethod
-from prism.util.radpytools.multiprocessing import critical
+from prism.util.radpytools.multiprocessing import (
+    synchronizedmethod,
+    synchronizedproperty,
+)
 
 from .exception import UnsatisfiableConstraints
 
@@ -43,29 +46,27 @@ class SwitchManager(abc.ABC):
         self._lock = RLock()
 
     @cachedmethod
-    @critical
+    @synchronizedmethod
     def _get_switch_config(
             self,
             switch: OpamSwitch) -> OpamSwitch.Configuration:
         return switch.export()
 
-    @property
-    @critical
+    @synchronizedproperty
     def switches(self) -> Set[OpamSwitch]:
         """
         Get the set of switches managed by this instance.
         """
         return self._switches
 
-    @property
-    @critical
+    @synchronizedproperty
     def variables(self) -> Dict[str, Union[bool, int, str]]:
         """
         Get the set of package variables used to evaluate dependencies.
         """
         return self._variables
 
-    @critical
+    @synchronizedmethod
     def get_switch(
             self,
             formula: PackageFormula,
@@ -100,7 +101,7 @@ class SwitchManager(abc.ABC):
                 return switch
         raise UnsatisfiableConstraints(formula)
 
-    @critical
+    @synchronizedmethod
     def release_switch(self, switch: OpamSwitch) -> None:
         """
         Record that a client is no longer using the given switch.
@@ -114,7 +115,7 @@ class SwitchManager(abc.ABC):
         pass
 
     @cachedmethod
-    @critical
+    @synchronizedmethod
     def satisfies(
             self,
             switch: OpamSwitch,
@@ -145,7 +146,7 @@ class SwitchManager(abc.ABC):
         return formula.is_satisfied(dict(config.installed), active_variables)
 
     @cachedmethod
-    @critical
+    @synchronizedmethod
     def simplify(
             self,
             switch: OpamSwitch,
