@@ -34,3 +34,12 @@ def normalize_spaces(s: str) -> str:
     Also remove leading and trailing whitespace.
     """
     return _whitespace_regex.sub(" ", s).strip()
+
+
+def unquote(s: str) -> str:
+    """
+    Remove starting and ending (double) quotes if present.
+    """
+    if s.startswith('"') and s.endswith('"'):
+        s = s[1 :-1]
+    return s

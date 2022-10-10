@@ -121,23 +121,22 @@ class SexpParser:
                 else:
                     terminal.append(cur_char)
                     continue
+            if escaped:
+                # escape the character
+                cur_char = ("\\" + cur_char).encode().decode("unicode-escape")
+                escaped = False
+            elif cur_char == cls.c_escape:
+                # Escape the next character
+                escaped = True
+                continue
             if quoted is not None:
                 # extend or conclude string literal
-                if escaped:
-                    # escape the character
-                    cur_char = ("\\"
-                                + cur_char).encode().decode("unicode-escape")
-                    quoted.append(cur_char)
-                    escaped = False
-                elif cur_char == cls.c_quote:
+                if cur_char == cls.c_quote:
                     # End string literal
                     # Consume the ending quote
                     quoted.append('"')
                     return_stack[-1].append(SexpString(''.join(quoted)))
                     quoted = None
-                elif cur_char == cls.c_escape:
-                    # Escape the next character
-                    escaped = True
                 else:
                     quoted.append(cur_char)
             elif cur_char.isspace():
