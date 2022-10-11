@@ -2,6 +2,7 @@
 Defines an adaptive switch manager introduces new switches on demand.
 """
 
+import os
 import tempfile
 import time
 from pathlib import Path
@@ -90,7 +91,15 @@ class AdaptiveSwitchManager(SwitchManager):
 
         lru = sorted(self._last_used, key=lambda x: self._last_used[x])[0]
 
+        switch_path = lru.path
+
         OpamAPI.remove_switch(lru)
+
+        # leave an empty placeholder directory stub to ensure that
+        # subsequent clones with generated tempfile names do not clash
+        # with previously evicted ones, thus potentially leading to
+        # incorrect behavior in cached methods
+        os.makedirs(switch_path)
 
         self.switches.remove(lru)
 
