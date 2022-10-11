@@ -312,15 +312,6 @@ def expand_idents(serapi, id_cache, ast):
             queried = query_qualid_memo(qualid_str)
             result = qualid_str if queried is None else queried
             return (qualid_of_str(result), SexpNode.RecurAction.StopRecursion)
-        is_id = sexp.is_list() and len(sexp) > 0 and sexp[0].get_content(
-        ) == "Id"
-        if is_id:
-            id_str = sexp[1].get_content()
-            if "#" in id_str:
-                return (id_of_str(id_str), SexpNode.RecurAction.StopRecursion)
-            queried = query_qualid_memo(id_str)
-            result = id_str if queried is None else queried
-            return (id_of_str(result), SexpNode.RecurAction.StopRecursion)
         return (sexp, SexpNode.RecurAction.ContinueRecursion)
 
     ast.modify_recur(pre_children_modify=rewrite_ids)
@@ -398,6 +389,7 @@ def _is_subproof(post_proof_id: str, ids: List[str]) -> bool:
 
 def _extract_vernac_commands(
         sentences: Iterable[CoqSentence],
+        filename,
         opam_switch: Optional[OpamSwitch] = None,
         serapi_options: str = "",
         use_goals_diff: bool = True) -> List[VernacCommandData]:
@@ -736,6 +728,7 @@ def _extract_vernac_commands_worker(
                 SEM.HEURISTIC,
                 return_locations=True,
                 glom_proofs=False),
+            filename,
             opam_switch=project.opam_switch,
             serapi_options=project.serapi_options)
     except Exception as e:

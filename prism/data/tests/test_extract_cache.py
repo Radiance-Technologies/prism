@@ -172,6 +172,7 @@ class TestExtractCache(unittest.TestCase):
                     sentence_extraction_method=SEM.HEURISTIC,
                     return_locations=True,
                     glom_proofs=False),
+                "Alphabet.v",
                 serapi_options="")
         self.assertEqual(len(extracted_commands), 37)
         self.assertEqual(len([c for c in extracted_commands if c.proofs]), 9)
@@ -186,6 +187,7 @@ class TestExtractCache(unittest.TestCase):
                         sentence_extraction_method=SEM.HEURISTIC,
                         return_locations=True,
                         glom_proofs=False),
+                    "delayed_proof.v",
                     serapi_options="")
             self.assertEqual(len(extracted_commands), 11)
             expected_ids = [
