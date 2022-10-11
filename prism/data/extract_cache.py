@@ -278,7 +278,11 @@ def _start_proof_block(
         partial_proof_stacks[post_proof_id] = []
 
 
-def expand_idents(serapi, id_cache, ast):
+def expand_idents(serapi, id_cache, ast, filename: os.PathLike):
+    path = os.path.dirname(filename).split("/")
+    if path == ['']:
+        path = []
+    modpath = ".".join([dirname.capitalize() for dirname in path])
 
     def query_qualid_memo(ident) -> str:
         try:
@@ -311,6 +315,9 @@ def expand_idents(serapi, id_cache, ast):
             qualid_str = str_of_qualid(sexp)
             queried = query_qualid_memo(qualid_str)
             result = qualid_str if queried is None else queried
+            parts = result.split(".")
+            if parts[0] == "SerTop":
+                result = ".".join([modpath, parts[1]]) if modpath else parts[1]
             return (qualid_of_str(result), SexpNode.RecurAction.StopRecursion)
         return (sexp, SexpNode.RecurAction.ContinueRecursion)
 
@@ -489,7 +496,7 @@ def _extract_vernac_commands(
             text = sentence.text
             _, feedback, sexp = serapi.execute(text, return_ast=True)
             sentence.ast = sexp
-            expand_idents(serapi, expanded_ids, sentence.ast)
+            expand_idents(serapi, expanded_ids, sentence.ast, filename)
             vernac = SexpAnalyzer.analyze_vernac(sentence.ast)
             if vernac.extend_type is None:
                 command_type = vernac.vernac_type
