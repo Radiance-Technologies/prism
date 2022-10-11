@@ -527,6 +527,7 @@ class OpamSwitch:
                         Path(f.name).stem,
                         "0.0",
                         "temp@example.com",
+                        synopsis="Temporary file",
                         depends=formula)))
             # close to ensure contents are flushed
         self.install(f.name, deps_only=True)

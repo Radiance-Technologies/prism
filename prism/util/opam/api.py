@@ -148,7 +148,11 @@ class OpamAPI:
         return OpamSwitch(clone_name, opam_root)
 
     @classmethod
-    def init_root(cls, opam_root: PathLike, bare: bool = True) -> None:
+    def init_root(
+            cls,
+            opam_root: PathLike,
+            bare: bool = True,
+            disable_sandboxing: bool = False) -> None:
         """
         Initialize the Opam state in a new root directory.
 
@@ -159,13 +163,20 @@ class OpamAPI:
         bare : bool, optional
             Whether to not setup a compiler switch or not, by default
             True (i.e., no compiler switch).
+        disable_sandboxing : bool, optional
+            Whether to disable sandboxing of builds or not, by default
+            False.
+            Disabling sandboxing may be critical to successful execution
+            in unprivileged environments such as a Docker container.
 
         Raises
         ------
         subprocess.CalledProcessError
             If the ``opam init`` command fails.
         """
-        command = f"opam init {'--bare' if bare else ''} -y"
+        bare = '--bare' if bare else ''
+        disable_sandboxing = '--disable-sandboxing' if disable_sandboxing else ''
+        command = f"opam init {bare} {disable_sandboxing} -y"
         cls.run(command, check=True, opam_root=opam_root)
 
     @classmethod

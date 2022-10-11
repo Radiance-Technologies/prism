@@ -23,7 +23,7 @@ class TestEvict(unittest.TestCase):
         Create a temporary OPAM root with empty (for speed) switch.
         """
         cls.root = tempfile.TemporaryDirectory()
-        OpamAPI.init_root(cls.root.name)
+        OpamAPI.init_root(cls.root.name, disable_sandboxing=True)
         OpamAPI.create_switch("test", None, opam_root=cls.root.name)
         # give our shared manager the root+switch to play with
         cls.manager = AutoSwitchManager([cls.root.name], max_pool_size=1)
