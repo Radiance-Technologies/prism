@@ -47,7 +47,7 @@ precommit:
     - pip install pre-commit
     - pre-commit install
     - precommit_passed=0
-    - git fetch origin ${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}:${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}
+    - git fetch --force origin ${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}:${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}
     - pre-commit run --files $(git diff-tree --no-commit-id --name-only -r HEAD origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}) || precommit_passed=$?
     - if (( $precommit_passed == 0 )) ; then echo "All pre-commit checks passed"; exit 0; fi
     - files_changes=0
