@@ -1,7 +1,7 @@
 """
 Defines the base class and interface for all switch managers.
 """
-import abc
+
 from multiprocessing import RLock
 from typing import Dict, Iterable, Optional, Set, Union
 
@@ -15,7 +15,7 @@ from prism.util.radpytools.multiprocessing import (
 from .exception import UnsatisfiableConstraints
 
 
-class SwitchManager(abc.ABC):
+class SwitchManager:
     """
     A basic manager that keeps a constant set of switches.
 
