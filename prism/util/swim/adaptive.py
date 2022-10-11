@@ -138,47 +138,43 @@ class AdaptiveSwitchManager(SwitchManager):
             If it is not possible to extend an existing switch to
             satisfy the formula.
         """
-        self._lock.acquire()
+        with self._lock:
+            if (variables is None):
+                # default is no variables
+                variables = {}
 
-        if (variables is None):
-            # default is no variables
-            variables = {}
-
-        closest_switch = None
-        minimum_size = Top()
-        for switch in self.switches:
-            simplified = self.simplify(switch, formula, **variables)
-            if isinstance(simplified, bool):
-                if simplified:
-                    simplified_size = 0
+            closest_switch = None
+            minimum_size = Top()
+            for switch in self.switches:
+                simplified = self.simplify(switch, formula, **variables)
+                if isinstance(simplified, bool):
+                    if simplified:
+                        simplified_size = 0
+                    else:
+                        continue
                 else:
-                    continue
-            else:
-                simplified_size = simplified.size
-            if simplified_size < minimum_size:
-                closest_switch = switch
-                minimum_size = simplified_size
-            if simplified_size == 0:
-                break
-        # clone the closest switch
-        if closest_switch is None:
-            raise UnsatisfiableConstraints(formula)
+                    simplified_size = simplified.size
+                if simplified_size < minimum_size:
+                    closest_switch = switch
+                    minimum_size = simplified_size
+                if simplified_size == 0:
+                    break
+            # clone the closest switch
+            if closest_switch is None:
+                raise UnsatisfiableConstraints(formula)
         if minimum_size > 0:
             # add a new switch to the persistent pool
-            self._lock.release()
             clone = self._clone_switch(switch)
             clone.install_formula(formula)
-            self._lock.acquire()
-            self.switches.add(clone)
-            if (len(self.switches) > self._max_pool_size):
-                self._evict()
-            switch = clone
+            with self._lock:
+                self.switches.add(clone)
+                if (len(self.switches) > self._max_pool_size):
+                    self._evict()
+                switch = clone
         # return a temporary clone
-        self._lock.release()
         clone = self._clone_switch(switch)
-        self._lock.acquire()
-        self._temporary_switches.add(clone)
-        self._lock.release()
+        with self._lock:
+            self._temporary_switches.add(clone)
         return clone
 
     @synchronizedmethod(semlock_name="_lock")
