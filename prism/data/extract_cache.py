@@ -34,6 +34,7 @@ from prism.language.sexp.list import SexpList
 from prism.language.sexp.string import SexpString
 from prism.project.base import SEM, Project
 from prism.project.exception import ProjectBuildError
+from prism.project.iqr import IQR
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ChangedCoqCommitIterator, ProjectRepo
 from seutil import io
@@ -278,12 +279,7 @@ def _start_proof_block(
         partial_proof_stacks[post_proof_id] = []
 
 
-def expand_idents(serapi, id_cache, ast, filename: os.PathLike):
-    path = os.path.dirname(filename).split("/")
-    if path == ['']:
-        path = []
-    modpath = ".".join([dirname.capitalize() for dirname in path])
-
+def expand_idents(serapi, id_cache, ast, filename : os.PathLike, serapi_options : str):
     def query_qualid_memo(ident) -> str:
         try:
             queried = id_cache[ident]
@@ -308,6 +304,20 @@ def expand_idents(serapi, id_cache, ast, filename: os.PathLike):
         modules = [id_of_str(x) for x in parts[0 :-1]]
         dirpath = SexpList([SexpString("DirPath"), SexpList(modules)])
         return SexpList([SexpString("Ser_Qualid"), dirpath, ident])
+
+    iqr = IQR.extract_iqr(serapi_options.split(" "))
+    for (phys, log) in (iqr.Q | iqr.R):
+        if phys == ".":
+            filename = log + filename
+            break
+        if filename.startswith(phys):
+            filename = z.removeprefix(phys)
+            filename = log + filename
+            break
+    path = os.path.dirname(filename).split("/")
+    if path == ['']:
+        path = []
+    modpath = ".".join([dirname.capitalize() for dirname in path])
 
     def rewrite_ids(sexp):
         is_qualid = sexp.is_list() and sexp.head() == "Ser_Qualid"
@@ -496,7 +506,7 @@ def _extract_vernac_commands(
             text = sentence.text
             _, feedback, sexp = serapi.execute(text, return_ast=True)
             sentence.ast = sexp
-            expand_idents(serapi, expanded_ids, sentence.ast, filename)
+            expand_idents(serapi, expanded_ids, sentence.ast, filename, serapi_options)
             vernac = SexpAnalyzer.analyze_vernac(sentence.ast)
             if vernac.extend_type is None:
                 command_type = vernac.vernac_type
