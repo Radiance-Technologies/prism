@@ -107,8 +107,9 @@ def _conclude_proof(
                          str],
     finished_proof_stacks: Dict[str,
                                 List[Tuple[str,
-                                           Proof]]]
-) -> Optional[VernacCommandData]:
+                                           Proof]]],
+    defined_lemmas: Dict[str,
+                         VernacCommandData]) -> Optional[VernacCommandData]:
     r"""
     Complete accumulation of a proof/proved conjecture.
 
@@ -133,6 +134,9 @@ def _conclude_proof(
         A map from conjecture IDs to lists of concluded proof blocks
         (e.g., one block per obligation).
         This map will be modified in-place.
+    defined_lemmas : Dict[str, VernacCommandData]
+        A map from conjecture/obligation IDs to the corresponding cache
+        data structure.
 
     Returns
     -------
@@ -172,11 +176,14 @@ def _conclude_proof(
         # ensure conjecture ID is last
         ids.pop(finished_proof_id, None)
         ids[finished_proof_id] = None
-        return VernacCommandData(
+        lemma = VernacCommandData(
             list(ids),
             None,
             lemma,
             [p for p in proofs if p])
+        for ident in ids:
+            defined_lemmas[ident] = lemma
+        return lemma
     else:
         return None
 
@@ -242,6 +249,63 @@ def _start_proof_block(
         assert post_proof_id not in conjectures
         conjectures[post_proof_id] = (sentence)
         partial_proof_stacks[post_proof_id] = []
+
+
+def _start_program(
+        sentence: CoqSentence,
+        command_type: str,
+        ids: List[str],
+        pre_goals: Optional[Goals],
+        programs: List[SentenceState]):
+    """
+    Start accumulation of a new program.
+
+    Parameters
+    ----------
+    sentence : CoqSentence
+        The sentence that instigated the program.
+    command_type : str
+        The type of the sentence's Vernacular command.
+    ids : List[str]
+        The list of definitions emitted by the program's declaration, if
+        any.
+    pre_goals : Optional[Goals]
+        Proof goals prior to the execution of the sentence, if any.
+    programs : List[SentenceState]
+        The list of all unfinished programs encountered thus far in
+        extraction.
+
+    Returns
+    -------
+    Optional[VernacCommandData]
+        The compiled command data for the program if all of its
+        obligations were automatically resolved or None if some
+        obligations remain.
+    """
+    # Try to determine if all of the obligations were
+    # immediately resolved.
+    program_id = None
+    for new_id in ids:
+        match = OBLIGATION_ID_PATTERN.match(new_id)
+        if match is not None:
+            program_id = match.groupdict()['proof_id']
+            if program_id in ids:
+                break
+    if program_id is not None:
+        # all obligations were resolved
+        return VernacCommandData(
+            list(ids),
+            None,
+            VernacSentence(
+                sentence.text,
+                sentence.ast,
+                sentence.location,
+                command_type,
+                pre_goals))
+    else:
+        # some obligations remain
+        programs.append((sentence, pre_goals, command_type))
+        return None
 
 
 def _extract_vernac_commands(
@@ -315,6 +379,8 @@ def _extract_vernac_commands(
     # identifier of the command.
     # The beginning of each partition is a Vernacular command that
     # is not Ltac-related.
+    defined_lemmas: Dict[str,
+                         VernacCommandData] = {}
     local_ids = {'SerTop'}
     pre_proof_id = None
     pre_goals = Goals()
@@ -357,7 +423,14 @@ def _extract_vernac_commands(
                 # Persist the current goals.
                 # Programs do not open proof mode, so post_proof_id
                 # may be None or refer to another conjecture.
-                programs.append((sentence, pre_goals, command_type))
+                program = _start_program(
+                    sentence,
+                    command_type,
+                    ids,
+                    pre_goals,
+                    programs)
+                if program is not None:
+                    file_commands.append(program)
             elif proof_id_changed:
                 post_goals = serapi.query_goals()
                 if pre_proof_id in local_ids:
@@ -374,7 +447,8 @@ def _extract_vernac_commands(
                             conjectures,
                             partial_proof_stacks,
                             obligation_map,
-                            finished_proof_stacks)
+                            finished_proof_stacks,
+                            defined_lemmas)
                         if completed_lemma is not None:
                             file_commands.append(completed_lemma)
                         continue
@@ -388,6 +462,20 @@ def _extract_vernac_commands(
                         warnings.warn(
                             f"Anomaly detected. '{pre_proof_id}' is an open "
                             f"conjecture but is also already defined. {extra}")
+                        if pre_proof_id in defined_lemmas:
+                            # add to the existing lemma as a new proof
+                            # block
+                            lemma = defined_lemmas[pre_proof_id]
+                            lemma.proofs.append(
+                                [
+                                    ProofSentence(
+                                        sentence.text,
+                                        sentence.ast,
+                                        sentence.location,
+                                        command_type,
+                                        pre_goals)
+                                ])
+                            continue
                 if post_proof_id not in partial_proof_stacks:
                     # We are starting a new proof (or obligation).
                     _start_proof_block(
@@ -404,6 +492,7 @@ def _extract_vernac_commands(
                     assert post_proof_id in partial_proof_stacks
                     proof_stack = partial_proof_stacks[post_proof_id]
                     proof_stack.append((sentence, pre_goals, command_type))
+
             elif post_proof_id is not None and not ids:
                 # we are continuing an open proof
                 assert post_proof_id in partial_proof_stacks
@@ -448,7 +537,7 @@ def extract_vernac_commands(project: ProjectRepo) -> VernacDict:
     """
     command_data = {}
     with pushd(project.dir_abspath):
-        file_list = project.get_file_list()
+        file_list = project.get_file_list(relative=True, dependency_order=True)
         pbar = tqdm.tqdm(
             file_list,
             total=len(file_list),
