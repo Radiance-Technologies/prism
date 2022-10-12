@@ -223,6 +223,63 @@ def _start_proof_block(
         partial_proof_stacks[post_proof_id] = []
 
 
+def _start_program(
+        sentence: CoqSentence,
+        command_type: str,
+        ids: List[str],
+        pre_goals: Optional[Goals],
+        programs: List[SentenceState]):
+    """
+    Start accumulation of a new program.
+
+    Parameters
+    ----------
+    sentence : CoqSentence
+        The sentence that instigated the program.
+    command_type : str
+        The type of the sentence's Vernacular command.
+    ids : List[str]
+        The list of definitions emitted by the program's declaration, if
+        any.
+    pre_goals : Optional[Goals]
+        Proof goals prior to the execution of the sentence, if any.
+    programs : List[SentenceState]
+        The list of all unfinished programs encountered thus far in
+        extraction.
+
+    Returns
+    -------
+    Optional[VernacCommandData]
+        The compiled command data for the program if all of its
+        obligations were automatically resolved or None if some
+        obligations remain.
+    """
+    # Try to determine if all of the obligations were
+    # immediately resolved.
+    program_id = None
+    for new_id in ids:
+        match = OBLIGATION_ID_PATTERN.match(new_id)
+        if match is not None:
+            program_id = match.groupdict()['proof_id']
+            if program_id in ids:
+                break
+    if program_id is not None:
+        # all obligations were resolved
+        return VernacCommandData(
+            list(ids),
+            None,
+            VernacSentence(
+                sentence.text,
+                sentence.ast,
+                sentence.location,
+                command_type,
+                pre_goals))
+    else:
+        # some obligations remain
+        programs.append((sentence, pre_goals, command_type))
+        return None
+
+
 def _extract_vernac_commands(
         sentences: Iterable[CoqSentence],
         serapi_options: str = "") -> List[VernacCommandData]:
@@ -338,30 +395,14 @@ def _extract_vernac_commands(
                 # Persist the current goals.
                 # Programs do not open proof mode, so post_proof_id
                 # may be None or refer to another conjecture.
-                # Try to determine if all of the obligations were
-                # immediately resolved.
-                program_id = None
-                for new_id in ids:
-                    match = OBLIGATION_ID_PATTERN.match(new_id)
-                    if match is not None:
-                        program_id = match.groupdict()['proof_id']
-                        if program_id in ids:
-                            break
-                if program_id is not None:
-                    # all obligations were resolved
-                    file_commands.append(
-                        VernacCommandData(
-                            list(ids),
-                            None,
-                            VernacSentence(
-                                text,
-                                sentence.ast,
-                                location,
-                                command_type,
-                                pre_goals)))
-                else:
-                    # some obligations remain
-                    programs.append((sentence, pre_goals, command_type))
+                program = _start_program(
+                    sentence,
+                    command_type,
+                    ids,
+                    pre_goals,
+                    programs)
+                if program is not None:
+                    file_commands.append(program)
             elif proof_id_changed:
                 post_goals = serapi.query_goals()
                 if pre_proof_id in local_ids:
