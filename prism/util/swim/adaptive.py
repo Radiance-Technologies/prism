@@ -2,9 +2,11 @@
 Defines an adaptive switch manager introduces new switches on demand.
 """
 
+import os
 import tempfile
+import time
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
 from prism.util.compare import Top
 from prism.util.opam import (
@@ -13,6 +15,7 @@ from prism.util.opam import (
     OpamSwitch,
     PackageFormula,
 )
+from prism.util.radpytools.multiprocessing import synchronizedmethod
 
 from .base import SwitchManager
 from .exception import UnsatisfiableConstraints
@@ -39,9 +42,12 @@ class AdaptiveSwitchManager(SwitchManager):
         formula evaluated by the switch.
     """
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args, max_pool_size=1000, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._temporary_switches = set()
+        self._last_used: Dict[OpamSwitch,
+                              float] = {}
+        self._max_pool_size = max_pool_size
 
     def _clone_switch(self, switch: OpamSwitch) -> OpamSwitch:
         """
@@ -52,7 +58,50 @@ class AdaptiveSwitchManager(SwitchManager):
         with tempfile.TemporaryDirectory(prefix=prefix, dir=switch.root) as d:
             clone_dir = Path(d)
         clone = OpamAPI.clone_switch(switch.name, clone_dir.name, switch.root)
+        # it's okay if this is clobbered by multiple threads.
+        # if a clobber occurs, the times must have been CLOSE.
+        self._last_used[switch] = time.time()
         return clone
+
+    @synchronizedmethod(semlock_name="_lock")
+    def _evict(self) -> None:
+        """
+        Pick a persistent switch to remove and remove it.
+
+        Picks by least recently used. Note that the switch is not simply
+        removed from the managed pool but is instead deleted from the
+        filesystem. This action cannot be undone.
+        """
+        # limit consideration only to switches in the managed pool that
+        # are not clones
+        disqualified_switches = set()
+
+        for switch in self._last_used:
+            if (switch not in self.switches
+                    or switch in self._temporary_switches
+                    or not switch.is_clone):
+                disqualified_switches.add(switch)
+
+        for switch in disqualified_switches:
+            self._last_used.pop(switch)
+
+        if (len(self._last_used) == 0):
+            # nothing to remove
+            return
+
+        lru = sorted(self._last_used, key=lambda x: self._last_used[x])[0]
+
+        switch_path = lru.path
+
+        OpamAPI.remove_switch(lru)
+
+        # leave an empty placeholder directory stub to ensure that
+        # subsequent clones with generated tempfile names do not clash
+        # with previously evicted ones, thus potentially leading to
+        # incorrect behavior in cached methods
+        os.makedirs(switch_path)
+
+        self.switches.remove(lru)
 
     def get_switch(
             self,
@@ -89,36 +138,46 @@ class AdaptiveSwitchManager(SwitchManager):
             If it is not possible to extend an existing switch to
             satisfy the formula.
         """
-        closest_switch = None
-        minimum_size = Top()
-        for switch in self.switches:
-            simplified = self.simplify(switch, formula, **variables)
-            if isinstance(simplified, bool):
-                if simplified:
-                    simplified_size = 0
+        with self._lock:
+            if (variables is None):
+                # default is no variables
+                variables = {}
+
+            closest_switch = None
+            minimum_size = Top()
+            for switch in self.switches:
+                simplified = self.simplify(switch, formula, **variables)
+                if isinstance(simplified, bool):
+                    if simplified:
+                        simplified_size = 0
+                    else:
+                        continue
                 else:
-                    continue
-            else:
-                simplified_size = simplified.size
-            if simplified_size < minimum_size:
-                closest_switch = switch
-                minimum_size = simplified_size
-            if simplified_size == 0:
-                break
-        # clone the closest switch
-        if closest_switch is None:
-            raise UnsatisfiableConstraints(formula)
+                    simplified_size = simplified.size
+                if simplified_size < minimum_size:
+                    closest_switch = switch
+                    minimum_size = simplified_size
+                if simplified_size == 0:
+                    break
+            # clone the closest switch
+            if closest_switch is None:
+                raise UnsatisfiableConstraints(formula)
         if minimum_size > 0:
             # add a new switch to the persistent pool
             clone = self._clone_switch(switch)
             clone.install_formula(formula)
-            self.switches.add(clone)
-            switch = clone
+            with self._lock:
+                self.switches.add(clone)
+                if (len(self.switches) > self._max_pool_size):
+                    self._evict()
+                switch = clone
         # return a temporary clone
         clone = self._clone_switch(switch)
-        self._temporary_switches.add(clone)
+        with self._lock:
+            self._temporary_switches.add(clone)
         return clone
 
+    @synchronizedmethod(semlock_name="_lock")
     def release_switch(self, switch: OpamSwitch) -> None:
         """
         Record that a client is no longer using the given switch.

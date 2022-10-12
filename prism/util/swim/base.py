@@ -1,16 +1,21 @@
 """
 Defines the base class and interface for all switch managers.
 """
-import abc
+
+from multiprocessing import RLock
 from typing import Dict, Iterable, Optional, Set, Union
 
 from prism.util.opam import AssignedVariables, OpamSwitch, PackageFormula
 from prism.util.radpytools import cachedmethod
+from prism.util.radpytools.multiprocessing import (
+    synchronizedmethod,
+    synchronizedproperty,
+)
 
 from .exception import UnsatisfiableConstraints
 
 
-class SwitchManager(abc.ABC):
+class SwitchManager:
     """
     A basic manager that keeps a constant set of switches.
 
@@ -38,27 +43,30 @@ class SwitchManager(abc.ABC):
             variables = {}
         self._switches = set(initial_switches)
         self._variables = dict(variables)
+        self._lock = RLock()
 
     @cachedmethod
+    @synchronizedmethod(semlock_name="_lock")
     def _get_switch_config(
             self,
             switch: OpamSwitch) -> OpamSwitch.Configuration:
         return switch.export()
 
-    @property
+    @synchronizedproperty(semlock_name="_lock")
     def switches(self) -> Set[OpamSwitch]:
         """
         Get the set of switches managed by this instance.
         """
         return self._switches
 
-    @property
+    @synchronizedproperty(semlock_name="_lock")
     def variables(self) -> Dict[str, Union[bool, int, str]]:
         """
         Get the set of package variables used to evaluate dependencies.
         """
         return self._variables
 
+    @synchronizedmethod(semlock_name="_lock")
     def get_switch(
             self,
             formula: PackageFormula,
@@ -93,6 +101,7 @@ class SwitchManager(abc.ABC):
                 return switch
         raise UnsatisfiableConstraints(formula)
 
+    @synchronizedmethod(semlock_name="_lock")
     def release_switch(self, switch: OpamSwitch) -> None:
         """
         Record that a client is no longer using the given switch.
@@ -106,6 +115,7 @@ class SwitchManager(abc.ABC):
         pass
 
     @cachedmethod
+    @synchronizedmethod(semlock_name="_lock")
     def satisfies(
             self,
             switch: OpamSwitch,
@@ -136,6 +146,7 @@ class SwitchManager(abc.ABC):
         return formula.is_satisfied(dict(config.installed), active_variables)
 
     @cachedmethod
+    @synchronizedmethod(semlock_name="_lock")
     def simplify(
             self,
             switch: OpamSwitch,
@@ -168,4 +179,5 @@ class SwitchManager(abc.ABC):
         active_variables = dict(self.variables)
         active_variables.update(variables)
         config: OpamSwitch.Configuration = self._get_switch_config(switch)
+        # config.installed can be (and was) None
         return formula.simplify(dict(config.installed), active_variables)

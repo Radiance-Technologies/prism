@@ -47,7 +47,7 @@ class TestOpamSwitch(unittest.TestCase):
         config.switch_name = None
         config.opam_root = None
         config.is_clone = None
-        config.package_metadata = None
+        config.package_metadata = []
         # normalize whitespace
         actual = actual.replace("[", "[ ").replace("]", " ]")
         actual = ' '.join(actual.split())

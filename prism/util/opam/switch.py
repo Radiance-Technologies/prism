@@ -16,6 +16,7 @@ from typing import ClassVar, Dict, List, Optional, Tuple, Union
 from seutil import bash
 
 from prism.util.bash import escape
+from prism.util.radpytools.dataclasses import default_field
 
 from .file import OpamFile
 from .formula import LogicalPF, LogOp, PackageConstraint, PackageFormula
@@ -43,11 +44,6 @@ class OpamSwitch:
 
     Note that OPAM must be installed to use all of the features of this
     class.
-
-    .. warning::
-        This class does not yet fully support the full expressivity of
-        OPAM dependencies as documented at
-        https://opam.ocaml.org/blog/opam-extended-dependencies/.
     """
 
     _whitespace_regex: ClassVar[re.Pattern] = re.compile(r"\s+")
@@ -130,8 +126,21 @@ class OpamSwitch:
         try:
             r = (self.path / '.opam-switch/environment').read_text()
         except FileNotFoundError:
-            raise ValueError(
-                f"No such switch: {self.name} with root {self.root}")
+            # The environment file may not yet exist.
+            # Try to force its creation.
+            r = bash.run(
+                "opam env",
+                env={
+                    "OPAMROOT": self.root,
+                    "OPAMSWITCH": self.name
+                })
+            try:
+                r.check_returncode()
+            except CalledProcessError:
+                raise ValueError(
+                    f"No such switch: {self.name} with root {self.root}")
+            else:
+                r = (self.path / '.opam-switch/environment').read_text()
 
         envs: List[str] = r.split('\n')[::-1]
         for env in envs:
@@ -521,6 +530,7 @@ class OpamSwitch:
                         Path(f.name).stem,
                         "0.0",
                         "temp@example.com",
+                        synopsis="Temporary file",
                         depends=formula)))
             # close to ensure contents are flushed
         self.install(f.name, deps_only=True)
@@ -595,7 +605,8 @@ class OpamSwitch:
                     os.rename(dest, tmp)
                     os.rename(src, dest)
                     r = bash.run(
-                        command.split("--")[-1].strip(),
+                        command.split("--",
+                                      maxsplit=3)[-1].strip(),
                         env=env,
                         **kwargs)
                     try:
@@ -681,11 +692,11 @@ class OpamSwitch:
         """
 
         opam_version: OpamVersion
-        compiler: Optional[List[Package]] = None
-        roots: Optional[List[Package]] = None
-        installed: Optional[List[Package]] = None
-        pinned: Optional[List[Package]] = None
-        package_metadata: Optional[List[PackageMetadata]] = None
+        compiler: List[Package] = default_field([])
+        roots: List[Package] = default_field([])
+        installed: List[Package] = default_field([])
+        pinned: List[Package] = default_field([])
+        package_metadata: List[PackageMetadata] = default_field([])
         opam_root: Optional[str] = None
         switch_name: Optional[str] = None
         is_clone: Optional[str] = None
@@ -698,7 +709,9 @@ class OpamSwitch:
             for f in fields(self):
                 field_name = f.name
                 field_value = getattr(self, field_name)
-                if field_value is None:
+                if (field_value is None
+                        or (isinstance(field_value,
+                                       list) and not field_value)):
                     continue
                 if field_name != "package_metadata":
                     s.append(field_name.replace("_", "-"))

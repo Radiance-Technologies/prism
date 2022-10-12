@@ -7,6 +7,7 @@ https://github.com/princeton-vl/CoqGym/blob/master/re_patterns.py
 
 import re
 
+from prism.interface.coq.unicode import IDENTPART, IDENTSEP, LETTER
 from prism.util.re import regex_from_options
 
 PWD_PATTERN = re.compile(r"\(\*\*PWD\*\* (?P<pwd>.*?) \*\*\)")
@@ -42,6 +43,26 @@ TYPE_PATTERN = re.compile(
     r'\(Pp_tag constr.type\(Pp_string (?P<type>"(?:\\"|[^"])*?"|[^\(\)\s"]*)\)\)'
 )
 
+_ident_init_pattern = f"(?:{LETTER.pattern}|{IDENTSEP.pattern})"
+"""
+A valid initial character for a Coq identifier.
+
+An initial character can be any Unicode letter-like symbol (including
+non-breaking space) that is not a digit or single quote.
+See `is_valid_ident_initial` in
+https://github.com/coq/coq/blob/master/clib/unicode.ml for more
+information.
+"""
+_ident_trailing_pattern = f"(?:{_ident_init_pattern}|{IDENTPART.pattern})"
+"""
+A valid non-initial character for a Coq identifier.
+
+See `is_valid_ident_trailing` in
+https://github.com/coq/coq/blob/master/clib/unicode.ml for more
+information.
+"""
+IDENT_PATTERN = re.compile(f"{_ident_init_pattern}{_ident_trailing_pattern}*")
+
 _new_ident_prefixes = ["Module", "Module Type", "Interactive Module"]
 _new_ident_prefixes = "|".join(_new_ident_prefixes)
 _new_ident_prefixes = rf"(?:{_new_ident_prefixes}\s+)?"
@@ -70,29 +91,36 @@ An identifier is introduced when a new constant/inductive is defined
 In the case of Modules, an identifier is "introduced" when the Module
 starts and when it ends.
 """
+_new_idents = rf"(?:{IDENT_PATTERN.pattern},\s+)*\s*{IDENT_PATTERN.pattern}\s+"
+"""
+Comma-delimited identifiers.
+"""
 NEW_IDENT_PATTERN = re.compile(
-    rf"{_new_ident_prefixes}(?P<idents>(?:\w+,\s+)*\s*\w+\s+){_new_ident_canaries}"
-)
+    rf"{_new_ident_prefixes}(?P<idents>{_new_idents}){_new_ident_canaries}")
 
-NAMED_DEF_ASSUM_PATTERN = re.compile(r"\*\*\* \[\s*(?P<def_assum>\w+)\s.+\]")
+NAMED_DEF_ASSUM_PATTERN = re.compile(
+    rf"\*\*\* \[\s*(?P<def_assum>{IDENT_PATTERN.pattern})\s.+\]")
 """
 Match a named definition or assumption (e.g., a section variable or
 admitted theorem) in the feedback of a ``Print All.`` command.
 """
-_inductive = r"[A-Z]\w*\s(?P<ind>\w+)\s+:"
+_inductive = rf"[A-Z]\w*\s(?P<ind>{IDENT_PATTERN.pattern})\s+:"
 """
 Match a defined type (e.g., an inductive type) structured as a
 Vernacular statement.
+
+NOTE: This may fail to detect exotic Vernacular extended types if
+Unicode characters are allowed similar to idents.
 """
-_mutual_inductive = r"\s+with\s(?P<mind>\w+)\s+:"
+_mutual_inductive = rf"\s+with\s(?P<mind>{IDENT_PATTERN.pattern})\s+:"
 """
 Match additional types in a mutually inductive body.
 """
-_constant = r"(?P<constant>\w+)\s+:\s"
+_constant = rf"(?P<constant>{IDENT_PATTERN.pattern})\s+:\s"
 """
 Match a constant.
 """
-_libmodsec = r" >>>>>>> \w+ (?P<libmodsec>\w+)"
+_libmodsec = rf" >>>>>>> \w+ (?P<libmodsec>{IDENT_PATTERN.pattern})"
 """
 Match a library, module, or section.
 """
@@ -106,4 +134,5 @@ PRINT_ALL_IDENT_PATTERN = regex_from_options(
     False,
     compile=True)
 
-OBLIGATION_ID_PATTERN = re.compile(r"(?P<proof_id>\w+)_obligation_\d+")
+OBLIGATION_ID_PATTERN = re.compile(
+    rf"(?P<proof_id>{IDENT_PATTERN.pattern})_obligation_\d+")

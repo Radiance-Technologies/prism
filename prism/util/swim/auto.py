@@ -34,13 +34,14 @@ class AutoSwitchManager(AdaptiveSwitchManager):
     def __init__(
             self,
             opam_roots: Optional[Iterable[PathLike]] = None,
-            variables: Optional[AssignedVariables] = None) -> None:
+            variables: Optional[AssignedVariables] = None,
+            **kwargs) -> None:
         if opam_roots is None:
             opam_roots = [OpamAPI.show_root()]
         switches = []
         for root in opam_roots:
             switches.extend(self.find_switches(root))
-        super().__init__(switches, variables)
+        super().__init__(switches, variables, **kwargs)
 
     @classmethod
     def find_switches(cls, root: PathLike) -> List[OpamSwitch]:

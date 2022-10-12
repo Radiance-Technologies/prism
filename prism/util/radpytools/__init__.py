@@ -2,7 +2,7 @@
 Subpackage containing functionality extracted from `radpytools`.
 """
 
-from functools import lru_cache, partial, partialmethod
+from functools import cached_property, lru_cache, partial, partialmethod
 from multiprocessing import RLock
 from typing import (
     Any,
@@ -19,7 +19,95 @@ from typing import (
 T = TypeVar('T')
 
 
-class _cachedmethod:
+class descriptor:
+    """
+    A base class for custom descriptors.
+
+    See https://docs.python.org/3/howto/descriptor.html#descriptorhowto
+    for more information about writing descriptors.
+    """
+
+    def __init__(
+            self,
+            func: Callable[...,
+                           Any],
+            require_read: bool = False,
+            require_write: bool = False,
+            require_delete: bool = False) -> None:
+        if (not callable(func)
+                and not ((require_read and hasattr(func,
+                                                   "__get__")) or  # noqa: W504
+                         (require_write and hasattr(func,
+                                                    "__set__")) or  # noqa: W504
+                         (require_delete and hasattr(func,
+                                                     "__delete__")))):
+            raise TypeError(
+                f"{repr(func)} is not callable or a valid descriptor")
+        self._f = func
+        if isinstance(func, descriptor):
+            self._isclassmethod = func._isclassmethod
+        else:
+            self._isclassmethod = isinstance(func, (classmethod, staticmethod))
+        self._isproperty = isinstance(func, (property, cached_property))
+        self._f_name = None
+        self.__doc__ = func.__doc__
+
+    def __set_name__(self, owner: Type[T], name: str):
+        """
+        Set the name of the descriptor.
+
+        Parameters
+        ----------
+        owner : Type[T]
+            The class defining the cached method.
+        name : str
+            The name of the attribute to which this descriptor is
+            assigned.
+
+        Raises
+        ------
+        TypeError
+            If one attempts to alter the name of the descriptor.
+        """
+        try:
+            self._f.__set_name__(owner, name)
+        except AttributeError:
+            # _f does not implement this part of descriptor protocol
+            pass
+        if self._f_name is None:
+            self._f_name = name
+            self._owner = owner
+        elif name != self._f_name:
+            raise TypeError(
+                "Cannot assign the same descriptor to two different names "
+                f"({self._f_name!r} and {name!r}).")
+        if self._owner is None:
+            self._owner = owner
+        elif owner != self._owner:
+            raise TypeError(
+                "Cannot assign the same descriptor to two different types "
+                f"({self._owner!r} and {owner!r}).")
+
+    def __get__(self, _instance: T, _owner: Type[T] = None) -> Any:
+        """
+        Reject attempts to get the descriptor.
+        """
+        raise AttributeError(f"unreadable attribute {self._f_name}")
+
+    def __set__(self, _instance: T, _value: Any) -> None:
+        """
+        Reject attempts to overwrite the descriptor.
+        """
+        raise AttributeError(f"can't set attribute {self._f_name}")
+
+    def __delete__(self, _instance: T) -> None:
+        """
+        Reject attempts to delete the descriptor.
+        """
+        raise AttributeError(f"can't delete attribute {self._name}")
+
+
+class _cachedmethod(descriptor):
     """
     Internal implementation of cached methods.
 
@@ -27,6 +115,10 @@ class _cachedmethod:
     --------
     cachedmethod: For public API.
     """
+
+    # NOTE (AG): It looks like I chose a poor example to emulate caching
+    # when basing this on functools.cached_property. Track the
+    # resolution of https://github.com/python/cpython/issues/87634.
 
     cachedmethods = "_cachedmethods"
     cachedclassmethods = "_cachedclassmethods"  # includes static
@@ -40,13 +132,8 @@ class _cachedmethod:
             maxsize: Optional[int] = None,
             **kwargs: Dict[str,
                            Any]) -> None:
-        if not callable(func) and not hasattr(func, "__get__"):
-            raise TypeError(f"{repr(func)} is not callable or a descriptor")
-        self._f = func
-        self._isclassmethod = isinstance(func, (classmethod, staticmethod))
-        self._f_name = None
+        super().__init__(func, require_read=True)
         self.cache_name = None
-        self.__doc__ = func.__doc__
         kwargs.update({'maxsize': maxsize})
         self.cache_kwargs = kwargs
         self.lock = RLock()
@@ -68,19 +155,7 @@ class _cachedmethod:
         TypeError
             If one attempts to alter the name of the descriptor.
         """
-        if self._f_name is None:
-            self._f_name = name
-            self._owner = owner
-        elif name != self._f_name:
-            raise TypeError(
-                "Cannot assign the same cachedmethod to two different names "
-                f"({self._f_name!r} and {name!r}).")
-        if self._owner is None:
-            self._owner = owner
-        elif owner != self._owner:
-            raise TypeError(
-                "Cannot assign the same cachedmethod to two different types "
-                f"({self._owner!r} and {owner!r}).")
+        super().__set_name__(owner, name)
         self.cache_name = self.get_cache_name(name, owner)
         # take the opportunity to create the cached method registry
         # two new attributes are added to the owner class
