@@ -509,7 +509,8 @@ def extract_vernac_commands(project: ProjectRepo) -> VernacDict:
     """
     command_data = {}
     with pushd(project.dir_abspath):
-        for filename in project.get_file_list():
+        for filename in project.get_file_list(relative=True,
+                                              dependency_order=True):
             command_data[filename] = _extract_vernac_commands(
                 project.get_sentences(
                     filename,

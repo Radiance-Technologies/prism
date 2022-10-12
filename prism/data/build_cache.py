@@ -258,6 +258,9 @@ class ProjectCommitData:
     """
     A map from file names relative to the root of the project to the set
     of command results.
+    Iterating over the map's keys should follow dependency order of the
+    files, i.e., if file ``B`` depends on file ``A``, then ``A`` will
+    appear in the iteration before ``B``.
     """
     environment: ProjectBuildEnvironment
     """
