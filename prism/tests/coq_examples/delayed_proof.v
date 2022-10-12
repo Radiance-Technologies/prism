@@ -37,3 +37,7 @@ Qed.
    foo is defined but we are back in its first (proved) obligation.
    The Abort. gets us back to a stable(?) state. *)
 Abort.
+
+Obligation Tactic := try (exact tt); try (simpl; match goal with |- ?a = _ => now destruct a end).
+
+Program Definition foo' := let x := _ : unit in _ : x = tt.

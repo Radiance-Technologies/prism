@@ -166,7 +166,7 @@ class TestExtractCache(unittest.TestCase):
                         return_locations=True,
                         glom_proofs=False),
                     serapi_options="")
-            self.assertEqual(len(extracted_commands), 9)
+            self.assertEqual(len(extracted_commands), 11)
             expected_ids = [
                 [],
                 [],
@@ -181,7 +181,11 @@ class TestExtractCache(unittest.TestCase):
                 ["foobar"],
                 ["foo_obligation_1",
                  "foo_obligation_2",
-                 "foo"]
+                 "foo"],
+                [],
+                ["foo'_obligation_1",
+                 "foo'_obligation_2",
+                 "foo'"],
             ]
             self.assertEqual(
                 [c.identifier for c in extracted_commands],
@@ -194,7 +198,7 @@ class TestExtractCache(unittest.TestCase):
                 "Qed.",
             ]
             self.assertEqual(
-                [c.text for c in extracted_commands[-3].sorted_sentences()],
+                [c.text for c in extracted_commands[-5].sorted_sentences()],
                 expected_derived)
             expected_definition = [
                 "Definition foobar : unit.",
@@ -203,7 +207,7 @@ class TestExtractCache(unittest.TestCase):
                 "Defined.",
             ]
             self.assertEqual(
-                [c.text for c in extracted_commands[-2].sorted_sentences()],
+                [c.text for c in extracted_commands[-4].sorted_sentences()],
                 expected_definition)
             expected_program = [
                 "Program Definition foo := let x := _ : unit in _ : x = tt.",
@@ -215,6 +219,19 @@ class TestExtractCache(unittest.TestCase):
                 "simpl; match goal with |- ?a = _ => now destruct a end.",
                 "Qed.",
                 "Abort.",
+            ]
+            self.assertEqual(
+                [c.text for c in extracted_commands[-3].sorted_sentences()],
+                expected_program)
+            expected_obligation_tactic = [
+                "Obligation Tactic := try (exact tt); "
+                "try (simpl; match goal with |- ?a = _ => now destruct a end)."
+            ]
+            self.assertEqual(
+                [c.text for c in extracted_commands[-2].sorted_sentences()],
+                expected_obligation_tactic)
+            expected_program = [
+                "Program Definition foo' := let x := _ : unit in _ : x = tt."
             ]
             self.assertEqual(
                 [c.text for c in extracted_commands[-1].sorted_sentences()],

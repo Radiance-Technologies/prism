@@ -338,7 +338,30 @@ def _extract_vernac_commands(
                 # Persist the current goals.
                 # Programs do not open proof mode, so post_proof_id
                 # may be None or refer to another conjecture.
-                programs.append((sentence, pre_goals, command_type))
+                # Try to determine if all of the obligations were
+                # immediately resolved.
+                program_id = None
+                for new_id in ids:
+                    match = OBLIGATION_ID_PATTERN.match(new_id)
+                    if match is not None:
+                        program_id = match.groupdict()['proof_id']
+                        if program_id in ids:
+                            break
+                if program_id is not None:
+                    # all obligations were resolved
+                    file_commands.append(
+                        VernacCommandData(
+                            list(ids),
+                            None,
+                            VernacSentence(
+                                text,
+                                sentence.ast,
+                                location,
+                                command_type,
+                                pre_goals)))
+                else:
+                    # some obligations remain
+                    programs.append((sentence, pre_goals, command_type))
             elif proof_id_changed:
                 post_goals = serapi.query_goals()
                 if pre_proof_id in local_ids:
