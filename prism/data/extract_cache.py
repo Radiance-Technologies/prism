@@ -79,8 +79,9 @@ def _conclude_proof(
                          str],
     finished_proof_stacks: Dict[str,
                                 List[Tuple[str,
-                                           Proof]]]
-) -> Optional[VernacCommandData]:
+                                           Proof]]],
+    defined_lemmas: Dict[str,
+                         VernacCommandData]) -> Optional[VernacCommandData]:
     r"""
     Complete accumulation of a proof/proved conjecture.
 
@@ -105,6 +106,9 @@ def _conclude_proof(
         A map from conjecture IDs to lists of concluded proof blocks
         (e.g., one block per obligation).
         This map will be modified in-place.
+    defined_lemmas : Dict[str, VernacCommandData]
+        A map from conjecture/obligation IDs to the corresponding cache
+        data structure.
 
     Returns
     -------
@@ -144,11 +148,14 @@ def _conclude_proof(
         # ensure conjecture ID is last
         ids.pop(finished_proof_id, None)
         ids[finished_proof_id] = None
-        return VernacCommandData(
+        lemma = VernacCommandData(
             list(ids),
             None,
             lemma,
             [p for p in proofs if p])
+        for ident in ids:
+            defined_lemmas[ident] = lemma
+        return lemma
     else:
         return None
 
@@ -287,6 +294,8 @@ def _extract_vernac_commands(
     # identifier of the command.
     # The beginning of each partition is a Vernacular command that
     # is not Ltac-related.
+    defined_lemmas: Dict[str,
+                         VernacCommandData] = {}
     local_ids = {'SerTop'}
     pre_proof_id = None
     pre_goals = Goals()
@@ -346,7 +355,8 @@ def _extract_vernac_commands(
                             conjectures,
                             partial_proof_stacks,
                             obligation_map,
-                            finished_proof_stacks)
+                            finished_proof_stacks,
+                            defined_lemmas)
                         if completed_lemma is not None:
                             file_commands.append(completed_lemma)
                         continue
@@ -360,6 +370,20 @@ def _extract_vernac_commands(
                         warnings.warn(
                             f"Anomaly detected. '{pre_proof_id}' is an open "
                             f"conjecture but is also already defined. {extra}")
+                        if pre_proof_id in defined_lemmas:
+                            # add to the existing lemma as a new proof
+                            # block
+                            lemma = defined_lemmas[pre_proof_id]
+                            lemma.proofs.append(
+                                [
+                                    ProofSentence(
+                                        sentence.text,
+                                        sentence.ast,
+                                        sentence.location,
+                                        command_type,
+                                        pre_goals)
+                                ])
+                            continue
                 if post_proof_id not in partial_proof_stacks:
                     # We are starting a new proof (or obligation).
                     _start_proof_block(
@@ -376,6 +400,7 @@ def _extract_vernac_commands(
                     assert post_proof_id in partial_proof_stacks
                     proof_stack = partial_proof_stacks[post_proof_id]
                     proof_stack.append((sentence, pre_goals, command_type))
+
             elif post_proof_id is not None and not ids:
                 # we are continuing an open proof
                 assert post_proof_id in partial_proof_stacks

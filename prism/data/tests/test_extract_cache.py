@@ -214,6 +214,7 @@ class TestExtractCache(unittest.TestCase):
                 "Next Obligation.",
                 "simpl; match goal with |- ?a = _ => now destruct a end.",
                 "Qed.",
+                "Abort.",
             ]
             self.assertEqual(
                 [c.text for c in extracted_commands[-1].sorted_sentences()],
