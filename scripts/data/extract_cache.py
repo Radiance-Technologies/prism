@@ -35,7 +35,6 @@ if __name__ == "__main__":
     parser.add_argument("--n-build-workers", default=1)
     parser.add_argument("--force-serial", action="store_true")
     parser.add_argument("--num-switches", default=7)
-    parser.add_argument("--profile", action="store_true")
     parser.add_argument("--project-names", nargs="*", default=[])
     args = parser.parse_args()
     default_commits_path: str = args.default_commits_path
@@ -47,7 +46,6 @@ if __name__ == "__main__":
     n_build_workers: int = int(args.n_build_workers)
     force_serial: bool = bool(args.force_serial)
     num_switches: int = int(args.num_switches)
-    profile = bool(args.profile)
     project_names = args.project_names if args.project_names else None
     # Force redirect the root logger to a file
     # This might break due to multiprocessing. If so, it should just
@@ -65,30 +63,10 @@ if __name__ == "__main__":
         swim,
         default_commits_path,
         cache_extract_commit_iterator)
-    if not profile:
-        cache_extractor.run(
-            project_root_path,
-            log_dir,
-            extract_nprocs=extract_nprocs,
-            force_serial=force_serial,
-            n_build_workers=n_build_workers,
-            project_names=project_names)
-    else:
-        import cProfile
-        import tracemalloc
-        with cProfile.Profile() as pr:
-            tracemalloc.start()
-            cache_extractor.run(
-                project_root_path,
-                log_dir,
-                extract_nprocs=extract_nprocs,
-                force_serial=force_serial,
-                n_build_workers=n_build_workers,
-                profile=True,
-                project_names=project_names)
-            pr.dump_stats(os.path.join(log_dir, "profile.out"))
-            snapshot = tracemalloc.take_snapshot()
-            mem_stats = snapshot.statistics('lineno')
-            with open(os.path.join(log_dir, "mem_profile.out"), "wt") as f:
-                for stat in mem_stats:
-                    print(stat, file=f)
+    cache_extractor.run(
+        project_root_path,
+        log_dir,
+        extract_nprocs=extract_nprocs,
+        force_serial=force_serial,
+        n_build_workers=n_build_workers,
+        project_names=project_names)

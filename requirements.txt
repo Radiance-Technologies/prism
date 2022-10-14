@@ -1,5 +1,7 @@
 bidict
 GitPython
+gprof2dot
+graphviz
 networkx
 numpy
 pexpect

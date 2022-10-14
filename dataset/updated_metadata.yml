@@ -51,9 +51,9 @@ indices:
   opam_repositories: 1
 install_cmd: {}
 ocaml_packages:
-- - '"coq-menhirlib"'
-  - 0
 - - '"coq-flocq"'
+  - 0
+- - '"coq-menhirlib"'
   - 1
 - - '"menhir"'
   - 2
@@ -78,14 +78,14 @@ project_sources:
 projects:
 - CompCert
 revisions:
-- commit_sha: 7b3bc19117e48d601e392f2db2c135c7df1d8376
-  project_source:
-    project_name: CompCert
-    repo_url: https://github.com/AbsInt/CompCert
 - commit_sha: null
   project_source:
     project_name: CompCert
     repo_url: null
+- commit_sha: 7b3bc19117e48d601e392f2db2c135c7df1d8376
+  project_source:
+    project_name: CompCert
+    repo_url: https://github.com/AbsInt/CompCert
 serapi_options:
   0: -R lib,compcert.lib -R common,compcert.common -R x86_64,compcert.x86_64 -R x86,compcert.x86
     -R backend,compcert.backend -R cfrontend,compcert.cfrontend -R driver,compcert.driver

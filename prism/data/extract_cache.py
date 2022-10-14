@@ -2,13 +2,13 @@
 Module for storing cache extraction functions.
 """
 import calendar
+import logging
 import multiprocessing as mp
 import os
 import re
 import warnings
 from datetime import datetime
 from functools import partial
-from logging import warn
 from multiprocessing import Pool
 from pathlib import Path
 from typing import (
@@ -521,7 +521,10 @@ def _extract_vernac_commands(
     return file_commands
 
 
-def extract_vernac_commands(project: ProjectRepo) -> VernacDict:
+def extract_vernac_commands(
+        project: ProjectRepo,
+        files_to_use: Optional[Dict[str,
+                                    Iterable[str]]] = None) -> VernacDict:
     """
     Compile vernac commands from a project into a dict.
 
@@ -529,6 +532,10 @@ def extract_vernac_commands(project: ProjectRepo) -> VernacDict:
     ----------
     project : ProjectRepo
         The project from which to extract the vernac commands
+    files_to_use : Dict[str, Iterable[str]] | None
+        A mapping from project name to files to use from that project;
+        or None. If None, all files are used. By default, None.
+        This argument is especially useful for profiling.
 
     Returns
     -------
@@ -538,6 +545,10 @@ def extract_vernac_commands(project: ProjectRepo) -> VernacDict:
     command_data = {}
     with pushd(project.dir_abspath):
         file_list = project.get_file_list(relative=True, dependency_order=True)
+        if files_to_use:
+            file_list = [
+                f for f in file_list if f in files_to_use[project.name]
+            ]
         pbar = tqdm.tqdm(
             file_list,
             total=len(file_list),
@@ -548,7 +559,7 @@ def extract_vernac_commands(project: ProjectRepo) -> VernacDict:
             path = Path(filename)
             vo = path.parent / (path.stem + ".vo")
             if not os.path.exists(vo):
-                warn(
+                logging.info(
                     f"Skipped extraction for file {filename}. "
                     "No .vo file found.")
                 continue
@@ -576,7 +587,9 @@ def extract_cache(
              str,
              str],
             bool]] = None,
-        block: bool = False) -> None:
+        block: bool = False,
+        files_to_use: Optional[Dict[str,
+                                    Iterable[str]]] = None) -> None:
     r"""
     Extract data from project commit and insert into `build_cache`.
 
@@ -621,6 +634,10 @@ def extract_cache(
         whether it should be reprocessed or not.
     block : bool, optional
         Whether to use blocking cache writes, by default False
+    files_to_use : Dict[str, Iterable[str]] | None
+        A mapping from project name to files to use from that project;
+        or None. If None, all files are used. By default, None.
+        This argument is especially useful for profiling.
 
     See Also
     --------
@@ -644,7 +661,8 @@ def extract_cache(
             commit_sha,
             process_project,
             coq_version,
-            block)
+            block,
+            files_to_use)
 
 
 def extract_cache_new(
@@ -655,7 +673,9 @@ def extract_cache_new(
         process_project: Callable[[Project],
                                   VernacDict],
         coq_version: str,
-        block: bool):
+        block: bool,
+        files_to_use: Optional[Dict[str,
+                                    Iterable[str]]]):
     """
     Extract a new cache and insert it into the build cache.
 
@@ -678,6 +698,10 @@ def extract_cache_new(
         None.
     block : bool
         Whether to use blocking cache writes
+    files_to_use : Dict[str, Iterable[str]] | None
+        A mapping from project name to files to use from that project;
+        or None. If None, all files are used. By default, None.
+        This argument is especially useful for profiling.
     """
     project.git.checkout(commit_sha)
     # get a switch
@@ -698,7 +722,7 @@ def extract_cache_new(
         build_result = (pbe.return_code, pbe.stdout, pbe.stderr)
         command_data = process_project(project)
     else:
-        command_data = extract_vernac_commands(project)
+        command_data = extract_vernac_commands(project, files_to_use)
     data = ProjectCommitData(
         metadata,
         command_data,
@@ -752,6 +776,8 @@ class CacheExtractor:
                                                         Version]]]] = None,
             process_project: Optional[Callable[[ProjectRepo],
                                                VernacDict]] = None,
+            files_to_use: Optional[Dict[str,
+                                        Iterable[str]]] = None,
             **kwargs):
         self.cache_kwargs = {
             k: v for k,
@@ -818,6 +844,13 @@ class CacheExtractor:
         build
         """
 
+        self.files_to_use = files_to_use
+        """
+        A mapping from project name to files to use from that project;
+        or None. If None, all files are used. By default, None.
+        This argument is especially useful for profiling.
+        """
+
     @staticmethod
     def _commit_iterator_func(
         project: ProjectRepo,
@@ -858,18 +891,20 @@ class CacheExtractor:
 
     @staticmethod
     def extract_cache_func(
-        project: ProjectRepo,
-        commit_sha: str,
-        _result: None,
-        build_cache_client_map: Dict[str,
-                                     CoqProjectBuildCacheClient],
-        switch_manager: SwitchManager,
-        process_project: Callable[[Project],
-                                  VernacDict],
-        coq_version_iterator: Callable[[Project,
-                                        str],
-                                       Iterable[Union[str,
-                                                      Version]]]):
+            project: ProjectRepo,
+            commit_sha: str,
+            _result: None,
+            build_cache_client_map: Dict[str,
+                                         CoqProjectBuildCacheClient],
+            switch_manager: SwitchManager,
+            process_project: Callable[[Project],
+                                      VernacDict],
+            coq_version_iterator: Callable[[Project,
+                                            str],
+                                           Iterable[Union[str,
+                                                          Version]]],
+            files_to_use: Optional[Dict[str,
+                                        Iterable[str]]]):
         """
         Extract cache.
 
@@ -893,10 +928,17 @@ class CacheExtractor:
                                         Iterable[Union[str, Version]]]
             A function that returns an iterable over allowable coq
             versions
+        files_to_use : Dict[str, Iterable[str]] | None
+            A mapping from project name to files to use from that
+            project; or None. If None, all files are used. By default,
+            None. This argument is especially useful for profiling.
         """
-        for coq_version in tqdm.tqdm(coq_version_iterator(project,
-                                                          commit_sha),
-                                     desc="Coq version"):
+        pbar = tqdm.tqdm(
+            coq_version_iterator(project,
+                                 commit_sha),
+            desc="Coq version")
+        for coq_version in pbar:
+            pbar.set_description(f"Coq version: {coq_version}")
             extract_cache(
                 build_cache_client_map[project.name],
                 switch_manager,
@@ -904,7 +946,8 @@ class CacheExtractor:
                 commit_sha,
                 process_project,
                 str(coq_version),
-                CacheExtractor.recache)
+                CacheExtractor.recache,
+                files_to_use=files_to_use)
 
     def get_extract_cache_func(
             self) -> Callable[[ProjectRepo,
@@ -924,7 +967,8 @@ class CacheExtractor:
             build_cache_client_map=self.cache_clients,
             switch_manager=self.swim,
             process_project=self.process_project,
-            coq_version_iterator=self.coq_version_iterator)
+            coq_version_iterator=self.coq_version_iterator,
+            files_to_use=self.files_to_use)
 
     def _default_coq_version_iterator(self, *args, **kwargs):
         return ["8.10.2"]
@@ -1002,9 +1046,6 @@ class CacheExtractor:
                     self.md_storage.projects),
                 desc="Initializing Project instances",
                 total=len(self.md_storage.projects)))
-        # If we're profiling, limit the number of projects
-        if profile and len(projects) > 4:
-            projects = projects[: 3]
         # If a list of projects is specified, use only those projects
         if project_names is not None:
             projects = [p for p in projects if p.name in project_names]
@@ -1012,9 +1053,12 @@ class CacheExtractor:
             requested_project_set = set(project_names)
             diff = requested_project_set.difference(actual_project_set)
             if diff:
-                warn(
+                logging.warn(
                     "The following projects were requested but were not "
                     f"found: {', '.join(diff)}")
+        # If we're profiling, limit the number of projects
+        if profile and len(projects) > 4:
+            projects = projects[: 3]
         if force_serial:
             client_keys = None
             client_to_server_q = None

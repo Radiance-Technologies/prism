@@ -107,6 +107,7 @@ def _project_commit_fmap(
                 raise e
             is_terminated = True
             result = Except(result, e, traceback.format_exc())
+        break
     return result
 
 
