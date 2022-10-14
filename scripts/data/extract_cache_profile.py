@@ -99,7 +99,8 @@ if __name__ == "__main__":
                 extract_nprocs=extract_nprocs,
                 force_serial=force_serial,
                 n_build_workers=n_build_workers,
-                project_names=project_names)
+                project_names=project_names,
+                max_num_commits=1)
             dump_file_name = os.path.join(log_dir, f"profile_{timestamp}.out")
             dot_file_name = os.path.join(log_dir, f"profile_{timestamp}.dot")
             pdf_file_name = os.path.join(log_dir, f"call_graph_{timestamp}.pdf")

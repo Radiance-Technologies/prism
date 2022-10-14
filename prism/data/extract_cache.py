@@ -731,20 +731,25 @@ def extract_cache_new(
 
 def cache_extract_commit_iterator(
         project: ProjectRepo,
-        starting_commit_sha: str) -> Generator[str,
-                                               None,
-                                               None]:
+        starting_commit_sha: str,
+        max_num_commits: Optional[int]) -> Generator[str,
+                                                     None,
+                                                     None]:
     """
     Provide default commit iterator for cache extraction.
     """
     iterator = ChangedCoqCommitIterator(project, starting_commit_sha)
+    i = 0
     for item in iterator:
+        i += 1
         # Define the minimum date; convert it to seconds since epoch
         limit_date = datetime(2019, 1, 1, 0, 0, 0)
         limit_epoch = calendar.timegm(limit_date.timetuple())
         # committed_date is in seconds since epoch
         if item.committed_date and item.committed_date >= limit_epoch:
             yield item.hexsha
+        if i >= max_num_commits:
+            break
 
 
 def default_recache(
@@ -854,8 +859,9 @@ class CacheExtractor:
         """
 
     def get_commit_iterator_func(
-            self) -> Callable[[ProjectRepo],
-                              Iterator[str]]:
+        self,
+        max_num_commits: Optional[int]) -> Callable[[ProjectRepo],
+                                                    Iterator[str]]:
         """
         Return a commit iterator function.
 
@@ -867,7 +873,8 @@ class CacheExtractor:
         return partial(
             CacheExtractor._commit_iterator_func,
             default_commits=self.default_commits,
-            commit_iterator_factory=self.commit_iterator_factory)
+            commit_iterator_factory=self.commit_iterator_factory,
+            max_num_commits=max_num_commits)
 
     def get_extract_cache_func(
             self) -> Callable[[ProjectRepo,
@@ -904,7 +911,8 @@ class CacheExtractor:
             extract_nprocs: int = 8,
             force_serial: bool = False,
             n_build_workers: int = 1,
-            project_names: Optional[List[str]] = None) -> None:
+            project_names: Optional[List[str]] = None,
+            max_num_commits: Optional[int] = None) -> None:
         """
         Build all projects at `root_path` and save updated metadata.
 
@@ -934,6 +942,9 @@ class CacheExtractor:
             If a list is provided, select only projects with names on
             the list for extraction. If projects on the given list
             aren't found, a warning is given. By default None.
+        max_num_commits : int | None
+            If this argument is not None, process no more than
+            max_num_commits commits when extracting cache.
         """
         if log_dir is None:
             log_dir = Path(self.md_storage_file).parent
@@ -990,7 +1001,7 @@ class CacheExtractor:
             # Create commit mapper
             project_looper = ProjectCommitUpdateMapper[None](
                 projects,
-                self.get_commit_iterator_func(),
+                self.get_commit_iterator_func(max_num_commits),
                 self.get_extract_cache_func(),
                 "Extracting cache",
                 terminate_on_except=False)
@@ -1023,13 +1034,13 @@ class CacheExtractor:
 
     @staticmethod
     def _commit_iterator_func(
-        project: ProjectRepo,
-        default_commits: Dict[str,
-                              List[str]],
-        commit_iterator_factory: Callable[[ProjectRepo,
-                                           str],
-                                          Iterator[str]]
-    ) -> Iterator[str]:
+            project: ProjectRepo,
+            default_commits: Dict[str,
+                                  List[str]],
+            commit_iterator_factory: Callable[[ProjectRepo,
+                                               str],
+                                              Iterator[str]],
+            max_num_commits: Optional[int]) -> Iterator[str]:
         # Just in case the local repo is out of date
         for remote in project.remotes:
             remote.fetch()
@@ -1041,7 +1052,10 @@ class CacheExtractor:
             # without a default commit; skip that one and any others
             # like it.
             return []
-        return commit_iterator_factory(project, starting_commit_sha)
+        return commit_iterator_factory(
+            project,
+            starting_commit_sha,
+            max_num_commits)
 
     @staticmethod
     def extract_cache_func(
