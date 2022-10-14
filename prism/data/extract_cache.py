@@ -853,28 +853,6 @@ class CacheExtractor:
         This argument is especially useful for profiling.
         """
 
-    @staticmethod
-    def _commit_iterator_func(
-        project: ProjectRepo,
-        default_commits: Dict[str,
-                              List[str]],
-        commit_iterator_factory: Callable[[ProjectRepo,
-                                           str],
-                                          Iterator[str]]
-    ) -> Iterator[str]:
-        # Just in case the local repo is out of date
-        for remote in project.remotes:
-            remote.fetch()
-        try:
-            starting_commit_sha = default_commits[
-                project.metadata.project_name][0]
-        except IndexError:
-            # There's at least one project in the default commits file
-            # without a default commit; skip that one and any others
-            # like it.
-            return []
-        return commit_iterator_factory(project, starting_commit_sha)
-
     def get_commit_iterator_func(
             self) -> Callable[[ProjectRepo],
                               Iterator[str]]:
@@ -890,66 +868,6 @@ class CacheExtractor:
             CacheExtractor._commit_iterator_func,
             default_commits=self.default_commits,
             commit_iterator_factory=self.commit_iterator_factory)
-
-    @staticmethod
-    def extract_cache_func(
-            project: ProjectRepo,
-            commit_sha: str,
-            _result: None,
-            build_cache_client_map: Dict[str,
-                                         CoqProjectBuildCacheClient],
-            switch_manager: SwitchManager,
-            process_project: Callable[[Project],
-                                      VernacDict],
-            coq_version_iterator: Callable[[Project,
-                                            str],
-                                           Iterable[Union[str,
-                                                          Version]]],
-            files_to_use: Optional[Dict[str,
-                                        Iterable[str]]]):
-        """
-        Extract cache.
-
-        Parameters
-        ----------
-        project : ProjectRepo
-            The project to extract cache from
-        commit_sha : str
-            The commit to extract cache from
-        _result : None
-            Left empty for compatibility with `ProjectCommitMapper`
-        build_cache_client_map : Dict[str, CoqProjectbuildCacheClient]
-            A mapping from project name to build cache client, used to
-            write extracted cache to disk
-        switch_manager : SwitchManager
-            A switch manager to use during extraction
-        process_project : Callable[[Project], VernacDict]
-            A function that does a best-effort cache extraction when the
-            project does not build
-        coq_version_iterator : Callable[[Project, str],
-                                        Iterable[Union[str, Version]]]
-            A function that returns an iterable over allowable coq
-            versions
-        files_to_use : Dict[str, Iterable[str]] | None
-            A mapping from project name to files to use from that
-            project; or None. If None, all files are used. By default,
-            None. This argument is especially useful for profiling.
-        """
-        pbar = tqdm.tqdm(
-            coq_version_iterator(project,
-                                 commit_sha),
-            desc="Coq version")
-        for coq_version in pbar:
-            pbar.set_description(f"Coq version: {coq_version}")
-            extract_cache(
-                build_cache_client_map[project.name],
-                switch_manager,
-                project,
-                commit_sha,
-                process_project,
-                str(coq_version),
-                default_recache,
-                files_to_use=files_to_use[project.name])
 
     def get_extract_cache_func(
             self) -> Callable[[ProjectRepo,
@@ -1102,3 +1020,85 @@ class CacheExtractor:
             # update metadata
             metadata_storage.dump(metadata_storage, updated_md_storage_file)
             print("Done")
+
+    @staticmethod
+    def _commit_iterator_func(
+        project: ProjectRepo,
+        default_commits: Dict[str,
+                              List[str]],
+        commit_iterator_factory: Callable[[ProjectRepo,
+                                           str],
+                                          Iterator[str]]
+    ) -> Iterator[str]:
+        # Just in case the local repo is out of date
+        for remote in project.remotes:
+            remote.fetch()
+        try:
+            starting_commit_sha = default_commits[
+                project.metadata.project_name][0]
+        except IndexError:
+            # There's at least one project in the default commits file
+            # without a default commit; skip that one and any others
+            # like it.
+            return []
+        return commit_iterator_factory(project, starting_commit_sha)
+
+    @staticmethod
+    def extract_cache_func(
+            project: ProjectRepo,
+            commit_sha: str,
+            _result: None,
+            build_cache_client_map: Dict[str,
+                                         CoqProjectBuildCacheClient],
+            switch_manager: SwitchManager,
+            process_project: Callable[[Project],
+                                      VernacDict],
+            coq_version_iterator: Callable[[Project,
+                                            str],
+                                           Iterable[Union[str,
+                                                          Version]]],
+            files_to_use: Optional[Dict[str,
+                                        Iterable[str]]]):
+        """
+        Extract cache.
+
+        Parameters
+        ----------
+        project : ProjectRepo
+            The project to extract cache from
+        commit_sha : str
+            The commit to extract cache from
+        _result : None
+            Left empty for compatibility with `ProjectCommitMapper`
+        build_cache_client_map : Dict[str, CoqProjectbuildCacheClient]
+            A mapping from project name to build cache client, used to
+            write extracted cache to disk
+        switch_manager : SwitchManager
+            A switch manager to use during extraction
+        process_project : Callable[[Project], VernacDict]
+            A function that does a best-effort cache extraction when the
+            project does not build
+        coq_version_iterator : Callable[[Project, str],
+                                        Iterable[Union[str, Version]]]
+            A function that returns an iterable over allowable coq
+            versions
+        files_to_use : Dict[str, Iterable[str]] | None
+            A mapping from project name to files to use from that
+            project; or None. If None, all files are used. By default,
+            None. This argument is especially useful for profiling.
+        """
+        pbar = tqdm.tqdm(
+            coq_version_iterator(project,
+                                 commit_sha),
+            desc="Coq version")
+        for coq_version in pbar:
+            pbar.set_description(f"Coq version: {coq_version}")
+            extract_cache(
+                build_cache_client_map[project.name],
+                switch_manager,
+                project,
+                commit_sha,
+                process_project,
+                str(coq_version),
+                default_recache,
+                files_to_use=files_to_use[project.name])
