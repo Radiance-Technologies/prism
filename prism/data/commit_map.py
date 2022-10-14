@@ -107,7 +107,6 @@ def _project_commit_fmap(
                 raise e
             is_terminated = True
             result = Except(result, e, traceback.format_exc())
-        break
     return result
 
 
@@ -202,8 +201,8 @@ class ProjectCommitMapper(Generic[T]):
         original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
         original_sigterm_handler = signal.signal(signal.SIGTERM, signal.SIG_IGN)
         logger.debug(f"Initializing pool of {max_workers} workers")
+        results = {p.name: None for p in self.projects}
         if force_serial:
-            results = {p.name: None for p in self.projects}
             for job in tqdm.tqdm(job_list,
                                  total=len(job_list),
                                  desc=self.task_description):
@@ -217,7 +216,6 @@ class ProjectCommitMapper(Generic[T]):
                     return results
         else:
             with ProcessPoolExecutor(max_workers=max_workers) as ex:
-                results = {p.name: None for p in self.projects}
                 with tqdm.tqdm(total=len(job_list),
                                desc=self.task_description) as progress_bar:
                     futures = {}

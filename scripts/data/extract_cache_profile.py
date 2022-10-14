@@ -99,7 +99,6 @@ if __name__ == "__main__":
                 extract_nprocs=extract_nprocs,
                 force_serial=force_serial,
                 n_build_workers=n_build_workers,
-                profile=True,
                 project_names=project_names)
             dump_file_name = os.path.join(log_dir, f"profile_{timestamp}.out")
             dot_file_name = os.path.join(log_dir, f"profile_{timestamp}.dot")

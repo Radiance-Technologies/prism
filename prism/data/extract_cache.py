@@ -523,8 +523,7 @@ def _extract_vernac_commands(
 
 def extract_vernac_commands(
         project: ProjectRepo,
-        files_to_use: Optional[Dict[str,
-                                    Iterable[str]]] = None) -> VernacDict:
+        files_to_use: Optional[Iterable[str]] = None) -> VernacDict:
     """
     Compile vernac commands from a project into a dict.
 
@@ -532,9 +531,9 @@ def extract_vernac_commands(
     ----------
     project : ProjectRepo
         The project from which to extract the vernac commands
-    files_to_use : Dict[str, Iterable[str]] | None
-        A mapping from project name to files to use from that project;
-        or None. If None, all files are used. By default, None.
+    files_to_use : Iterable[str] | None
+        An iterable of filenames to use for this project; or None. If
+        None, all files are used. By default, None.
         This argument is especially useful for profiling.
 
     Returns
@@ -546,9 +545,7 @@ def extract_vernac_commands(
     with pushd(project.dir_abspath):
         file_list = project.get_file_list(relative=True, dependency_order=True)
         if files_to_use:
-            file_list = [
-                f for f in file_list if f in files_to_use[project.name]
-            ]
+            file_list = [f for f in file_list if f in files_to_use]
         pbar = tqdm.tqdm(
             file_list,
             total=len(file_list),
@@ -588,8 +585,7 @@ def extract_cache(
              str],
             bool]] = None,
         block: bool = False,
-        files_to_use: Optional[Dict[str,
-                                    Iterable[str]]] = None) -> None:
+        files_to_use: Optional[Iterable[str]] = None) -> None:
     r"""
     Extract data from project commit and insert into `build_cache`.
 
@@ -634,9 +630,9 @@ def extract_cache(
         whether it should be reprocessed or not.
     block : bool, optional
         Whether to use blocking cache writes, by default False
-    files_to_use : Dict[str, Iterable[str]] | None
-        A mapping from project name to files to use from that project;
-        or None. If None, all files are used. By default, None.
+    files_to_use : Iterable[str] | None
+        An iterable of files to use from this project; or None. If None,
+        all files are used. By default, None.
         This argument is especially useful for profiling.
 
     See Also
@@ -674,8 +670,7 @@ def extract_cache_new(
                                   VernacDict],
         coq_version: str,
         block: bool,
-        files_to_use: Optional[Dict[str,
-                                    Iterable[str]]]):
+        files_to_use: Optional[Iterable[str]]):
     """
     Extract a new cache and insert it into the build cache.
 
@@ -698,9 +693,9 @@ def extract_cache_new(
         None.
     block : bool
         Whether to use blocking cache writes
-    files_to_use : Dict[str, Iterable[str]] | None
-        A mapping from project name to files to use from that project;
-        or None. If None, all files are used. By default, None.
+    files_to_use : Iterable[str] | None
+        An iterable of files to use from this project; or None. If None,
+        all files are used. By default, None.
         This argument is especially useful for profiling.
     """
     project.git.checkout(commit_sha)
@@ -752,13 +747,21 @@ def cache_extract_commit_iterator(
             yield item.hexsha
 
 
+def default_recache(
+        build_cache: CoqProjectBuildCacheServer,
+        project: ProjectRepo,
+        commit_sha: str,
+        coq_version: str) -> bool:
+    """
+    Provide a placeholder function for now.
+    """
+    return False
+
+
 class CacheExtractor:
     """
     Class for managing a broad Coq project cache extraction process.
     """
-
-    _avail_cache_kwargs = ["fmt_ext"]
-    _avail_mds_kwargs = ["fmt"]
 
     def __init__(
             self,
@@ -778,19 +781,18 @@ class CacheExtractor:
                                                VernacDict]] = None,
             files_to_use: Optional[Dict[str,
                                         Iterable[str]]] = None,
-            **kwargs):
+            cache_fmt_ext: Optional[str] = None,
+            mds_fmt: Optional[str] = None):
         self.cache_kwargs = {
-            k: v for k,
-            v in kwargs.items() if k in self._avail_cache_kwargs
-        }
+            "fmt_ext": cache_fmt_ext
+        } if cache_fmt_ext else {}
         """
         Keyword arguments for constructing the project cache build
         server
         """
-        mds_kwargs = {
-            k: v for k,
-            v in kwargs.items() if k in self._avail_mds_kwargs
-        }
+        self.mds_kwargs = {
+            "fmt": mds_fmt
+        } if mds_fmt else {}
         """
         Keyword arguments for constructing the metadata storage
         """
@@ -804,7 +806,7 @@ class CacheExtractor:
         """
         self.md_storage = MetadataStorage.load(
             metadata_storage_file,
-            **mds_kwargs)
+            **self.mds_kwargs)
         """
         The project metadata storage object
         """
@@ -946,8 +948,8 @@ class CacheExtractor:
                 commit_sha,
                 process_project,
                 str(coq_version),
-                CacheExtractor.recache,
-                files_to_use=files_to_use)
+                default_recache,
+                files_to_use=files_to_use[project.name])
 
     def get_extract_cache_func(
             self) -> Callable[[ProjectRepo,
@@ -976,17 +978,6 @@ class CacheExtractor:
     def _default_process_project(self, *args, **kwargs) -> VernacDict:
         return dict()
 
-    @staticmethod
-    def recache(
-            build_cache: CoqProjectBuildCacheServer,
-            project: ProjectRepo,
-            commit_sha: str,
-            coq_version: str) -> bool:
-        """
-        Provide a placeholder function for now.
-        """
-        return False
-
     def run(
             self,
             root_path: str,
@@ -995,7 +986,6 @@ class CacheExtractor:
             extract_nprocs: int = 8,
             force_serial: bool = False,
             n_build_workers: int = 1,
-            profile: bool = False,
             project_names: Optional[List[str]] = None) -> None:
         """
         Build all projects at `root_path` and save updated metadata.
@@ -1022,9 +1012,6 @@ class CacheExtractor:
         n_build_workers : int, optional
             The number of workers to allow per project when executing
             the `build` function, by default 1.
-        profile : bool, optional
-            If true, only 3 projects are used during extraction to allow
-            for quicker code profiling, by default False.
         project_names : list of str or None, optional
             If a list is provided, select only projects with names on
             the list for extraction. If projects on the given list
@@ -1056,9 +1043,6 @@ class CacheExtractor:
                 logging.warn(
                     "The following projects were requested but were not "
                     f"found: {', '.join(diff)}")
-        # If we're profiling, limit the number of projects
-        if profile and len(projects) > 4:
-            projects = projects[: 3]
         if force_serial:
             client_keys = None
             client_to_server_q = None
