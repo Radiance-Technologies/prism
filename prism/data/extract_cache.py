@@ -948,9 +948,6 @@ class CacheExtractor:
         """
         if log_dir is None:
             log_dir = Path(self.md_storage_file).parent
-        if updated_md_storage_file is None:
-            updated_md_storage_file = (
-                Path(self.md_storage_file).parent / "updated_metadata.yml")
         # Generate list of projects
         projects = list(
             tqdm.tqdm(
@@ -1029,7 +1026,8 @@ class CacheExtractor:
                                     result.trace
                                 ]))
             # update metadata
-            metadata_storage.dump(metadata_storage, updated_md_storage_file)
+            if updated_md_storage_file:
+                metadata_storage.dump(metadata_storage, updated_md_storage_file)
             print("Done")
 
     @staticmethod

@@ -86,6 +86,11 @@ if __name__ == "__main__":
         default=None,
         help="If provided, the number of commits per project is capped at"
         " this number.")
+    parser.add_argument(
+        "--updated-md-storage-file",
+        default=None,
+        help="If provided, the metadata storage, which may be updated as cache"
+        " is extracted, will be saved to the file given.")
     args = parser.parse_args()
     default_commits_path: str = args.default_commits_path
     cache_dir: str = args.cache_dir
@@ -98,6 +103,9 @@ if __name__ == "__main__":
     num_switches: int = int(args.num_switches)
     project_names = args.project_names if args.project_names else None
     max_num_commits: Optional[int] = args.max_num_commits
+    updated_md_storage_file: Optional[str] = args.updated_md_storage_file
+    if updated_md_storage_file:
+        os.makedirs(pathlib.Path(updated_md_storage_file).parent, exist_ok=True)
     # Force redirect the root logger to a file
     # This might break due to multiprocessing. If so, it should just
     # be disabled
@@ -121,4 +129,5 @@ if __name__ == "__main__":
         force_serial=force_serial,
         n_build_workers=n_build_workers,
         project_names=project_names,
-        max_num_commits=max_num_commits)
+        max_num_commits=max_num_commits,
+        updated_md_storage_file=updated_md_storage_file)
