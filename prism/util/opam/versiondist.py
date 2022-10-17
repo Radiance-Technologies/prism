@@ -13,9 +13,9 @@ from pathlib import Path
 from typing import Optional
 
 import git
-from pearls.prism.util.opam.formula.common import AssignedVariables
 
 from prism.util.opam.api import OpamAPI
+from prism.util.opam.formula.common import AssignedVariables
 from prism.util.opam.formula.version import VersionFormula
 from prism.util.opam.version import OpamVersion
 from prism.util.parse import ParseError
