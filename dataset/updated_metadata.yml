@@ -51,9 +51,9 @@ indices:
   opam_repositories: 1
 install_cmd: {}
 ocaml_packages:
-- - '"coq-flocq"'
-  - 0
 - - '"coq-menhirlib"'
+  - 0
+- - '"coq-flocq"'
   - 1
 - - '"menhir"'
   - 2
@@ -72,9 +72,9 @@ opam_repositories:
   - 0
 project_sources:
 - project_name: CompCert
-  repo_url: null
-- project_name: CompCert
   repo_url: https://github.com/AbsInt/CompCert
+- project_name: CompCert
+  repo_url: null
 projects:
 - CompCert
 revisions:
