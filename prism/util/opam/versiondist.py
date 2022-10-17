@@ -82,74 +82,74 @@ class VersionDistribution:
         if date is None:
             date = datetime.now()
 
-        REPO_LOCK.acquire()
+        with REPO_LOCK:
+            repo = git.Repo(REPO_DIRECTORY.name)
 
-        repo = git.Repo(REPO_DIRECTORY.name)
+            # get the commit right before the time desired
+            commit = repo.git.execute(
+                [
+                    "git",
+                    "rev-list",
+                    "-n1",
+                    f"--before=\"{date.strftime('%Y-%m-%d')}\"",
+                    "master"
+                ])
+            if (commit == ""):
+                # time given must predate entire repository!
+                REPO_LOCK.release()
+                raise ValueError("time given predates opam-coq repo")
 
-        # get the commit right before the time desired
-        commit = repo.git.execute(
-            [
-                "git",
-                "rev-list",
-                "-n1",
-                f"--before=\"{date.strftime('%Y-%m-%d')}\"",
-                "master"
-            ])
-        if (commit == ""):
-            # time given must predate entire repository!
-            REPO_LOCK.release()
-            raise ValueError("time given predates opam-coq repo")
+            repo.git.checkout(commit)
 
-        repo.git.checkout(commit)
+            # base directory of all packages (released,extra-dev,etc)
+            all_packages = list(
+                map(
+                    Path,
+                    glob.glob(
+                        REPO_DIRECTORY.name + "/**/packages/*",
+                        recursive=True)))
 
-        # base directory of all packages (released,extra-dev,etc)
-        all_packages = list(
-            map(
-                Path,
-                glob.glob(
-                    REPO_DIRECTORY.name + "/**/packages/*",
-                    recursive=True)))
+            # we only care about the most recent version
+            # of packages at this timestamp
+            new_packages = filter(
+                None,
+                (
+                    max(
+                        map(OpamVersion.parse,
+                            glob.glob(str(x / "*"))),
+                        default=None) for x in all_packages))
 
-        # we only care about the most recent version
-        # of packages at this timestamp
-        new_packages = filter(
-            None,
-            (
-                max(
-                    map(OpamVersion.parse,
-                        glob.glob(str(x / "*"))),
-                    default=None) for x in all_packages))
+            # build a regex to find our version constraint
+            single_dep_regex = r'"([^\"]+)"\s*(\{[^\}]+\})?\s*'
 
-        # build a regex to find our version constraint
-        single_dep_regex = r'"([^\"]+)"\s*(\{[^\}]+\})?\s*'
+            dep_regex = re.compile(
+                r'depends:\s*\[\s*(' + single_dep_regex + ')*('
+                + single_dep_regex.replace(r'[^\"]+',
+                                           package + r"(\.[^\"]+)?") + ')('
+                + single_dep_regex + ')*]',
+                flags=re.MULTILINE)
 
-        dep_regex = re.compile(
-            r'depends:\s*\[\s*(' + single_dep_regex + ')*('
-            + single_dep_regex.replace(r'[^\"]+',
-                                       package + r"(\.[^\"]+)?") + ')('
-            + single_dep_regex + ')*]',
-            flags=re.MULTILINE)
+            count = Counter()
 
-        count = Counter()
-
-        for package in new_packages:
-            try:
-                m = dep_regex.search((Path(str(package)) / "opam").read_text())
-            except NotADirectoryError:
-                # circa 2018 some packages had different structures
-                # so we will exclude those
-                continue
-            if (m and m.group(7)):
+            for package in new_packages:
                 try:
-                    constraint = VersionFormula.parse(m.group(7)[1 :-1])
-                    count.update(VersionFormula.filter(constraint, versions))
-                except ParseError:
-                    # TODO: maybe these should be warnings?
-                    pass
-            elif (m and m.group(6)):
-                # version was explicitly specified.
-                count[OpamVersion.parse(m.group(6)[1 :])] += 1
-
-        REPO_LOCK.release()
+                    m = dep_regex.search(
+                        (Path(str(package)) / "opam").read_text())
+                except NotADirectoryError:
+                    # circa 2018 some packages had different structures
+                    # so we will exclude those
+                    continue
+                if (m and m.group(7)):
+                    try:
+                        constraint = VersionFormula.parse(m.group(7)[1 :-1])
+                        count.update(
+                            VersionFormula.filter(constraint,
+                                                  versions))
+                    except ParseError:
+                        # TODO: maybe these should be warnings?
+                        pass
+                elif (m and m.group(6)):
+                    # version was explicitly specified.
+                    count[OpamVersion.parse(m.group(6)[1 :])] += 1
 
         return count
