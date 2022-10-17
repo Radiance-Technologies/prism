@@ -10,9 +10,11 @@ from collections import Counter
 from datetime import datetime
 from multiprocessing import Lock, Process
 from pathlib import Path
+from typing import Optional
 
 import git
 
+from pearls.prism.util.opam.formula.common import AssignedVariables
 from prism.util.opam.api import OpamAPI
 from prism.util.opam.formula.version import VersionFormula
 from prism.util.opam.version import OpamVersion
@@ -53,7 +55,11 @@ class VersionDistribution:
 
     @cachedmethod
     @classmethod
-    def search(cls, package, date=None):
+    def search(  # noqa: C901
+            cls,
+            package: str,
+            date: Optional[datetime] = None,
+            variables: Optional[AssignedVariables] = None) -> Counter:
         """
         Order versions of `package` by 'popularity'.
 
@@ -71,7 +77,26 @@ class VersionDistribution:
         )
         ```
         where indexing an unknown value will return 0.
+
+        Parameters
+        ----------
+        package : str
+            The name of an Opam package.
+        date : datetime | None
+            A date/time in history at which to conduct the search.
+            By default None, which defaults to "now".
+        variables : AssignedVariables | None
+            A map from variables to values to be used when evaluating
+            version formulae, by default None.
+
+        Returns
+        -------
+        Counter
+            A map from each version of `package` to the number of times
+            that it appeared as a dependency of other packages at the
+            designated date/time in history.
         """
+        # get versions in ascending order
         versions = list(
             map(
                 OpamVersion.parse,
@@ -121,19 +146,12 @@ class VersionDistribution:
                         default=None) for x in all_packages))
 
             # build a regex to find our version constraint
-            def single_dep_regex(capture: bool) -> re.Pattern:
-                if capture:
-                    capture = "?P<formula>"
-                else:
-                    capture = "?:"
-                return rf'"(?:[^\"]+)"\s*({capture}\{{[^\}}]+\}})?\s*'
-
             dep_regex = re.compile(
-                r'depends:\s*\[\s*(?:' + single_dep_regex(False) + ')*(?:'
-                + single_dep_regex(True).replace(
+                r'depends:\s*\[\s*(?:' + cls.single_constraint_regex(False)
+                + ')*(?:' + cls.single_constraint_regex(True).replace(
                     r'[^\"]+',
                     package + r"(?P<version>\.[^\"]+)?") + ')(?:'
-                + single_dep_regex(False) + ')*]',
+                + cls.single_constraint_regex(False) + ')*]',
                 flags=re.MULTILINE)
 
             count = Counter()
@@ -145,6 +163,7 @@ class VersionDistribution:
                 except NotADirectoryError:
                     # circa 2018 some packages had different structures
                     # so we will exclude those
+                    warnings.warn(f"Skipping {package}...")
                     continue
                 if m is not None:
                     formula = m.group('formula')
@@ -153,15 +172,61 @@ class VersionDistribution:
                         formula = formula[1 :-1].strip()
                         try:
                             constraint = VersionFormula.parse(formula)
-                            count.update(
-                                VersionFormula.filter(constraint,
-                                                      versions))
                         except ParseError:
                             warnings.warn(
                                 f"Failed to parse version formula from {formula}"
                             )
+                        else:
+                            simplified = constraint.simplify(
+                                None,
+                                variables=variables,
+                                evaluate_filters=True)
+                            if isinstance(simplified, VersionFormula):
+                                filtered = simplified.filter_versions(
+                                    versions,
+                                    variables=variables)
+                            elif isinstance(simplified, bool):
+                                if simplified:
+                                    filtered = versions
+                                else:
+                                    filtered = []
+                            else:
+                                warnings.warn(
+                                    "Unsure how to filter with simplified "
+                                    f"constraint '{simplified}' obtained from "
+                                    f"'{constraint}'. Defaulting to True.")
+                                filtered = versions
+                            count.update(filtered)
                     elif version is not None:
                         version = version[1 :]
                         # version was explicitly specified.
-                        count[OpamVersion.parse(version)] += 1
+                        try:
+                            version = OpamVersion.parse(version)
+                        except ParseError:
+                            warnings.warn(
+                                f"Failed to parse version from {version}")
+                        else:
+                            count[version] += 1
         return count
+
+    @staticmethod
+    def single_constraint_regex(capture: bool) -> re.Pattern:
+        """
+        Get a regular expression that matches a package constraint.
+
+        Parameters
+        ----------
+        capture : bool
+            If True, then capture the version formula in the package
+            constraint as a group named ``"formula"``.
+
+        Returns
+        -------
+        re.Pattern
+            A regular expression that matches one package constraint.
+        """
+        if capture:
+            capture = "?P<formula>"
+        else:
+            capture = "?:"
+        return rf'"(?:[^\"]+)"\s*({capture}\{{[^\}}]+\}})?\s*'
