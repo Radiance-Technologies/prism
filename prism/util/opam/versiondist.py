@@ -5,6 +5,7 @@ Utility for guessing popular package versions.
 import glob
 import re
 import tempfile
+import warnings
 from collections import Counter
 from datetime import datetime
 from multiprocessing import Lock, Process
@@ -120,13 +121,19 @@ class VersionDistribution:
                         default=None) for x in all_packages))
 
             # build a regex to find our version constraint
-            single_dep_regex = r'"([^\"]+)"\s*(\{[^\}]+\})?\s*'
+            def single_dep_regex(capture: bool) -> re.Pattern:
+                if capture:
+                    capture = "?P<formula>"
+                else:
+                    capture = "?:"
+                return rf'"(?:[^\"]+)"\s*({capture}\{{[^\}}]+\}})?\s*'
 
             dep_regex = re.compile(
-                r'depends:\s*\[\s*(' + single_dep_regex + ')*('
-                + single_dep_regex.replace(r'[^\"]+',
-                                           package + r"(\.[^\"]+)?") + ')('
-                + single_dep_regex + ')*]',
+                r'depends:\s*\[\s*(?:' + single_dep_regex(False) + ')*(?:'
+                + single_dep_regex(True).replace(
+                    r'[^\"]+',
+                    package + r"(?P<version>\.[^\"]+)?") + ')(?:'
+                + single_dep_regex(False) + ')*]',
                 flags=re.MULTILINE)
 
             count = Counter()
@@ -139,17 +146,22 @@ class VersionDistribution:
                     # circa 2018 some packages had different structures
                     # so we will exclude those
                     continue
-                if (m and m.group(7)):
-                    try:
-                        constraint = VersionFormula.parse(m.group(7)[1 :-1])
-                        count.update(
-                            VersionFormula.filter(constraint,
-                                                  versions))
-                    except ParseError:
-                        # TODO: maybe these should be warnings?
-                        pass
-                elif (m and m.group(6)):
-                    # version was explicitly specified.
-                    count[OpamVersion.parse(m.group(6)[1 :])] += 1
-
+                if m is not None:
+                    formula = m.group('formula')
+                    version = m.group('version')
+                    if formula is not None:
+                        formula = formula[1 :-1].strip()
+                        try:
+                            constraint = VersionFormula.parse(formula)
+                            count.update(
+                                VersionFormula.filter(constraint,
+                                                      versions))
+                        except ParseError:
+                            warnings.warn(
+                                f"Failed to parse version formula from {formula}"
+                            )
+                    elif version is not None:
+                        version = version[1 :]
+                        # version was explicitly specified.
+                        count[OpamVersion.parse(version)] += 1
         return count
