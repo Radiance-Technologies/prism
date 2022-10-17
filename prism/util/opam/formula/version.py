@@ -138,14 +138,15 @@ class VersionFormula(Parseable, ABC):
         try:
             logop, pos = LogOp._chain_parse(input, pos)
         except ParseError:
-            formula = left
+            # it turns out Opam doesn't require an explicit logop, which
+            # contradicts its official version formula grammar
+            logop = LogOp.AND
+        try:
+            right, pos = VersionFormula._chain_parse(input, pos)
+        except ParseError as e:
+            raise ParseError(LogicalVF, input[begpos :]) from e
         else:
-            try:
-                right, pos = VersionFormula._chain_parse(input, pos)
-            except ParseError as e:
-                raise ParseError(LogicalVF, input[begpos :]) from e
-            else:
-                formula = LogicalVF(left, logop, right)
+            formula = LogicalVF(left, logop, right)
         return formula, pos
 
 
