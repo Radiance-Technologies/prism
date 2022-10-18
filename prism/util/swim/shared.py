@@ -43,6 +43,7 @@ def SharedSwitchManagerServer(
     manager.register("SwitchManager", swim_cls)
     # dies when parent process does, no need to clean up.
     manager.start()
+    return manager
 
 
 def SharedSwitchManagerClient(
