@@ -393,6 +393,19 @@ class TestVersionFormula(unittest.TestCase):
         with self.assertRaises(ParseError):
             VersionFormula.parse(
                 '!= "2.0.pre | !(< "3") & <= "3.9.0" | ="4.0+dev"')
+        with self.subTest("implied_logop"):
+            self.assertEqual(
+                VersionFormula.parse('>= "8.11" < "8.17~" != "8.14"'),
+                LogicalVF(
+                    VersionConstraint(RelOp.GEQ,
+                                      OpamVersion.parse("8.11")),
+                    LogOp.AND,
+                    LogicalVF(
+                        VersionConstraint(RelOp.LT,
+                                          OpamVersion.parse("8.17~")),
+                        LogOp.AND,
+                        VersionConstraint(RelOp.NEQ,
+                                          OpamVersion.parse("8.14")))))
 
     def test_str(self):
         """
