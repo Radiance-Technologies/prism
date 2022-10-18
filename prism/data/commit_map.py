@@ -387,8 +387,8 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
                 storage.insert(metadata)
             # capture non-updated metadata
             for other_p in p_storage.projects.difference(updated_projects):
-                if other_p not in storage.projects:
-                    for metadata in p_storage.get_all(other_p):
+                for metadata in p_storage.get_all(other_p):
+                    if metadata not in storage:
                         storage.insert(metadata)
         for p in self.projects:
             p.metadata_storage = storage
