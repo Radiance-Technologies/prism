@@ -748,7 +748,7 @@ def cache_extract_commit_iterator(
         # committed_date is in seconds since epoch
         if item.committed_date and item.committed_date >= limit_epoch:
             yield item.hexsha
-        if i >= max_num_commits:
+        if max_num_commits and i >= max_num_commits:
             break
 
 

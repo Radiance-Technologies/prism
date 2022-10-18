@@ -106,7 +106,7 @@ if __name__ == "__main__":
     force_serial: bool = bool(args.force_serial)
     num_switches: int = int(args.num_switches)
     project_names = args.project_names if args.project_names else None
-    max_num_commits: Optional[int] = args.max_num_commits
+    max_num_commits: Optional[int] = int(args.max_num_commits)
     updated_md_storage_file: Optional[str] = args.updated_md_storage_file
     if updated_md_storage_file:
         os.makedirs(pathlib.Path(updated_md_storage_file).parent, exist_ok=True)
