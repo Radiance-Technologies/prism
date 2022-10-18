@@ -575,8 +575,8 @@ def extract_cache(
         switch_manager: SwitchManager,
         project: ProjectRepo,
         commit_sha: str,
-        process_project: Callable[[Project],
-                                  VernacDict],
+        process_project_fallback: Callable[[Project],
+                                           VernacDict],
         coq_version: Optional[str] = None,
         recache: Optional[Callable[
             [CoqProjectBuildCacheServer,
@@ -617,14 +617,14 @@ def extract_cache(
         The project from which to extract data.
     commit_sha : str
         The commit whose data should be extracted.
-    process_project : Callable[[Project], VernacDict]
+    process_project_fallback : Callable[[Project], VernacDict]
         Function that provides fallback vernacular command
         extraction for projects that do not build.
     coq_version : str or None, optional
         The version of Coq in which to build the project, by default
         None.
-    recache : Callable[[CoqProjectBuildCache, ProjectRepo, str, \
-                    str], bool]
+    recache : Callable[[CoqProjectBuildCache, ProjectRepo, str, str], \
+                       bool] \
             or None, optional
         A function that for an existing entry in the cache returns
         whether it should be reprocessed or not.
@@ -655,7 +655,7 @@ def extract_cache(
             switch_manager,
             project,
             commit_sha,
-            process_project,
+            process_project_fallback,
             coq_version,
             block,
             files_to_use)
@@ -666,8 +666,8 @@ def extract_cache_new(
         switch_manager: SwitchManager,
         project: ProjectRepo,
         commit_sha: str,
-        process_project: Callable[[Project],
-                                  VernacDict],
+        process_project_fallback: Callable[[Project],
+                                           VernacDict],
         coq_version: str,
         block: bool,
         files_to_use: Optional[Iterable[str]]):
@@ -685,7 +685,7 @@ def extract_cache_new(
         The project from which to extract data.
     commit_sha : str
         The commit whose data should be extracted.
-    process_project : Callable[[Project], VernacDict]
+    process_project_fallback : Callable[[Project], VernacDict]
         Function that provides fallback vernacular command
         extraction for projects that do not build.
     coq_version : str or None, optional
@@ -715,7 +715,7 @@ def extract_cache_new(
         build_result = project.build()
     except ProjectBuildError as pbe:
         build_result = (pbe.return_code, pbe.stdout, pbe.stderr)
-        command_data = process_project(project)
+        command_data = process_project_fallback(project)
     else:
         command_data = extract_vernac_commands(project, files_to_use)
     data = ProjectCommitData(
@@ -752,17 +752,6 @@ def cache_extract_commit_iterator(
             break
 
 
-def default_recache(
-        build_cache: CoqProjectBuildCacheServer,
-        project: ProjectRepo,
-        commit_sha: str,
-        coq_version: str) -> bool:
-    """
-    Provide a placeholder function for now.
-    """
-    return False
-
-
 class CacheExtractor:
     """
     Class for managing a broad Coq project cache extraction process.
@@ -782,8 +771,14 @@ class CacheExtractor:
                                                     Iterable[Union[
                                                         str,
                                                         Version]]]] = None,
-            process_project: Optional[Callable[[ProjectRepo],
-                                               VernacDict]] = None,
+            process_project_fallback: Optional[Callable[[ProjectRepo],
+                                                        VernacDict]] = None,
+            recache: Optional[Callable[
+                [CoqProjectBuildCacheServer,
+                 ProjectRepo,
+                 str,
+                 str],
+                bool]] = None,
             files_to_use: Optional[Dict[str,
                                         Iterable[str]]] = None,
             cache_fmt_ext: Optional[str] = None,
@@ -837,15 +832,15 @@ class CacheExtractor:
         """
 
         if coq_version_iterator is None:
-            coq_version_iterator = self._default_coq_version_iterator
+            coq_version_iterator = self.default_coq_version_iterator
         self.coq_version_iterator = coq_version_iterator
         """
         An iterator over coq versions
         """
 
-        if process_project is None:
-            process_project = self._default_process_project
-        self.process_project = process_project
+        if process_project_fallback is None:
+            process_project_fallback = self.default_process_project_fallback
+        self.process_project_fallback = process_project_fallback
         """
         Function to process commits for cache extraction if they do not
         build
@@ -856,6 +851,14 @@ class CacheExtractor:
         A mapping from project name to files to use from that project;
         or None. If None, all files are used. By default, None.
         This argument is especially useful for profiling.
+        """
+
+        if recache is None:
+            recache = self.default_recache
+        self.recache = recache
+        """
+        Function that determines when a project commit's cached
+        artifacts should be recomputed.
         """
 
     def get_commit_iterator_func(
@@ -893,15 +896,10 @@ class CacheExtractor:
             CacheExtractor.extract_cache_func,
             build_cache_client_map=self.cache_clients,
             switch_manager=self.swim,
-            process_project=self.process_project,
+            process_project_fallback=self.process_project_fallback,
+            recache=self.recache,
             coq_version_iterator=self.coq_version_iterator,
             files_to_use=self.files_to_use)
-
-    def _default_coq_version_iterator(self, *args, **kwargs):
-        return ["8.10.2"]
-
-    def _default_process_project(self, *args, **kwargs) -> VernacDict:
-        return dict()
 
     def run(
             self,
@@ -1056,6 +1054,32 @@ class CacheExtractor:
             max_num_commits)
 
     @staticmethod
+    def default_coq_version_iterator(_project: Project,
+                                     _commit: str) -> List[str]:
+        """
+        By default, extract build caches only for Coq 8.10.2.
+        """
+        return ["8.10.2"]
+
+    @staticmethod
+    def default_process_project_fallback(_project: ProjectRepo) -> VernacDict:
+        """
+        By default, do nothing on project build failure.
+        """
+        return dict()
+
+    @staticmethod
+    def default_recache(
+            _build_cache: CoqProjectBuildCacheServer,
+            _project: ProjectRepo,
+            _commit_sha: str,
+            _coq_version: str) -> bool:
+        """
+        By default, do not recache anything.
+        """
+        return False
+
+    @staticmethod
     def extract_cache_func(
             project: ProjectRepo,
             commit_sha: str,
@@ -1063,15 +1087,21 @@ class CacheExtractor:
             build_cache_client_map: Dict[str,
                                          CoqProjectBuildCacheClient],
             switch_manager: SwitchManager,
-            process_project: Callable[[Project],
-                                      VernacDict],
+            process_project_fallback: Callable[[Project],
+                                               VernacDict],
+            recache: Callable[
+                [CoqProjectBuildCacheServer,
+                 ProjectRepo,
+                 str,
+                 str],
+                bool],
             coq_version_iterator: Callable[[Project,
                                             str],
                                            Iterable[Union[str,
                                                           Version]]],
             files_to_use: Optional[Dict[str,
                                         Iterable[str]]]):
-        """
+        r"""
         Extract cache.
 
         Parameters
@@ -1087,9 +1117,14 @@ class CacheExtractor:
             write extracted cache to disk
         switch_manager : SwitchManager
             A switch manager to use during extraction
-        process_project : Callable[[Project], VernacDict]
+        process_project_fallback : Callable[[Project], VernacDict]
             A function that does a best-effort cache extraction when the
             project does not build
+        recache : Callable[[CoqProjectBuildCache, ProjectRepo, str, \
+                            str], \
+                           bool]
+            A function that for an existing entry in the cache returns
+            whether it should be reprocessed or not.
         coq_version_iterator : Callable[[Project, str],
                                         Iterable[Union[str, Version]]]
             A function that returns an iterable over allowable coq
@@ -1110,7 +1145,7 @@ class CacheExtractor:
                 switch_manager,
                 project,
                 commit_sha,
-                process_project,
+                process_project_fallback,
                 str(coq_version),
-                default_recache,
+                recache,
                 files_to_use=files_to_use[project.name])
