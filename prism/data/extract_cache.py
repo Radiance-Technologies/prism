@@ -1143,6 +1143,8 @@ class CacheExtractor:
             coq_version_iterator(project,
                                  commit_sha),
             desc="Coq version")
+        if files_to_use is not None:
+            files_to_use = files_to_use[project.name]
         for coq_version in pbar:
             pbar.set_description(f"Coq version: {coq_version}")
             extract_cache(
@@ -1153,4 +1155,4 @@ class CacheExtractor:
                 process_project_fallback,
                 str(coq_version),
                 recache,
-                files_to_use=files_to_use[project.name])
+                files_to_use=files_to_use)
