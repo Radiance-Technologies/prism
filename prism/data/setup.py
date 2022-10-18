@@ -2,7 +2,6 @@
 Setup utilities, especially for repair mining.
 """
 import os
-from inspect import signature
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple, Union
 
@@ -16,7 +15,10 @@ from prism.util.opam.api import OpamAPI
 from prism.util.opam.switch import OpamSwitch
 
 
-def _initialize_switch(args: Tuple[str, str]) -> OpamSwitch:
+def _initialize_switch(
+        args: Tuple[str,
+                    str,
+                    Optional[os.PathLike]]) -> OpamSwitch:
     """
     Unpack arguments for `initialize_switch`.
     """
@@ -151,17 +153,16 @@ def create_default_switches(n_procs: int = 1) -> List[OpamSwitch]:
     return switch_list
 
 
-def _initialize_project(args: Tuple[str, str]) -> Project:
+def _initialize_project(
+    args: Tuple[str,
+                str,
+                MetadataStorage,
+                Optional[SentenceExtractionMethod],
+                Optional[int]]
+) -> ProjectRepo:
     """
     Unpack arguments for `initialize_project`.
     """
-    nargs = len(args)
-    if nargs < 3:
-        raise RuntimeError(
-            "The following arguments are required:"
-            " root_path, project_name, and metadata_storage.")
-    nparam = len(signature(initialize_project).parameters)
-    args = args + (nparam - nargs) * (None,)
     return initialize_project(*args)
 
 
@@ -169,8 +170,8 @@ def initialize_project(
     root_path: str,
     project_name: str,
     metadata_storage: MetadataStorage,
-    sentence_extraction_method: SentenceExtractionMethod,
-    n_build_workers: int,
+    sentence_extraction_method: Optional[SentenceExtractionMethod] = None,
+    n_build_workers: Optional[int] = None,
 ) -> ProjectRepo:
     """
     Initialize project from parent directory and project name.
@@ -179,17 +180,17 @@ def initialize_project(
 
     Parameters
     ----------
-    root_path: str,
+    root_path: str
         Root path containing project root directories
         with names matching project names.
-    project_name: str,
+    project_name: str
         Name of project to be initialized.
-    metadata_storage: MetadataStorage,
+    metadata_storage: MetadataStorage
         A metadata storage instance.
-    sentence_extraction_method: SentenceExtractionMethod,
+    sentence_extraction_method: SentenceExtractionMethod | None
         Project sentence extraction method. If None, the default
         SentenceExtractionMethod will be used.
-    n_build_workers: int,
+    n_build_workers: int | None
         Number of process to build with. If None, the default
         number of processes will be used.
 
@@ -274,7 +275,12 @@ def initialize_projects(
             "Sentence extraction method should be specified"
             "once (int), for each project (Tuple[int]), or not at all (None)")
 
-    job_list = zip(root_paths, projects, metadata_storages, n_build_workers)
+    job_list = zip(
+        root_paths,
+        projects,
+        metadata_storages,
+        sentence_extraction_methods,
+        n_build_workers)
 
     if n_procs != 1:
         # BUG: This may cause an OSError on program exit in Python 3.8
