@@ -1053,23 +1053,27 @@ class CacheExtractor:
             starting_commit_sha,
             max_num_commits)
 
-    @staticmethod
-    def default_coq_version_iterator(_project: Project,
+    @classmethod
+    def default_coq_version_iterator(cls,
+                                     _project: Project,
                                      _commit: str) -> List[str]:
         """
         By default, extract build caches only for Coq 8.10.2.
         """
         return ["8.10.2"]
 
-    @staticmethod
-    def default_process_project_fallback(_project: ProjectRepo) -> VernacDict:
+    @classmethod
+    def default_process_project_fallback(
+            cls,
+            _project: ProjectRepo) -> VernacDict:
         """
         By default, do nothing on project build failure.
         """
         return dict()
 
-    @staticmethod
+    @classmethod
     def default_recache(
+            cls,
             _build_cache: CoqProjectBuildCacheServer,
             _project: ProjectRepo,
             _commit_sha: str,
@@ -1079,8 +1083,9 @@ class CacheExtractor:
         """
         return False
 
-    @staticmethod
+    @classmethod
     def extract_cache_func(
+            cls,
             project: ProjectRepo,
             commit_sha: str,
             _result: None,
