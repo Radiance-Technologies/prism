@@ -179,18 +179,25 @@ def initialize_project(
 
     Parameters
     ----------
-    root_path : str
-        Directory containing project folder
-    compiler : str
-        Desired compiler for switch.
-    opam_root : os.PathLike | None, optional
-        The OPAM root of the desired switch, by default the current
-        globally set root.
+    root_path: str,
+        Root path containing project root directories
+        with names matching project names.
+    project_name: str,
+        Name of project to be initialized.
+    metadata_storage: MetadataStorage,
+        A metadata storage instance.
+    sentence_extraction_method: SentenceExtractionMethod,
+        Project sentence extraction method. If None, the default
+        SentenceExtractionMethod will be used.
+    n_build_workers: int,
+        Number of process to build with. If None, the default
+        number of processes will be used.
 
     Returns
     -------
-    OpamSwitch
-        New OPAM switch.
+    ProjectRepo
+        Initialized project with specified sentence extraction method,
+        build worker count, and metadata storage.
     """
     repo_path = Path(root_path) / project_name
     # Quietly allow user to avoid overriding defaults.
