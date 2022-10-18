@@ -329,8 +329,11 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
     """
     Map a function over commits of all projects in a given collection.
 
-    In addition, update the MetadataStorage of each project according to
-    any changes incurred due to the provided map function.
+    In addition, update the `MetadataStorage` of each project according
+    to any changes incurred due to the provided map function. Note that
+    if the initial `MetadataStorage` of each project differs,
+    conflicting information is resolved in a first-come, first-serve
+    basis.
     """
 
     def __init__(
@@ -362,6 +365,7 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
         # get all project's metadata with the understanding that each
         # project only affected at most its own records
         storage = MetadataStorage()
+        updated_projects = {p.name for p in self.projects}
         for p in self.projects:
             result = results[p.name]
             exception = None
@@ -381,6 +385,11 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
                 p_storage = result[1]
             for metadata in p_storage.get_all(p.name):
                 storage.insert(metadata)
+            # capture non-updated metadata
+            for other_p in p_storage.projects.difference(updated_projects):
+                if other_p not in storage.projects:
+                    for metadata in p_storage.get_all(other_p):
+                        storage.insert(metadata)
         for p in self.projects:
             p.metadata_storage = storage
         return results
