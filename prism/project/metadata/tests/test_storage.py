@@ -37,6 +37,17 @@ class TestMetadataStorage(unittest.TestCase):
         self.metadata = list(reversed(ProjectMetadata.load(self.projects_yaml)))
         return super().setUp()
 
+    def test_contains(self):
+        """
+        Verify that metadata existence in the storage can be tested.
+        """
+        storage = MetadataStorage()
+        storage.insert(self.metadata[0])
+        self.assertIn(self.metadata[0], storage)
+        self.assertNotIn(self.metadata[1], storage)
+        with self.assertRaises(TypeError):
+            self.assertIn('gstew5_games' in storage)
+
     def test_get_project_revisions(self):
         """
         Verify that function returns valid results for a project.
