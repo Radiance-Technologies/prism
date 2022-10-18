@@ -13,7 +13,11 @@ from prism.data.extract_cache import (
     cache_extract_commit_iterator,
 )
 from prism.data.setup import create_default_switches
-from prism.util.swim import AutoSwitchManager
+from prism.util.swim import (
+    AutoSwitchManager,
+    SharedSwitchManagerClient,
+    SharedSwitchManagerServer,
+)
 
 if __name__ == "__main__":
     # Get args
@@ -115,7 +119,11 @@ if __name__ == "__main__":
     logging.basicConfig(filename=log_file_path, force=True)
     # Do things
     create_default_switches(num_switches)
-    swim = AutoSwitchManager()
+    if force_serial:
+        swim = AutoSwitchManager()
+    else:
+        swim_server = SharedSwitchManagerServer(AutoSwitchManager)
+        swim = SharedSwitchManagerClient(swim_server)
     cache_extractor = CacheExtractor(
         cache_dir,
         mds_file,
