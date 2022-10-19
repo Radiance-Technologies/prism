@@ -1,13 +1,36 @@
 """
 Module for storing cache extraction functions.
 """
+import calendar
+import logging
+import multiprocessing as mp
+import os
 import re
 import warnings
-from typing import Callable, Dict, Iterable, List, Optional, Set, Tuple
+from datetime import datetime
+from functools import partial
+from multiprocessing import Pool
+from pathlib import Path
+from typing import (
+    Callable,
+    Dict,
+    Generator,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
+
+import tqdm
+from seutil import io
 
 from prism.data.build_cache import (
     CommandType,
-    CoqProjectBuildCache,
+    CoqProjectBuildCacheClient,
+    CoqProjectBuildCacheServer,
     ProjectBuildEnvironment,
     ProjectBuildResult,
     ProjectCommitData,
@@ -16,7 +39,10 @@ from prism.data.build_cache import (
     VernacCommandData,
     VernacDict,
     VernacSentence,
+    create_cpbcs_qs,
 )
+from prism.data.commit_map import Except, ProjectCommitUpdateMapper
+from prism.data.util import get_project_func
 from prism.interface.coq.goals import Goals
 from prism.interface.coq.re_patterns import OBLIGATION_ID_PATTERN
 from prism.interface.coq.serapi import SerAPI
@@ -24,7 +50,9 @@ from prism.language.heuristic.parser import CoqSentence
 from prism.language.sexp import SexpParser
 from prism.project.base import SEM, Project
 from prism.project.exception import ProjectBuildError
-from prism.project.repo import ProjectRepo
+from prism.project.metadata.storage import MetadataStorage
+from prism.project.repo import ChangedCoqCommitIterator, ProjectRepo
+from prism.util.opam.version import Version
 from prism.util.radpytools import unzip
 from prism.util.radpytools.os import pushd
 from prism.util.swim import SwitchManager
@@ -493,7 +521,9 @@ def _extract_vernac_commands(
     return file_commands
 
 
-def extract_vernac_commands(project: ProjectRepo) -> VernacDict:
+def extract_vernac_commands(
+        project: ProjectRepo,
+        files_to_use: Optional[Iterable[str]] = None) -> VernacDict:
     """
     Compile vernac commands from a project into a dict.
 
@@ -501,6 +531,10 @@ def extract_vernac_commands(project: ProjectRepo) -> VernacDict:
     ----------
     project : ProjectRepo
         The project from which to extract the vernac commands
+    files_to_use : Iterable[str] | None
+        An iterable of filenames to use for this project; or None. If
+        None, all files are used. By default, None.
+        This argument is especially useful for profiling.
 
     Returns
     -------
@@ -509,8 +543,23 @@ def extract_vernac_commands(project: ProjectRepo) -> VernacDict:
     """
     command_data = {}
     with pushd(project.dir_abspath):
-        for filename in project.get_file_list(relative=True,
-                                              dependency_order=True):
+        file_list = project.get_file_list(relative=True, dependency_order=True)
+        if files_to_use:
+            file_list = [f for f in file_list if f in files_to_use]
+        pbar = tqdm.tqdm(
+            file_list,
+            total=len(file_list),
+            desc="extract_vernac_commands")
+        for filename in pbar:
+            # Verify that accompanying vo file exists first
+            pbar.set_description(f"extract_vernac_commands: {filename}")
+            path = Path(filename)
+            vo = path.parent / (path.stem + ".vo")
+            if not os.path.exists(vo):
+                logging.info(
+                    f"Skipped extraction for file {filename}. "
+                    "No .vo file found.")
+                continue
             command_data[filename] = _extract_vernac_commands(
                 project.get_sentences(
                     filename,
@@ -522,33 +571,36 @@ def extract_vernac_commands(project: ProjectRepo) -> VernacDict:
 
 
 def extract_cache(
-    build_cache: CoqProjectBuildCache,
-    switch_manager: SwitchManager,
-    project: ProjectRepo,
-    commit_sha: str,
-    process_project: Callable[[Project],
-                              VernacDict],
-    coq_version: Optional[str] = None,
-    recache: Optional[Callable[[CoqProjectBuildCache,
-                                ProjectRepo,
-                                str,
-                                str],
-                               bool]] = None
-) -> None:
+        build_cache_client: CoqProjectBuildCacheClient,
+        switch_manager: SwitchManager,
+        project: ProjectRepo,
+        commit_sha: str,
+        process_project_fallback: Callable[[Project],
+                                           VernacDict],
+        coq_version: Optional[str] = None,
+        recache: Optional[Callable[
+            [CoqProjectBuildCacheServer,
+             ProjectRepo,
+             str,
+             str],
+            bool]] = None,
+        block: bool = False,
+        files_to_use: Optional[Iterable[str]] = None) -> None:
     r"""
-    Extract data from a project commit and insert it into `build_cache`.
+    Extract data from project commit and insert into `build_cache`.
 
-    The cache is implemented as a file-and-directory-based repository
-    structure (`CoqProjectBuildCache`) that provides storage of
-    artifacts and concurrent access for parallel processes through the
-    operating system's own file system. Directories identify projects
-    and commits with a separate cache file per build environment (i.e.,
-    Coq version). The presence or absence of a cache file within the
-    structure indicates whether the commit has been cached yet. The
-    cache files themselves contain two key pieces of information
-    (reflected in `ProjectCommitData`): the metadata for the commit and
-    a map from Coq file paths in the project to sets of per-sentence
-    build artifacts (represented by `VernacCommandData`).
+    The cache is implemented as a file-and-directory-based
+    repository structure (`CoqProjectBuildCache`) that provides
+    storage of artifacts and concurrent access for parallel
+    processes through the operating system's own file system.
+    Directories identify projects and commits with a separate cache
+    file per build environment (i.e., Coq version). The presence or
+    absence of a cache file within the structure indicates whether
+    the commit has been cached yet. The cache files themselves
+    contain two key pieces of information (reflected in
+    `ProjectCommitData`): the metadata for the commit and a map from
+    Coq file paths in the project to sets of per-sentence build
+    artifacts (represented by `VernacCommandData`).
 
     This function does not return any cache extracted. Instead, it
     modifies on-disk build cache by inserting any previously unseen
@@ -556,25 +608,32 @@ def extract_cache(
 
     Parameters
     ----------
-    build_cache : CoqProjectBuildCache
-        The build cache in which to insert the build artifacts.
+    build_cache_client : CoqProjectBuildCacheClient
+        The client that can insert the build artifacts into the on-disk
+        build cache.
     switch_manager : SwitchManager
         A source of switches in which to process the project.
     project : ProjectRepo
         The project from which to extract data.
     commit_sha : str
         The commit whose data should be extracted.
-    process_project : Callable[[Project], VernacDict]
-        Function that provides fallback vernacular command extraction
-        for projects that do not build.
+    process_project_fallback : Callable[[Project], VernacDict]
+        Function that provides fallback vernacular command
+        extraction for projects that do not build.
     coq_version : str or None, optional
         The version of Coq in which to build the project, by default
         None.
     recache : Callable[[CoqProjectBuildCache, ProjectRepo, str, str], \
-                       bool]
-              or None, optional
+                       bool] \
+            or None, optional
         A function that for an existing entry in the cache returns
         whether it should be reprocessed or not.
+    block : bool, optional
+        Whether to use blocking cache writes, by default False
+    files_to_use : Iterable[str] | None
+        An iterable of files to use from this project; or None. If None,
+        all files are used. By default, None.
+        This argument is especially useful for profiling.
 
     See Also
     --------
@@ -586,47 +645,58 @@ def extract_cache(
         coq_version = project.metadata.coq_version
     if ((project.name,
          commit_sha,
-         coq_version) not in build_cache
-            or (recache is not None and recache(build_cache,
+         coq_version) not in build_cache_client
+            or (recache is not None and recache(build_cache_client,
                                                 project,
                                                 commit_sha,
                                                 coq_version))):
         extract_cache_new(
-            build_cache,
+            build_cache_client,
             switch_manager,
             project,
             commit_sha,
-            process_project,
-            coq_version)
+            process_project_fallback,
+            coq_version,
+            block,
+            files_to_use)
 
 
 def extract_cache_new(
-        build_cache: CoqProjectBuildCache,
+        build_cache_client: CoqProjectBuildCacheClient,
         switch_manager: SwitchManager,
         project: ProjectRepo,
         commit_sha: str,
-        process_project: Callable[[Project],
-                                  VernacDict],
-        coq_version: str):
+        process_project_fallback: Callable[[Project],
+                                           VernacDict],
+        coq_version: str,
+        block: bool,
+        files_to_use: Optional[Iterable[str]]):
     """
     Extract a new cache and insert it into the build cache.
 
     Parameters
     ----------
-    build_cache : CoqProjectBuildCache
-        The build cache in which to insert the build artifacts.
+    build_cache_client : CoqProjectBuildCacheClient
+        The client that can communicate the build cache to be written to
+        the build cache server
     switch_manager : SwitchManager
         A source of switches in which to process the project.
     project : ProjectRepo
         The project from which to extract data.
     commit_sha : str
         The commit whose data should be extracted.
-    process_project : Callable[[Project], VernacDict]
-        Function that provides fallback vernacular command extraction
-        for projects that do not build.
+    process_project_fallback : Callable[[Project], VernacDict]
+        Function that provides fallback vernacular command
+        extraction for projects that do not build.
     coq_version : str or None, optional
         The version of Coq in which to build the project, by default
         None.
+    block : bool
+        Whether to use blocking cache writes
+    files_to_use : Iterable[str] | None
+        An iterable of files to use from this project; or None. If None,
+        all files are used. By default, None.
+        This argument is especially useful for profiling.
     """
     project.git.checkout(commit_sha)
     # get a switch
@@ -645,15 +715,444 @@ def extract_cache_new(
         build_result = project.build()
     except ProjectBuildError as pbe:
         build_result = (pbe.return_code, pbe.stdout, pbe.stderr)
-        command_data = process_project(project)
+        command_data = process_project_fallback(project)
     else:
-        command_data = extract_vernac_commands(project)
+        command_data = extract_vernac_commands(project, files_to_use)
     data = ProjectCommitData(
         metadata,
         command_data,
         ProjectBuildEnvironment(project.opam_switch.export()),
         ProjectBuildResult(*build_result))
-    build_cache.insert(data)
+    build_cache_client.insert(data, block)
     # release the switch
     switch_manager.release_switch(project.opam_switch)
     project.opam_switch = original_switch
+
+
+def cache_extract_commit_iterator(
+        project: ProjectRepo,
+        starting_commit_sha: str,
+        max_num_commits: Optional[int]) -> Generator[str,
+                                                     None,
+                                                     None]:
+    """
+    Provide default commit iterator for cache extraction.
+    """
+    iterator = ChangedCoqCommitIterator(project, starting_commit_sha)
+    i = 0
+    for item in iterator:
+        i += 1
+        # Define the minimum date; convert it to seconds since epoch
+        limit_date = datetime(2019, 1, 1, 0, 0, 0)
+        limit_epoch = calendar.timegm(limit_date.timetuple())
+        # committed_date is in seconds since epoch
+        if item.committed_date and item.committed_date >= limit_epoch:
+            yield item.hexsha
+        if max_num_commits and i >= max_num_commits:
+            break
+
+
+class CacheExtractor:
+    """
+    Class for managing a broad Coq project cache extraction process.
+    """
+
+    def __init__(
+            self,
+            cache_dir: str,
+            metadata_storage_file: str,
+            swim: SwitchManager,
+            default_commits_path: str,
+            commit_iterator_factory: Callable[[ProjectRepo,
+                                               str],
+                                              Iterator[str]],
+            coq_version_iterator: Optional[Callable[[Project,
+                                                     str],
+                                                    Iterable[Union[
+                                                        str,
+                                                        Version]]]] = None,
+            process_project_fallback: Optional[Callable[[ProjectRepo],
+                                                        VernacDict]] = None,
+            recache: Optional[Callable[
+                [CoqProjectBuildCacheServer,
+                 ProjectRepo,
+                 str,
+                 str],
+                bool]] = None,
+            files_to_use: Optional[Dict[str,
+                                        Iterable[str]]] = None,
+            cache_fmt_ext: Optional[str] = None,
+            mds_fmt: Optional[str] = None):
+        self.cache_kwargs = {
+            "fmt_ext": cache_fmt_ext
+        } if cache_fmt_ext else {}
+        """
+        Keyword arguments for constructing the project cache build
+        server
+        """
+        self.mds_kwargs = {
+            "fmt": mds_fmt
+        } if mds_fmt else {}
+        """
+        Keyword arguments for constructing the metadata storage
+        """
+        self.cache_dir = cache_dir
+        """
+        Directory the cache will be read from and written to
+        """
+        self.swim = swim
+        """
+        The switch manager used for extraction
+        """
+        self.md_storage = MetadataStorage.load(
+            metadata_storage_file,
+            **self.mds_kwargs)
+        """
+        The project metadata storage object
+        """
+        self.md_storage_file = metadata_storage_file
+        """
+        The project metadata storage file
+        """
+        self.commit_iterator_factory = commit_iterator_factory
+        """
+        The factory function that produces a commit iterator given a
+        project and a starting commmit SHA
+        """
+        self.default_commits_path = default_commits_path
+        """
+        Path to a file containing default commits for each project.
+        """
+        self.default_commits: Dict[str,
+                                   List[str]] = io.load(
+                                       self.default_commits_path,
+                                       clz=dict)
+        """
+        The default commits for each project.
+        """
+
+        if coq_version_iterator is None:
+            coq_version_iterator = self.default_coq_version_iterator
+        self.coq_version_iterator = coq_version_iterator
+        """
+        An iterator over coq versions
+        """
+
+        if process_project_fallback is None:
+            process_project_fallback = self.default_process_project_fallback
+        self.process_project_fallback = process_project_fallback
+        """
+        Function to process commits for cache extraction if they do not
+        build
+        """
+
+        self.files_to_use = files_to_use
+        """
+        A mapping from project name to files to use from that project;
+        or None. If None, all files are used. By default, None.
+        This argument is especially useful for profiling.
+        """
+
+        if recache is None:
+            recache = self.default_recache
+        self.recache = recache
+        """
+        Function that determines when a project commit's cached
+        artifacts should be recomputed.
+        """
+
+    def get_commit_iterator_func(
+        self,
+        max_num_commits: Optional[int]) -> Callable[[ProjectRepo],
+                                                    Iterator[str]]:
+        """
+        Return a commit iterator function.
+
+        Returns
+        -------
+        Callable[[ProjectRepo], Iterator[str]]
+            The chosen commit iterator function
+        """
+        return partial(
+            CacheExtractor._commit_iterator_func,
+            default_commits=self.default_commits,
+            commit_iterator_factory=self.commit_iterator_factory,
+            max_num_commits=max_num_commits)
+
+    def get_extract_cache_func(
+            self) -> Callable[[ProjectRepo,
+                               str,
+                               None],
+                              None]:
+        """
+        Return the cache extraction function for the commit mapper.
+
+        Returns
+        -------
+        Callable[[ProjectRepo, str, None], None]
+            The extraction function to be mapped
+        """
+        return partial(
+            CacheExtractor.extract_cache_func,
+            build_cache_client_map=self.cache_clients,
+            switch_manager=self.swim,
+            process_project_fallback=self.process_project_fallback,
+            recache=self.recache,
+            coq_version_iterator=self.coq_version_iterator,
+            files_to_use=self.files_to_use)
+
+    def run(
+            self,
+            root_path: str,
+            log_dir: Optional[str] = None,
+            updated_md_storage_file: Optional[str] = None,
+            extract_nprocs: int = 8,
+            force_serial: bool = False,
+            n_build_workers: int = 1,
+            project_names: Optional[List[str]] = None,
+            max_num_commits: Optional[int] = None) -> None:
+        """
+        Build all projects at `root_path` and save updated metadata.
+
+        Parameters
+        ----------
+        root_path : PathLike
+            The root directory containing each project's directory.
+            The project directories do not need to already exist.
+        log_dir : str or None, optional
+            Directory to store log file(s) in, by default the directory
+            that the metadata storage file is loaded from
+        updated_md_storage_file : str or None, optional
+            File to save the updated metadata storage file to, by
+            default the original file's parent directory /
+            "updated_metadata.yml"
+        extract_nprocs : int, optional
+            Number of workers to allow for cache extraction, by default
+            8
+        force_serial : bool, optional
+            If this argument is true, disable parallel execution all
+            along the cache extraction pipeline. Useful for debugging.
+            By default False.
+        n_build_workers : int, optional
+            The number of workers to allow per project when executing
+            the `build` function, by default 1.
+        project_names : list of str or None, optional
+            If a list is provided, select only projects with names on
+            the list for extraction. If projects on the given list
+            aren't found, a warning is given. By default None.
+        max_num_commits : int | None
+            If this argument is not None, process no more than
+            max_num_commits commits when extracting cache.
+        """
+        if log_dir is None:
+            log_dir = Path(self.md_storage_file).parent
+        # Generate list of projects
+        projects = list(
+            tqdm.tqdm(
+                Pool(20).imap(
+                    get_project_func(
+                        root_path,
+                        self.md_storage,
+                        n_build_workers),
+                    self.md_storage.projects),
+                desc="Initializing Project instances",
+                total=len(self.md_storage.projects)))
+        # If a list of projects is specified, use only those projects
+        if project_names is not None:
+            projects = [p for p in projects if p.name in project_names]
+            actual_project_set = {p.name for p in projects}
+            requested_project_set = set(project_names)
+            diff = requested_project_set.difference(actual_project_set)
+            if diff:
+                logging.warn(
+                    "The following projects were requested but were not "
+                    f"found: {', '.join(diff)}")
+        if force_serial:
+            client_keys = None
+            client_to_server_q = None
+            server_to_client_q_dict = None
+        else:
+            client_keys = [project.name for project in projects]
+            manager = mp.Manager()
+            client_to_server_q, server_to_client_q_dict = create_cpbcs_qs(
+                manager,
+                client_keys)
+        with CoqProjectBuildCacheServer(self.cache_dir,
+                                        client_keys,
+                                        client_to_server_q,
+                                        server_to_client_q_dict,
+                                        **self.cache_kwargs) as cache_server:
+            if force_serial:
+                self.cache_clients = {
+                    project.name: cache_server for project in projects
+                }
+            else:
+                self.cache_clients = {
+                    project.name: CoqProjectBuildCacheClient(
+                        cache_server.client_to_server,
+                        cache_server.server_to_client_dict[project.name],
+                        project.name) for project in projects
+                }
+            # Create commit mapper
+            project_looper = ProjectCommitUpdateMapper[None](
+                projects,
+                self.get_commit_iterator_func(max_num_commits),
+                self.get_extract_cache_func(),
+                "Extracting cache",
+                terminate_on_except=False)
+            # Extract cache in parallel
+            results, metadata_storage = project_looper.update_map(
+                extract_nprocs,
+                force_serial)
+            # report errors
+            if not os.path.exists(log_dir):
+                os.makedirs(log_dir)
+            with open(os.path.join(log_dir, "extract_cache.log"), "wt") as f:
+                for p, result in results.items():
+                    if isinstance(result, Except):
+                        print(
+                            f"{type(result.exception)} encountered in project {p}:"
+                        )
+                        print(result.trace)
+                        f.write(
+                            '\n'.join(
+                                [
+                                    "##########################################"
+                                    "#########",
+                                    f"{type(result.exception)} encountered in"
+                                    f" project {p}:",
+                                    result.trace
+                                ]))
+            # update metadata
+            if updated_md_storage_file:
+                metadata_storage.dump(metadata_storage, updated_md_storage_file)
+            print("Done")
+
+    @staticmethod
+    def _commit_iterator_func(
+            project: ProjectRepo,
+            default_commits: Dict[str,
+                                  List[str]],
+            commit_iterator_factory: Callable[[ProjectRepo,
+                                               str],
+                                              Iterator[str]],
+            max_num_commits: Optional[int]) -> Iterator[str]:
+        # Just in case the local repo is out of date
+        for remote in project.remotes:
+            remote.fetch()
+        try:
+            starting_commit_sha = default_commits[
+                project.metadata.project_name][0]
+        except IndexError:
+            # There's at least one project in the default commits file
+            # without a default commit; skip that one and any others
+            # like it.
+            return []
+        return commit_iterator_factory(
+            project,
+            starting_commit_sha,
+            max_num_commits)
+
+    @classmethod
+    def default_coq_version_iterator(cls,
+                                     _project: Project,
+                                     _commit: str) -> List[str]:
+        """
+        By default, extract build caches only for Coq 8.10.2.
+        """
+        return ["8.10.2"]
+
+    @classmethod
+    def default_process_project_fallback(
+            cls,
+            _project: ProjectRepo) -> VernacDict:
+        """
+        By default, do nothing on project build failure.
+        """
+        return dict()
+
+    @classmethod
+    def default_recache(
+            cls,
+            _build_cache: CoqProjectBuildCacheServer,
+            _project: ProjectRepo,
+            _commit_sha: str,
+            _coq_version: str) -> bool:
+        """
+        By default, do not recache anything.
+        """
+        return False
+
+    @classmethod
+    def extract_cache_func(
+            cls,
+            project: ProjectRepo,
+            commit_sha: str,
+            _result: None,
+            build_cache_client_map: Dict[str,
+                                         CoqProjectBuildCacheClient],
+            switch_manager: SwitchManager,
+            process_project_fallback: Callable[[Project],
+                                               VernacDict],
+            recache: Callable[
+                [CoqProjectBuildCacheServer,
+                 ProjectRepo,
+                 str,
+                 str],
+                bool],
+            coq_version_iterator: Callable[[Project,
+                                            str],
+                                           Iterable[Union[str,
+                                                          Version]]],
+            files_to_use: Optional[Dict[str,
+                                        Iterable[str]]]):
+        r"""
+        Extract cache.
+
+        Parameters
+        ----------
+        project : ProjectRepo
+            The project to extract cache from
+        commit_sha : str
+            The commit to extract cache from
+        _result : None
+            Left empty for compatibility with `ProjectCommitMapper`
+        build_cache_client_map : Dict[str, CoqProjectbuildCacheClient]
+            A mapping from project name to build cache client, used to
+            write extracted cache to disk
+        switch_manager : SwitchManager
+            A switch manager to use during extraction
+        process_project_fallback : Callable[[Project], VernacDict]
+            A function that does a best-effort cache extraction when the
+            project does not build
+        recache : Callable[[CoqProjectBuildCache, ProjectRepo, str, \
+                            str], \
+                           bool]
+            A function that for an existing entry in the cache returns
+            whether it should be reprocessed or not.
+        coq_version_iterator : Callable[[Project, str],
+                                        Iterable[Union[str, Version]]]
+            A function that returns an iterable over allowable coq
+            versions
+        files_to_use : Dict[str, Iterable[str]] | None
+            A mapping from project name to files to use from that
+            project; or None. If None, all files are used. By default,
+            None. This argument is especially useful for profiling.
+        """
+        pbar = tqdm.tqdm(
+            coq_version_iterator(project,
+                                 commit_sha),
+            desc="Coq version")
+        if files_to_use is not None:
+            files_to_use = files_to_use[project.name]
+        for coq_version in pbar:
+            pbar.set_description(f"Coq version: {coq_version}")
+            extract_cache(
+                build_cache_client_map[project.name],
+                switch_manager,
+                project,
+                commit_sha,
+                process_project_fallback,
+                str(coq_version),
+                recache,
+                files_to_use=files_to_use)

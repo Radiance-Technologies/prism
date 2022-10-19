@@ -330,6 +330,8 @@ class OpamSwitch:
                 kwargs[field] = Version.parse(value, require_quotes=True)
             else:
                 packages = []
+                if not isinstance(value, list):
+                    value = [value]
                 for package in value:
                     package: PackageConstraint = PackageConstraint.parse(
                         package)
@@ -344,7 +346,8 @@ class OpamSwitch:
         if package_metadata:
             kwargs['package_metadata'] = all_metadata
         if include_id:
-            kwargs['opam_root'] = self.root
+            # Coerce `root` into `str`. `Path` can't be serialized.
+            kwargs['opam_root'] = str(self.root)
             kwargs['switch_name'] = self.name
             kwargs['is_clone'] = self.is_clone
         return OpamSwitch.Configuration(**kwargs)

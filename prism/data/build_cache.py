@@ -6,10 +6,11 @@ import re
 import subprocess
 import tempfile
 import warnings
-from dataclasses import InitVar, dataclass, field
-from multiprocessing.pool import Pool
+from dataclasses import dataclass, field
+from multiprocessing import Process, Queue
+from multiprocessing.managers import SyncManager
 from pathlib import Path
-from typing import ClassVar, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Any, ClassVar, Dict, Iterable, List, Optional, Tuple, Union
 
 import setuptools_scm
 import seutil as su
@@ -222,6 +223,7 @@ class ProjectBuildEnvironment:
         """
         self.current_version = setuptools_scm.get_version()
         match = self.SHA_regex.search(self.current_version)
+        self.switch_config = self.switch_config
         if match is not None:
             # replace abbreviated hash with full hash to guarantee
             # the hash remains unambiguous in the future
@@ -314,7 +316,158 @@ class ProjectCommitData:
 
 
 @dataclass
-class CoqProjectBuildCache:
+class BuildCacheMsg:
+    """
+    Data class for messages passed between cache server and client.
+    """
+
+    client_id: str
+    """
+    Identifier for client object
+    """
+    type: str
+    """
+    The type of this message. If the message is meant to invoke a
+    function, this should match a key in the receiving object's
+    dispatch table.
+    """
+    args: tuple = field(default_factory=tuple)
+    """
+    Arbitrary tuple of args to be passed to a function on the receiving
+    end
+    """
+    response: Any = None
+    """
+    Response, if any, from any functions that were previously called
+    """
+
+
+class CoqProjectBuildCacheClient:
+    """
+    Client object for writing build cache.
+    """
+
+    def __init__(
+            self,
+            client_to_server: Queue,
+            server_to_client: Queue,
+            client_id: str):
+        self.client_to_server = client_to_server
+        """
+        This queue is used to send messages and commands from the client
+        to the server. This queue is shared among all clients.
+        """
+        self.server_to_client = server_to_client
+        """
+        This queue is used to receive messages from the server. Each
+        client instance has a unique instance of this queue.
+        """
+        self.client_id = client_id
+        """
+        Identifier for client object.
+        """
+
+    def __contains__(  # noqa: D105
+            self,
+            obj: Union[ProjectCommitData,
+                       ProjectMetadata,
+                       Tuple[str]]) -> bool:
+        msg = BuildCacheMsg(self.client_id, "contains", args=(obj,))
+        self.client_to_server.put(msg)
+        response: BuildCacheMsg = self.server_to_client.get()
+        if not isinstance(response.response, bool):
+            raise TypeError(f"Unexpected response {response.response}")
+        return response.response
+
+    def get(
+            self,
+            project: str,
+            commit: str,
+            coq_version: str) -> ProjectCommitData:
+        """
+        Fetch a data object from the on-disk folder structure.
+
+        Parameters
+        ----------
+        project : str
+            The name of the project
+        commit : str
+            The commit hash to fetch from
+        coq_version : str
+            The Coq version
+
+        Returns
+        -------
+        ProjectCommitData
+            The fetched cache object
+
+        Raises
+        ------
+        TypeError
+            If response from the server is not of the expected type
+        """
+        msg = BuildCacheMsg(
+            self.client_id,
+            "get",
+            args=(project,
+                  commit,
+                  coq_version))
+        self.client_to_server.put(msg)
+        response: BuildCacheMsg = self.server_to_client.get()
+        if not isinstance(response.response, ProjectCommitData):
+            raise TypeError(f"Unexpected response {response.response}")
+        return response.response
+
+    def write(self, data: ProjectCommitData, block: bool = False) -> None:
+        """
+        Cache the data to disk regardless of whether it already exists.
+
+        Parameters
+        ----------
+        data : ProjectCommitData
+            The object to be cached.
+        block : bool, optional
+            Whether to wait for the write operation to complete, by
+            default False.
+
+        Raises
+        ------
+        ValueError
+            If response from server has unexpected contents
+        """
+        msg = BuildCacheMsg(self.client_id, "write", args=(data, block))
+        self.client_to_server.put(msg)
+        if block:
+            response: BuildCacheMsg = self.server_to_client.get()
+            if response.response != "write complete":
+                raise ValueError(f"Unexpected response {response.response}.")
+
+    # Aliases
+    insert = write
+    update = write
+
+
+def create_cpbcs_qs(manager: SyncManager,
+                    client_keys: List[str]) -> Tuple[Queue,
+                                                     Dict[str,
+                                                          Queue]]:
+    """
+    Create queues for CoqProjectBuildCacheServer objects.
+
+    Parameters
+    ----------
+    manager : SyncManager
+        A sync manager that supplies queues that can be shared among
+        non-inherited processes
+    client_keys : List[str]
+        A list of client keys for the cache server
+    """
+    client_to_server_q = manager.Queue()
+    server_to_client_q_dict = {k: manager.Queue() for k in client_keys}
+    return client_to_server_q, server_to_client_q_dict
+
+
+class CoqProjectBuildCacheServer:
     """
     Object regulating access to repair mining cache on disk.
 
@@ -333,32 +486,55 @@ class CoqProjectBuildCache:
     └── ...
     """
 
-    root: Path
-    """
-    Root folder of repair mining cache structure
-    """
-    fmt_ext: str = "yml"
-    """
-    The extension for the cache files that defines their format.
-    """
-    num_workers: InitVar[int] = 1
-    """
-    The number of workers available for asynchronously writing cache
-    files.
-    """
-    _worker_pool: Pool = field(init=False)
-    """
-    Multiprocessing pool for writing cache files to disk on demand.
-    """
-
-    def __post_init__(self, num_workers: int):
+    def __init__(
+            self,
+            root: Path,
+            client_keys: Optional[List[str]] = None,
+            client_to_server_q: Optional[Queue] = None,
+            server_to_client_q_dict: Optional[Dict[str,
+                                                   Queue]] = None,
+            fmt_ext: str = "yml"):
+        self.root = Path(root)
         """
-        Instantiate object.
+        Root folder of repair mining cache structure
         """
-        self.root = Path(self.root)
-        if not self.root.exists():
-            os.makedirs(self.root)
-        self._worker_pool = Pool(processes=num_workers)
+        self.fmt_ext = fmt_ext
+        """
+        The extension for the cache files that defines their format.
+        """
+        self.client_keys = client_keys if client_keys else []
+        """
+        Keys corresponding to each client. If these keys are not
+        provided, the server loop process does not start, and it is
+        expected that this object will be used by a single producer OR
+        in a read-only context.
+        """
+        self.client_to_server = client_to_server_q
+        """
+        Queue for clients to send cache messages to write to this object
+        acting as a cache-writing server.
+        """
+        self.server_to_client_dict = server_to_client_q_dict
+        """
+        Dictionary of queues for sending messages from server to client
+        """
+        self._worker_proc: Process = Process(target=self._server_loop)
+        """
+        Consumer process that writes to disk from queue.
+        """
+        self._dispatch_table = {
+            "write": self._write,
+            "contains": self.contains,
+            "get": self.get
+        }
+        """
+        Dictionary mapping incoming function calls from the
+        client-to-server queue.
+        """
+        if client_keys and (self.client_to_server is None
+                            or self.server_to_client_dict is None):
+            raise RuntimeError(
+                "If client keys are provided, queues must be provided as well.")
 
     def __contains__(  # noqa: D105
             self,
@@ -367,10 +543,34 @@ class CoqProjectBuildCache:
                        Tuple[str]]) -> bool:
         return self.contains(obj)
 
-    def __del__(self) -> None:  # noqa: D105
-        # close the multiprocessing pool
-        self._worker_pool.close()
-        self._worker_pool.terminate()
+    def __enter__(self):
+        """
+        Enter the context manager.
+        """
+        if not self.root.exists():
+            os.makedirs(self.root)
+        if self.client_keys:
+            self._worker_proc.start()
+        return self
+
+    def __exit__(self, _exc_type, _exc_value, _exc_traceback):
+        """
+        Stop the worker process.
+        """
+        if self.client_keys:
+            # Send poison pill
+            try:
+                self.client_to_server.put(BuildCacheMsg(None, "poison pill"))
+            except AttributeError:
+                # We shouldn't ever get here, but just in case...
+                self._worker_proc.kill()
+            # Allow any remaining writes to complete
+            # Note: if this ends up being buggy, maybe try setting a
+            # timeout for join and then calling self._worker_proc.kill()
+            # after timeout.
+            self._worker_proc.join()
+            # Termination has already happened at this point, so we
+            # don't need to do it manually.
 
     @property
     def fmt(self) -> su.io.Fmt:
@@ -382,11 +582,72 @@ class CoqProjectBuildCache:
     def _contains_data(self, data: ProjectCommitData) -> bool:
         return self.get_path_from_data(data).exists()
 
+    def _contains_fields(self, *fields: Tuple[str]) -> bool:
+        return self.get_path_from_fields(*fields).exists()
+
     def _contains_metadata(self, metadata: ProjectMetadata) -> bool:
         return self.get_path_from_metadata(metadata).exists()
 
-    def _contains_fields(self, *fields: Tuple[str]) -> bool:
-        return self.get_path_from_fields(*fields).exists()
+    def _server_loop(self) -> None:
+        """
+        Provide consumer loop for build cache server.
+        """
+        while True:
+            msg: BuildCacheMsg = self.client_to_server.get()
+            try:
+                response = self._dispatch_table[msg.type](*msg.args)
+            except (KeyError, AttributeError):
+                if msg.type == "poison pill":
+                    # Break the infinite loop if we get the poison pill
+                    break
+                else:
+                    raise
+            else:
+                response_msg = BuildCacheMsg(
+                    msg.client_id,
+                    "response",
+                    response=response)
+                # Don't put a response in the queue if the client called
+                # "write" with block=False.
+                if msg.type != "write" or (msg.type == "write" and msg.args[1]):
+                    self.server_to_client_dict[msg.client_id].put(response_msg)
+
+    def _write(self, data: ProjectCommitData, block: bool) -> Optional[str]:
+        """
+        Write to build cache.
+
+        This is a private function. Invoking it outside of the
+        client -> queue -> server route will result in undefined
+        behavior.
+
+        Parameters
+        ----------
+        data : ProjectCommitData
+            Data to write to build cache
+        block : bool
+            If true, return a "write complete" message
+
+        Returns
+        -------
+        str or None
+            If `block`, return "write complete"; otherwise, return
+            nothing
+        """
+        data_path = self.get_path_from_data(data)
+        cache_dir = data_path.parent
+        if not cache_dir.exists():
+            os.makedirs(str(cache_dir))
+        # Ensure that we write the cache atomically.
+        # First, we write to a temporary file so that if we get
+        # interrupted, we aren't left with a corrupted cache.
+        with tempfile.NamedTemporaryFile("w", delete=False, dir=self.root) as f:
+            pass
+        data.dump(f.name, su.io.infer_fmt_from_ext(self.fmt_ext))
+        # Then, we atomically move the file to the correct, final
+        # path.
+        os.replace(f.name, data_path)
+        if block:
+            return "write complete"
 
     def contains(
             self,
@@ -483,98 +744,38 @@ class CoqProjectBuildCache:
             metadata.commit_sha,
             metadata.coq_version)
 
-    def insert(self, data: ProjectCommitData, block: bool = True) -> None:
-        """
-        Cache a new element of data on disk.
-
-        Parameters
-        ----------
-        data : ProjectCommitData
-            The data to be cached.
-        block : bool, optional
-            Whether to wait for the operation to complete or not, by
-            default True.
-
-        Raises
-        ------
-        RuntimeError
-            If the cache file already exists. In this case, `update`
-            should be called instead.
-        """
-        if data in self:
-            raise RuntimeError(
-                "Cache file already exists. Call `update` instead.")
-        else:
-            self.write(data, block)
-
-    def update(self, data: ProjectCommitData, block: bool = True) -> None:
-        """
-        Update an existing cache file on disk.
-
-        Parameters
-        ----------
-        data : ProjectCommitData
-            The object to be re-cached.
-        block : bool, optional
-            Whether to wait for the operation to complete or not, by
-            default True.
-
-        Raises
-        ------
-        RuntimeError
-            If the cache file does not exist, `insert` should be called
-            instead
-        """
-        if data not in self:
-            raise RuntimeError(
-                "Cache file does not exist. Call `insert` instead.")
-        else:
-            self.write(data, block)
-
-    def write(self, data: ProjectMetadata, block: bool = False) -> None:
+    def write(self, data: ProjectCommitData, block: bool = True) -> None:
         """
         Cache the data to disk regardless of whether it already exists.
 
-        Parameters
-        ----------
-        data : ProjectMetadata
-            The object to be cached.
-        """
-        kwargs = {
-            'data_path': self.get_path_from_data(data),
-            'data': data,
-            'tmpdir': self.root,
-            'ext': self.fmt_ext
-        }
-        if block:
-            self._worker_pool.apply(self._write, kwds=kwargs)
-        else:
-            self._worker_pool.apply_async(self._write, kwds=kwargs)
-
-    @staticmethod
-    def _write(
-            data: ProjectCommitData,
-            data_path: Path,
-            tmpdir: str,
-            ext: str) -> None:
-        """
-        Write the project commit's data to disk.
-
-        This should not in normal circumstances be called directly.
+        This method cannot be safely used in a multi-producer
+        context. It is meant for use in a single-producer context to
+        remove the need for a `CoqProjectBuildCacheClient` object.
 
         Parameters
         ----------
         data : ProjectCommitData
-            The data to be written to disk.
+            The object to be cached.
+        block : bool, optional
+            Whether to wait for the write operation to complete.
+            This argument currently has no effect; the method always
+            blocks.
+            The argument is allowed to maintain a uniform signature
+            with `CoqProjectBuildCacheClient.write`.
+
+        Raises
+        ------
+        RuntimeError
+            If clients can potentially send data to the server,
+            indicating that using this method is not guaranteed to be
+            safe.
         """
-        cache_dir = data_path.parent
-        if not cache_dir.exists():
-            os.makedirs(str(cache_dir))
-        # Ensure that we write the cache atomically.
-        # First, we write to a temporary file so that if we get
-        # interrupted, we aren't left with a corrupted cache.
-        with tempfile.NamedTemporaryFile("w", delete=False, dir=tmpdir) as f:
-            pass
-        data.dump(f.name, su.io.infer_fmt_from_ext(ext))
-        # Then, we atomically move the file to the correct, final path.
-        os.replace(f.name, data_path)
+        if self.client_keys:
+            raise RuntimeError(
+                "It is not safe to use the `write`"
+                " method when clients are connected to the server.")
+        else:
+            self._write(data, block)
+
+    insert = write
+    apply = write

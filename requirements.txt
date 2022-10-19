@@ -1,5 +1,7 @@
 bidict
 GitPython
+gprof2dot
+graphviz
 networkx
 numpy
 pexpect
@@ -9,3 +11,4 @@ pytest-cov
 setuptools_scm
 seutil >= 0.7.1
 strace-parser
+tqdm

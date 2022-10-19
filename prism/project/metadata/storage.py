@@ -286,6 +286,28 @@ class MetadataStorage:
             else:
                 self.indices[index] = 0
 
+    def __contains__(self, context: Union[Context, ProjectMetadata]) -> bool:
+        """
+        Return whether the given metadata record is in the storage.
+
+        Parameters
+        ----------
+        context : Union[Context, ProjectMetadata]
+            An explicit metadata record (`Context`) or one implied by a
+            `ProjectMetadata`.
+
+        Returns
+        -------
+        bool
+            True if the given record is explicitly stored, False
+            otherwise.
+        """
+        if isinstance(context, ProjectMetadata):
+            context = Context.from_metadata(context)
+        elif not isinstance(context, Context):
+            return NotImplemented
+        return context in self.contexts
+
     def __iter__(self) -> Iterator[ProjectMetadata]:
         """
         Iterate over the stored metadata.
@@ -634,6 +656,61 @@ class MetadataStorage:
         """
         if field_name not in self._final_fields:
             getattr(self, field_name).pop(context_id, None)
+
+    def contains(
+            self,
+            project_name: Union[str,
+                                ProjectMetadata],
+            project_url: Optional[str] = None,
+            commit_sha: Optional[str] = None,
+            coq_version: Optional[Union[str,
+                                        Version]] = None,
+            ocaml_version: Optional[Union[str,
+                                          Version]] = None) -> bool:
+        """
+        Return whether the indicated metadata record is in the storage.
+
+        Parameters
+        ----------
+        project_name : str or ProjectMetadata
+            The name of a project or the metadata to be updated.
+            If metadata is provided, its contents are ignored except for
+            the purposes of identifying the record.
+        project_url : Optional[str], optional
+            The URL of the project's (Git) repository, by default None.
+        commit_sha : Optional[str], optional
+            The commit SHA of a revision of the project, by default
+            None.
+        coq_version : Optional[str], optional
+            The version of Coq against which the project should be
+            built, by default None.
+        ocaml_version : Optional[str], optional
+            The version of the OCaml compiler against which the project
+            should be built, by default None.
+
+        Returns
+        -------
+        bool
+            True if the indicated metadata is recorded as an explicit
+            entry in the storage, False otherwise.
+        """
+        (project_name,
+         project_url,
+         commit_sha,
+         coq_version,
+         ocaml_version) = self._process_record_args(
+             project_name,
+             project_url,
+             commit_sha,
+             coq_version,
+             ocaml_version)
+        context = Context(
+            Revision(ProjectSource(project_name,
+                                   project_url),
+                     commit_sha),
+            coq_version,
+            ocaml_version)
+        return context in self
 
     def get(
             self,

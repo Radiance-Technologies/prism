@@ -61,15 +61,15 @@ class Except(Generic[T]):
 
 
 def _project_commit_fmap(
-    project: ProjectRepo,
-    get_commit_iterator: Callable[[ProjectRepo],
-                                  Iterator[str]],
-    commit_fmap: Callable[[ProjectRepo,
-                           str,
-                           Optional[T]],
-                          T]
-) -> Union[Optional[T],
-           Except[T]]:
+        project: ProjectRepo,
+        get_commit_iterator: Callable[[ProjectRepo],
+                                      Iterator[str]],
+        commit_fmap: Callable[[ProjectRepo,
+                               str,
+                               Optional[T]],
+                              T],
+        force_serial: bool) -> Union[Optional[T],
+                                     Except[T]]:
     """
     Perform a given action on a project with a given iterator generator.
 
@@ -95,12 +95,16 @@ def _project_commit_fmap(
     os.chdir(project.path)
     iterator = get_commit_iterator(project)
     result = None
-    for commit in tqdm.tqdm(iterator, desc=f"Commits: {project.name}"):
+    for commit in tqdm.tqdm(iterator,
+                            total=None,
+                            desc=f"Commits: {project.name}"):
         if is_terminated:
             break
         try:
             result = commit_fmap(project, commit, result)
         except Exception as e:
+            if force_serial:
+                raise e
             is_terminated = True
             result = Except(result, e, traceback.format_exc())
     return result
@@ -170,7 +174,11 @@ class ProjectCommitMapper(Generic[T]):
         # By default True so that an arbitrary commit_fmap is allowed
         # to clean up any artifacts or state prior to termination
 
-    def __call__(self, max_workers: int = 1) -> Dict[str, Union[T, Except[T]]]:
+    def __call__(self,
+                 max_workers: int = 1,
+                 force_serial: bool = False) -> Dict[str,
+                                                     Union[T,
+                                                           Except[T]]]:
         """
         Map over project commits.
 
@@ -181,7 +189,8 @@ class ProjectCommitMapper(Generic[T]):
         job_list = [
             (p,
              self.get_commit_iterator,
-             self.commit_fmap) for p in self.projects
+             self.commit_fmap,
+             force_serial) for p in self.projects
         ]
         # BUG: Multiprocessing pools may cause an OSError on program
         # exit in Python 3.8 or earlier.
@@ -192,53 +201,73 @@ class ProjectCommitMapper(Generic[T]):
         original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
         original_sigterm_handler = signal.signal(signal.SIGTERM, signal.SIG_IGN)
         logger.debug(f"Initializing pool of {max_workers} workers")
-        with ProcessPoolExecutor(max_workers=max_workers) as ex:
-            results = {p.name: None for p in self.projects}
-            with tqdm.tqdm(total=len(job_list),
-                           desc=self.task_description) as progress_bar:
-                futures = {}
-                for job in job_list:
-                    project_name = job[0].name
-                    future = ex.submit(_project_commit_fmap_, job)
-                    futures[future] = project_name
-                    logger.debug(f"Job submitted for {project_name}")
-                signal.signal(signal.SIGINT, original_sigint_handler)
-                signal.signal(signal.SIGTERM, original_sigterm_handler)
-                logger.debug("Default signal handlers restored.")
-                try:
-                    for future in as_completed(futures):
-                        project_name = futures[future]
-                        result = future.result()
-                        logger.debug(f"Job {project_name} completed.")
-                        results[project_name] = result
-                        if isinstance(result, Except) and self._terminate:
-                            logger.critical(
-                                f"Job {project_name} failed. Terminating process pool.",
-                                exc_info=result.exception)
-                            is_terminated = True
-                        if is_terminated:
-                            # keep doing this until pool is empty and
-                            # exits naturally
+        results = {p.name: None for p in self.projects}
+        if force_serial:
+            for job in tqdm.tqdm(job_list,
+                                 total=len(job_list),
+                                 desc=self.task_description):
+                result = _project_commit_fmap_(job)
+                project_name = job[0].name
+                results[project_name] = result
+                if isinstance(result, Except) and self._terminate:
+                    logger.critical(
+                        f"Job {project_name} failed. Terminating process pool.",
+                        exc_info=result.exception)
+                    return results
+        else:
+            with ProcessPoolExecutor(max_workers=max_workers) as ex:
+                with tqdm.tqdm(total=len(job_list),
+                               desc=self.task_description) as progress_bar:
+                    futures = {}
+                    for job in job_list:
+                        project_name = job[0].name
+                        future = ex.submit(_project_commit_fmap_, job)
+                        futures[future] = project_name
+                        logger.debug(f"Job submitted for {project_name}")
+                    signal.signal(signal.SIGINT, original_sigint_handler)
+                    signal.signal(signal.SIGTERM, original_sigterm_handler)
+                    logger.debug("Default signal handlers restored.")
+                    try:
+                        for future in as_completed(futures):
+                            project_name = futures[future]
+                            result = future.result()
+                            logger.debug(f"Job {project_name} completed.")
+                            results[project_name] = result
+                            if isinstance(result, Except) and self._terminate:
+                                logger.critical(
+                                    f"Job {project_name} failed."
+                                    " Terminating process pool.",
+                                    exc_info=result.exception)
+                                is_terminated = True
+                            if is_terminated:
+                                # keep doing this until pool is empty
+                                # and exits naturally
+                                for _pid, p in ex._processes.items():
+                                    # send SIGTERM to each process in
+                                    # pool
+                                    p.terminate()
+                            progress_bar.update(1)
+                    except KeyboardInterrupt:
+                        logger.info(
+                            "Terminating process pool due to user interrupt.")
+                        if not self._wait:
                             for _pid, p in ex._processes.items():
-                                # send SIGTERM to each process in pool
-                                p.terminate()
-                        progress_bar.update(1)
-                except KeyboardInterrupt:
-                    logger.info(
-                        "Terminating process pool due to user interrupt.")
-                    if not self._wait:
-                        for _pid, p in ex._processes.items():
-                            # Do not wait for any jobs to finish.
-                            # Terminate them immediately.
-                            # However, since each child is set to ignore
-                            # a SIGTERM until it finishes its current
-                            # commit, we send SIGKILL instead.
-                            p.kill()
-                    ex.shutdown(wait=True)
-                    raise
+                                # Do not wait for any jobs to finish.
+                                # Terminate them immediately.
+                                # However, since each child is set to
+                                # ignore a SIGTERM until it finishes its
+                                # current commit, we send SIGKILL
+                                # instead.
+                                p.kill()
+                        ex.shutdown(wait=True)
+                        raise
         return results
 
-    def map(self, max_workers: int = 1) -> Dict[str, Union[T, Except[T]]]:
+    def map(self,
+            max_workers: int = 1,
+            force_serial: bool = False) -> Dict[str,
+                                                Union[T,
+                                                      Except[T]]]:
         """
         Map over the project commits.
 
@@ -265,7 +294,7 @@ class ProjectCommitMapper(Generic[T]):
             exception will be wrapped in an `Except` object for
             subsequent handling or re-raising by the caller.
         """
-        return self(max_workers)
+        return self(max_workers, force_serial)
 
     @property
     def task_description(self) -> str:
@@ -300,8 +329,11 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
     """
     Map a function over commits of all projects in a given collection.
 
-    In addition, update the MetadataStorage of each project according to
-    any changes incurred due to the provided map function.
+    In addition, update the `MetadataStorage` of each project according
+    to any changes incurred due to the provided map function. Note that
+    if the initial `MetadataStorage` of each project differs,
+    conflicting information is resolved in a first-come, first-serve
+    basis.
     """
 
     def __init__(
@@ -326,12 +358,14 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
             terminate_on_except)
 
     def __call__(self,  # noqa: D102
-                 max_workers: int = 1) -> Dict[str,
-                                               Union[T, Except[T]]]:
-        results = super().__call__(max_workers)
+                 max_workers: int = 1,
+                 force_serial: bool = False) -> Dict[str,
+                                                     Union[T, Except[T]]]:
+        results = super().__call__(max_workers, force_serial)
         # get all project's metadata with the understanding that each
         # project only affected at most its own records
         storage = MetadataStorage()
+        updated_projects = {p.name for p in self.projects}
         for p in self.projects:
             result = results[p.name]
             exception = None
@@ -351,13 +385,19 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
                 p_storage = result[1]
             for metadata in p_storage.get_all(p.name):
                 storage.insert(metadata)
+            # capture non-updated metadata
+            for other_p in p_storage.projects.difference(updated_projects):
+                for metadata in p_storage.get_all(other_p):
+                    if metadata not in storage:
+                        storage.insert(metadata)
         for p in self.projects:
             p.metadata_storage = storage
         return results
 
     def update_map(
         self,
-        max_workers: int = 1
+        max_workers: int = 1,
+        force_serial: bool = False
     ) -> Tuple[Dict[str,
                     Union[T,
                           Except[T]]],
@@ -387,6 +427,6 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
         --------
         map : For more details on the return value.
         """
-        result = self.map(max_workers)
+        result = self.map(max_workers, force_serial)
         storage = self.projects[0].metadata_storage
         return result, storage
