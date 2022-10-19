@@ -75,9 +75,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num-switches",
         default=7,
-        help="Number of default switches to set up for the AutoSwitchManager."
-        " Leave as 7 unless you have a good reason to do otherwise. This"
-        " argument does not limit the number of switches used overall.")
+        help="Number of processes used to set up the set of default Opam"
+        " switches.")
     parser.add_argument(
         "--project-names",
         nargs="*",
