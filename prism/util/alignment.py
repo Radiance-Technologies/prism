@@ -5,6 +5,7 @@ import heapq
 from typing import Callable, List, Optional, Sequence, Tuple, TypeVar, Union
 
 import numpy as np
+from numba import jit
 
 T = TypeVar('T')
 LeftMatch = Tuple[T, Optional[T]]
@@ -153,3 +154,92 @@ def lazy_align(
         return D[-1, -1], alignment[::-1]
     else:
         return alignment[::-1]
+
+
+def align_factory(calign, cskip, numba=True):
+    """
+    Assemble an accelerated alignment function using the cost functions.
+
+    Numba "doesn't support lambdas" but it does support "calling other
+    jitted functions", which we use as a workaround to bake the cost
+    functions into the alignment function.
+    """
+    if (numba):
+        calign = jit(calign)
+        cskip = jit(cskip)
+
+    def kernel(D, BT, a, b):
+
+        heap = [(0.0, 0, 0)]
+
+        cx, cy = -1, -1
+
+        end = (len(a), len(b))
+
+        neighbors = np.array([[1, 0], [1, 1], [0, 1]])
+
+        while (cx, cy) != end:
+            candidate = heapq.heappop(heap)
+            # x,y are inverted so that heap properly tiebreaks.
+            # we prefer things closer to the end.
+            nc, cx, cy = candidate[0], int(-candidate[1]), int(-candidate[2])
+            costs = (
+                cskip(a[cx]) if cx < len(a) else np.infty,
+                calign(a[cx],
+                       b[cy]) if cx < len(a) and cy < len(b) else np.infty,
+                cskip(b[cy]) if cy < len(b) else np.infty)
+            for c, (x, y) in zip(costs, np.array([cx, cy], dtype=np.int32) + neighbors):
+                # bounds check
+                if (x > len(a) or y > len(b)):
+                    continue
+                nc = c + D[cx, cy]
+                if (D[x, y] > nc):
+                    D[x, y] = nc
+                    BT[x, y] = (cx, cy)
+                    heapq.heappush(heap, (nc, -x, -y))
+
+        return D, BT
+
+    if (numba):
+        kernel = jit(nopython=True, cache=True)(kernel)
+
+    def align(a, b, return_cost=False):
+        # DP table
+        D = np.zeros([len(a) + 1, len(b) + 1]) + np.infty
+        D[0, 0] = 0
+
+        # backtracking table
+        BT = np.zeros([len(a) + 1, len(b) + 1, 2], dtype="int32")
+
+        # run the O(n^2) part in a fast, jitted kernel.
+        kernel(D, BT, a, b)
+
+        x, y = len(a), len(b)
+
+        alignment = []
+
+        while (x, y) != (0, 0):
+            # backtrack once.
+            nx, ny = BT[x, y]
+            alignment.append(
+                (a[nx] if nx < x else None,
+                 b[ny] if ny < y else None))
+            x, y = nx, ny
+
+        if return_cost:
+            return D[-1, -1], alignment[::-1]
+        else:
+            return alignment[::-1]
+
+    # note the lack of "nopython" on align
+    # it's because numba can't do that here
+    # without a refactor of all the align code,
+    # and i don't have it in me to refactor a part
+    # that isn't doing O(n^2) logic anyways.
+    return align
+
+
+fast_edit_distance = align_factory(
+    lambda a,
+    b: 1.0 if a != b else 0.0,
+    lambda x: 1.0)
