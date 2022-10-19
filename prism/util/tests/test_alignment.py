@@ -4,7 +4,7 @@ Test suite for alignment algorithms and utilities.
 import random
 import unittest
 
-from prism.util.alignment import lazy_align
+from prism.util.alignment import fast_edit_distance, lazy_align
 
 
 class TestAlignment(unittest.TestCase):
@@ -46,7 +46,15 @@ class TestAlignment(unittest.TestCase):
                 else:
                     # change the char
                     b[index] = 'a' if b[index] == 'z' else 'z'
-            cost_measured, alignment = edit_distance(a, b)
+            cost_measured, alignment = edit_distance("".join(a), "".join(b))
+            # ensure that the alignment is the same even in the accelerated
+            # version of the algorithm
+            self.assertEqual(
+                (cost_measured,
+                 alignment),
+                fast_edit_distance(a,
+                                   b,
+                                   return_cost=True))
 
             # assert that the found alignment
             # is no worse than the mutations we caused.

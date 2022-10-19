@@ -3,6 +3,7 @@ GitPython
 gprof2dot
 graphviz
 networkx
+numba
 numpy
 pexpect
 prettytable
