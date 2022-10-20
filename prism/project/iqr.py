@@ -5,8 +5,9 @@ Provides an abstraction of Coq library linking command-line options.
 import argparse
 import os
 import pathlib
+import re
 from dataclasses import dataclass
-from typing import List, Set, Tuple
+from typing import ClassVar, List, Set, Tuple, Union
 
 from prism.util.path import get_relative_path
 
@@ -34,6 +35,11 @@ class IQR:
     comma for compatibility with SerAPI.
     A space should be used for compatibility with Coq.
     """
+    _i_regex: ClassVar[re.Pattern] = re.compile(r"-I\s+(?P<phy>\S+)")
+    _q_regex: ClassVar[re.Pattern] = re.compile(
+        r"-Q\s+(?P<phy>\S+)(?:\s+|,)(?!-I|-Q|-R)(?P<log>[^,\s]+)")
+    _r_regex: ClassVar[re.Pattern] = re.compile(
+        r"-R\s+(?P<phy>\S+)(?:\s+|,)(?!-I|-Q|-R)(?P<log>[^,\s]+)")
 
     def __or__(self, other: 'IQR') -> 'IQR':  # noqa: D105
         if not isinstance(other, IQR):
@@ -98,14 +104,20 @@ class IQR:
             self.delim)
 
     @classmethod
-    def extract_iqr(cls, args: List[str], pwd: os.PathLike = "") -> 'IQR':
+    def extract_iqr(
+            cls,
+            args: Union[str,
+                        List[str]],
+            pwd: os.PathLike = "") -> 'IQR':
         """
         Extract IQR args from command args; return as IQR dataclass.
 
         Parameters
         ----------
-        args : List[str]
-            A list of string arguments associated with a command.
+        args : Union[str, List[str]]
+            A list of string arguments associated with a command or an
+            unsplit string of arguments (e.g., options for SerAPI
+            commands)
         pwd : os.PathLike, optional
             The directory in which the command was executed, by default
             an empty string.
@@ -115,37 +127,49 @@ class IQR:
         IQR
             Args processed into IQR dataclass
         """
-        parser = argparse.ArgumentParser()
-        parser.add_argument(
-            '-I',
-            metavar=('dir'),
-            nargs=1,
-            action='append',
-            default=[],
-            help='append filesystem to ML load path')
+        if isinstance(args, list):
+            # use optimized argparser if already a list
+            parser = argparse.ArgumentParser()
+            parser.add_argument(
+                '-I',
+                metavar=('dir'),
+                nargs=1,
+                action='append',
+                default=[],
+                help='append filesystem to ML load path')
 
-        parser.add_argument(
-            '-Q',
-            metavar=('dir',
-                     'coqdir'),
-            nargs=2,
-            action='append',
-            default=[],
-            help='append filesystem dir mapped to coqdir to coq load path')
+            parser.add_argument(
+                '-Q',
+                metavar=('dir',
+                         'coqdir'),
+                nargs=2,
+                action='append',
+                default=[],
+                help='append filesystem dir mapped to coqdir to coq load path')
 
-        parser.add_argument(
-            '-R',
-            metavar=('dir',
-                     'coqdir'),
-            nargs=2,
-            action='append',
-            default=[],
-            help='recursively append filesystem dir mapped '
-            'to coqdir to coq load path')
-        args, _ = parser.parse_known_args(args)
+            parser.add_argument(
+                '-R',
+                metavar=('dir',
+                         'coqdir'),
+                nargs=2,
+                action='append',
+                default=[],
+                help='recursively append filesystem dir mapped '
+                'to coqdir to coq load path')
+            args, _ = parser.parse_known_args(args)
+            I_ = set(args.I)
+            Q = {tuple(i) for i in args.Q}
+            R = {tuple(i) for i in args.R}
+        else:
+            # these could be serapi options with embedded commas
+            I_ = {m.group('phy') for m in cls._i_regex.finditer(args)}
+            Q = {
+                (m.group('phy'),
+                 m.group('log')) for m in cls._q_regex.finditer(args)
+            }
+            R = {
+                (m.group('phy'),
+                 m.group('log')) for m in cls._r_regex.finditer(args)
+            }
 
-        return cls(
-            I=set(args.I),
-            Q={tuple(i) for i in args.Q},
-            R={tuple(i) for i in args.R},
-            pwd=pwd)
+        return cls(I_, Q, R, pwd=pwd)
