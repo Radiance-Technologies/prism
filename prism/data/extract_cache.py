@@ -344,6 +344,19 @@ def expand_idents(
         ast: SexpNode,
         modpath: str) -> SexpNode:
 
+    def id_re(capture_name: Optional[str]) -> re.Pattern:
+        if capture_name is not None:
+            str_of_id = rf"(?P<{capture_name}>[^\)\s]+)"
+        else:
+            str_of_id = r"[^\)\s]+"
+        return re.compile(rf"\(\s*Id\s+{str_of_id}\)")
+
+    dirpath_re = re.compile(
+        rf"\(\s*DirPath\s*\((?P<dirpath>(?:\s*{id_re(None).pattern})*)\)\s*\)")
+    serqualid_re = re.compile(
+        rf"\(\s*Ser_Qualid\s*{dirpath_re.pattern}\s*"
+        rf"{id_re('str_of_qualid').pattern}\s*\)")
+
     def query_qualid_memo(ident: str) -> str:
         try:
             queried = id_cache[ident]
@@ -556,8 +569,11 @@ def _extract_vernac_commands(
             location = sentence.location
             text = sentence.text
             _, feedback, sexp = serapi.execute(text, return_ast=True)
-            sentence.ast = sexp
-            expand_idents(serapi, expanded_ids, sentence.ast, modpath)
+            sentence.ast = expand_idents(
+                serapi,
+                expanded_ids,
+                sexp,
+                modpath)
             vernac = SexpAnalyzer.analyze_vernac(sentence.ast)
             if vernac.extend_type is None:
                 command_type = vernac.vernac_type
