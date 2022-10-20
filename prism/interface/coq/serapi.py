@@ -754,7 +754,7 @@ class SerAPI:
 
         return Environment(constants, inductives)
 
-    def query_full_qualid(self, qualid: str) -> str:
+    def query_full_qualid(self, qualid: str) -> Optional[str]:
         """
         Get the fully qualified version of the given identifier.
 
