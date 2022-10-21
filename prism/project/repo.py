@@ -349,6 +349,13 @@ class ProjectRepo(Repo, Project):
     def remote_url(self) -> str:  # noqa: D102
         return self.remote().url
 
+    @property
+    def short_sha(self) -> str:
+        """
+        Get an abbreviated commit SHA.
+        """
+        return self.commit_sha[: 8]
+
     def _pre_get_file(self, **kwargs):
         """
         Set the current commit; use HEAD if none given.
