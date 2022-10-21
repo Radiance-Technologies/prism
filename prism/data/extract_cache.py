@@ -553,11 +553,14 @@ def extract_vernac_commands(
         file_list = project.get_file_list(relative=True, dependency_order=True)
         if files_to_use:
             file_list = [f for f in file_list if f in files_to_use]
-        pbar = tqdm.tqdm(file_list, total=len(file_list), desc="Caching")
+        pbar = tqdm.tqdm(
+            file_list,
+            total=len(file_list),
+            desc=f"Caching {project.name}@{project.short_sha}")
         for filename in pbar:
             # Verify that accompanying vo file exists first
             pbar.set_description(
-                f"Caching {project.name}@{project.commit_sha}:{filename}")
+                f"Caching {project.name}@{project.short_sha}:{filename}")
             path = Path(filename)
             vo = path.parent / (path.stem + ".vo")
             if not os.path.exists(vo):
@@ -1156,7 +1159,7 @@ class CacheExtractor:
             files_to_use = files_to_use[project.name]
         for coq_version in pbar:
             pbar.set_description(
-                f"Coq version ({project.name}@{project.commit_sha[:8]}): {coq_version}"
+                f"Coq version ({project.name}@{project.short_sha}): {coq_version}"
             )
             extract_cache(
                 build_cache_client_map[project.name],
