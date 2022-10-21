@@ -128,7 +128,9 @@ if __name__ == "__main__":
     force_serial: bool = bool(args.force_serial)
     num_switches: int = int(args.num_switches)
     project_names = args.project_names if args.project_names else None
-    coq_versions = args.coq_versions if args.coq_versions else None
+    coq_version_iterator = (
+        lambda _,
+        __: args.coq_versions) if args.coq_versions else None
     max_num_commits: Optional[int] = int(args.max_num_commits)
     if args.updated_md_storage_file:
         updated_md_storage_file = args.updated_md_storage_file
@@ -158,8 +160,7 @@ if __name__ == "__main__":
         swim,
         default_commits_path,
         cache_extract_commit_iterator,
-        coq_version_iterator=lambda _,
-        __: coq_versions)
+        coq_version_iterator=coq_version_iterator)
     cache_extractor.run(
         project_root_path,
         log_dir,
