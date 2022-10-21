@@ -646,6 +646,21 @@ class CoqProjectBuildCacheServer:
         # Then, we atomically move the file to the correct, final
         # path.
         os.replace(f.name, data_path)
+        # If there was an error in cache extraction, write an additional
+        # text file containing the output.
+        if data.build_result.exit_code != 0:
+            error_path = data_path.parent / str(data_path.stem) + "_error.txt"
+            with tempfile.NamedTemporaryFile("wb",
+                                             delete=False,
+                                             dir=self.root) as f_error:
+                str_to_write = "\n".join(
+                    [
+                        f"Exit code:\n{data.build_result.exit_code}",
+                        f"stdout:\n{data.build_result.stdout}",
+                        f"stderr:\n{data.build_result.stderr}"
+                    ])
+                f_error.write(str_to_write.encode("utf-8"))
+            os.replace(f_error.name, error_path)
         if block:
             return "write complete"
 
