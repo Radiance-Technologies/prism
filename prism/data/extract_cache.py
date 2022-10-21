@@ -52,6 +52,7 @@ from prism.project.base import SEM, Project
 from prism.project.exception import ProjectBuildError
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ChangedCoqCommitIterator, ProjectRepo
+from prism.util.opam.switch import OpamSwitch
 from prism.util.opam.version import Version
 from prism.util.radpytools import unzip
 from prism.util.radpytools.os import pushd
@@ -310,14 +311,19 @@ def _start_program(
 
 def _extract_vernac_commands(
         sentences: Iterable[CoqSentence],
+        opam_switch: OpamSwitch,
         serapi_options: str = "") -> List[VernacCommandData]:
     """
-    Compile vernac commands from a sequence of sentences.
+    Compile Vernacular commands from a sequence of sentences.
 
     Parameters
     ----------
     sentences : Iterable[CoqSentence]
         A sequence of sentences derived from a document.
+    opam_switch : OpamSwitch,
+        The switch in which to execute the commands, which sets the
+        version of `sertop` and controls the availability of external
+        libraries.
     serapi_options : str, optional
         Arguments with which to initialize `sertop`, namely IQR flags.
 
@@ -386,7 +392,7 @@ def _extract_vernac_commands(
     pre_goals = Goals()
     post_proof_id = None
     post_goals = Goals()
-    with SerAPI(serapi_options) as serapi:
+    with SerAPI(serapi_options, switch_=opam_switch) as serapi:
         for sentence in sentences:
             # TODO: Optionally filter queries out of results (and
             # execution)
@@ -546,13 +552,11 @@ def extract_vernac_commands(
         file_list = project.get_file_list(relative=True, dependency_order=True)
         if files_to_use:
             file_list = [f for f in file_list if f in files_to_use]
-        pbar = tqdm.tqdm(
-            file_list,
-            total=len(file_list),
-            desc="extract_vernac_commands")
+        pbar = tqdm.tqdm(file_list, total=len(file_list), desc="Caching")
         for filename in pbar:
             # Verify that accompanying vo file exists first
-            pbar.set_description(f"extract_vernac_commands: {filename}")
+            pbar.set_description(
+                f"Caching {project.name}@{project.commit_sha}:{filename}")
             path = Path(filename)
             vo = path.parent / (path.stem + ".vo")
             if not os.path.exists(vo):
@@ -566,12 +570,13 @@ def extract_vernac_commands(
                     SEM.HEURISTIC,
                     return_locations=True,
                     glom_proofs=False),
+                opam_switch=project.opam_switch,
                 serapi_options=project.serapi_options)
     return command_data
 
 
 def extract_cache(
-        build_cache_client: CoqProjectBuildCacheClient,
+        build_cache_client: CoqProjectBuildCacheClient,  # should be protocol
         switch_manager: SwitchManager,
         project: ProjectRepo,
         commit_sha: str,
@@ -737,18 +742,21 @@ def cache_extract_commit_iterator(
                                                      None]:
     """
     Provide default commit iterator for cache extraction.
+
+    Commits are limited to those that occur on or after January 1, 2019,
+    which roughly coincides with the release of Coq 8.9.1.
     """
     iterator = ChangedCoqCommitIterator(project, starting_commit_sha)
     i = 0
     for item in iterator:
-        i += 1
         # Define the minimum date; convert it to seconds since epoch
         limit_date = datetime(2019, 1, 1, 0, 0, 0)
         limit_epoch = calendar.timegm(limit_date.timetuple())
         # committed_date is in seconds since epoch
-        if item.committed_date and item.committed_date >= limit_epoch:
+        if item.committed_date is not None and item.committed_date >= limit_epoch:
+            i += 1
             yield item.hexsha
-        if max_num_commits and i >= max_num_commits:
+        if max_num_commits is not None and i >= max_num_commits:
             break
 
 
@@ -903,9 +911,9 @@ class CacheExtractor:
 
     def run(
             self,
-            root_path: str,
-            log_dir: Optional[str] = None,
-            updated_md_storage_file: Optional[str] = None,
+            root_path: os.PathLike,
+            log_dir: Optional[os.PathLike] = None,
+            updated_md_storage_file: Optional[os.PathLike] = None,
             extract_nprocs: int = 8,
             force_serial: bool = False,
             n_build_workers: int = 1,
@@ -919,10 +927,10 @@ class CacheExtractor:
         root_path : PathLike
             The root directory containing each project's directory.
             The project directories do not need to already exist.
-        log_dir : str or None, optional
+        log_dir : os.PathLike or None, optional
             Directory to store log file(s) in, by default the directory
             that the metadata storage file is loaded from
-        updated_md_storage_file : str or None, optional
+        updated_md_storage_file : os.PathLike or None, optional
             File to save the updated metadata storage file to, by
             default the original file's parent directory /
             "updated_metadata.yml"
@@ -1146,7 +1154,9 @@ class CacheExtractor:
         if files_to_use is not None:
             files_to_use = files_to_use[project.name]
         for coq_version in pbar:
-            pbar.set_description(f"Coq version: {coq_version}")
+            pbar.set_description(
+                f"Coq version ({project.name}@{project.commit_sha[:8]}): {coq_version}"
+            )
             extract_cache(
                 build_cache_client_map[project.name],
                 switch_manager,
