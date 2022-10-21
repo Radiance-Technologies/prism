@@ -655,6 +655,7 @@ class CoqProjectBuildCacheServer:
                                              dir=self.root) as f_error:
                 str_to_write = "\n".join(
                     [
+                        "@@Build errors@@"
                         f"Exit code:\n{data.build_result.exit_code}",
                         f"stdout:\n{data.build_result.stdout}",
                         f"stderr:\n{data.build_result.stderr}"
