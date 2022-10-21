@@ -71,7 +71,7 @@ class SerAPI:
     """
     The timeout for responses from the spawned SerAPI process.
     """
-    switch_: InitVar[OpamSwitch] = None
+    switch_: InitVar[Optional[OpamSwitch]] = None
     """
     The switch in which to invoke `sertop`, which implicitly controls
     the version of Coq and SerAPI that are used.

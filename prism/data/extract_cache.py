@@ -311,7 +311,7 @@ def _start_program(
 
 def _extract_vernac_commands(
         sentences: Iterable[CoqSentence],
-        opam_switch: OpamSwitch,
+        opam_switch: Optional[OpamSwitch] = None,
         serapi_options: str = "") -> List[VernacCommandData]:
     """
     Compile Vernacular commands from a sequence of sentences.
@@ -320,10 +320,11 @@ def _extract_vernac_commands(
     ----------
     sentences : Iterable[CoqSentence]
         A sequence of sentences derived from a document.
-    opam_switch : OpamSwitch,
+    opam_switch : Optional[OpamSwitch], optional
         The switch in which to execute the commands, which sets the
         version of `sertop` and controls the availability of external
         libraries.
+        If None, then the default global switch is used.
     serapi_options : str, optional
         Arguments with which to initialize `sertop`, namely IQR flags.
 
