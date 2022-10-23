@@ -325,12 +325,13 @@ PyObject* sexp_parse(PyObject* sexp_str)
                               cur_char == c_quote or Py_UNICODE_ISSPACE(cur_char)))
             {
                 // conclude terminal
-                PyList_Append(
-                    return_stack.back(),
-                    PyObject_CallFunctionObjArgs(
-                        SexpString,
-                        PyUnicode_FromWideChar(terminal.c_str(), terminal.length()),
-                        NULL));
+                PyObject* new_char =
+                    PyUnicode_FromWideChar(terminal.c_str(), terminal.length());
+                PyObject* sexp_string =
+                    PyObject_CallFunctionObjArgs(SexpString, new_char, NULL);
+                Py_DecRef(new_char);
+                PyList_Append(return_stack.back(), sexp_string);
+                Py_DecRef(sexp_string);
                 terminal = L"";
             }
             else
@@ -406,12 +407,13 @@ PyObject* sexp_parse(PyObject* sexp_str)
                 // End string literal
                 // Consume the ending quote
                 quoted.push_back('"');
-                PyList_Append(
-                    return_stack.back(),
-                    PyObject_CallFunctionObjArgs(
-                        SexpString,
-                        PyUnicode_FromWideChar(quoted.c_str(), quoted.length()),
-                        NULL));
+                PyObject* new_char =
+                    PyUnicode_FromWideChar(quoted.c_str(), quoted.length());
+                PyObject* sexp_string =
+                    PyObject_CallFunctionObjArgs(SexpString, new_char, NULL);
+                Py_DecRef(new_char);
+                PyList_Append(return_stack.back(), sexp_string);
+                Py_DecRef(sexp_string);
                 quoted = L"";
             }
             else
@@ -449,10 +451,15 @@ PyObject* sexp_parse(PyObject* sexp_str)
                     error_msg << "Extra close parenthesis at index " << i;
                     error_msg << " of " << wstring_to_string(wcopy);
                     PyErr_SetString(PyExc_ValueError, error_msg.str().c_str());
+                    /* Release accumulated SexpNodes */
+                    Py_DecRef(children);
                     return NULL;
                 }
-                PyList_Append(return_stack.back(),
-                              PyObject_CallFunctionObjArgs(SexpList, children, NULL));
+                PyObject* sexp_list =
+                    PyObject_CallFunctionObjArgs(SexpList, children, NULL);
+                Py_DecRef(children);
+                PyList_Append(return_stack.back(), sexp_list);
+                Py_DecRef(sexp_list);
             }
             else if (cur_char == c_quote)
             {
@@ -476,23 +483,32 @@ PyObject* sexp_parse(PyObject* sexp_str)
     if (!terminal.empty())
     {
         // conclude terminal
-        PyList_Append(return_stack.back(),
-                      PyObject_CallFunctionObjArgs(
-                          SexpString,
-                          PyUnicode_FromWideChar(terminal.c_str(), terminal.length()),
-                          NULL));
+        PyObject* new_char =
+            PyUnicode_FromWideChar(terminal.c_str(), terminal.length());
+        PyObject* sexp_string =
+            PyObject_CallFunctionObjArgs(SexpString, new_char, NULL);
+        Py_DecRef(new_char);
+        PyList_Append(return_stack.back(), sexp_string);
+        Py_DecRef(sexp_string);
     }
     if (return_stack.size() != 1 or PyList_Size(return_stack.front()) == 0)
     {
-        if (str_len > 100)
+        bool do_abbreviate = str_len > 100;
+        if (do_abbreviate)
         {
             sexp_str = PyUnicode_Substring(sexp_str, 0, 72);
         }
         PyObject* msg_start = PyUnicode_FromString("Malformed sexp: ");
         PyObject* msg       = PyUnicode_Concat(msg_start, sexp_str);
+        if (do_abbreviate)
+        {
+            Py_DecRef(sexp_str);
+        }
         Py_DecRef(msg_start);
-        PyErr_SetObject(PyExc_ValueError,
-                        PyObject_CallFunctionObjArgs(PyExc_ValueError, msg, NULL));
+        PyObject* exc = PyObject_CallFunctionObjArgs(PyExc_ValueError, msg, NULL);
+        Py_DecRef(msg);
+        PyErr_SetObject(PyExc_ValueError, exc);
+        Py_DecRef(exc);
         /* Release accumulated SexpNodes */
         for (const auto& py_object: return_stack)
         {
