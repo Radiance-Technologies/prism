@@ -442,6 +442,41 @@ class CoqProjectBuildCacheClient:
             if response.response != "write complete":
                 raise ValueError(f"Unexpected response {response.response}.")
 
+    def write_error_log(
+            self,
+            metadata: ProjectMetadata,
+            block: bool = False,
+            cache_error_log: str = "") -> None:
+        """
+        Cache the data to disk regardless of whether it already exists.
+
+        Parameters
+        ----------
+        metadata : ProjectMetadata
+            The project metadata for the project that had an error.
+        block : bool, optional
+            Whether to wait for the write operation to complete, by
+            default False.
+        cache_error_log : str
+            Caching error log to write to file.
+
+        Raises
+        ------
+        ValueError
+            If response from server has unexpected contents
+        """
+        msg = BuildCacheMsg(
+            self.client_id,
+            "write_error_log",
+            args=(metadata,
+                  block,
+                  cache_error_log))
+        self.client_to_server.put(msg)
+        if block:
+            response: BuildCacheMsg = self.server_to_client.get()
+            if response.response != "write complete":
+                raise ValueError(f"Unexpected response {response.response}.")
+
     # Aliases
     insert = write
     update = write
@@ -524,6 +559,7 @@ class CoqProjectBuildCacheServer:
         """
         self._dispatch_table = {
             "write": self._write,
+            "write_error_log": self._write_error_log,
             "contains": self.contains,
             "get": self.get
         }
@@ -649,19 +685,60 @@ class CoqProjectBuildCacheServer:
         # If there was an error in cache extraction, write an additional
         # text file containing the output.
         if data.build_result.exit_code != 0:
-            error_path = data_path.parent / str(data_path.stem) + "_error.txt"
+            error_path = data_path.parent / str(
+                data_path.stem) + "_build_error.txt"
             with tempfile.NamedTemporaryFile("wb",
                                              delete=False,
                                              dir=self.root) as f_error:
                 str_to_write = "\n".join(
                     [
-                        "@@Build errors@@",
-                        f"Exit code:\n{data.build_result.exit_code}",
-                        f"stdout:\n{data.build_result.stdout}",
-                        f"stderr:\n{data.build_result.stderr}"
+                        f"@@Exit code@@\n{data.build_result.exit_code}",
+                        f"@@stdout@@\n{data.build_result.stdout}",
+                        f"@@stderr@@\n{data.build_result.stderr}"
                     ])
                 f_error.write(str_to_write.encode("utf-8"))
             os.replace(f_error.name, error_path)
+        if block:
+            return "write complete"
+
+    def _write_error_log(
+            self,
+            metadata: ProjectMetadata,
+            block: bool,
+            cache_error_log: str) -> Optional[str]:
+        """
+        Write caching error log to build cache directory.
+
+        This is a private function. Invoking it outside of the
+        client -> queue -> server route will result in undefined
+        behavior.
+
+        Parameters
+        ----------
+        metadata : ProjectMetadata
+            Metadata for the project that had an error. Used by this
+            method to get the correct path to write to.
+        block : bool
+            If true, return a "write complete" message
+        cache_error_log : str
+            Caching error log string to write to file.
+
+        Returns
+        -------
+        str or None
+            If `block`, return "write complete"; otherwise, return
+            nothing
+        """
+        data_path = self.get_path_from_metadata(metadata)
+        cache_dir = data_path.parent
+        if not cache_dir.exists():
+            os.makedirs(str(cache_dir))
+        path = data_path.parent / str(data_path.stem) + "_cache_error.txt"
+        with tempfile.NamedTemporaryFile("wb",
+                                         delete=False,
+                                         dir=self.root) as f:
+            f.write(cache_error_log.encode("utf-8"))
+        os.replace(f.name, path)
         if block:
             return "write complete"
 
@@ -792,6 +869,41 @@ class CoqProjectBuildCacheServer:
                 " method when clients are connected to the server.")
         else:
             self._write(data, block)
+
+    def write_error_log(
+            self,
+            metadata: ProjectMetadata,
+            block: bool,
+            cache_error_log: str) -> Optional[str]:
+        """
+        Write caching error log to build cache directory.
+
+        This method cannot be safely used in a multi-producer
+        context. It is meant for use in a single-producer context to
+        remove the need for a `CoqProjectBuildCacheClient` object.
+
+        Parameters
+        ----------
+        metadata : ProjectCommitData
+            Metadata for the project that had a caching error. Used by
+            this method to get the correct path to write to.
+        block : bool
+            Whether to wait for the operation to complete.
+        cache_error_log : str
+            Caching error log string to write to file.
+
+        Returns
+        -------
+        str or None
+            If `block`, return "write complete"; otherwise, return
+            nothing
+        """
+        if self.client_keys:
+            raise RuntimeError(
+                "It is not safe to use the `write_error_log`"
+                " method when clients are connected to the server.")
+        else:
+            self._write_error_log(metadata, block, cache_error_log)
 
     insert = write
     apply = write

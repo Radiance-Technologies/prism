@@ -9,6 +9,7 @@ import re
 import warnings
 from datetime import datetime
 from functools import partial
+from io import StringIO
 from multiprocessing import Pool
 from pathlib import Path
 from typing import (
@@ -707,35 +708,53 @@ def extract_cache_new(
         all files are used. By default, None.
         This argument is especially useful for profiling.
     """
-    project.git.checkout(commit_sha)
-    # get a switch
-    dependency_formula = project.get_dependency_formula(coq_version)
-    original_switch = project.opam_switch
-    project.opam_switch = switch_manager.get_switch(
-        dependency_formula,
-        variables={
-            'build': True,
-            'post': True,
-            'dev': True
-        })
-    # process the commit
-    metadata = project.metadata
-    try:
-        build_result = project.build()
-    except ProjectBuildError as pbe:
-        build_result = (pbe.return_code, pbe.stdout, pbe.stderr)
-        command_data = process_project_fallback(project)
-    else:
-        command_data = extract_vernac_commands(project, files_to_use)
-    data = ProjectCommitData(
-        metadata,
-        command_data,
-        ProjectBuildEnvironment(project.opam_switch.export()),
-        ProjectBuildResult(*build_result))
-    build_cache_client.insert(data, block)
-    # release the switch
-    switch_manager.release_switch(project.opam_switch)
-    project.opam_switch = original_switch
+    # Construct a logger local to this function and unique to this PID
+    pid = os.getpid()
+    logger = logging.getLogger(f"extract_cache_new-{pid}")
+    logger.setLevel(logging.DEBUG)
+    # Tell the logger to log to a text stream
+    with StringIO() as logger_stream:
+        handler = logging.StreamHandler(logger_stream)
+        # Clear any default handlers
+        for h in logger.handlers:
+            logger.removeHandler(h)
+        logger.addHandler(handler)
+        project.git.checkout(commit_sha)
+        # get a switch
+        dependency_formula = project.get_dependency_formula(coq_version)
+        original_switch = project.opam_switch
+        project.opam_switch = switch_manager.get_switch(
+            dependency_formula,
+            variables={
+                'build': True,
+                'post': True,
+                'dev': True
+            })
+        # process the commit
+        metadata = project.metadata
+        try:
+            build_result = project.build()
+        except ProjectBuildError as pbe:
+            build_result = (pbe.return_code, pbe.stdout, pbe.stderr)
+            command_data = process_project_fallback(project)
+        else:
+            try:
+                command_data = extract_vernac_commands(project, files_to_use)
+            except Exception as e:
+                logger.exception(e)
+                logger_stream.flush()
+                logged_text = logger_stream.getvalue()
+                build_cache_client.write_error_log(metadata, block, logged_text)
+                raise
+        data = ProjectCommitData(
+            metadata,
+            command_data,
+            ProjectBuildEnvironment(project.opam_switch.export()),
+            ProjectBuildResult(*build_result))
+        build_cache_client.insert(data, block)
+        # release the switch
+        switch_manager.release_switch(project.opam_switch)
+        project.opam_switch = original_switch
 
 
 def cache_extract_commit_iterator(
