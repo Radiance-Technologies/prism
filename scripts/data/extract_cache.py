@@ -131,7 +131,8 @@ if __name__ == "__main__":
     coq_version_iterator = (
         lambda _,
         __: args.coq_versions) if args.coq_versions else None
-    max_num_commits: Optional[int] = int(args.max_num_commits)
+    max_num_commits: Optional[int] = int(
+        args.max_num_commits) if args.max_num_commits else None
     if args.updated_md_storage_file:
         updated_md_storage_file = args.updated_md_storage_file
     else:

@@ -685,8 +685,8 @@ class CoqProjectBuildCacheServer:
         # If there was an error in cache extraction, write an additional
         # text file containing the output.
         if data.build_result.exit_code != 0:
-            error_path = data_path.parent / str(
-                data_path.stem) + "_build_error.txt"
+            error_path = data_path.parent / (
+                str(data_path.stem) + "_build_error.txt")
             with tempfile.NamedTemporaryFile("wb",
                                              delete=False,
                                              dir=self.root) as f_error:
@@ -733,7 +733,7 @@ class CoqProjectBuildCacheServer:
         cache_dir = data_path.parent
         if not cache_dir.exists():
             os.makedirs(str(cache_dir))
-        path = data_path.parent / str(data_path.stem) + "_cache_error.txt"
+        path = data_path.parent / (str(data_path.stem) + "_cache_error.txt")
         with tempfile.NamedTemporaryFile("wb",
                                          delete=False,
                                          dir=self.root) as f:
