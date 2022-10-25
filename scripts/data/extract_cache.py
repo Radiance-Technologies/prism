@@ -117,6 +117,12 @@ if __name__ == "__main__":
         help="If provided, the metadata storage, which may be updated as cache"
         " is extracted, will be saved to the file given. If not provided, the"
         " --mds-file will be updated.")
+    parser.add_argument(
+        "--max-switch-pool-size",
+        default=100,
+        type=int,
+        help="Maximum number of switches to allow. Set somewhat"
+        " conservatively to avoid running out of disk space.")
     args = parser.parse_args()
     default_commits_path: str = args.default_commits_path
     cache_dir: str = args.cache_dir
@@ -139,6 +145,7 @@ if __name__ == "__main__":
         updated_md_storage_file = mds_file
     updated_md_storage_file = Path(updated_md_storage_file)
     updated_md_storage_file.parent.mkdir(parents=True, exist_ok=True)
+    max_pool_size = int(args.max_switch_pool_size)
     # Force redirect the root logger to a file
     # This might break due to multiprocessing. If so, it should just
     # be disabled
@@ -154,7 +161,9 @@ if __name__ == "__main__":
         swim = AutoSwitchManager()
     else:
         swim_server = SharedSwitchManagerServer(AutoSwitchManager)
-        swim = SharedSwitchManagerClient(swim_server)
+        swim = SharedSwitchManagerClient(
+            swim_server,
+            max_pool_size=max_pool_size)
     cache_extractor = CacheExtractor(
         cache_dir,
         mds_file,
