@@ -445,6 +445,41 @@ class CoqProjectBuildCacheClient:
             if response.response != "write complete":
                 raise ValueError(f"Unexpected response {response.response}.")
 
+    def write_misc_log(
+            self,
+            metadata: ProjectMetadata,
+            block: bool = False,
+            misc_log: str = "") -> None:
+        """
+        Write an otherwise uncategorized error to disk.
+
+        Parameters
+        ----------
+        metadata : ProjectMetadata
+            The project metadata for the project that had an error.
+        block : bool, optional
+            Whether to wait for the write operation to complete, by
+            default False.
+        misc_log : str
+            Error message to write to disk.
+
+        Raises
+        ------
+        ValueError
+            If response from server has unexpected contents
+        """
+        msg = BuildCacheMsg(
+            self.client_id,
+            "write_misc_log",
+            args=(metadata,
+                  block,
+                  misc_log))
+        self.client_to_server.put(msg)
+        if block:
+            response: BuildCacheMsg = self.server_to_client.get()
+            if response.response != "write complete":
+                raise ValueError(f"Unexpected response {response.response}.")
+
     def write_timing_log(
             self,
             metadata: ProjectMetadata,
@@ -563,6 +598,7 @@ class CoqProjectBuildCacheServer:
         self._dispatch_table = {
             "write": self._write,
             "write_error_log": self._write_error_log,
+            "write_misc_log": self._write_misc_log,
             "write_timing_log": self._write_timing_log,
             "contains": self.contains,
             "get": self.get
@@ -794,6 +830,36 @@ class CoqProjectBuildCacheServer:
         if block:
             return "write complete"
 
+    def _write_misc_log(
+            self,
+            metadata: ProjectMetadata,
+            block: bool,
+            misc_log: str) -> Optional[str]:
+        """
+        Write miscellaneous error log to build cache directory.
+
+        This is a private function. Invoking it outside of the
+        client -> queue -> server route will result in undefined
+        behavior.
+
+        Parameters
+        ----------
+        metadata : ProjectMetadata
+            Metadata for the project that had an error. Used by this
+            method to get the correct path to write to.
+        block : bool
+            If true, return a "write complete" message
+        misc_log : str
+            Miscellaneous error message to write to file.
+
+        Returns
+        -------
+        str or None
+            If `block`, return "write complete"; otherwise, return
+            nothing
+        """
+        return self._write_kernel(metadata, block, misc_log, "_misc_error.txt")
+
     def _write_timing_log(
             self,
             metadata: ProjectMetadata,
@@ -1010,6 +1076,41 @@ class CoqProjectBuildCacheServer:
                 " method when clients are connected to the server.")
         else:
             self._write_error_log(metadata, block, cache_error_log)
+
+    def write_misc_log(
+            self,
+            metadata: ProjectMetadata,
+            block: bool,
+            misc_log: str) -> Optional[str]:
+        """
+        Write miscellaneous error log to build cache directory.
+
+        This method cannot be safely used in a multi-producer
+        context. It is meant for use in a single-producer context to
+        remove the need for a `CoqProjectBuildCacheClient` object.
+
+        Parameters
+        ----------
+        metadata : ProjectCommitData
+            Metadata for the project that had a caching error. Used by
+            this method to get the correct path to write to.
+        block : bool
+            Whether to wait for the operation to complete.
+        misc_log : str
+            Miscellaneous error log string to write to file.
+
+        Returns
+        -------
+        str or None
+            If `block`, return "write complete"; otherwise, return
+            nothing
+        """
+        if self.client_keys:
+            raise RuntimeError(
+                "It is not safe to use the `write_misc_log`"
+                " method when clients are connected to the server.")
+        else:
+            self._write_error_log(metadata, block, misc_log)
 
     def write_timing_log(
             self,
