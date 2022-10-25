@@ -69,6 +69,16 @@ ProofSentenceState = Tuple[CoqSentence, Union[Goals, GoalsDiff], CommandType]
 ProofBlock = List[ProofSentenceState]
 
 
+class ExtractVernacCommandsError(RuntimeError):
+    """
+    Extended RuntimeError with a filename property.
+    """
+
+    def __init__(self, filename: str, *args):
+        super().__init__(*args)
+        self.filename = filename
+
+
 def _process_proof_block(block: ProofBlock) -> Proof:
     """
     Convert a proof block into the form expected for extraction.
@@ -544,8 +554,6 @@ def _extract_vernac_commands(
 
 def extract_vernac_commands(
         project: ProjectRepo,
-        build_cache_client: CoqProjectBuildCacheClient,
-        block: bool,
         files_to_use: Optional[Iterable[str]] = None) -> VernacDict:
     """
     Compile vernac commands from a project into a dict.
@@ -554,11 +562,6 @@ def extract_vernac_commands(
     ----------
     project : ProjectRepo
         The project from which to extract the vernac commands
-    build_cache_client : CoqProjectBuildCacheClient
-        The client that can communicate the build cache to be written to
-        the build cache server
-    block : bool
-        Whether to use blocking cache writes
     files_to_use : Iterable[str] | None
         An iterable of filenames to use for this project; or None. If
         None, all files are used. By default, None.
@@ -569,59 +572,41 @@ def extract_vernac_commands(
     VernacDict
         A map from file names to their extracted commands.
     """
-    # Construct a logger local to this function and unique to this PID
-    pid = os.getpid()
-    logger = logging.getLogger(f"extract_vernac_commands-{pid}")
-    logger.setLevel(logging.DEBUG)
     # Tell the logger to log to a text stream
-    with StringIO() as logger_stream:
-        handler = logging.StreamHandler(logger_stream)
-        # Clear any default handlers
-        for h in logger.handlers:
-            logger.removeHandler(h)
-        logger.addHandler(handler)
-        command_data = {}
-        with pushd(project.dir_abspath):
-            file_list = project.get_file_list(
-                relative=True,
-                dependency_order=True)
-            if files_to_use:
-                file_list = [f for f in file_list if f in files_to_use]
-            pbar = tqdm.tqdm(
-                file_list,
-                total=len(file_list),
-                desc=f"Caching {project.name}@{project.short_sha}")
-            for filename in pbar:
-                # Verify that accompanying vo file exists first
-                pbar.set_description(
-                    f"Caching {project.name}@{project.short_sha}:{filename}")
-                path = Path(filename)
-                vo = path.parent / (path.stem + ".vo")
-                if not os.path.exists(vo):
-                    logging.info(
-                        f"Skipped extraction for file {filename}. "
-                        "No .vo file found.")
-                    continue
-                try:
-                    command_data[filename] = _extract_vernac_commands(
-                        project.get_sentences(
-                            filename,
-                            SEM.HEURISTIC,
-                            return_locations=True,
-                            glom_proofs=False),
-                        opam_switch=project.opam_switch,
-                        serapi_options=project.serapi_options)
-                except Exception as e:
-                    logger.critical(f"Filename: {filename}\n")
-                    logger.exception(e)
-                    logger_stream.flush()
-                    logged_text = logger_stream.getvalue()
-                    build_cache_client.write_error_log(
-                        project.metadata,
-                        block,
-                        logged_text)
-                    raise
-        return command_data
+    command_data = {}
+    with pushd(project.dir_abspath):
+        file_list = project.get_file_list(relative=True, dependency_order=True)
+        if files_to_use:
+            file_list = [f for f in file_list if f in files_to_use]
+        pbar = tqdm.tqdm(
+            file_list,
+            total=len(file_list),
+            desc=f"Caching {project.name}@{project.short_sha}")
+        for filename in pbar:
+            # Verify that accompanying vo file exists first
+            pbar.set_description(
+                f"Caching {project.name}@{project.short_sha}:{filename}")
+            path = Path(filename)
+            vo = path.parent / (path.stem + ".vo")
+            if not os.path.exists(vo):
+                logging.info(
+                    f"Skipped extraction for file {filename}. "
+                    "No .vo file found.")
+                continue
+            try:
+                command_data[filename] = _extract_vernac_commands(
+                    project.get_sentences(
+                        filename,
+                        SEM.HEURISTIC,
+                        return_locations=True,
+                        glom_proofs=False),
+                    opam_switch=project.opam_switch,
+                    serapi_options=project.serapi_options)
+            except Exception as e:
+                raise ExtractVernacCommandsError(
+                    filename,
+                    f"Error on {filename}") from e
+    return command_data
 
 
 def extract_cache(
@@ -752,45 +737,64 @@ def extract_cache_new(
         all files are used. By default, None.
         This argument is especially useful for profiling.
     """
-    project.git.checkout(commit_sha)
-    # get a switch
-    dependency_formula = project.get_dependency_formula(coq_version)
-    original_switch = project.opam_switch
-    project.opam_switch = switch_manager.get_switch(
-        dependency_formula,
-        variables={
-            'build': True,
-            'post': True,
-            'dev': True
-        })
-    # process the commit
-    metadata = project.metadata
-    try:
-        build_result = project.build()
-    except ProjectBuildError as pbe:
-        build_result = (pbe.return_code, pbe.stdout, pbe.stderr)
-        command_data = process_project_fallback(project)
-    else:
-        start_time = time()
-        command_data = extract_vernac_commands(
-            project,
-            build_cache_client,
-            block,
-            files_to_use)
-        elapsed_time = time() - start_time
-        build_cache_client.write_timing_log(
+    # Construct a logger local to this function and unique to this PID
+    pid = os.getpid()
+    logger = logging.getLogger(f"extract_vernac_commands-{pid}")
+    logger.setLevel(logging.DEBUG)
+    with StringIO() as logger_stream:
+        handler = logging.StreamHandler(logger_stream)
+        # Clear any default handlers
+        for h in logger.handlers:
+            logger.removeHandler(h)
+        logger.addHandler(handler)
+        project.git.checkout(commit_sha)
+        # get a switch
+        dependency_formula = project.get_dependency_formula(coq_version)
+        original_switch = project.opam_switch
+        project.opam_switch = switch_manager.get_switch(
+            dependency_formula,
+            variables={
+                'build': True,
+                'post': True,
+                'dev': True
+            })
+        # process the commit
+        metadata = project.metadata
+        try:
+            build_result = project.build()
+        except ProjectBuildError as pbe:
+            build_result = (pbe.return_code, pbe.stdout, pbe.stderr)
+            command_data = process_project_fallback(project)
+        else:
+            start_time = time()
+            try:
+                command_data = extract_vernac_commands(project, files_to_use)
+            except ExtractVernacCommandsError as e:
+                logger.critical(f"Filename: {e.filename}\n")
+                logger.exception(e)
+                logger_stream.flush()
+                logged_text = logger_stream.getvalue()
+                build_cache_client.write_error_log(
+                    project.metadata,
+                    block,
+                    logged_text)
+                raise
+            finally:
+                elapsed_time = time() - start_time
+                build_cache_client.write_timing_log(
+                    metadata,
+                    block,
+                    f"Elapsed time in extract_vernac_commands: {elapsed_time} s"
+                )
+        data = ProjectCommitData(
             metadata,
-            block,
-            f"Elapsed time in extract_vernac_commands: {elapsed_time} s")
-    data = ProjectCommitData(
-        metadata,
-        command_data,
-        ProjectBuildEnvironment(project.opam_switch.export()),
-        ProjectBuildResult(*build_result))
-    build_cache_client.insert(data, block)
-    # release the switch
-    switch_manager.release_switch(project.opam_switch)
-    project.opam_switch = original_switch
+            command_data,
+            ProjectBuildEnvironment(project.opam_switch.export()),
+            ProjectBuildResult(*build_result))
+        build_cache_client.insert(data, block)
+        # release the switch
+        switch_manager.release_switch(project.opam_switch)
+        project.opam_switch = original_switch
 
 
 def cache_extract_commit_iterator(
