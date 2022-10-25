@@ -232,8 +232,6 @@ def _start_proof_block(
             post_proof_id).groupdict()['proof_id']
         obligation_map[post_proof_id] = program_id
         proof_stack = partial_proof_stacks.setdefault(post_proof_id, [])
-        # assert that the proof has goals
-        assert sentence[1] is not None
         proof_stack.append(sentence)
         if program_id not in conjectures:
             # Programs unfortunately do not open proof
@@ -250,7 +248,7 @@ def _start_proof_block(
             assert program_id in conjectures
     else:
         assert post_proof_id not in conjectures
-        conjectures[post_proof_id] = (sentence)
+        conjectures[post_proof_id] = sentence
         partial_proof_stacks[post_proof_id] = []
 
 

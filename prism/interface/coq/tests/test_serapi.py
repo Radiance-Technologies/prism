@@ -489,7 +489,7 @@ class TestSerAPI(unittest.TestCase):
             'Type',
             '(Sort (Type ((((hash 14398528588510) '
             '(data (Level ((DirPath ((Id SerTop))) 2)))) 0))))')
-        no_goals = Goals([], [], [], [])
+        no_goals = None
         focused_no_goals = Goals([], [([], [])], [], [])
         expected_add0_base_goal = Goal(
             10,

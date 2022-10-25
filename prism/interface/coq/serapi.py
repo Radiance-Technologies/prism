@@ -799,19 +799,20 @@ class SerAPI:
                 qualids.append(line.split()[1])
         return qualids
 
-    def query_goals(self) -> Goals:
+    def query_goals(self) -> Optional[Goals]:
         """
         Retrieve a list of open goals.
 
         Returns
         -------
-        Goals
-            A collection of open goals.
+        Goals | None
+            A collection of open goals or None if there are no open
+            goals.
         """
         responses, _, _ = self.send("(Query () Goals)")
         assert responses[1][2][0] == SexpString("ObjList")
         if responses[1][2][1] == SexpList():  # no goals
-            return Goals()
+            goals = None
         else:
             assert len(responses[1][2][1]) == 1
 
@@ -888,7 +889,10 @@ class SerAPI:
                      deserialize_goals(frame[1])))
             shelved_goals = deserialize_goals(shelved_goals)
             abandoned_goals = deserialize_goals(abandoned_goals)
-            return Goals(fg_goals, bg_goals, shelved_goals, abandoned_goals)
+            goals = Goals(fg_goals, bg_goals, shelved_goals, abandoned_goals)
+            if goals.is_empty:
+                goals = None
+        return goals
 
     def query_library(self, lib: str) -> Path:
         """

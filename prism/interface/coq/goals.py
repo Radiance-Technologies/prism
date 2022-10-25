@@ -135,6 +135,15 @@ class Goals:
     shelved_goals: List[Goal] = default_field([])
     abandoned_goals: List[Goal] = default_field([])
 
+    @property
+    def is_empty(self) -> bool:
+        """
+        Return True if there are no goals, False otherwise.
+        """
+        return not (
+            self.foreground_goals or self.background_goals or self.shelved_goals
+            or self.abandoned_goals)
+
     def get(
         self,
         goal_type: GoalType,
