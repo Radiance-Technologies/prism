@@ -747,54 +747,72 @@ def extract_cache_new(
         for h in logger.handlers:
             logger.removeHandler(h)
         logger.addHandler(handler)
-        project.git.checkout(commit_sha)
-        # get a switch
-        dependency_formula = project.get_dependency_formula(coq_version)
-        original_switch = project.opam_switch
-        project.opam_switch = switch_manager.get_switch(
-            dependency_formula,
-            variables={
-                'build': True,
-                'post': True,
-                'dev': True
-            })
-        # process the commit
-        metadata = project.metadata
         try:
-            build_result = project.build()
-        except ProjectBuildError as pbe:
-            build_result = (pbe.return_code, pbe.stdout, pbe.stderr)
-            command_data = process_project_fallback(project)
-        else:
-            start_time = time()
+            project.git.checkout(commit_sha)
+            # get a switch
+            dependency_formula = project.get_dependency_formula(coq_version)
+            original_switch = project.opam_switch
+            project.opam_switch = switch_manager.get_switch(
+                dependency_formula,
+                variables={
+                    'build': True,
+                    'post': True,
+                    'dev': True
+                })
+            # process the commit
+            metadata = project.metadata
             try:
-                command_data = extract_vernac_commands(project, files_to_use)
-            except ExtractVernacCommandsError as e:
-                logger.critical(f"Filename: {e.filename}\n")
-                logger.exception(e)
-                logger_stream.flush()
-                logged_text = logger_stream.getvalue()
-                build_cache_client.write_error_log(
-                    project.metadata,
-                    block,
-                    logged_text)
+                build_result = project.build()
+            except ProjectBuildError as pbe:
+                build_result = (pbe.return_code, pbe.stdout, pbe.stderr)
+                command_data = process_project_fallback(project)
+            else:
+                start_time = time()
+                try:
+                    command_data = extract_vernac_commands(
+                        project,
+                        files_to_use)
+                except ExtractVernacCommandsError as e:
+                    logger.critical(f"Filename: {e.filename}\n")
+                    logger.exception(e)
+                    logger_stream.flush()
+                    logged_text = logger_stream.getvalue()
+                    build_cache_client.write_error_log(
+                        project.metadata,
+                        block,
+                        logged_text)
+                    raise
+                finally:
+                    elapsed_time = time() - start_time
+                    build_cache_client.write_timing_log(
+                        metadata,
+                        block,
+                        f"Elapsed time in extract_vernac_commands: {elapsed_time} s"
+                    )
+            data = ProjectCommitData(
+                metadata,
+                command_data,
+                ProjectBuildEnvironment(project.opam_switch.export()),
+                ProjectBuildResult(*build_result))
+            build_cache_client.insert(data, block)
+            # release the switch
+            switch_manager.release_switch(project.opam_switch)
+            project.opam_switch = original_switch
+        except Exception as e:
+            if isinstance(e, ExtractVernacCommandsError):
+                # Don't re-log extract_vernac_commands errors
                 raise
-            finally:
-                elapsed_time = time() - start_time
-                build_cache_client.write_timing_log(
-                    metadata,
-                    block,
-                    f"Elapsed time in extract_vernac_commands: {elapsed_time} s"
-                )
-        data = ProjectCommitData(
-            metadata,
-            command_data,
-            ProjectBuildEnvironment(project.opam_switch.export()),
-            ProjectBuildResult(*build_result))
-        build_cache_client.insert(data, block)
-        # release the switch
-        switch_manager.release_switch(project.opam_switch)
-        project.opam_switch = original_switch
+            logger.critical(
+                "An exception occurred outside of extracting vernacular commands.\n"
+            )
+            logger.exception(e)
+            logger_stream.flush()
+            logged_text = logger_stream.getvalue()
+            build_cache_client.write_misc_log(
+                project.metadata,
+                block,
+                logged_text)
+            raise
 
 
 def cache_extract_commit_iterator(
