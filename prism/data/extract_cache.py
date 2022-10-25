@@ -12,6 +12,7 @@ from functools import partial
 from io import StringIO
 from multiprocessing import Pool
 from pathlib import Path
+from time import time
 from typing import (
     Callable,
     Dict,
@@ -558,7 +559,7 @@ def extract_vernac_commands(
     """
     # Construct a logger local to this function and unique to this PID
     pid = os.getpid()
-    logger = logging.getLogger(f"extract_cache_new-{pid}")
+    logger = logging.getLogger(f"extract_vernac_commands-{pid}")
     logger.setLevel(logging.DEBUG)
     # Tell the logger to log to a text stream
     with StringIO() as logger_stream:
@@ -758,11 +759,17 @@ def extract_cache_new(
         build_result = (pbe.return_code, pbe.stdout, pbe.stderr)
         command_data = process_project_fallback(project)
     else:
+        start_time = time()
         command_data = extract_vernac_commands(
             project,
             build_cache_client,
             block,
             files_to_use)
+        elapsed_time = time() - start_time
+        build_cache_client.write_timing_log(
+            metadata,
+            block,
+            f"Elapsed time in extract_vernac_commands: {elapsed_time} s")
     data = ProjectCommitData(
         metadata,
         command_data,
