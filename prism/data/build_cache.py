@@ -20,6 +20,7 @@ from prism.language.sexp.node import SexpNode
 from prism.project.metadata import ProjectMetadata
 from prism.util.opam.switch import OpamSwitch
 from prism.util.radpytools.dataclasses import default_field
+from prism.util.serialize import Serializable
 
 from ..interface.coq.goals import Goals, GoalsDiff
 
@@ -250,7 +251,7 @@ class ProjectBuildEnvironment:
 
 
 @dataclass
-class ProjectCommitData:
+class ProjectCommitData(Serializable):
     """
     Data associated with a project commit.
 
@@ -280,46 +281,6 @@ class ProjectCommitData:
     The result of building the project commit in the `opam_switch` or
     None if building was not required to process the commit.
     """
-
-    def dump(
-            self,
-            output_filepath: os.PathLike,
-            fmt: su.io.Fmt = su.io.Fmt.yaml) -> None:
-        """
-        Serialize data to text file.
-
-        Parameters
-        ----------
-        output_filepath : os.PathLike
-            Filepath to which cache should be dumped.
-        fmt : su.io.Fmt, optional
-            Designated format of the output file,
-            by default `su.io.Fmt.yaml`.
-        """
-        su.io.dump(output_filepath, self, fmt=fmt)
-
-    @classmethod
-    def load(
-            cls,
-            filepath: os.PathLike,
-            fmt: Optional[su.io.Fmt] = None) -> 'ProjectCommitData':
-        """
-        Load repair mining cache from file.
-
-        Parameters
-        ----------
-        filepath : os.PathLike
-            Filepath containing repair mining cache.
-        fmt : Optional[su.io.Fmt], optional
-            Designated format of the input file, by default None.
-            If None, then the format is inferred from the extension.
-
-        Returns
-        -------
-        ProjectCommitData
-            Loaded repair mining cache
-        """
-        return su.io.load(filepath, fmt, clz=cls)
 
 
 @dataclass
@@ -704,27 +665,15 @@ class CoqProjectBuildCacheServer:
         data : ProjectCommitData
             Data to write to build cache
         block : bool
-            If true, return a "write complete" message
+            If true, return a ``"write complete"`` message.
 
         Returns
         -------
         str or None
-            If `block`, return "write complete"; otherwise, return
+            If `block`, return ``"write complete"``; otherwise, return
             nothing
         """
-        data_path = self.get_path_from_data(data)
-        cache_dir = data_path.parent
-        if not cache_dir.exists():
-            os.makedirs(str(cache_dir))
-        # Ensure that we write the cache atomically.
-        # First, we write to a temporary file so that if we get
-        # interrupted, we aren't left with a corrupted cache.
-        with tempfile.NamedTemporaryFile("w", delete=False, dir=self.root) as f:
-            pass
-        data.dump(f.name, su.io.infer_fmt_from_ext(self.fmt_ext))
-        # Then, we atomically move the file to the correct, final
-        # path.
-        os.replace(f.name, data_path)
+        self._write_kernel(data, False, data)
         # If there was an error in cache extraction, write an additional
         # text file containing the output.
         if data.build_result.exit_code != 0:
@@ -734,11 +683,7 @@ class CoqProjectBuildCacheServer:
                     f"@@stdout@@\n{data.build_result.stdout}",
                     f"@@stderr@@\n{data.build_result.stderr}"
                 ])
-            self._write_kernel(
-                data.project_metadata,
-                block,
-                str_to_write,
-                "_build_error.txt")
+            self._write_kernel(data, block, str_to_write, "_build_error.txt")
         if block:
             return "write complete"
 
@@ -760,14 +705,14 @@ class CoqProjectBuildCacheServer:
             Metadata for the project that had an error. Used by this
             method to get the correct path to write to.
         block : bool
-            If true, return a "write complete" message
+            If true, return a ``"write complete"`` message.
         cache_error_log : str
             Caching error log string to write to file.
 
         Returns
         -------
         str or None
-            If `block`, return "write complete"; otherwise, return
+            If `block`, return ``"write complete"``; otherwise, return
             nothing
         """
         return self._write_kernel(
@@ -778,20 +723,74 @@ class CoqProjectBuildCacheServer:
 
     def _write_kernel(
             self,
-            metadata: ProjectMetadata,
+            cache_id: Union[ProjectCommitData,
+                            ProjectMetadata,
+                            Tuple[str,
+                                  str,
+                                  str]],
             block: bool,
-            file_contents: str,
-            suffix: str) -> Optional[str]:
-        data_path = self.get_path_from_metadata(metadata)
+            file_contents: Union[str,
+                                 Serializable],
+            suffix: Optional[str] = None) -> Optional[str]:
+        r"""
+        Write a message or object to a text file.
+
+        Any existing file contents are overwritten.
+
+        Parameters
+        ----------
+        cache_id : Union[ProjectCommitData, \
+                         ProjectMetadata, \
+                         Tuple[str, str, str]]
+            An object that identifies the cache to which the
+            `file_contents` should be written.
+        block : bool
+            If true, return a ``"write complete"`` message.
+        file_contents : Union[str, Serializable]
+            The contents to write or serialized to the file.
+        suffix : Optional[str], optional
+            An optional suffix (including file extension) that uniquely
+            identifies the written file, by default None, which
+            corresponds to the cached build data itself.
+
+        Returns
+        -------
+        str or None
+            If `block`, return ``"write complete"``; otherwise, return
+            nothing
+
+        Raises
+        ------
+        TypeError
+            If `file_contents` is not a string or `Serializable`.
+        """
+        if not isinstance(file_contents, (str, Serializable)):
+            raise TypeError(
+                f"Cannot write object of type {type(file_contents)} to file")
+        # standardize inputs to get_path
+        if not isinstance(cache_id, tuple):
+            cache_id = (cache_id,)
+        data_path = self.get_path(*cache_id)
         cache_dir = data_path.parent
         if not cache_dir.exists():
             os.makedirs(str(cache_dir))
-        path = data_path.parent / (str(data_path.stem) + suffix)
-        with tempfile.NamedTemporaryFile("wb",
+        # Ensure that we write atomically.
+        # First, we write to a temporary file so that if we get
+        # interrupted, we aren't left with a corrupted file.
+        if suffix is None and isinstance(file_contents, Serializable):
+            suffix = f".{self.fmt_ext}"
+        data_path: Path = data_path.parent / (data_path.stem + suffix)
+        with tempfile.NamedTemporaryFile("w",
                                          delete=False,
-                                         dir=self.root) as f:
-            f.write(file_contents.encode("utf-8"))
-        os.replace(f.name, path)
+                                         dir=self.root,
+                                         encoding='utf-8') as f:
+            if isinstance(file_contents, str):
+                f.write(file_contents)
+        if isinstance(file_contents, Serializable):
+            file_contents.dump(f.name, self.fmt)
+        # Then, we atomically move the file to the correct, final
+        # path.
+        os.replace(f.name, data_path)
         if block:
             return "write complete"
 
@@ -891,6 +890,30 @@ class CoqProjectBuildCacheServer:
         else:
             data = ProjectCommitData.load(data_path)
             return data
+
+    def get_path(self, *args, **kwargs):
+        """
+        Get the file path for arguments identifying a cache.
+
+        This function serves as an alias for each of
+        `get_path_from_data`, `get_path_from_metadata`, and
+        `get_path_from_fields`.
+        """
+        if len(args) == 1:
+            data = args[0]
+            if isinstance(data, ProjectCommitData):
+                path = self.get_path_from_data(data, **kwargs)
+            elif isinstance(data, ProjectMetadata):
+                path = self.get_path_from_metadata(data, **kwargs)
+            else:
+                path = self.get_path_from_fields(*args, **kwargs)
+        elif 'data' in kwargs:
+            path = self.get_path_from_data(**kwargs)
+        elif 'metadata' in kwargs:
+            path = self.get_path_from_metadata(**kwargs)
+        else:
+            path = self.get_path_from_fields(*args, **kwargs)
+        return path
 
     def get_path_from_data(self, data: ProjectCommitData) -> Path:
         """
