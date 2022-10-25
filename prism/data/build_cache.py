@@ -21,7 +21,7 @@ from prism.project.metadata import ProjectMetadata
 from prism.util.opam.switch import OpamSwitch
 from prism.util.radpytools.dataclasses import default_field
 
-from ..interface.coq.goals import Goals
+from ..interface.coq.goals import Goals, GoalsDiff
 
 CommandType = str
 
@@ -51,7 +51,7 @@ class VernacSentence:
     """
     The Vernacular type of command, e.g., VernacInductive.
     """
-    goals: Optional[Goals] = None
+    goals: Optional[Union[Goals, GoalsDiff]] = None
     """
     Open goals, if any, prior to the execution of this sentence.
 
