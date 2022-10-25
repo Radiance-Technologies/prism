@@ -572,7 +572,6 @@ def extract_vernac_commands(
     VernacDict
         A map from file names to their extracted commands.
     """
-    # Tell the logger to log to a text stream
     command_data = {}
     with pushd(project.dir_abspath):
         file_list = project.get_file_list(relative=True, dependency_order=True)
@@ -741,6 +740,7 @@ def extract_cache_new(
     pid = os.getpid()
     logger = logging.getLogger(f"extract_vernac_commands-{pid}")
     logger.setLevel(logging.DEBUG)
+    # Tell the logger to log to a text stream
     with StringIO() as logger_stream:
         handler = logging.StreamHandler(logger_stream)
         # Clear any default handlers
