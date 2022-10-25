@@ -47,7 +47,6 @@ from prism.interface.coq.goals import Goals
 from prism.interface.coq.re_patterns import OBLIGATION_ID_PATTERN
 from prism.interface.coq.serapi import SerAPI
 from prism.language.heuristic.parser import CoqSentence
-from prism.language.sexp import SexpParser
 from prism.project.base import SEM, Project
 from prism.project.exception import ProjectBuildError
 from prism.project.metadata.storage import MetadataStorage
@@ -401,7 +400,7 @@ def _extract_vernac_commands(
             location = sentence.location
             text = sentence.text
             _, feedback, sexp = serapi.execute(text, return_ast=True)
-            sentence.ast = SexpParser.parse(sexp)
+            sentence.ast = sexp
             vernac = SexpAnalyzer.analyze_vernac(sentence.ast)
             if vernac.extend_type is None:
                 command_type = vernac.vernac_type

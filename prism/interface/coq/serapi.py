@@ -338,7 +338,7 @@ class SerAPI:
                      List[str]],
                Tuple[List[SexpNode],
                      List[str],
-                     Optional[str]]]:
+                     AbstractSyntaxTree]]:
         """
         Execute a command.
 
@@ -361,7 +361,7 @@ class SerAPI:
         feedback : List[str]
             Feedback from the Coq Proof Assistant to the executed
             command.
-        ast : str, optional
+        ast : AbstractSyntaxTree, optional
             If `return_ast` is True, then the AST of `cmd` is also
             returned.
         """
@@ -369,7 +369,8 @@ class SerAPI:
         responses, exec_feedback, _ = self.send(f"(Exec {state_id})")
         feedback.extend(exec_feedback)
         if return_ast:
-            return responses, feedback, ast.pretty_format() if ast is not None else ast
+            assert ast is not None
+            return responses, feedback, ast
         else:
             return responses, feedback
 
@@ -1181,7 +1182,7 @@ class SerAPI:
             The AST of the added command or None if `return_ast` is
             False.
         feedback : List[str]
-            Feedback from the
+            Feedback from the added command.
         """
         verbose = "(verb true)" if verbose else ""
         _, feedback, raw_responses = self.send(f'(Add ({verbose}) "{escape(cmd)}")')
