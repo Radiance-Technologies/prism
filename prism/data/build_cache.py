@@ -16,12 +16,12 @@ import setuptools_scm
 import seutil as su
 
 from prism.language.gallina.analyze import SexpInfo
+from prism.language.sexp.node import SexpNode
 from prism.project.metadata import ProjectMetadata
 from prism.util.opam.switch import OpamSwitch
 from prism.util.radpytools.dataclasses import default_field
 
-from ..interface.coq.goals import Goals
-from ..interface.coq.serapi import AbstractSyntaxTree
+from ..interface.coq.goals import Goals, GoalsDiff
 
 CommandType = str
 
@@ -36,9 +36,9 @@ class VernacSentence:
     """
     Text of a sentence from a proof.
     """
-    ast: AbstractSyntaxTree
+    ast: str
     """
-    The AST derived from this sentence.
+    The serialized AST derived from this sentence.
 
     Note that locations within this AST are not accurate with respect to
     the source document.
@@ -51,13 +51,20 @@ class VernacSentence:
     """
     The Vernacular type of command, e.g., VernacInductive.
     """
-    goals: Optional[Goals] = None
+    goals: Optional[Union[Goals, GoalsDiff]] = None
     """
     Open goals, if any, prior to the execution of this sentence.
 
     This is especially useful for capturing the context of commands
     nested within proofs.
     """
+
+    def __post_init__(self) -> None:
+        """
+        Ensure the AST is serialized.
+        """
+        if isinstance(self.ast, SexpNode):
+            self.ast = str(self.ast)
 
     @staticmethod
     def sort_sentences(sentences: List['VernacSentence']) -> List[str]:

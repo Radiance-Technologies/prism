@@ -338,7 +338,7 @@ class SerAPI:
                      List[str]],
                Tuple[List[SexpNode],
                      List[str],
-                     Optional[str]]]:
+                     AbstractSyntaxTree]]:
         """
         Execute a command.
 
@@ -361,7 +361,7 @@ class SerAPI:
         feedback : List[str]
             Feedback from the Coq Proof Assistant to the executed
             command.
-        ast : str, optional
+        ast : AbstractSyntaxTree, optional
             If `return_ast` is True, then the AST of `cmd` is also
             returned.
         """
@@ -369,7 +369,8 @@ class SerAPI:
         responses, exec_feedback, _ = self.send(f"(Exec {state_id})")
         feedback.extend(exec_feedback)
         if return_ast:
-            return responses, feedback, ast.pretty_format() if ast is not None else ast
+            assert ast is not None
+            return responses, feedback, ast
         else:
             return responses, feedback
 
@@ -798,19 +799,20 @@ class SerAPI:
                 qualids.append(line.split()[1])
         return qualids
 
-    def query_goals(self) -> Goals:
+    def query_goals(self) -> Optional[Goals]:
         """
         Retrieve a list of open goals.
 
         Returns
         -------
-        Goals
-            A collection of open goals.
+        Goals | None
+            A collection of open goals or None if there are no open
+            goals.
         """
         responses, _, _ = self.send("(Query () Goals)")
         assert responses[1][2][0] == SexpString("ObjList")
         if responses[1][2][1] == SexpList():  # no goals
-            return Goals()
+            goals = None
         else:
             assert len(responses[1][2][1]) == 1
 
@@ -887,7 +889,10 @@ class SerAPI:
                      deserialize_goals(frame[1])))
             shelved_goals = deserialize_goals(shelved_goals)
             abandoned_goals = deserialize_goals(abandoned_goals)
-            return Goals(fg_goals, bg_goals, shelved_goals, abandoned_goals)
+            goals = Goals(fg_goals, bg_goals, shelved_goals, abandoned_goals)
+            if goals.is_empty:
+                goals = None
+        return goals
 
     def query_library(self, lib: str) -> Path:
         """
@@ -1181,7 +1186,7 @@ class SerAPI:
             The AST of the added command or None if `return_ast` is
             False.
         feedback : List[str]
-            Feedback from the
+            Feedback from the added command.
         """
         verbose = "(verb true)" if verbose else ""
         _, feedback, raw_responses = self.send(f'(Add ({verbose}) "{escape(cmd)}")')

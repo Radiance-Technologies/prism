@@ -106,7 +106,7 @@ class TestSerAPI(unittest.TestCase):
             responses, _, ast = serapi.execute('Locate "_ ∘ _".', True)
             self.assertEqual(str(responses[0]), '(Answer 25 Ack)')
             self.assertEqual(str(responses[1]), '(Answer 25 Completed)')
-            self.assertEqual(SexpParser.parse(ast), expected_ast)
+            self.assertEqual(ast, expected_ast)
 
     def test_get_local_ids(self):
         """
@@ -489,7 +489,7 @@ class TestSerAPI(unittest.TestCase):
             'Type',
             '(Sort (Type ((((hash 14398528588510) '
             '(data (Level ((DirPath ((Id SerTop))) 2)))) 0))))')
-        no_goals = Goals([], [], [], [])
+        no_goals = None
         focused_no_goals = Goals([], [([], [])], [], [])
         expected_add0_base_goal = Goal(
             10,

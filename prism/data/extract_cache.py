@@ -45,11 +45,10 @@ from prism.data.build_cache import (
 )
 from prism.data.commit_map import Except, ProjectCommitUpdateMapper
 from prism.data.util import get_project_func
-from prism.interface.coq.goals import Goals
+from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.interface.coq.re_patterns import OBLIGATION_ID_PATTERN
 from prism.interface.coq.serapi import SerAPI
 from prism.language.heuristic.parser import CoqSentence
-from prism.language.sexp import SexpParser
 from prism.project.base import SEM, Project
 from prism.project.exception import ProjectBuildError
 from prism.project.metadata.storage import MetadataStorage
@@ -62,8 +61,11 @@ from prism.util.swim import SwitchManager
 
 from ..language.gallina.analyze import SexpAnalyzer
 
-SentenceState = Tuple[CoqSentence, Optional[Goals], CommandType]
-ProofSentenceState = Tuple[CoqSentence, Goals, CommandType]
+SentenceState = Tuple[CoqSentence,
+                      Optional[Union[Goals,
+                                     GoalsDiff]],
+                      CommandType]
+ProofSentenceState = Tuple[CoqSentence, Union[Goals, GoalsDiff], CommandType]
 ProofBlock = List[ProofSentenceState]
 
 
@@ -167,13 +169,13 @@ def _conclude_proof(
         # show up as separate entries if it defines custom
         # proof environments.
         ids, proofs = unzip(finished_proof_stacks.pop(finished_proof_id))
-        lemma, pre_goals, lemma_type = conjectures.pop(finished_proof_id)
+        lemma, pre_goals_or_diff, lemma_type = conjectures.pop(finished_proof_id)
         lemma = VernacSentence(
             lemma.text,
             lemma.ast,
             lemma.location,
             lemma_type,
-            pre_goals)
+            pre_goals_or_diff)
         # uniquify but keep original order
         ids = dict.fromkeys(ids)
         # ensure conjecture ID is last
@@ -232,8 +234,6 @@ def _start_proof_block(
             post_proof_id).groupdict()['proof_id']
         obligation_map[post_proof_id] = program_id
         proof_stack = partial_proof_stacks.setdefault(post_proof_id, [])
-        # assert that the proof has goals
-        assert sentence[1] is not None
         proof_stack.append(sentence)
         if program_id not in conjectures:
             # Programs unfortunately do not open proof
@@ -250,7 +250,7 @@ def _start_proof_block(
             assert program_id in conjectures
     else:
         assert post_proof_id not in conjectures
-        conjectures[post_proof_id] = (sentence)
+        conjectures[post_proof_id] = sentence
         partial_proof_stacks[post_proof_id] = []
 
 
@@ -258,7 +258,8 @@ def _start_program(
         sentence: CoqSentence,
         command_type: str,
         ids: List[str],
-        pre_goals: Optional[Goals],
+        pre_goals_or_diff: Optional[Union[Goals,
+                                          GoalsDiff]],
         programs: List[SentenceState]):
     """
     Start accumulation of a new program.
@@ -272,7 +273,7 @@ def _start_program(
     ids : List[str]
         The list of definitions emitted by the program's declaration, if
         any.
-    pre_goals : Optional[Goals]
+    pre_goals_or_diff : Optional[Union[Goals, GoalsDiff]]
         Proof goals prior to the execution of the sentence, if any.
     programs : List[SentenceState]
         The list of all unfinished programs encountered thus far in
@@ -304,10 +305,10 @@ def _start_program(
                 sentence.ast,
                 sentence.location,
                 command_type,
-                pre_goals))
+                pre_goals_or_diff))
     else:
         # some obligations remain
-        programs.append((sentence, pre_goals, command_type))
+        programs.append((sentence, pre_goals_or_diff, command_type))
         return None
 
 
@@ -371,11 +372,13 @@ def _extract_vernac_commands(
     programs: List[SentenceState] = []
     conjectures: Dict[str,
                       Tuple[CoqSentence,
-                            Optional[Goals],
+                            Optional[Union[Goals,
+                                           GoalsDiff]],
                             CommandType]] = {}
     partial_proof_stacks: Dict[str,
                                List[Tuple[CoqSentence,
-                                          Goals,
+                                          Union[Goals,
+                                                GoalsDiff],
                                           CommandType]]] = {}
     obligation_map: Dict[str,
                          str] = {}
@@ -403,7 +406,7 @@ def _extract_vernac_commands(
             location = sentence.location
             text = sentence.text
             _, feedback, sexp = serapi.execute(text, return_ast=True)
-            sentence.ast = SexpParser.parse(sexp)
+            sentence.ast = sexp
             vernac = SexpAnalyzer.analyze_vernac(sentence.ast)
             if vernac.extend_type is None:
                 command_type = vernac.vernac_type
@@ -420,6 +423,12 @@ def _extract_vernac_commands(
                 # update reference set
                 local_ids = all_local_ids
             pre_proof_id = post_proof_id
+            if pre_goals is not None and post_goals is not None:
+                pre_goals_or_diff = GoalsDiff.compute_diff(
+                    pre_goals,
+                    post_goals)
+            else:
+                pre_goals_or_diff = post_goals
             pre_goals = post_goals
             post_proof_id = serapi.get_conjecture_id()
             proof_id_changed = post_proof_id != pre_proof_id
@@ -436,7 +445,7 @@ def _extract_vernac_commands(
                     sentence,
                     command_type,
                     ids,
-                    pre_goals,
+                    pre_goals_or_diff,
                     programs)
                 if program is not None:
                     file_commands.append(program)
@@ -447,7 +456,7 @@ def _extract_vernac_commands(
                     if pre_proof_id in partial_proof_stacks:
                         partial_proof_stacks[pre_proof_id].append(
                             (sentence,
-                             pre_goals,
+                             pre_goals_or_diff,
                              command_type))
                         completed_lemma = _conclude_proof(
                             local_ids,
@@ -482,14 +491,14 @@ def _extract_vernac_commands(
                                         sentence.ast,
                                         sentence.location,
                                         command_type,
-                                        pre_goals)
+                                        pre_goals_or_diff)
                                 ])
                             continue
                 if post_proof_id not in partial_proof_stacks:
                     # We are starting a new proof (or obligation).
                     _start_proof_block(
                         (sentence,
-                         pre_goals,
+                         pre_goals_or_diff,
                          command_type),
                         post_proof_id,
                         conjectures,
@@ -500,14 +509,17 @@ def _extract_vernac_commands(
                     # we are continuing a delayed proof
                     assert post_proof_id in partial_proof_stacks
                     proof_stack = partial_proof_stacks[post_proof_id]
-                    proof_stack.append((sentence, pre_goals, command_type))
+                    proof_stack.append(
+                        (sentence,
+                         pre_goals_or_diff,
+                         command_type))
 
             elif post_proof_id is not None and not ids:
                 # we are continuing an open proof
                 assert post_proof_id in partial_proof_stacks
                 post_goals = serapi.query_goals()
                 proof_stack = partial_proof_stacks[post_proof_id]
-                proof_stack.append((sentence, pre_goals, command_type))
+                proof_stack.append((sentence, pre_goals_or_diff, command_type))
             else:
                 # We are either not in a proof
                 # OR we just defined something new as a side-effect.
@@ -521,7 +533,7 @@ def _extract_vernac_commands(
                             sentence.ast,
                             location,
                             command_type,
-                            pre_goals)))
+                            pre_goals_or_diff)))
     # assert that we have extracted all proofs
     assert not conjectures
     assert not partial_proof_stacks
