@@ -140,12 +140,12 @@ if __name__ == "__main__":
     max_num_commits: Optional[int] = \
         args.max_num_commits if args.max_num_commits else None
     if args.updated_md_storage_file:
-        updated_md_storage_file = args.updated_md_storage_file
+        updated_md_storage_file: str = args.updated_md_storage_file
     else:
-        updated_md_storage_file = mds_file
+        updated_md_storage_file: str = mds_file
     updated_md_storage_file = Path(updated_md_storage_file)
     updated_md_storage_file.parent.mkdir(parents=True, exist_ok=True)
-    max_pool_size = args.max_switch_pool_size
+    max_pool_size: int = args.max_switch_pool_size
     # Force redirect the root logger to a file
     # This might break due to multiprocessing. If so, it should just
     # be disabled
