@@ -129,23 +129,23 @@ if __name__ == "__main__":
     mds_file: str = args.mds_file
     project_root_path: str = args.project_root_path
     log_dir = Path(args.log_dir)
-    extract_nprocs: int = int(args.extract_nprocs)
-    n_build_workers: int = int(args.n_build_workers)
-    force_serial: bool = bool(args.force_serial)
-    num_switches: int = int(args.num_switches)
+    extract_nprocs: int = args.extract_nprocs
+    n_build_workers: int = args.n_build_workers
+    force_serial: bool = args.force_serial
+    num_switches: int = args.num_switches
     project_names = args.project_names if args.project_names else None
     coq_version_iterator = (
         lambda _,
         __: args.coq_versions) if args.coq_versions else None
-    max_num_commits: Optional[int] = int(
-        args.max_num_commits) if args.max_num_commits else None
+    max_num_commits: Optional[int] = \
+        args.max_num_commits if args.max_num_commits else None
     if args.updated_md_storage_file:
         updated_md_storage_file = args.updated_md_storage_file
     else:
         updated_md_storage_file = mds_file
     updated_md_storage_file = Path(updated_md_storage_file)
     updated_md_storage_file.parent.mkdir(parents=True, exist_ok=True)
-    max_pool_size = int(args.max_switch_pool_size)
+    max_pool_size = args.max_switch_pool_size
     # Force redirect the root logger to a file
     # This might break due to multiprocessing. If so, it should just
     # be disabled
