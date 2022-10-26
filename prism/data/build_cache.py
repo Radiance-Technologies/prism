@@ -347,6 +347,40 @@ class CoqProjectBuildCacheClient:
             raise TypeError(f"Unexpected response {response.response}")
         return response.response
 
+    def _write_kernel(
+            self,
+            server_func: str,
+            data: Union[ProjectCommitData,
+                        ProjectMetadata],
+            block: bool,
+            log: Optional[str] = None):
+        """
+        Deduplicate common features of `write`, `write_error_log`, etc.
+
+        Parameters
+        ----------
+        server_func : str
+            Key of server dispatch table to call
+        data : ProjectCommitData or ProjectMetadata
+            Data or metadata to either write to disk or at least to
+            determine the path to write to
+        block : bool
+            Whether the write operation should block or not
+        log : str or None
+            Log message to be written, if applicable
+        """
+        msg = BuildCacheMsg(
+            self.client_id,
+            server_func,
+            args=(data,
+                  block,
+                  log))
+        self.client_to_server.put(msg)
+        if block:
+            response: BuildCacheMsg = self.server_to_client.get()
+            if response.response != "write complete":
+                raise ValueError(f"Unexpected response {response.response}.")
+
     def get(
             self,
             project: str,
@@ -403,12 +437,7 @@ class CoqProjectBuildCacheClient:
         ValueError
             If response from server has unexpected contents
         """
-        msg = BuildCacheMsg(self.client_id, "write", args=(data, block))
-        self.client_to_server.put(msg)
-        if block:
-            response: BuildCacheMsg = self.server_to_client.get()
-            if response.response != "write complete":
-                raise ValueError(f"Unexpected response {response.response}.")
+        self._write_kernel("write", data, block)
 
     def write_error_log(
             self,
@@ -433,17 +462,7 @@ class CoqProjectBuildCacheClient:
         ValueError
             If response from server has unexpected contents
         """
-        msg = BuildCacheMsg(
-            self.client_id,
-            "write_error_log",
-            args=(metadata,
-                  block,
-                  cache_error_log))
-        self.client_to_server.put(msg)
-        if block:
-            response: BuildCacheMsg = self.server_to_client.get()
-            if response.response != "write complete":
-                raise ValueError(f"Unexpected response {response.response}.")
+        self._write_kernel("write_error_log", metadata, block, cache_error_log)
 
     def write_misc_log(
             self,
@@ -468,17 +487,7 @@ class CoqProjectBuildCacheClient:
         ValueError
             If response from server has unexpected contents
         """
-        msg = BuildCacheMsg(
-            self.client_id,
-            "write_misc_log",
-            args=(metadata,
-                  block,
-                  misc_log))
-        self.client_to_server.put(msg)
-        if block:
-            response: BuildCacheMsg = self.server_to_client.get()
-            if response.response != "write complete":
-                raise ValueError(f"Unexpected response {response.response}.")
+        self._write_kernel("write_misc_log", metadata, block, misc_log)
 
     def write_timing_log(
             self,
@@ -503,17 +512,7 @@ class CoqProjectBuildCacheClient:
         ValueError
             If response from server has unexpected contents
         """
-        msg = BuildCacheMsg(
-            self.client_id,
-            "write_timing_log",
-            args=(metadata,
-                  block,
-                  timing_log))
-        self.client_to_server.put(msg)
-        if block:
-            response: BuildCacheMsg = self.server_to_client.get()
-            if response.response != "write complete":
-                raise ValueError(f"Unexpected response {response.response}.")
+        self._write_kernel("write_timing_log", metadata, block, timing_log)
 
     # Aliases
     insert = write
@@ -688,7 +687,10 @@ class CoqProjectBuildCacheServer:
                 if msg.type != "write" or (msg.type == "write" and msg.args[1]):
                     self.server_to_client_dict[msg.client_id].put(response_msg)
 
-    def _write(self, data: ProjectCommitData, block: bool) -> Optional[str]:
+    def _write(self,
+               data: ProjectCommitData,
+               block: bool,
+               _=None) -> Optional[str]:
         """
         Write to build cache.
 
@@ -708,6 +710,11 @@ class CoqProjectBuildCacheServer:
         str or None
             If `block`, return ``"write complete"``; otherwise, return
             nothing
+
+        Notes
+        -----
+        The final `_` parameter in the definition is provided for
+        compatibility with the other write methods.
         """
         self._write_kernel(data, False, data)
         # If there was an error in cache extraction, write an additional
