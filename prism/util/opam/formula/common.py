@@ -4,7 +4,17 @@ Provides utilities for working with OCaml package constraints.
 
 import enum
 import re
-from typing import Any, Dict, Mapping, Optional, Protocol, Tuple, TypeVar, Union
+from typing import (
+    Any,
+    Dict,
+    Mapping,
+    Optional,
+    Protocol,
+    Tuple,
+    TypeVar,
+    Union,
+    runtime_checkable,
+)
 
 from prism.util.abc_enum import ABCEnumMeta
 from prism.util.parse import Parseable, ParseError
@@ -174,6 +184,7 @@ The result of reducing a filter.
 """
 
 
+@runtime_checkable
 class Formula(Protocol):
     """
     A protocol for satisfiable Boolean formulas.

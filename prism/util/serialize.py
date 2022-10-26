@@ -3,11 +3,12 @@ Supply a protocol for serializable data.
 """
 
 import os
-from typing import Optional, Protocol
+from typing import Optional, Protocol, runtime_checkable
 
 import seutil as su
 
 
+@runtime_checkable
 class Serializable(Protocol):
     """
     A simple protocol for serializable data.
