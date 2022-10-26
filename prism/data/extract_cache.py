@@ -798,10 +798,10 @@ def extract_cache_new(
             # release the switch
             switch_manager.release_switch(project.opam_switch)
             project.opam_switch = original_switch
+        except ExtractVernacCommandsError:
+            # Don't re-log extract_vernac_commands errors
+            raise
         except Exception as e:
-            if isinstance(e, ExtractVernacCommandsError):
-                # Don't re-log extract_vernac_commands errors
-                raise
             logger.critical(
                 "An exception occurred outside of extracting vernacular commands.\n"
             )
