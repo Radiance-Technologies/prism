@@ -29,8 +29,8 @@ def normalized_string_alignment(a : str,b : str):
 
 def file_alignment(a: List[VernacSentence],b : List[VernacSentence]): 
     return lazy_align(range(len(a)),range(len(b)),
-               lambda x,y: normalized_string_alignment(a[x].text,b[x].text),
-               lambda x: 0.75)
+               lambda x,y: normalized_string_alignment(a[x].text,b[y].text),
+               lambda x: 0.1)
     # the last, fixed value is a hyperparameter tradeoff between skipping and mis-matching
     # a value of 1.0 always mismatches and a value of 0.0 always skips.
 
@@ -47,5 +47,22 @@ def align_commits(a : ProjectCommitData, b : ProjectCommitData):
         a_sentences = [x.command for x in a.command_data[f]]
         b_sentences = [x.command for x in b.command_data[f]]
         aligned_files[f] = file_alignment(a_sentences,b_sentences)
+    
+    # generate one unified alignment across the contents of the commit
+    # using the file alignments as a guide
+    left_acc = 0
+    right_acc = 0
+    alignment = []
+    for f in a.command_data.keys():
+        if f in aligned_files:
+            for (x,y) in aligned_files[f]:
+                alignment.append((x and x+left_acc,y and y+right_acc))
+            # update indexes by the lengths of the files
+            left_acc += len(a.command_data[f])
+            right_acc += len(b.command_data[f])
 
-    return aligned_files
+    return alignment
+            
+            
+
+
