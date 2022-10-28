@@ -47,8 +47,8 @@ class TestAlignment(unittest.TestCase):
                     # change the char
                     b[index] = 'a' if b[index] == 'z' else 'z'
             cost_measured, alignment = edit_distance("".join(a), "".join(b))
-            # ensure that the alignment is the same even in the accelerated
-            # version of the algorithm
+            # ensure that the alignment is the same
+            # even in the accelerated version of the algorithm
             self.assertEqual(
                 (cost_measured,
                  alignment),
