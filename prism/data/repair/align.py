@@ -4,6 +4,8 @@ Tools for aligning the same proofs across commits.
 
 from typing import List
 
+from numpy import cumsum
+
 from prism.data.build_cache import ProjectCommitData, VernacSentence
 from prism.util.alignment import fast_edit_distance, lazy_align
 
@@ -63,9 +65,9 @@ def align_commits(a: ProjectCommitData, b: ProjectCommitData):
     the first file of `a` to the first
     element of the first file of `b`.
 
-    (1,None) matches the first element
-    of the first file of `a` to no
-    element of `b`, skipping it.
+    This function does not produces skipped
+    alignment pairs-- they will simply not
+    show up in the output.
 
     All VernacSentences of `a` and `b` are
     considered once, but not necessarily in
@@ -76,22 +78,28 @@ def align_commits(a: ProjectCommitData, b: ProjectCommitData):
     # only attempt to align files present in both roots.
     alignable_files = a.command_data.keys() & b.command_data.keys()
     aligned_files = {}
+
+    alignment = []
+
+    a_indexes = [0] + list(
+        cumsum([len(x) for x in a.command_data.values()])[:-1])
+    b_indexes = [0] + list(
+        cumsum([len(x) for x in b.command_data.values()])[:-1])
+
     for f in alignable_files:
         a_sentences = [x.command for x in a.command_data[f]]
         b_sentences = [x.command for x in b.command_data[f]]
-        aligned_files[f] = file_alignment(a_sentences, b_sentences)
-
-    # generate one unified alignment across the contents of the commit
-    # using the file alignments as a guide
-    left_acc = 0
-    right_acc = 0
-    alignment = []
-    for f in a.command_data.keys():
+        aligned_files[f] = list(
+            filter(
+                lambda x: x[0] is not None and x[1] is not None,
+                file_alignment(a_sentences,
+                               b_sentences)))
+        # seek to the right part of the alignment
+        left_acc = a_indexes[list(a.command_data.keys()).index(f)]
+        right_acc = b_indexes[list(b.command_data.keys()).index(f)]
         if f in aligned_files:
             for (x, y) in aligned_files[f]:
-                alignment.append((x and x + left_acc, y and y + right_acc))
-            # update indexes by the lengths of the files
-            left_acc += len(a.command_data[f])
-            right_acc += len(b.command_data[f])
+                if (x is not None and y is not None):
+                    alignment.append((x + left_acc, y + right_acc))
 
     return alignment

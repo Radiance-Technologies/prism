@@ -2,6 +2,7 @@
 Test module for repair tools.
 """
 import unittest
+from itertools import chain
 from pathlib import Path
 
 from prism.data.build_cache import ProjectCommitData, VernacSentence
@@ -23,8 +24,7 @@ class TestRepair(unittest.TestCase):
         """
         Set up some real data to try to align.
         """
-        files = ["verdi_core_net_a.v", "verdi_core_net_b.v"]
-        print(_COQ_EXAMPLES_PATH)
+        files = ["verdi_core_net_a.v", "verdi_core_net_b.v", "Alphabet.v"]
 
         for f in files:
             # grab a small representative set of lines
@@ -81,6 +81,37 @@ class TestRepair(unittest.TestCase):
         # exactly matched in the alignment
         # unless there are Very Extenuating Circumstances
         for i, x in enumerate(self.caches["verdi_core_net_a.v"]):
+            for j, y in enumerate(self.caches["verdi_core_net_b.v"]):
+                if (x.command.text == y.command.text):
+                    self.assertTrue((i, j) in alignment)
+
+    def test_align_multifile(self):
+        """
+        Check that align_commits offsets file indexes correctly.
+        """
+        a = ProjectCommitData(
+            None,
+            {
+                "Alphabet'.v": TestRepair.caches["Alphabet.v"],
+                "core_net": TestRepair.caches["verdi_core_net_a.v"],
+                "Alphabet.v": TestRepair.caches["Alphabet.v"]
+            },
+            None,
+            None)
+        b = ProjectCommitData(
+            None,
+            {"core_net": TestRepair.caches["verdi_core_net_b.v"]},
+            None,
+            None)
+        alignment = align_commits(a, b)
+
+        alines = list(
+            chain.from_iterable(
+                a.command_data[x] for x in a.command_data.keys()))
+
+        # a needs special treatment because it now consists
+        # of multiple files here
+        for i, x in enumerate(alines):
             for j, y in enumerate(self.caches["verdi_core_net_b.v"]):
                 if (x.command.text == y.command.text):
                     self.assertTrue((i, j) in alignment)
