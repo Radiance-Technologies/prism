@@ -110,9 +110,6 @@ class Project(ABC):
     metadata: ProjectMetadata
         Project metadata containing information such as project name
         and commands.
-    size_bytes : int
-        The total space on disk occupied by the files in the dir in
-        bytes
     sentence_extraction_method : SentenceExtractionMethod
         The method by which sentences are extracted.
     """
@@ -134,7 +131,6 @@ class Project(ABC):
         """
         self.dir_abspath = dir_abspath
         self.metadata_storage = metadata_storage
-        self.size_bytes = self._get_size_bytes()
         self.sentence_extraction_method = sentence_extraction_method
         if opam_switch is not None:
             self.opam_switch = opam_switch
@@ -279,6 +275,23 @@ class Project(ABC):
         """
         return self.metadata.serapi_options
 
+    @property
+    def size_bytes(self) -> int:
+        """
+        Get size in bytes of working directory.
+
+        A measure of the total space on disk occupied by files in the
+        project directory in bytes. This size should exclude the
+        contents of any .git directories.
+        """
+        return sum(
+            f.stat().st_size
+            for f in pathlib.Path(self.path).glob('**/*')
+            if f.is_file()) - sum(
+                f.stat().st_size
+                for f in pathlib.Path(self.path).glob('**/.git/**/*')
+                if f.is_file())
+
     def _clean(self) -> None:
         """
         Remove all compiled Coq library (object) files.
@@ -312,20 +325,6 @@ class Project(ABC):
             serapi_options=self.serapi_options,
             opam_switch=self.opam_switch)
         return sentences
-
-    def _get_size_bytes(self) -> int:
-        """
-        Get size in bytes of working directory.
-
-        This size should exclude the contents of any .git directories.
-        """
-        return sum(
-            f.stat().st_size
-            for f in pathlib.Path(self.path).glob('**/*')
-            if f.is_file()) - sum(
-                f.stat().st_size
-                for f in pathlib.Path(self.path).glob('**/.git/**/*')
-                if f.is_file())
 
     def _prepare_command(self, target: str) -> str:
         commands = [f"({cmd})" for cmd in getattr(self, f"{target}_cmd")]
