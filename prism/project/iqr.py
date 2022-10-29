@@ -88,7 +88,7 @@ class IQR:
 
         Returns
         -------
-        str
+        IQR
             The reinterpreted arguments.
         """
         prefix = get_relative_path(self.pwd, pwd)
