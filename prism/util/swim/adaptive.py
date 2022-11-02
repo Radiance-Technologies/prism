@@ -164,15 +164,15 @@ class AdaptiveSwitchManager(SwitchManager):
                 raise UnsatisfiableConstraints(formula)
         if minimum_size > 0:
             # add a new switch to the persistent pool
-            clone = self._clone_switch(switch)
+            clone = self._clone_switch(closest_switch)
             clone.install_formula(formula)
             with self._lock:
                 self.switches.add(clone)
                 if (len(self.switches) > self._max_pool_size):
                     self._evict()
-                switch = clone
+                closest_switch = clone
         # return a temporary clone
-        clone = self._clone_switch(switch)
+        clone = self._clone_switch(closest_switch)
         with self._lock:
             self._temporary_switches.add(clone)
         return clone
