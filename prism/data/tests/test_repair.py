@@ -7,7 +7,7 @@ from pathlib import Path
 
 from prism.data.build_cache import ProjectCommitData, VernacSentence
 from prism.data.extract_cache import VernacCommandData
-from prism.data.repair.align import align_commits
+from prism.data.repair import align_commits
 from prism.language.heuristic.parser import HeuristicParser
 from prism.tests import _COQ_EXAMPLES_PATH
 
