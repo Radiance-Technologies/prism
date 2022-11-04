@@ -267,14 +267,15 @@ def fast_edit_distance(a, b, return_cost=False):
     al2 = []
 
     if (return_cost):
-        cost,al = al
+        cost, al = al
 
-    for (x,y) in al:
-        al2.append((chr(x) if x is not None else None,
-                    chr(y) if y is not None else None))
+    for (x, y) in al:
+        al2.append(
+            (
+                chr(x) if x is not None else None,
+                chr(y) if y is not None else None))
 
     if (return_cost):
-        return cost,al2
+        return cost, al2
     else:
         return al2
-
