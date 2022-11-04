@@ -52,8 +52,8 @@ class TestAlignment(unittest.TestCase):
             self.assertEqual(
                 (cost_measured,
                  alignment),
-                fast_edit_distance(a,
-                                   b,
+                fast_edit_distance("".join(a),
+                                   "".join(b),
                                    return_cost=True))
 
             # assert that the found alignment
