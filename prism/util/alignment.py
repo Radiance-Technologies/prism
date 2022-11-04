@@ -239,7 +239,20 @@ def align_factory(calign, cskip, numba=True):
     return align
 
 
-fast_edit_distance = align_factory(
+fast_edit_distance_raw = align_factory(
     lambda a,
     b: 1.0 if a != b else 0.0,
     lambda x: 1.0)
+
+
+def fast_edit_distance(a, b, **kwargs):
+    """
+    Convert types for fast_edit_distance_raw.
+
+    Converts strings to lists of ints, which should align faster.
+    """
+    if (type(a) == type(b) and type(b) == str):
+        a = np.array([ord(c) for c in a])
+        b = np.array([ord(c) for c in b])
+
+    return fast_edit_distance_raw(a, b, **kwargs)
