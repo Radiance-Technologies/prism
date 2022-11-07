@@ -40,3 +40,11 @@ class ProjectBuildError(Exception):
 
     def __str__(self) -> str:  # noqa: D105
         return self.msg
+
+
+class ProjectCommandError(ProjectBuildError):
+    """
+    A specialization of `ProjectBuildError` to non-build commands.
+    """
+
+    pass

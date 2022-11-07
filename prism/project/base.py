@@ -12,7 +12,17 @@ from dataclasses import fields
 from enum import Enum, auto
 from functools import partialmethod, reduce
 from subprocess import CalledProcessError
-from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    List,
+    NamedTuple,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+)
 
 from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
@@ -21,11 +31,12 @@ from prism.language.heuristic.parser import (
     HeuristicParser,
     SerAPIParser,
 )
-from prism.project.exception import ProjectBuildError
+from prism.project.exception import ProjectBuildError, ProjectCommandError
 from prism.project.iqr import IQR
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.strace import strace_build
+from prism.util.bash import escape
 from prism.util.build_tools.coqdep import order_dependencies
 from prism.util.logging import default_log_level
 from prism.util.opam import (
@@ -338,13 +349,14 @@ class Project(ABC):
             action: str,
             returncode: int,
             stdout: str,
-            stderr: str) -> None:
+            stderr: str,
+            ExcType: Type[ProjectBuildError] = ProjectBuildError) -> None:
         status = "failed" if returncode != 0 else "finished"
         msg = (
             f"{action} {status}! Return code is {returncode}! "
             f"stdout:\n{stdout}\n; stderr:\n{stderr}")
         if returncode != 0:
-            raise ProjectBuildError(msg, returncode, stdout, stderr)
+            raise ExcType(msg, returncode, stdout, stderr)
         else:
             logger.debug(msg)
 
@@ -831,6 +843,48 @@ class Project(ABC):
     """
     Install the project system-wide in "coq-contrib".
     """
+
+    def run(self,
+            cmd: str,
+            action: Optional[str] = None,
+            **kwargs) -> Tuple[int,
+                               str,
+                               str]:
+        """
+        Run a command in the context of the project.
+
+        Parameters
+        ----------
+        cmd : str
+            An arbitrary command.
+        action : Optional[str], optional
+            A short description of the command, by default None.
+        kwargs : Dict[str, Any]
+            Optional keywords arguments to `OpamSwitch.run`.
+
+        Returns
+        -------
+        return_code : int
+            The return code, expected to be 0.
+        stdout : str
+            The standard output of the command.
+        stderr : str
+            The standard error output of the command.
+
+        Raises
+        ------
+        ProjectCommandError
+            If the command fails with nonzero exit code.
+        """
+        r = self.opam_switch.run(cmd, check=False, **kwargs)
+        result = (r.returncode, r.stdout, r.stderr)
+        if action is None:
+            action = escape(cmd)
+        self._process_command_output(
+            action,
+            *result,
+            ExcType=ProjectCommandError)
+        return result
 
     @staticmethod
     def extract_sentences(
