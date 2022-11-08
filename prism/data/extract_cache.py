@@ -29,7 +29,7 @@ from typing import (
 
 import tqdm
 from prism.language.heuristic.parser import CoqSentence
-from prism.language.sexp import SexpList, SexpNode, SexpString
+from prism.language.sexp import SexpNode, SexpParser
 from prism.project.base import SEM, Project
 from prism.project.exception import ProjectBuildError
 from prism.project.iqr import IQR
@@ -66,6 +66,7 @@ from prism.util.opam.version import Version
 from prism.util.radpytools import unzip
 from prism.util.radpytools.os import pushd
 from prism.util.swim import SwitchManager
+from prism.util.iterable import CallableIterator
 
 from ..language.gallina.analyze import SexpAnalyzer
 
@@ -341,8 +342,8 @@ def expand_idents(
         serapi: SerAPI,
         id_cache: Dict[str,
                        str],
-        ast: SexpNode,
-        modpath: str) -> SexpNode:
+        sexp: str,
+        modpath: str) -> str:
 
     def id_re(capture_name: Optional[str]) -> re.Pattern:
         if capture_name is not None:
@@ -357,6 +358,26 @@ def expand_idents(
         rf"\(\s*Ser_Qualid\s*{dirpath_re.pattern}\s*"
         rf"{id_re('str_of_qualid').pattern}\s*\)")
 
+    serqualid_re = re.compile(
+        rf"\(\s*Ser_Qualid\s*{dirpath_re.pattern}\s*"
+        rf"{id_re('str_of_qualid').pattern}\s*\)")
+
+    def qualid_str_of_match(m):
+        dirpath = [d['id'] for d in re.finditer(id_re('id'), m['dirpath'])]
+        dirpath.append(m['str_of_qualid'])
+        return ".".join(dirpath)
+
+    def id_of_str(txt: str) -> str:
+        return "(Id " + txt + ")"
+
+    def sexp_str_of_qualid(qualid_str: str) -> SexpNode:
+        parts = qualid_str.split(".")
+        if parts[0] == "SerTop":
+            parts[0] = modpath
+        ident = id_of_str(parts[-1])
+        dirpath = "(DirPath(" + "".join([id_of_str(d) for d in parts[0:-1]]) + "))"
+        return "(Ser_Qualid" + dirpath + ident + ")"
+
     def query_qualid_memo(ident: str) -> str:
         try:
             queried = id_cache[ident]
@@ -365,37 +386,14 @@ def expand_idents(
             id_cache[ident] = queried
         return queried
 
-    def id_of_str(txt: str) -> SexpList:
-        return SexpList([SexpString("Id"), SexpString(txt)])
+    def locate(qualid_str):
+        queried = query_qualid_memo(qualid_str)
+        return qualid_str if queried is None else queried
 
-    def str_of_qualid(serqualid: SexpList) -> str:
-        dirpath = serqualid[1][1]
-        ident = serqualid[2][1]
-        modules = [mod[1].get_content() for mod in dirpath]
-        modules.append(ident.get_content())
-        return ".".join(modules)
-
-    def qualid_of_str(qualid_str: str) -> SexpNode:
-        parts = qualid_str.split(".")
-        ident = id_of_str(parts[-1])
-        modules = [id_of_str(x) for x in parts[0 :-1]]
-        dirpath = SexpList([SexpString("DirPath"), SexpList(modules)])
-        return SexpList([SexpString("Ser_Qualid"), dirpath, ident])
-
-    def rewrite_ids(sexp):
-        is_qualid = sexp.is_list() and sexp.head() == "Ser_Qualid"
-        if is_qualid:
-            qualid_str = str_of_qualid(sexp)
-            queried = query_qualid_memo(qualid_str)
-            result = qualid_str if queried is None else queried
-            parts = result.split(".")
-            if parts[0] == "SerTop":
-                result = ".".join([modpath, parts[1]]) if modpath else parts[1]
-            return (qualid_of_str(result), SexpNode.RecurAction.StopRecursion)
-        return (sexp, SexpNode.RecurAction.ContinueRecursion)
-
-    return ast.modify_recur(pre_children_modify=rewrite_ids)
-
+    matches = re.finditer(serqualid_re, sexp)
+    replacements = [sexp_str_of_qualid(locate(qualid_str_of_match(m))) for m in matches]
+    repl_it = CallableIterator(replacements)
+    return re.sub(serqualid_re, repl_it, sexp)
 
 def _start_program(
         sentence: CoqSentence,
@@ -569,11 +567,11 @@ def _extract_vernac_commands(
             location = sentence.location
             text = sentence.text
             _, feedback, sexp = serapi.execute(text, return_ast=True)
-            sentence.ast = expand_idents(
+            sentence.ast = SexpParser.parse(expand_idents(
                 serapi,
                 expanded_ids,
-                sexp,
-                modpath)
+                str(sexp),
+                modpath))
             vernac = SexpAnalyzer.analyze_vernac(sentence.ast)
             if vernac.extend_type is None:
                 command_type = vernac.vernac_type
