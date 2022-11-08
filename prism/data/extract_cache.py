@@ -61,12 +61,12 @@ from prism.interface.coq.re_patterns import (
     SUBPROOF_ID_PATTERN,
 )
 from prism.interface.coq.serapi import SerAPI
+from prism.util.iterable import CallableIterator
 from prism.util.opam.switch import OpamSwitch
 from prism.util.opam.version import Version
 from prism.util.radpytools import unzip
 from prism.util.radpytools.os import pushd
 from prism.util.swim import SwitchManager
-from prism.util.iterable import CallableIterator
 
 from ..language.gallina.analyze import SexpAnalyzer
 
@@ -375,7 +375,8 @@ def expand_idents(
         if parts[0] == "SerTop":
             parts[0] = modpath
         ident = id_of_str(parts[-1])
-        dirpath = "(DirPath(" + "".join([id_of_str(d) for d in parts[0:-1]]) + "))"
+        dirpath = "(DirPath(" + "".join(
+            [id_of_str(d) for d in parts[0 :-1]]) + "))"
         return "(Ser_Qualid" + dirpath + ident + ")"
 
     def query_qualid_memo(ident: str) -> str:
@@ -391,9 +392,12 @@ def expand_idents(
         return qualid_str if queried is None else queried
 
     matches = re.finditer(serqualid_re, sexp)
-    replacements = [sexp_str_of_qualid(locate(qualid_str_of_match(m))) for m in matches]
+    replacements = [
+        sexp_str_of_qualid(locate(qualid_str_of_match(m))) for m in matches
+    ]
     repl_it = CallableIterator(replacements)
     return re.sub(serqualid_re, repl_it, sexp)
+
 
 def _start_program(
         sentence: CoqSentence,
