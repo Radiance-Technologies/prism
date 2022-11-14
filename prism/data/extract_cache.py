@@ -61,6 +61,12 @@ from prism.interface.coq.re_patterns import (
     SUBPROOF_ID_PATTERN,
 )
 from prism.interface.coq.serapi import SerAPI
+from prism.language.heuristic.parser import CoqSentence
+from prism.language.sexp import SexpParser
+from prism.project.base import SEM, Project
+from prism.project.exception import ProjectBuildError
+from prism.project.iqr import IQR
+from prism.project.repo import ProjectRepo
 from prism.util.iterable import CallableIterator
 from prism.util.opam.switch import OpamSwitch
 from prism.util.opam.version import Version
@@ -75,6 +81,98 @@ SentenceState = Tuple[CoqSentence,
                                      GoalsDiff]],
                       CommandType]
 ProofSentenceState = Tuple[CoqSentence, Union[Goals, GoalsDiff], CommandType]
+
+def _id_re(capture_name: Optional[str]) -> re.Pattern:
+    """
+    Make a regex that matches a Coq kernel ``Id`` type's s-expression.
+
+    Parameters
+    ----------
+    capture_name : Optional[str]
+        If not None, then capture the ID in a group with the name
+        `capture_name`.
+
+    Returns
+    -------
+    re.Pattern
+        The compiled regex pattern.
+    """
+    if capture_name is not None:
+        str_of_id = rf"(?P<{capture_name}>[^\)\s]+)"
+    else:
+        str_of_id = r"[^\)\s]+"
+    return re.compile(rf"\(\s*Id\s+{str_of_id}\)")
+
+
+dirpath_re = re.compile(
+    rf"\(\s*DirPath\s*\((?P<dirpath>(?:\s*{_id_re(None).pattern})*)\)\s*\)")
+serqualid_re = re.compile(
+    rf"\(\s*Ser_Qualid\s*{dirpath_re.pattern}\s*"
+    rf"{_id_re('str_of_qualid').pattern}\s*\)")
+
+
+def qualid_str_of_serqualid_match(serqualid: re.Match) -> str:
+    """
+    Convert a matched ``Ser_Qualid`` pattern to a dot-delimited path.
+
+    Parameters
+    ----------
+    serqualid : re.Match
+        A match obtained from `serqualid_re`.
+
+    Returns
+    -------
+    str
+        A dot-delimited representation of the given implicit qualified
+        ID as it would appear in code.
+    """
+    dirpath = [d['id'] for d in re.finditer(_id_re('id'), serqualid['dirpath'])]
+    dirpath.append(serqualid['str_of_qualid'])
+    return ".".join(dirpath)
+
+
+def id_of_str(txt: str) -> str:
+    """
+    Embed a string into a serialized ``Id`` s-expression.
+    """
+    return f"(Id {txt})"
+
+
+def sexp_str_of_qualid(qualid_str: str, modpath: str) -> str:
+    """
+    Convert a qualified identifier into a serialized s-expression.
+
+    The s-expression is based on how the identifier would be
+    represented in an AST using Coq kernel types.
+
+    Parameters
+    ----------
+    qualid_str : str
+        A qualified identifier.
+    modpath : str
+        The module path to use in place of ``"SerTop."`` for locally
+        defined identifiers.
+
+    Returns
+    -------
+    str
+        The s-expression representation of the given identifier.
+    """
+    parts = qualid_str.split(".")
+    if parts[0] == "SerTop":
+        # make identity unambiguous when the AST is used later in
+        # a non-interactive context
+        parts[0] = modpath
+    ident = id_of_str(parts[-1])
+    dirpath = ["(DirPath("]
+    dirpath.extend([id_of_str(d) for d in parts[0 :-1]])
+    dirpath.append("))")
+    dirpath = "".join(dirpath)
+    return f"(Ser_Qualid{dirpath}{ident})"
+
+
+SentenceState = Tuple[CoqSentence, Optional[Goals], CommandType]
+ProofSentenceState = Tuple[CoqSentence, Goals, CommandType]
 ProofBlock = List[ProofSentenceState]
 
 
@@ -278,7 +376,7 @@ def _start_proof_block(
         partial_proof_stacks[post_proof_id] = []
 
 
-def _get_local_modpath(filename: os.PathLike, serapi_options: str) -> str:
+def get_local_modpath(filename: os.PathLike, serapi_options: str) -> str:
     """
     Infer the module path for the given file.
 
@@ -292,7 +390,7 @@ def _get_local_modpath(filename: os.PathLike, serapi_options: str) -> str:
 
     Returns
     -------
-    str
+    modpath : str
         The logical library path one would use if the indicated file was
         imported or required in another.
     """
@@ -344,56 +442,60 @@ def expand_idents(
                        str],
         sexp: str,
         modpath: str) -> str:
+    """
+    Fully qualify all identifiers in a given AST.
 
-    def id_re(capture_name: Optional[str]) -> re.Pattern:
-        if capture_name is not None:
-            str_of_id = rf"(?P<{capture_name}>[^\)\s]+)"
-        else:
-            str_of_id = r"[^\)\s]+"
-        return re.compile(rf"\(\s*Id\s+{str_of_id}\)")
+    Parameters
+    ----------
+    serapi : SerAPI
+        An interactive `sertop` session.
+    id_cache : Dict[str, str]
+        A map from unqualified or partially qualified IDs to fully
+        qualified variants.
+    sexp : str
+        A serialized s-expression representing the AST of some command
+        executed in `serapi`.
+    modpath : str
+        The logical library path one would use if the contents of the
+        `serapi` session were dumped to file and imported or required in
+        another.
 
-    dirpath_re = re.compile(
-        rf"\(\s*DirPath\s*\((?P<dirpath>(?:\s*{id_re(None).pattern})*)\)\s*\)")
-    serqualid_re = re.compile(
-        rf"\(\s*Ser_Qualid\s*{dirpath_re.pattern}\s*"
-        rf"{id_re('str_of_qualid').pattern}\s*\)")
+    Returns
+    -------
+    str
+        The given serialized `sexp` with all identifiers replaced by
+        their fully qualified versions.
 
-    serqualid_re = re.compile(
-        rf"\(\s*Ser_Qualid\s*{dirpath_re.pattern}\s*"
-        rf"{id_re('str_of_qualid').pattern}\s*\)")
+    Notes
+    -----
+    Currently, only ``Ser_Qualid`` identifiers are expanded.
+    """
 
-    def qualid_str_of_match(m):
-        dirpath = [d['id'] for d in re.finditer(id_re('id'), m['dirpath'])]
-        dirpath.append(m['str_of_qualid'])
-        return ".".join(dirpath)
+    def qualify(qualid_str: str) -> str:
+        """
+        Fully qualify the given identifier.
 
-    def id_of_str(txt: str) -> str:
-        return "(Id " + txt + ")"
+        Parameters
+        ----------
+        qualid_str : str
+            An identifier as it appears in the AST.
 
-    def sexp_str_of_qualid(qualid_str: str) -> SexpNode:
-        parts = qualid_str.split(".")
-        if parts[0] == "SerTop":
-            parts[0] = modpath
-        ident = id_of_str(parts[-1])
-        dirpath = "(DirPath(" + "".join(
-            [id_of_str(d) for d in parts[0 :-1]]) + "))"
-        return "(Ser_Qualid" + dirpath + ident + ")"
-
-    def query_qualid_memo(ident: str) -> str:
+        Returns
+        -------
+        str
+            The fully qualified identifier.
+        """
         try:
-            queried = id_cache[ident]
+            queried = id_cache[qualid_str]
         except KeyError:
-            queried = serapi.query_full_qualid(ident)
-            id_cache[ident] = queried
-        return queried
-
-    def locate(qualid_str):
-        queried = query_qualid_memo(qualid_str)
+            queried = serapi.query_full_qualid(qualid_str)
+            id_cache[qualid_str] = queried
         return qualid_str if queried is None else queried
 
     matches = re.finditer(serqualid_re, sexp)
     replacements = [
-        sexp_str_of_qualid(locate(qualid_str_of_match(m))) for m in matches
+        sexp_str_of_qualid(qualify(qualid_str_of_serqualid_match(m)),
+                           modpath) for m in matches
     ]
     repl_it = CallableIterator(replacements)
     return re.sub(serqualid_re, repl_it, sexp)
@@ -471,7 +573,7 @@ def _is_subproof(post_proof_id: str, ids: List[str]) -> bool:
 
 def _extract_vernac_commands(
         sentences: Iterable[CoqSentence],
-        filename,
+        filename: os.PathLike,
         opam_switch: Optional[OpamSwitch] = None,
         serapi_options: str = "",
         use_goals_diff: bool = True) -> List[VernacCommandData]:
@@ -482,6 +584,9 @@ def _extract_vernac_commands(
     ----------
     sentences : Iterable[CoqSentence]
         A sequence of sentences derived from a document.
+    filename : os.PathLike
+        The name of the document from which the `sentences` are taken,
+        relative to the root of the project.
     opam_switch : Optional[OpamSwitch], optional
         The switch in which to execute the commands, which sets the
         version of `sertop` and controls the availability of external
@@ -530,7 +635,7 @@ def _extract_vernac_commands(
     * The conjecture IDs returned by ``Show Conjectures.`` are ordered
       such that the conjecture actively being proved is listed first.
     """
-    modpath = _get_local_modpath(filename, serapi_options)
+    modpath = get_local_modpath(filename, serapi_options)
     file_commands: List[VernacCommandData] = []
     programs: List[SentenceState] = []
     conjectures: Dict[str,
@@ -584,6 +689,7 @@ def _extract_vernac_commands(
             # get new ids
             ids = serapi.parse_new_identifiers(feedback)
             for ident in ids:
+                # shadow old ids
                 expanded_ids.pop(ident, None)
             if ids:
                 local_ids = local_ids.union(ids)
