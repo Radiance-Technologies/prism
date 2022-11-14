@@ -123,6 +123,12 @@ if __name__ == "__main__":
         type=int,
         help="Maximum number of switches to allow. Set somewhat"
         " conservatively to avoid running out of disk space.")
+    parser.add_argument(
+        "--max-procs-file-level",
+        default=128,
+        type=int,
+        help="Maximum number of active workers to allow at once on the "
+        "file-level of extraction.")
     args = parser.parse_args()
     default_commits_path: str = args.default_commits_path
     cache_dir: str = args.cache_dir
@@ -146,6 +152,7 @@ if __name__ == "__main__":
     updated_md_storage_file = Path(updated_md_storage_file)
     updated_md_storage_file.parent.mkdir(parents=True, exist_ok=True)
     max_pool_size: int = args.max_switch_pool_size
+    max_procs_file_level: int = args.max_procs_file_level
     # Force redirect the root logger to a file
     # This might break due to multiprocessing. If so, it should just
     # be disabled
@@ -179,4 +186,5 @@ if __name__ == "__main__":
         n_build_workers=n_build_workers,
         project_names=project_names,
         max_num_commits=max_num_commits,
-        updated_md_storage_file=updated_md_storage_file)
+        updated_md_storage_file=updated_md_storage_file,
+        max_procs_file_level=max_procs_file_level)

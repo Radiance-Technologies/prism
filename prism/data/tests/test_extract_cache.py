@@ -135,6 +135,7 @@ class TestExtractCache(unittest.TestCase):
                     self.logger.debug(f"Project folder: {project.dir_abspath}")
                     continue
                 project: ProjectRepo
+                semaphore = manager.BoundedSemaphore(4)
                 extract_cache(
                     cache_clients[project.name],
                     self.swim,
@@ -142,7 +143,8 @@ class TestExtractCache(unittest.TestCase):
                     head,
                     lambda x: {},
                     coq_version,
-                    block=True)
+                    block=True,
+                    worker_semaphore=semaphore)
                 self.logger.debug(f"Success {project_name}")
             # assert that the other float commit was not checked out
             self.assertEqual(coq_float.commit_sha, coq_float.reset_head)

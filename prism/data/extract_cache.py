@@ -12,6 +12,7 @@ from functools import partial
 from io import StringIO
 from multiprocessing import Pool
 from pathlib import Path
+from threading import BoundedSemaphore
 from time import time
 from typing import (
     Callable,
@@ -28,6 +29,7 @@ from typing import (
 
 import tqdm
 from seutil import io
+from tqdm.contrib.concurrent import process_map
 
 from prism.data.build_cache import (
     CommandType,
@@ -71,12 +73,17 @@ ProofBlock = List[ProofSentenceState]
 
 class ExtractVernacCommandsError(RuntimeError):
     """
-    Extended RuntimeError with a filename property.
+    Extended RuntimeError with filename and parent properties.
     """
 
-    def __init__(self, filename: str, *args):
-        super().__init__(*args)
+    def __init__(
+            self,
+            message: str,
+            filename: str = "",
+            parent_exception: Optional[Exception] = None):
+        super().__init__(message)
         self.filename = filename
+        self.parent = parent_exception
 
 
 def _process_proof_block(block: ProofBlock) -> Proof:
@@ -554,7 +561,9 @@ def _extract_vernac_commands(
 
 def extract_vernac_commands(
         project: ProjectRepo,
-        files_to_use: Optional[Iterable[str]] = None) -> VernacDict:
+        files_to_use: Optional[Iterable[str]] = None,
+        force_serial: bool = False,
+        worker_semaphore: Optional[BoundedSemaphore] = None) -> VernacDict:
     """
     Compile vernac commands from a project into a dict.
 
@@ -566,6 +575,12 @@ def extract_vernac_commands(
         An iterable of filenames to use for this project; or None. If
         None, all files are used. By default, None.
         This argument is especially useful for profiling.
+    force_serial : bool, optional
+        If this argument is true, disable parallel execution. Useful for
+        debugging. By default False.
+    worker_semaphore : Semaphore or None, optional
+        Semaphore used to control the number of file workers than
+        can run at once. By default None. If None, ignore.
 
     Returns
     -------
@@ -577,35 +592,86 @@ def extract_vernac_commands(
         file_list = project.get_file_list(relative=True, dependency_order=True)
         if files_to_use:
             file_list = [f for f in file_list if f in files_to_use]
-        pbar = tqdm.tqdm(
-            file_list,
-            total=len(file_list),
-            desc=f"Caching {project.name}@{project.short_sha}")
-        for filename in pbar:
-            # Verify that accompanying vo file exists first
-            pbar.set_description(
-                f"Caching {project.name}@{project.short_sha}:{filename}")
+        # Remove files that don't have corresponding .vo files
+        final_file_list = []
+        for filename in file_list:
             path = Path(filename)
             vo = path.parent / (path.stem + ".vo")
             if not os.path.exists(vo):
                 logging.info(
                     f"Skipped extraction for file {filename}. "
                     "No .vo file found.")
-                continue
-            try:
-                command_data[filename] = _extract_vernac_commands(
-                    project.get_sentences(
-                        filename,
-                        SEM.HEURISTIC,
-                        return_locations=True,
-                        glom_proofs=False),
-                    opam_switch=project.opam_switch,
-                    serapi_options=project.serapi_options)
-            except Exception as e:
-                raise ExtractVernacCommandsError(
-                    filename,
-                    f"Error on {filename}") from e
+            else:
+                final_file_list.append(filename)
+        if force_serial:
+            pbar = tqdm.tqdm(
+                file_list,
+                total=len(file_list),
+                desc=f"Caching {project.name}@{project.short_sha}")
+            for filename in pbar:
+                # Verify that accompanying vo file exists first
+                pbar.set_description(
+                    f"Caching {project.name}@{project.short_sha}:{filename}")
+                result = _extract_vernac_commands_worker(filename, project)
+                if isinstance(result, ExtractVernacCommandsError):
+                    if result.parent is not None:
+                        raise result from result.parent
+                    else:
+                        raise result
+                command_data[filename] = result
+        else:
+            if worker_semaphore is None:
+                raise ValueError(
+                    "force_serial is False but the worker_semaphore is None. "
+                    "This is not a valid combination of arguments.")
+            arg_list = [(f, project, worker_semaphore) for f in final_file_list]
+            results = process_map(
+                _extract_vernac_commands_worker_star,
+                arg_list,
+                desc=f"Caching {project.name}@{project.short_sha}")
+            for f, result in zip(final_file_list, results):
+                if isinstance(result, ExtractVernacCommandsError):
+                    if result.parent is not None:
+                        raise result from result.parent
+                    else:
+                        raise result
+                command_data[f] = result
     return command_data
+
+
+def _extract_vernac_commands_worker(
+    filename: str,
+    project: ProjectRepo,
+    worker_semaphore: Optional[BoundedSemaphore] = None,
+    pbar: Optional[tqdm.tqdm] = None
+) -> Union[List[VernacCommandData],
+           ExtractVernacCommandsError]:
+    """
+    Provide worker function for file-parallel cache extraction.
+    """
+    if worker_semaphore is not None:
+        worker_semaphore.acquire()
+    try:
+        result = _extract_vernac_commands(
+            project.get_sentences(
+                filename,
+                SEM.HEURISTIC,
+                return_locations=True,
+                glom_proofs=False),
+            opam_switch=project.opam_switch,
+            serapi_options=project.serapi_options)
+    except Exception as e:
+        return ExtractVernacCommandsError(f"Error on {filename}", filename, e)
+    finally:
+        if worker_semaphore is not None:
+            worker_semaphore.release()
+    if pbar is not None:
+        pbar.update(1)
+    return result
+
+
+def _extract_vernac_commands_worker_star(args) -> List[VernacCommandData]:
+    return _extract_vernac_commands_worker(*args)
 
 
 def extract_cache(
@@ -623,7 +689,9 @@ def extract_cache(
              str],
             bool]] = None,
         block: bool = False,
-        files_to_use: Optional[Iterable[str]] = None) -> None:
+        files_to_use: Optional[Iterable[str]] = None,
+        force_serial: bool = False,
+        worker_semaphore: Optional[BoundedSemaphore] = None) -> None:
     r"""
     Extract data from project commit and insert into `build_cache`.
 
@@ -672,6 +740,12 @@ def extract_cache(
         An iterable of files to use from this project; or None. If None,
         all files are used. By default, None.
         This argument is especially useful for profiling.
+    force_serial : bool, optional
+        If this argument is true, disable parallel execution. Useful for
+        debugging. By default False.
+    worker_semaphore : Semaphore or None, optional
+        Semaphore used to control the number of file workers than
+        can run at once, by default None. If None, ignore.
 
     See Also
     --------
@@ -696,7 +770,9 @@ def extract_cache(
             process_project_fallback,
             coq_version,
             block,
-            files_to_use)
+            files_to_use,
+            force_serial,
+            worker_semaphore)
 
 
 def extract_cache_new(
@@ -708,7 +784,9 @@ def extract_cache_new(
                                            VernacDict],
         coq_version: str,
         block: bool,
-        files_to_use: Optional[Iterable[str]]):
+        files_to_use: Optional[Iterable[str]],
+        force_serial: bool,
+        worker_semaphore: Optional[BoundedSemaphore]):
     """
     Extract a new cache and insert it into the build cache.
 
@@ -735,6 +813,12 @@ def extract_cache_new(
         An iterable of files to use from this project; or None. If None,
         all files are used. By default, None.
         This argument is especially useful for profiling.
+    force_serial : bool
+        If this argument is true, disable parallel execution. Useful for
+        debugging.
+    worker_semaphore : Semaphore or None
+        Semaphore used to control the number of file workers than
+        can run at once. If None, ignore.
     """
     # Construct a logger local to this function and unique to this PID
     pid = os.getpid()
@@ -771,7 +855,9 @@ def extract_cache_new(
                 try:
                     command_data = extract_vernac_commands(
                         project,
-                        files_to_use)
+                        files_to_use,
+                        force_serial,
+                        worker_semaphore)
                 except ExtractVernacCommandsError as e:
                     logger.critical(f"Filename: {e.filename}\n")
                     logger.exception(e)
@@ -969,12 +1055,24 @@ class CacheExtractor:
             max_num_commits=max_num_commits)
 
     def get_extract_cache_func(
-            self) -> Callable[[ProjectRepo,
-                               str,
-                               None],
-                              None]:
+        self,
+        force_serial: bool = False,
+        worker_semaphore: Optional[BoundedSemaphore] = None
+    ) -> Callable[[ProjectRepo,
+                   str,
+                   None],
+                  None]:
         """
         Return the cache extraction function for the commit mapper.
+
+        Parameters
+        ----------
+        force_serial : bool, optional
+            If this argument is true, disable parallel execution. Useful
+            for debugging. By default False.
+        worker_semaphore : Semaphore or None, optional
+            Semaphore used to control the number of file workers than
+            can run at once, by default None. If None, ignore.
 
         Returns
         -------
@@ -988,7 +1086,9 @@ class CacheExtractor:
             process_project_fallback=self.process_project_fallback,
             recache=self.recache,
             coq_version_iterator=self.coq_version_iterator,
-            files_to_use=self.files_to_use)
+            files_to_use=self.files_to_use,
+            force_serial=force_serial,
+            worker_semaphore=worker_semaphore)
 
     def run(
             self,
@@ -999,7 +1099,8 @@ class CacheExtractor:
             force_serial: bool = False,
             n_build_workers: int = 1,
             project_names: Optional[List[str]] = None,
-            max_num_commits: Optional[int] = None) -> None:
+            max_num_commits: Optional[int] = None,
+            max_procs_file_level: int = 0) -> None:
         """
         Build all projects at `root_path` and save updated metadata.
 
@@ -1029,9 +1130,13 @@ class CacheExtractor:
             If a list is provided, select only projects with names on
             the list for extraction. If projects on the given list
             aren't found, a warning is given. By default None.
-        max_num_commits : int | None
+        max_num_commits : int | None, optional
             If this argument is not None, process no more than
             max_num_commits commits when extracting cache.
+        max_procs_file_level : int, optional
+            Maximum number of active workers to allow at once on the
+            file-level of extraction, by default 0. If 0, allow
+            unlimited processes at this level.
         """
         if log_dir is None:
             log_dir = Path(self.md_storage_file).parent
@@ -1060,6 +1165,7 @@ class CacheExtractor:
             client_keys = None
             client_to_server_q = None
             server_to_client_q_dict = None
+            manager = None
         else:
             client_keys = [project.name for project in projects]
             manager = mp.Manager()
@@ -1082,11 +1188,19 @@ class CacheExtractor:
                         cache_server.server_to_client_dict[project.name],
                         project.name) for project in projects
                 }
+            # Create semaphore for controlling file-level workers
+            if manager is not None:
+                nprocs = os.cpu_count(
+                ) if not max_procs_file_level else max_procs_file_level
+                worker_semaphore = manager.BoundedSemaphore(nprocs)
+            else:
+                worker_semaphore = None
             # Create commit mapper
             project_looper = ProjectCommitUpdateMapper[None](
                 projects,
                 self.get_commit_iterator_func(max_num_commits),
-                self.get_extract_cache_func(),
+                self.get_extract_cache_func(force_serial,
+                                            worker_semaphore),
                 "Extracting cache",
                 terminate_on_except=False)
             # Extract cache in parallel
@@ -1194,7 +1308,9 @@ class CacheExtractor:
                                            Iterable[Union[str,
                                                           Version]]],
             files_to_use: Optional[Dict[str,
-                                        Iterable[str]]]):
+                                        Iterable[str]]],
+            force_serial: bool,
+            worker_semaphore: Optional[BoundedSemaphore]):
         r"""
         Extract cache.
 
@@ -1227,6 +1343,12 @@ class CacheExtractor:
             A mapping from project name to files to use from that
             project; or None. If None, all files are used. By default,
             None. This argument is especially useful for profiling.
+        force_serial : bool
+            If this argument is true, disable parallel execution. Useful
+            for debugging.
+        worker_semaphore : Semaphore or None
+            Semaphore used to control the number of file workers than
+            can run at once. If None, ignore.
         """
         pbar = tqdm.tqdm(
             coq_version_iterator(project,
@@ -1246,4 +1368,6 @@ class CacheExtractor:
                 process_project_fallback,
                 str(coq_version),
                 recache,
-                files_to_use=files_to_use)
+                files_to_use=files_to_use,
+                force_serial=force_serial,
+                worker_semaphore=worker_semaphore)
