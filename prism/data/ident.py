@@ -6,6 +6,7 @@ from typing import Dict, Optional, Set
 
 from prism.interface.coq.serapi import SerAPI
 from prism.util.iterable import CallableIterator
+from prism.util.string import quote_escape, unquote
 
 
 def id_re(capture_name: Optional[str]) -> re.Pattern:
@@ -52,8 +53,12 @@ def qualid_str_of_serqualid_match(serqualid: re.Match) -> str:
         A dot-delimited representation of the given implicit qualified
         ID as it would appear in code.
     """
-    dirpath = [d['id'] for d in re.finditer(id_re('id'), serqualid['dirpath'])]
-    dirpath.append(serqualid['str_of_qualid'])
+    dirpath = [
+        unquote(d['id'])
+        for d in re.finditer(id_re('id'),
+                             serqualid['dirpath'])
+    ]
+    dirpath.append(unquote(serqualid['str_of_qualid']))
     return ".".join(dirpath)
 
 
@@ -61,7 +66,7 @@ def id_of_str(txt: str) -> str:
     """
     Embed a string into a serialized ``Id`` s-expression.
     """
-    return f"(Id {txt})"
+    return f"(Id {quote_escape(txt, quotes_only=True)})"
 
 
 def sexp_str_of_qualid(qualid_str: str, modpath: str) -> str:
@@ -147,11 +152,13 @@ def expand_idents(
             The fully qualified identifier.
         """
         try:
-            queried = id_cache[qualid_str]
+            fully_qualified = id_cache[qualid_str]
         except KeyError:
-            queried = serapi.query_full_qualid(qualid_str)
-            id_cache[qualid_str] = queried
-        return qualid_str if queried is None else queried
+            fully_qualified = serapi.query_full_qualid(qualid_str)
+            if fully_qualified is None:
+                fully_qualified = qualid_str
+            id_cache[qualid_str] = fully_qualified
+        return fully_qualified
 
     matches = re.finditer(serqualid_re, sexp)
     replacements = [
