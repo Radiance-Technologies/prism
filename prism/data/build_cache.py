@@ -27,11 +27,12 @@ from typing import (
 import networkx as nx
 import setuptools_scm
 import seutil as su
-
-from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.language.gallina.analyze import SexpInfo
 from prism.language.sexp.node import SexpNode
 from prism.project.metadata import ProjectMetadata
+
+from prism.data.ident import get_all_idents
+from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.util.opam.switch import OpamSwitch
 from prism.util.opam.version import Version, VersionString
 from prism.util.radpytools.dataclasses import default_field
@@ -85,6 +86,12 @@ class VernacSentence:
         if isinstance(self.ast, SexpNode):
             self.ast = str(self.ast)
 
+    def referenced_identifiers(self) -> Set[str]:
+        """
+        Get the set of identifiers referenced by this sentence.
+        """
+        return get_all_idents(self.ast)
+
     @classmethod
     def deserialize(cls, data: Dict[str, Any]) -> 'VernacSentence':
         """
@@ -127,7 +134,6 @@ class VernacSentence:
         ----------
         located_sentences : List[VernacSentence]
             A list of sentences presumed to come from the same document.
-
 
         Returns
         -------
@@ -214,6 +220,14 @@ class VernacCommandData:
         """
         return self.command.location
 
+    def referenced_identifiers(self) -> Set[str]:
+        """
+        Get the set of identifiers referenced by this command.
+        """
+        return sum(  # type: ignore
+            (s.referenced_identifiers() for s in self.sorted_sentences()),
+            set())
+
     def sorted_sentences(
             self,
             attach_proof_indexes: bool = False,
@@ -227,7 +241,7 @@ class VernacCommandData:
         Parameters
         ----------
         attach_proof_indexes : bool, optional
-            If true, add extra fields to proof sentences with proof and
+            If True, add extra fields to proof sentences with proof and
             proof step indexes, by default False
         command_idx : int or None, optional
             If provided, attach a command index to all sentences
