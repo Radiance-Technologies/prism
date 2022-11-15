@@ -82,6 +82,10 @@ class SerAPI:
     Whether to shorten and replace locations with a filler token or to
     yield full location information, by default False.
     """
+    cwd: InitVar[Optional[bool]] = None
+    """
+    Whether to set the current working directory.
+    """
     frame_stack: List[List[int]] = default_field([])
     """
     A stack of frames capturing restorable checkpoints in execution.
@@ -118,13 +122,17 @@ class SerAPI:
             sertop_options: str,
             timeout: int,
             switch: OpamSwitch,
-            omit_loc: bool):
+            omit_loc: bool,
+            cwd: Optional[bool] = None):
         """
         Initialize the SerAPI subprocess.
         """
         if switch is None:
             switch = OpamSwitch()
+        if cwd is None:
+            cwd = "./"
         self._switch = switch
+        self.cwd = cwd
         try:
             cmd = f"sertop --implicit --print0 {sertop_options}"
             if omit_loc:
@@ -136,7 +144,8 @@ class SerAPI:
                 encoding="utf-8",
                 timeout=timeout,
                 maxread=10000000,
-                env=switch.environ)
+                env=switch.environ,
+                cwd=self.cwd)
         except FileNotFoundError:
             logger.log(
                 logging.ERROR,

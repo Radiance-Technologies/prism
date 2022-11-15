@@ -144,6 +144,7 @@ def order_dependencies(
         files: List[PathLike],
         switch: OpamSwitch,
         IQR: str = '',
+        working_directory: str = None,
         boot: bool = False) -> List[str]:
     """
     Sort the given files in dependency order using `coqdep`.
@@ -157,6 +158,8 @@ def order_dependencies(
     IQR : str, optional
         IQR flags for `coqdep` that bind physical paths to logical
         library names.
+    working_directory : str, optional
+        Working directory to pass to run function.
     boot : bool, optional
         Whether to print dependencies over Coq library files, by default
         False.
@@ -176,7 +179,7 @@ def order_dependencies(
     else:
         boot = ''
     command = "coqdep {0} -sort {1} {2}".format(files, IQR, boot)
-    file_deps = switch.run(command)
+    file_deps = switch.run(command, cwd=working_directory)
     file_deps = file_deps.stdout.strip().split()
     file_deps = [_coq_file_regex.match(x).groups()[0] for x in file_deps]
 
