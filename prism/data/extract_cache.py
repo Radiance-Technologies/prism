@@ -56,7 +56,6 @@ from prism.interface.coq.re_patterns import (
 )
 from prism.interface.coq.serapi import SerAPI
 from prism.language.heuristic.parser import CoqSentence
-from prism.language.sexp import SexpParser
 from prism.project.base import SEM, Project
 from prism.project.exception import ProjectBuildError
 from prism.project.metadata.storage import MetadataStorage
@@ -75,6 +74,8 @@ SentenceState = Tuple[CoqSentence,
                       CommandType]
 ProofSentenceState = Tuple[CoqSentence, Union[Goals, GoalsDiff], CommandType]
 ProofBlock = List[ProofSentenceState]
+
+_program_regex = re.compile("[Pp]rogram")
 
 
 class ExtractVernacCommandsError(RuntimeError):
@@ -335,16 +336,85 @@ def _start_program(
         return None
 
 
-def _is_subproof(post_proof_id: str, ids: List[str]) -> bool:
-    is_subproof = False
-    for i in ids:
-        match = SUBPROOF_ID_PATTERN.match(i)
-        if match is not None:
-            proof_id_under_test = match.groupdict()['proof_id']
-            if proof_id_under_test == post_proof_id:
-                is_subproof = True
-                break
-    return is_subproof
+def is_subproof(proof_id: str, id_under_test: str) -> bool:
+    """
+    Check if the given ID corresponds to a subproof of a conjecture ID.
+
+    Parameters
+    ----------
+    proof_id : str
+        The identifier of a conjecture.
+    id_under_test : List[str]
+        An identifier of a possible subproof.
+
+    Returns
+    -------
+    bool
+        True if `id_under_test` is a subproof of `proof_id`, False
+        otherwise.
+    """
+    match = SUBPROOF_ID_PATTERN.match(id_under_test)
+    return match is not None and match['proof_id'] == proof_id
+
+
+def _update_ids(
+    serapi: SerAPI,
+    feedback: List[str],
+    local_ids: Set[str],
+    post_proof_id: Optional[str],
+    expanded_ids: Dict[str,
+                       str]
+) -> Tuple[Set[str],
+           Set[str],
+           Optional[str],
+           Optional[str]]:
+    """
+    Update known local identifiers.
+
+    Parameters
+    ----------
+    serapi : SerAPI
+        An interactive `sertop` session.
+    feedback : List[str]
+        Feedback received from a command executed in the `serapi`
+        session.
+    local_ids : Set[str]
+        The set of locally defined identifiers.
+    post_proof_id : Optional[str]
+        The ID of the active conjecture prior to the most recently
+        executed command.
+    expanded_ids : Dict[str, str]
+        A map from unqualified or partially qualified IDs to fully
+        qualified variants.
+
+    Returns
+    -------
+    ids : Set[str]
+        The set of identifiers introduced by the most recent command.
+    local_ids : Set[str]
+        The set of locally defined identifiers.
+    pre_proof_id : Optional[str]
+        The ID of the active conjecture prior to the most recently
+        executed command.
+    post_proof_id : Optional[str]
+        The ID of the active conjecture immediately after the most
+        recent command's execution.
+    """
+    ids = serapi.parse_new_identifiers(feedback)
+    for ident in ids:
+        # shadow old ids
+        expanded_ids.pop(ident, None)
+    if ids:
+        local_ids = local_ids.union(ids)
+    else:
+        all_local_ids = set(serapi.get_local_ids())
+        # get new identifiers
+        ids = all_local_ids.difference(local_ids)
+        # update reference set
+        local_ids = all_local_ids
+    pre_proof_id = post_proof_id
+    post_proof_id = serapi.get_conjecture_id()
+    return ids, local_ids, pre_proof_id, post_proof_id
 
 
 def _extract_vernac_commands(
@@ -429,14 +499,14 @@ def _extract_vernac_commands(
     finished_proof_stacks: Dict[str,
                                 List[Tuple[str,
                                            Proof]]] = {}
-    expanded_ids: Dict[str,
-                       str] = {}
     # A partitioned list of sentences that occur at the beginning or
     # in the middle of a proof each paired with the goals that
-    # result after the sentence is executed and the type and the
+    # result before the sentence is executed and the type and the
     # identifier of the command.
     # The beginning of each partition is a Vernacular command that
     # is not Ltac-related.
+    expanded_ids: Dict[str,
+                       str] = {}
     defined_lemmas: Dict[str,
                          VernacCommandData] = {}
     local_ids = {'SerTop'}
@@ -452,45 +522,46 @@ def _extract_vernac_commands(
             location = sentence.location
             text = sentence.text
             _, feedback, sexp = serapi.execute(text, return_ast=True)
-            sentence.ast = SexpParser.parse(
-                expand_idents(serapi,
-                              expanded_ids,
-                              str(sexp),
-                              modpath))
-            vernac = SexpAnalyzer.analyze_vernac(sentence.ast)
-            if vernac.extend_type is None:
-                command_type = vernac.vernac_type
-            else:
-                command_type = vernac.extend_type
+            # store the string representation of the AST in the
+            # CoqSentence, technically violatings its type annotation
+            sentence.ast = expand_idents(
+                serapi,
+                expanded_ids,
+                str(sexp),
+                modpath)
             # get new ids
-            ids = serapi.parse_new_identifiers(feedback)
-            for ident in ids:
-                # shadow old ids
-                expanded_ids.pop(ident, None)
-            if ids:
-                local_ids = local_ids.union(ids)
-            else:
-                all_local_ids = set(serapi.get_local_ids())
-                # get new identifiers
-                ids = all_local_ids.difference(local_ids)
-                # update reference set
-                local_ids = all_local_ids
-            pre_proof_id = post_proof_id
-            if use_goals_diff and pre_goals is not None and post_goals is not None:
+            (ids,
+             local_ids,
+             pre_proof_id,
+             post_proof_id) = _update_ids(
+                 serapi,
+                 feedback,
+                 local_ids,
+                 post_proof_id,
+                 expanded_ids)
+            proof_id_changed = post_proof_id != pre_proof_id
+            # update goals
+            if (use_goals_diff and pre_goals is not None and post_goals is not None):
                 pre_goals_or_diff = GoalsDiff.compute_diff(
                     pre_goals,
                     post_goals)
             else:
                 pre_goals_or_diff = post_goals
             pre_goals = post_goals
-            post_proof_id = serapi.get_conjecture_id()
-            proof_id_changed = post_proof_id != pre_proof_id
-            program_regex = re.compile("[Pp]rogram")
+            # analyze command
+            vernac = SexpAnalyzer.analyze_vernac(sexp)
+            if vernac.extend_type is None:
+                command_type = vernac.vernac_type
+            else:
+                command_type = vernac.extend_type
             is_program = any(
-                program_regex.search(attr) is not None
+                _program_regex.search(attr) is not None
                 for attr in vernac.attributes)
             # Check if we're dealing with a subproof
-            is_subproof = _is_subproof(post_proof_id, ids)
+            is_subproof = (
+                post_proof_id is not None
+                and any(is_subproof(post_proof_id,
+                                    i) for i in ids))
             if is_program:
                 # A program was declared.
                 # Persist the current goals.
@@ -542,9 +613,9 @@ def _extract_vernac_commands(
                             lemma.proofs.append(
                                 [
                                     ProofSentence(
-                                        sentence.text,
+                                        text,
                                         sentence.ast,
-                                        sentence.location,
+                                        location,
                                         command_type,
                                         pre_goals_or_diff)
                                 ])
