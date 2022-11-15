@@ -131,7 +131,7 @@ class VernacSentence:
 
         Returns
         -------
-        List[str]
+        List['VernacSentence']
             The sentences sorted by their location in the document in
             ascending order.
 
