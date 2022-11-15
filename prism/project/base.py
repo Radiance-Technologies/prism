@@ -989,3 +989,64 @@ class Project(ABC):
             glom_ltac=glom_ltac,
             return_asts=return_asts,
             **kwargs)
+
+    @staticmethod
+    def get_local_modpath(filename: os.PathLike, serapi_options: str) -> str:
+        """
+        Infer the module path for the given file.
+
+        Parameters
+        ----------
+        filename : os.PathLike
+            The physical path to a project file relative to the project
+            root.
+        serapi_options : str
+            Arguments with which to initialize `sertop`, namely IQR
+            flags.
+
+        Returns
+        -------
+        modpath : str
+            The logical library path one would use if the indicated file
+            was imported or required in another.
+        """
+        # strip file extension, if any
+        if not isinstance(filename, pathlib.Path):
+            filename = pathlib.Path(filename)
+        filename = str(filename.with_suffix(''))
+        iqr = IQR.extract_iqr(serapi_options)
+        # identify the correct logical library prefix for this filename
+        matched = False
+        dot_log = None
+        for (phys, log) in (iqr.Q | iqr.R):
+            if filename.startswith(phys):
+                filename = filename[len(phys):]
+            else:
+                if phys == ".":
+                    dot_log = log
+                continue
+            # ensure that the filename gets separated from the logical
+            # prefix by a path separator (to be replaced with a period)
+            if filename[0] != os.path.sep:
+                sep = os.path.sep
+            else:
+                sep = ''
+            filename = sep.join([log, filename])
+            matched = True
+            break
+        if not matched and dot_log is not None:
+            # ensure that the filename gets separated from the logical
+            # prefix by a path separator (to be replaced with a period)
+            if filename[0] != os.path.sep:
+                sep = os.path.sep
+            else:
+                sep = ''
+            filename = sep.join([dot_log, filename])
+        # else we implicitly map the working directory to an empty
+        # logical prefix
+        # convert rest of physical path to logical
+        path = filename.split(os.path.sep)
+        if path == ['']:
+            path = []
+        modpath = ".".join([dirname.capitalize() for dirname in path])
+        return modpath

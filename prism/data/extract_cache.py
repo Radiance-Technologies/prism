@@ -28,13 +28,6 @@ from typing import (
 )
 
 import tqdm
-from prism.language.heuristic.parser import CoqSentence
-from prism.language.sexp import SexpParser
-from prism.project.base import SEM, Project
-from prism.project.exception import ProjectBuildError
-from prism.project.iqr import IQR
-from prism.project.metadata.storage import MetadataStorage
-from prism.project.repo import ChangedCoqCommitIterator, ProjectRepo
 from seutil import io
 from tqdm.contrib.concurrent import process_map
 
@@ -62,6 +55,12 @@ from prism.interface.coq.re_patterns import (
     SUBPROOF_ID_PATTERN,
 )
 from prism.interface.coq.serapi import SerAPI
+from prism.language.heuristic.parser import CoqSentence
+from prism.language.sexp import SexpParser
+from prism.project.base import SEM, Project
+from prism.project.exception import ProjectBuildError
+from prism.project.metadata.storage import MetadataStorage
+from prism.project.repo import ChangedCoqCommitIterator, ProjectRepo
 from prism.util.opam.switch import OpamSwitch
 from prism.util.opam.version import Version
 from prism.util.radpytools import unzip
@@ -278,66 +277,6 @@ def _start_proof_block(
         partial_proof_stacks[post_proof_id] = []
 
 
-def get_local_modpath(filename: os.PathLike, serapi_options: str) -> str:
-    """
-    Infer the module path for the given file.
-
-    Parameters
-    ----------
-    filename : os.PathLike
-        The physical path to a project file relative to the project
-        root.
-    serapi_options : str
-        Arguments with which to initialize `sertop`, namely IQR flags.
-
-    Returns
-    -------
-    modpath : str
-        The logical library path one would use if the indicated file was
-        imported or required in another.
-    """
-    # strip file extension, if any
-    if not isinstance(filename, Path):
-        filename = Path(filename)
-    filename = str(filename.with_suffix(''))
-    iqr = IQR.extract_iqr(serapi_options)
-    # identify the correct logical library prefix for this filename
-    matched = False
-    dot_log = None
-    for (phys, log) in (iqr.Q | iqr.R):
-        if filename.startswith(phys):
-            filename = filename[len(phys):]
-        else:
-            if phys == ".":
-                dot_log = log
-            continue
-        # ensure that the filename gets separated from the logical
-        # prefix by a path separator (to be replaced with a period)
-        if filename[0] != os.path.sep:
-            sep = os.path.sep
-        else:
-            sep = ''
-        filename = sep.join([log, filename])
-        matched = True
-        break
-    if not matched and dot_log is not None:
-        # ensure that the filename gets separated from the logical
-        # prefix by a path separator (to be replaced with a period)
-        if filename[0] != os.path.sep:
-            sep = os.path.sep
-        else:
-            sep = ''
-        filename = sep.join([dot_log, filename])
-    # else we implicitly map the working directory to an empty logical
-    # prefix
-    # convert rest of physical path to logical
-    path = filename.split(os.path.sep)
-    if path == ['']:
-        path = []
-    modpath = ".".join([dirname.capitalize() for dirname in path])
-    return modpath
-
-
 def _start_program(
         sentence: CoqSentence,
         command_type: str,
@@ -472,7 +411,7 @@ def _extract_vernac_commands(
     * The conjecture IDs returned by ``Show Conjectures.`` are ordered
       such that the conjecture actively being proved is listed first.
     """
-    modpath = get_local_modpath(filename, serapi_options)
+    modpath = Project.get_local_modpath(filename, serapi_options)
     file_commands: List[VernacCommandData] = []
     programs: List[SentenceState] = []
     conjectures: Dict[str,
@@ -513,11 +452,11 @@ def _extract_vernac_commands(
             location = sentence.location
             text = sentence.text
             _, feedback, sexp = serapi.execute(text, return_ast=True)
-            sentence.ast = SexpParser.parse(expand_idents(
-                serapi,
-                expanded_ids,
-                str(sexp),
-                modpath))
+            sentence.ast = SexpParser.parse(
+                expand_idents(serapi,
+                              expanded_ids,
+                              str(sexp),
+                              modpath))
             vernac = SexpAnalyzer.analyze_vernac(sentence.ast)
             if vernac.extend_type is None:
                 command_type = vernac.vernac_type
