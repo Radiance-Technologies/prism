@@ -2,7 +2,7 @@
 Data utilities related to Coq identifiers.
 """
 import re
-from typing import Dict, Optional
+from typing import Dict, Optional, Set
 
 from prism.interface.coq.serapi import SerAPI
 from prism.util.iterable import CallableIterator
@@ -160,3 +160,22 @@ def expand_idents(
     ]
     repl_it = CallableIterator(replacements)
     return re.sub(serqualid_re, repl_it, sexp)
+
+
+def get_all_idents(ast: str) -> Set[str]:
+    """
+    Get all of the identifiers referenced in the given serialized AST.
+
+    Parameters
+    ----------
+    ast : str
+        A serialized AST.
+
+    Returns
+    -------
+    Set[str]
+        The set of all identifiers (``Ser_Qualid``s) contained in the
+        AST.
+    """
+    matches = re.finditer(serqualid_re, ast)
+    return {qualid_str_of_serqualid_match(m) for m in matches}
