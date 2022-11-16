@@ -1,6 +1,18 @@
 """
 Complementary module to `prism.util.compare`.
 """
+from typing import TypeVar
+
+T = TypeVar('T')
+
+
+def identity(x: T) -> T:
+    """
+    Perform the identity function; return the input unchanged.
+
+    Equivalent to ``lambda x: x``.
+    """
+    return x
 
 
 class Identity:
