@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import warnings
 from dataclasses import dataclass, field, fields
+from functools import reduce
 from multiprocessing.managers import BaseManager
 from pathlib import Path
 from typing import (
@@ -31,7 +32,7 @@ from prism.language.gallina.analyze import SexpInfo
 from prism.language.sexp.node import SexpNode
 from prism.project.metadata import ProjectMetadata
 
-from prism.data.ident import get_all_idents
+from prism.data.ident import Identifier
 from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.util.opam.switch import OpamSwitch
 from prism.util.opam.version import Version, VersionString
@@ -57,6 +58,11 @@ class VernacSentence:
 
     Note that locations within this AST are not accurate with respect to
     the source document.
+    """
+    qualified_identifiers: List[Identifier]
+    """
+    A list of fully qualified identifiers contained within the
+    serialized AST in the order of their appearance.
     """
     location: SexpInfo.Loc
     """
@@ -90,7 +96,7 @@ class VernacSentence:
         """
         Get the set of identifiers referenced by this sentence.
         """
-        return get_all_idents(self.ast)
+        return {ident.string for ident in self.qualified_identifiers}
 
     @classmethod
     def deserialize(cls, data: Dict[str, Any]) -> 'VernacSentence':
@@ -224,9 +230,10 @@ class VernacCommandData:
         """
         Get the set of identifiers referenced by this command.
         """
-        return sum(  # type: ignore
-            (s.referenced_identifiers() for s in self.sorted_sentences()),
-            set())
+        return reduce(
+            lambda x,
+            y: x.union(y),
+            (s.referenced_identifiers() for s in self.sorted_sentences()))
 
     def sorted_sentences(
             self,

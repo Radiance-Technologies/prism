@@ -47,7 +47,7 @@ from prism.data.build_cache import (
     VernacSentence,
 )
 from prism.data.commit_map import Except, ProjectCommitUpdateMapper
-from prism.data.ident import expand_idents
+from prism.data.ident import get_all_qualified_idents
 from prism.data.util import get_project_func
 from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.interface.coq.re_patterns import (
@@ -118,6 +118,7 @@ def _process_proof_block(block: ProofBlock) -> Proof:
             ProofSentence(
                 tactic.text,
                 tactic.ast,
+                tactic.identifiers,
                 tactic.location,
                 command_type,
                 goal))
@@ -197,6 +198,7 @@ def _conclude_proof(
         lemma = VernacSentence(
             lemma.text,
             lemma.ast,
+            lemma.identifiers,
             lemma.location,
             lemma_type,
             pre_goals_or_diff)
@@ -327,6 +329,7 @@ def _start_program(
             VernacSentence(
                 sentence.text,
                 sentence.ast,
+                sentence.identifiers,
                 sentence.location,
                 command_type,
                 pre_goals_or_diff))
@@ -480,6 +483,15 @@ def _extract_vernac_commands(
       However, an error may also be raised as the situation is untested.
     * The conjecture IDs returned by ``Show Conjectures.`` are ordered
       such that the conjecture actively being proved is listed first.
+    * If a new identifier shadows an existing one, then the defining
+      command does not reference the shadowed ID. Violation of this
+      assumption is possible (consider a recursive function named after
+      a type that takes arguments of said type as input) but not
+      expected to occur frequently as it is unlikely in the first place
+      and poor practice. If it does occur, then the fully qualified
+      identifiers in the cache will erroneously interpret the shadowed
+      ID as its shadower (i.e., as the recursive function in the example
+      above).
     """
     modpath = Project.get_local_modpath(filename, serapi_options)
     file_commands: List[VernacCommandData] = []
@@ -522,14 +534,8 @@ def _extract_vernac_commands(
             location = sentence.location
             text = sentence.text
             _, feedback, sexp = serapi.execute(text, return_ast=True)
-            # store the string representation of the AST in the
-            # CoqSentence, technically violatings its type annotation
-            sentence.ast = expand_idents(
-                serapi,
-                expanded_ids,
-                str(sexp),
-                modpath)
-            # get new ids
+            sentence.ast = sexp
+            # get new ids and shadow redefined ones
             (ids,
              local_ids,
              pre_proof_id,
@@ -539,6 +545,14 @@ def _extract_vernac_commands(
                  local_ids,
                  post_proof_id,
                  expanded_ids)
+            # Attach an undocumented extra field to the CoqSentence
+            # object containing fully qualified referenced identifiers
+            sentence.identifiers = get_all_qualified_idents(
+                serapi,
+                modpath,
+                str(sexp),
+                ordered=True,
+                id_cache=expanded_ids)
             proof_id_changed = post_proof_id != pre_proof_id
             # update goals
             if (use_goals_diff and pre_goals is not None and post_goals is not None):
@@ -615,6 +629,7 @@ def _extract_vernac_commands(
                                     ProofSentence(
                                         text,
                                         sentence.ast,
+                                        sentence.identifiers,
                                         location,
                                         command_type,
                                         pre_goals_or_diff)
@@ -657,6 +672,7 @@ def _extract_vernac_commands(
                         VernacSentence(
                             text,
                             sentence.ast,
+                            sentence.identifiers,
                             location,
                             command_type,
                             pre_goals_or_diff)))
