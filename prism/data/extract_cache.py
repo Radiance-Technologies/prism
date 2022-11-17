@@ -913,7 +913,7 @@ def cache_extract_commit_iterator(
     Commits are limited to those that occur on or after January 1, 2019,
     which roughly coincides with the release of Coq 8.9.1.
     """
-    iterator = ChangedCoqCommitIterator(project, starting_commit_sha)
+    iterator = ChangedCoqCommitIterator(project)
     i = 0
     for item in iterator:
         # Define the minimum date; convert it to seconds since epoch
