@@ -149,34 +149,31 @@ class ChangedCoqCommitIterator(CommitIterator):
     Subclass of CommitIterator only yielding changed .v files.
     """
 
-    def __iter__(self):
+    def __next__(self):
         """
         Yield each commit in the specified order.
 
         Excludes commits that did not change a .v file.
         """
-        last = None
-        super().__iter__()
-        # this is possibly the only way
-        # to iterate through a superclass
+        if not hasattr(self, "_last"):
+            self._last = None
         while True:
             try:
                 hash = super().__next__()
             except StopIteration:
-                return
-            else:
-                commit = self._repo.commit(hash)
-
-            if last is None:
-                yield commit.hexsha
+                break
+            commit = self._repo.commit(hash)
+            if self._last is None:
+                self._last = commit
+                return commit.hexsha
             else:
                 changed_files = self._repo.git.diff(
                     "--name-only",
                     commit,
-                    last).split("\n")
+                    self._last).split("\n")
                 if any(filename.endswith(".v") for filename in changed_files):
-                    yield commit.hexsha
-            last = commit
+                    self._last = commit
+                    return commit.hexsha
 
 
 class ProjectRepo(Repo, Project):
