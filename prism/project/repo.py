@@ -53,11 +53,13 @@ class CommitIterator:
     """
 
     def __init__(
-        self,
-        repo: ProjectRepo,
-        commit_sha: Optional[str] = None,
-        march_strategy: Optional[
-            CommitTraversalStrategy] = CommitTraversalStrategy.NEW_FIRST):
+            self,
+            repo: ProjectRepo,
+            march_strategy: Optional[
+                CommitTraversalStrategy] = CommitTraversalStrategy.NEW_FIRST,
+            center_hash: Optional[str] = None,
+            newest_hash_limit: Optional[str] = None,
+            oldest_hash_limit: Optional[str] = None):
         """
         Initialize CommitIterator.
 
@@ -65,12 +67,19 @@ class CommitIterator:
         ----------
         repo : ProjectRepo
             Repo, the commits of which we wish to iterate through.
-        commit_sha : str
-            Initial commit which we wish to treat as the starting point
-            for the iteration
         march_strategy : CommitTraversalStrategy
             The particular method of iterating over the repo which
             we wish to use.
+        center_hash : str or None, optional
+            If this is provided, and one of the curlicue march strategy
+            is used, this hash is used as the starting point, by default
+            None.
+        newest_hash_limit : str or None, optional
+            If this is provided, no commit made later than this hash
+            will be used, by default None
+        oldest_hash_limit : str or None, optional
+            If this is provided, no commit made earlier than this hash
+            will be used, by default None
         """
         self._repo = repo
         commit_generator = self._repo.iter_commits("--all")
@@ -81,6 +90,11 @@ class CommitIterator:
         # Sort in ascending order by date
         self.dated_hashes = sorted(self.dated_hashes, key=lambda x: x[0])
         self.hashes = [i[1] for i in self.dated_hashes]
+        oldest_idx = self.hashes.index(
+            oldest_hash_limit) if oldest_hash_limit is not None else None
+        newest_idx = self.hashes.index(
+            newest_hash_limit) + 1 if newest_hash_limit is not None else None
+        self.hashes = self.hashes[oldest_idx : newest_idx]
         if march_strategy == CommitTraversalStrategy.NEW_FIRST:
             self._hash_iterator = reversed(self.hashes)
         elif march_strategy == CommitTraversalStrategy.OLD_FIRST:
@@ -88,8 +102,8 @@ class CommitIterator:
         else:
             # Get the center index, then figure out which curlicue we're
             # doing.
-            if commit_sha is not None and commit_sha in self.hashes:
-                center_idx = self.hashes.index(commit_sha)
+            if center_hash is not None and center_hash in self.hashes:
+                center_idx = self.hashes.index(center_hash)
             else:
                 center_idx = int(len(self.hashes) / 2)
             temp_list = []

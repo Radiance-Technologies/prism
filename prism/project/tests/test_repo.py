@@ -35,13 +35,13 @@ GEOCOQ_COMMIT_138 = "09a02dc56715b3308689843dd872209262beb5af"
 GEOCOQ_COMMIT_137 = "b67cdbb28c93286126bfda514d5aafc370f09f75"
 GEOCOQ_COMMIT_136 = "f67bb0495882db6ad8c5cf6fb81c7ed8542541f7"
 GEOCOQ_COMMIT_135 = "296c0a9ab3d8edb031979c6ab2a9951b8c0ee63d"
-GEOCOQ_COMMIT_134 = "25917f56a3b46843690457b2bfd83168bed1321c"
+GEOCOQ_COMMIT_134 = "9872a84f9fd54feb9f1be33638b5e49c1234bde0"
 
 GEOCOQ_COMMIT_1 = "86e2cfed3e7ad2308051f011f1d2a0c4799ea350"
 GEOCOQ_COMMIT_2 = "bcbbc55554a4ef77da3d79949e1ac0d7e83a43d5"
-GEOCOQ_COMMIT_3 = "212eee5df43a1b3c4fdfab8be5e0f3f9afb41c6d"
-GEOCOQ_COMMIT_4 = "4948ebee64e375ea42c91798dc18d2f5b16ef669"
-GEOCOQ_COMMIT_5 = "46ca71de544769ec2a50d4f5ac73f2bd27b0033c"
+GEOCOQ_COMMIT_3 = "4ab82c0181856f270a031e1c0cf92472e34de7e9"
+GEOCOQ_COMMIT_4 = "212eee5df43a1b3c4fdfab8be5e0f3f9afb41c6d"
+GEOCOQ_COMMIT_5 = "4948ebee64e375ea42c91798dc18d2f5b16ef669"
 
 
 class TestCommitIter(unittest.TestCase):
@@ -107,15 +107,10 @@ class TestCommitIter(unittest.TestCase):
             GEOCOQ_COMMIT_138
         ]
         hashes.reverse()
-        commit_iter = CommitIterator(repo, GEOCOQ_COMMIT_138)
+        commit_iter = CommitIterator(repo, newest_hash_limit=GEOCOQ_COMMIT_138)
         hashes_test = list(itertools.islice(commit_iter, 5))
-        hashes_test = [x.hexsha for x in hashes_test]
         self.assertEqual(hashes, hashes_test)
 
-    @unittest.skip(
-        "Oldest first produces a newest first list if you give it "
-        "the newest commit to start with, but it fails to iterate at"
-        " all if you give it the oldest commit to start with.")
     def test_iterator_oldest_first(self):
         """
         Test iterator oldest first functionality.
@@ -130,37 +125,14 @@ class TestCommitIter(unittest.TestCase):
         ]
         commit_iter = CommitIterator(
             repo,
-            GEOCOQ_COMMIT_5,
-            CommitTraversalStrategy.OLD_FIRST)
+            CommitTraversalStrategy.OLD_FIRST,
+            newest_hash_limit=GEOCOQ_COMMIT_5)
         hashes_test = list(itertools.islice(commit_iter, 5))
-        hashes_test = [x.hexsha for x in hashes_test]
         self.assertEqual(hashes, hashes_test)
 
-    @unittest.skip("Fails due to change in second arg to init.")
     def test_iterator_curlicue_new(self):
         """
         Test iterator curlicue new functionality.
-        """
-        repo = self.projects['GeoCoq']
-        hashes = [
-            GEOCOQ_COMMIT_3,
-            GEOCOQ_COMMIT_2,
-            GEOCOQ_COMMIT_4,
-            GEOCOQ_COMMIT_1,
-            GEOCOQ_COMMIT_5
-        ]
-        commit_iter = CommitIterator(
-            repo,
-            GEOCOQ_COMMIT_3,
-            CommitTraversalStrategy.CURLICUE_NEW)
-        hashes_test = list(itertools.islice(commit_iter, 5))
-        hashes_test = [x.hexsha for x in hashes_test]
-        self.assertEqual(hashes, hashes_test)
-
-    @unittest.skip("Fails due to change in second arg to init.")
-    def test_iterator_curlicue_old(self):
-        """
-        Test iterator curlicue old functionality.
         """
         repo = self.projects['GeoCoq']
         hashes = [
@@ -172,10 +144,30 @@ class TestCommitIter(unittest.TestCase):
         ]
         commit_iter = CommitIterator(
             repo,
-            GEOCOQ_COMMIT_3,
-            CommitTraversalStrategy.CURLICUE_OLD)
+            CommitTraversalStrategy.CURLICUE_NEW,
+            center_hash=GEOCOQ_COMMIT_3,
+            newest_hash_limit=GEOCOQ_COMMIT_5)
         hashes_test = list(itertools.islice(commit_iter, 5))
-        hashes_test = [x.hexsha for x in hashes_test]
+        self.assertEqual(hashes, hashes_test)
+
+    def test_iterator_curlicue_old(self):
+        """
+        Test iterator curlicue old functionality.
+        """
+        repo = self.projects['GeoCoq']
+        hashes = [
+            GEOCOQ_COMMIT_3,
+            GEOCOQ_COMMIT_2,
+            GEOCOQ_COMMIT_4,
+            GEOCOQ_COMMIT_1,
+            GEOCOQ_COMMIT_5
+        ]
+        commit_iter = CommitIterator(
+            repo,
+            CommitTraversalStrategy.CURLICUE_OLD,
+            center_hash=GEOCOQ_COMMIT_3,
+            newest_hash_limit=GEOCOQ_COMMIT_5)
+        hashes_test = list(itertools.islice(commit_iter, 5))
         self.assertEqual(hashes, hashes_test)
 
     @unittest.skip("Fails due to change in second arg to init.")
