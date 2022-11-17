@@ -107,7 +107,7 @@ class TestCommitIter(unittest.TestCase):
             GEOCOQ_COMMIT_138
         ]
         hashes.reverse()
-        commit_iter = CommitIterator(repo, newest_hash_limit=GEOCOQ_COMMIT_138)
+        commit_iter = CommitIterator(repo, GEOCOQ_COMMIT_138)
         hashes_test = list(itertools.islice(commit_iter, 5))
         self.assertEqual(hashes, hashes_test)
 
@@ -125,8 +125,7 @@ class TestCommitIter(unittest.TestCase):
         ]
         commit_iter = CommitIterator(
             repo,
-            CommitTraversalStrategy.OLD_FIRST,
-            newest_hash_limit=GEOCOQ_COMMIT_5)
+            march_strategy=CommitTraversalStrategy.OLD_FIRST)
         hashes_test = list(itertools.islice(commit_iter, 5))
         self.assertEqual(hashes, hashes_test)
 
@@ -144,9 +143,8 @@ class TestCommitIter(unittest.TestCase):
         ]
         commit_iter = CommitIterator(
             repo,
-            CommitTraversalStrategy.CURLICUE_NEW,
-            center_hash=GEOCOQ_COMMIT_3,
-            newest_hash_limit=GEOCOQ_COMMIT_5)
+            GEOCOQ_COMMIT_3,
+            CommitTraversalStrategy.CURLICUE_NEW)
         hashes_test = list(itertools.islice(commit_iter, 5))
         self.assertEqual(hashes, hashes_test)
 
@@ -164,9 +162,8 @@ class TestCommitIter(unittest.TestCase):
         ]
         commit_iter = CommitIterator(
             repo,
-            CommitTraversalStrategy.CURLICUE_OLD,
-            center_hash=GEOCOQ_COMMIT_3,
-            newest_hash_limit=GEOCOQ_COMMIT_5)
+            GEOCOQ_COMMIT_3,
+            CommitTraversalStrategy.CURLICUE_OLD)
         hashes_test = list(itertools.islice(commit_iter, 5))
         self.assertEqual(hashes, hashes_test)
 
@@ -181,7 +178,7 @@ class TestCommitIter(unittest.TestCase):
         ]
         commit_iter = ChangedCoqCommitIterator(
             repo,
-            oldest_hash_limit=GEOCOQ_COMMIT_134,
+            GEOCOQ_COMMIT_134,
             march_strategy=CommitTraversalStrategy.OLD_FIRST)
         hashes_test = list(itertools.islice(commit_iter, 5))
         # these hashes are included
