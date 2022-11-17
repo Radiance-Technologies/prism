@@ -73,150 +73,60 @@ class CommitIterator:
             we wish to use.
         """
         self._repo = repo
-        # For the purposes of iteration (whatever the state of the
-        # repo when the iterator is constructed) it is assumed that
-        # the head of the repo at construction time is the furthest
-        # forward that we are interested in traversing.
-        if commit_sha is None:
-            commit_sha = repo.reset_head
-        self._repo_initial_head = repo.commit(commit_sha)
-        parent_list = list(repo.commit(self._repo_initial_head).iter_parents())
-        self._commits = [self._repo_initial_head] + parent_list
-        self._commit_sha = commit_sha
-        self._commit_sha_list = [x.hexsha for x in self._commits]
-        if self._commit_sha not in self._commit_sha_list:
-            raise KeyError("Commit sha supplied to CommitIterator not in repo")
-        self._commit_idx = self._commit_sha_list.index(self._commit_sha)
-
-        self._march_strategy = march_strategy
-        nmf = CommitTraversalStrategy.NEW_FIRST
-        omf = CommitTraversalStrategy.OLD_FIRST
-        crn = CommitTraversalStrategy.CURLICUE_NEW
-        cro = CommitTraversalStrategy.CURLICUE_OLD
-        self._next_func_dict = {
-            nmf: self.new_first,
-            omf: self.old_first,
-            crn: self.curlicue,
-            cro: self.curlicue
-        }
-        self._next_func = self._next_func_dict[self._march_strategy]
-
-        self._last_ret = ""
-        self._newest_commit = None
-        self._oldest_commit = None
-        self.init_commit_indices()
+        commit_generator = self._repo.iter_commits("--all")
+        self.dated_hashes = [
+            (c.committed_date,
+             c.hexsha) for c in commit_generator
+        ]
+        # Sort in ascending order by date
+        self.dated_hashes = sorted(self.dated_hashes, key=lambda x: x[0])
+        self.hashes = [i[1] for i in self.dated_hashes]
+        if march_strategy == CommitTraversalStrategy.NEW_FIRST:
+            self._hash_iterator = reversed(self.hashes)
+        elif march_strategy == CommitTraversalStrategy.OLD_FIRST:
+            self._hash_iterator = iter(self.hashes)
+        else:
+            # Get the center index, then figure out which curlicue we're
+            # doing.
+            if commit_sha is not None and commit_sha in self.hashes:
+                center_idx = self.hashes.index(commit_sha)
+            else:
+                center_idx = int(len(self.hashes) / 2)
+            temp_list = []
+            if march_strategy == CommitTraversalStrategy.CURLICUE_NEW:
+                old_list = self.hashes[: center_idx + 1]
+                new_list = self.hashes[center_idx + 1 :]
+                while old_list and new_list:
+                    temp_list.append(old_list.pop(-1))
+                    temp_list.append(new_list.pop(0))
+            elif march_strategy == CommitTraversalStrategy.CURLICUE_OLD:
+                old_list = self.hashes[: center_idx]
+                new_list = self.hashes[center_idx :]
+                while old_list and new_list:
+                    temp_list.append(new_list.pop(0))
+                    temp_list.append(old_list.pop(-1))
+            else:
+                raise ValueError(
+                    f"{march_strategy} is not a valid march strategy.")
+            # Deal with list remainders if center is not actually the
+            # center.
+            if old_list:
+                temp_list.extend(list(reversed(old_list)))
+            elif new_list:
+                temp_list.extend(new_list)
+            self._hash_iterator = iter(temp_list)
 
     def __iter__(self):
         """
         Initialize iterator.
         """
-        self.init_commit_indices()
-        if self._march_strategy == CommitTraversalStrategy.CURLICUE_NEW \
-           or self._march_strategy == CommitTraversalStrategy.NEW_FIRST:
-            self._last_ret = "old"
-            self._newest_commit = self._commit_idx
-        elif (self._march_strategy == CommitTraversalStrategy.CURLICUE_OLD
-              or self._march_strategy == CommitTraversalStrategy.OLD_FIRST):
-            self._last_ret = "new"
-            self._oldest_commit = self._commit_idx
         return self
 
     def __next__(self):
         """
         Return next value in container.
         """
-        return self._next_func()
-
-    def init_commit_indices(self):
-        """
-        Initialize commit indices.
-
-        Initialize the newest and oldest commit indices, according to
-        where the starting commit is.
-        """
-        if self._commit_idx > 0:
-            self._newest_commit = self._commit_idx - 1
-        else:
-            self._newest_commit = None
-        if self._commit_idx < len(self._commits) - 1:
-            self._oldest_commit = self._commit_idx + 1
-        else:
-            self._oldest_commit = None
-
-    def set_center_commit(self, sha):
-        """
-        Reset center commit.
-        """
-        if sha not in self._commit_sha_list:
-            raise KeyError("Commit sha supplied to CommitIterator not in repo")
-        self._commit_sha = sha
-        self._commit_idx = self._commit_sha_list.index(self._commit_sha)
-        self.init_commit_indices()
-
-    def new_first(self):
-        """
-        Return newer commits until none remain, then older.
-
-        The commit traversal strategy which follows all progressively
-        newer commits before it returns older commits.
-        """
-        if self._newest_commit >= 0:
-            tmp_idx = self._newest_commit
-            self._newest_commit = self._newest_commit - 1
-            return self._commits[tmp_idx]
-        elif self._oldest_commit and self._oldest_commit < len(self._commits):
-            tmp_idx = self._oldest_commit
-            self._oldest_commit = self._oldest_commit + 1
-            return self._commits[tmp_idx]
-        else:
-            raise StopIteration
-
-    def old_first(self):
-        """
-        Return older commits until none remain, then newer.
-
-        The commit traversal strategy which follows all progressively
-        older commits before it returns newer commits.
-        """
-        if self._oldest_commit < len(self._commits):
-            tmp_idx = self._oldest_commit
-            self._oldest_commit = self._oldest_commit + 1
-            return self._commits[tmp_idx]
-        elif self._newest_commit >= 0:
-            tmp_idx = self._newest_commit
-            self._newest_commit = self._newest_commit - 1
-            return self._commits[tmp_idx]
-        else:
-            raise StopIteration
-
-    def curlicue(self):
-        """
-        Return commits in a progressively widened area about the center.
-
-        The commit traversal strategy which alternates between newer and
-        older commits, progressively widening the distance from the
-        central commit.
-        """
-        if self._newest_commit == 0:
-            self._last_ret = "new"
-        if self._oldest_commit == len(self._commits):
-            self._last_ret = "old"
-        if self._last_ret == "old" and self._newest_commit >= 0:
-            self._last_ret = "new"
-            tmp_idx = self._newest_commit
-            self._newest_commit = self._newest_commit - 1
-            return self._commits[tmp_idx]
-        elif (self._last_ret == "new"
-              and self._oldest_commit < len(self._commits)):
-            self._last_ret = "old"
-            tmp_idx = self._oldest_commit
-            self._oldest_commit = self._oldest_commit + 1
-            return self._commits[tmp_idx]
-        else:
-            if self._last_ret != "new" and self._last_ret != "old":
-                raise Exception("Malformed")
-            else:
-                raise StopIteration
+        return next(self._hash_iterator)
 
 
 class ChangedCoqCommitIterator(CommitIterator):
@@ -236,19 +146,21 @@ class ChangedCoqCommitIterator(CommitIterator):
         # to iterate through a superclass
         while True:
             try:
-                commit = super().__next__()
+                hash = super().__next__()
             except StopIteration:
                 return
+            else:
+                commit = self._repo.commit(hash)
 
             if last is None:
-                yield commit
+                yield commit.hexsha
             else:
                 changed_files = self._repo.git.diff(
                     "--name-only",
                     commit,
                     last).split("\n")
                 if any(filename.endswith(".v") for filename in changed_files):
-                    yield commit
+                    yield commit.hexsha
             last = commit
 
 
