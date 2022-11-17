@@ -7,6 +7,7 @@ import os
 import pathlib
 import random
 import warnings
+from collections import deque
 from enum import Enum
 from typing import List, Optional
 
@@ -106,19 +107,19 @@ class CommitIterator:
                 center_idx = self.hashes.index(center_hash)
             else:
                 center_idx = int(len(self.hashes) / 2)
-            temp_list = []
+            temp_list = deque()
             if march_strategy == CommitTraversalStrategy.CURLICUE_NEW:
-                old_list = self.hashes[: center_idx + 1]
-                new_list = self.hashes[center_idx + 1 :]
+                old_list = deque(self.hashes[: center_idx + 1])
+                new_list = deque(self.hashes[center_idx + 1 :])
                 while old_list and new_list:
-                    temp_list.append(old_list.pop(-1))
-                    temp_list.append(new_list.pop(0))
+                    temp_list.append(old_list.pop())
+                    temp_list.append(new_list.popleft())
             elif march_strategy == CommitTraversalStrategy.CURLICUE_OLD:
-                old_list = self.hashes[: center_idx]
-                new_list = self.hashes[center_idx :]
+                old_list = deque(self.hashes[: center_idx])
+                new_list = deque(self.hashes[center_idx :])
                 while old_list and new_list:
-                    temp_list.append(new_list.pop(0))
-                    temp_list.append(old_list.pop(-1))
+                    temp_list.append(new_list.popleft())
+                    temp_list.append(old_list.pop())
             else:
                 raise ValueError(
                     f"{march_strategy} is not a valid march strategy.")
