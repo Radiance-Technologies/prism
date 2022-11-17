@@ -170,7 +170,6 @@ class TestCommitIter(unittest.TestCase):
         hashes_test = list(itertools.islice(commit_iter, 5))
         self.assertEqual(hashes, hashes_test)
 
-    @unittest.skip("Fails due to change in second arg to init.")
     def test_iterator_skipping_unchanged_coq(self):
         """
         Test skipping consecutive commits with the same Coq source code.
@@ -180,9 +179,11 @@ class TestCommitIter(unittest.TestCase):
             GEOCOQ_COMMIT_134,
             GEOCOQ_COMMIT_135,
         ]
-        commit_iter = ChangedCoqCommitIterator(repo, GEOCOQ_COMMIT_138)
+        commit_iter = ChangedCoqCommitIterator(
+            repo,
+            oldest_hash_limit=GEOCOQ_COMMIT_134,
+            march_strategy=CommitTraversalStrategy.OLD_FIRST)
         hashes_test = list(itertools.islice(commit_iter, 5))
-        hashes_test = [x.hexsha for x in hashes_test]
         # these hashes are included
         self.assertEqual(hashes, hashes_test[: 2])
         # these hashes are not
