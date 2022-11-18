@@ -1,7 +1,6 @@
 """
 Test suite for `prism.data.build_cache`.
 """
-import multiprocessing as mp
 import shutil
 import unittest
 from pathlib import Path
@@ -9,13 +8,13 @@ from typing import List
 
 from prism.data.build_cache import (
     CoqProjectBuildCacheClient,
+    CoqProjectBuildCacheProtocol,
     CoqProjectBuildCacheServer,
     ProjectBuildEnvironment,
     ProjectBuildResult,
     ProjectCommitData,
     VernacCommandData,
     VernacSentence,
-    create_cpbcs_qs,
 )
 from prism.data.dataset import CoqProjectBaseDataset
 from prism.interface.coq.goals import Goals
@@ -43,23 +42,14 @@ class TestCoqProjectBuildCache(unittest.TestCase):
         Test all aspects of the cache with subtests.
         """
         projects: List[ProjectRepo] = list(self.dataset.projects.values())
-        project_names = [p.name for p in projects]
-        manager = mp.Manager()
-        client_to_server, server_to_client_dict = create_cpbcs_qs(
-            manager,
-            project_names)
-        with CoqProjectBuildCacheServer(self.cache_dir,
-                                        project_names,
-                                        client_to_server,
-                                        server_to_client_dict) as cache:
+        with CoqProjectBuildCacheServer() as cache_server:
+            cache_client: CoqProjectBuildCacheProtocol = CoqProjectBuildCacheClient(
+                cache_server,
+                self.cache_dir)
             uneventful_result = ProjectBuildResult(0, "", "")
             environment = ProjectBuildEnvironment(
                 OpamAPI.active_switch.export())
             for project in projects:
-                cache_client = CoqProjectBuildCacheClient(
-                    client_to_server,
-                    server_to_client_dict[project.name],
-                    project.name)
                 command_data = {}
                 project: ProjectRepo
                 for filename in project.get_file_list():
@@ -103,23 +93,23 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                         [
                             data.project_metadata.coq_version.replace(".",
                                                                       "_"),
-                            cache.fmt_ext
+                            "yml"
                         ]))
                 with self.subTest(f"get_path_{project.name}"):
                     self.assertEqual(
                         expected_path,
-                        cache.get_path_from_data(data))
+                        cache_client.get_path_from_data(data))
                 with self.subTest(f"update_{project.name}_fail"):
                     self.assertFalse(
-                        Path(cache.get_path_from_data(data)).exists())
+                        Path(cache_client.get_path_from_data(data)).exists())
                 with self.subTest(f"insert_{project.name}"):
                     cache_client.insert(data, block=True)
                     self.assertTrue(
-                        Path(cache.get_path_from_data(data)).exists())
+                        Path(cache_client.get_path_from_data(data)).exists())
                 with self.subTest(f"update_{project.name}"):
                     cache_client.update(data, block=True)
                 with self.subTest(f"get_{project.name}"):
-                    retrieved = cache.get(
+                    retrieved = cache_client.get(
                         project.name,
                         data.project_metadata.commit_sha,
                         data.project_metadata.coq_version)

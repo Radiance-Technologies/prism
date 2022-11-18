@@ -33,7 +33,9 @@ from tqdm.contrib.concurrent import process_map
 
 from prism.data.build_cache import (
     CommandType,
+    CoqProjectBuildCache,
     CoqProjectBuildCacheClient,
+    CoqProjectBuildCacheProtocol,
     CoqProjectBuildCacheServer,
     ProjectBuildEnvironment,
     ProjectBuildResult,
@@ -43,7 +45,6 @@ from prism.data.build_cache import (
     VernacCommandData,
     VernacDict,
     VernacSentence,
-    create_cpbcs_qs,
 )
 from prism.data.commit_map import Except, ProjectCommitUpdateMapper
 from prism.data.util import get_project_func
@@ -675,7 +676,7 @@ def _extract_vernac_commands_worker_star(args) -> List[VernacCommandData]:
 
 
 def extract_cache(
-        build_cache_client: CoqProjectBuildCacheClient,  # should be protocol
+        build_cache_client: CoqProjectBuildCacheProtocol,
         switch_manager: SwitchManager,
         project: ProjectRepo,
         commit_sha: str,
@@ -714,7 +715,7 @@ def extract_cache(
 
     Parameters
     ----------
-    build_cache_client : CoqProjectBuildCacheClient
+    build_cache_client : CoqProjectBuildCacheProtocol
         The client that can insert the build artifacts into the on-disk
         build cache.
     switch_manager : SwitchManager
@@ -755,9 +756,9 @@ def extract_cache(
     """
     if coq_version is None:
         coq_version = project.metadata.coq_version
-    if ((project.name,
-         commit_sha,
-         coq_version) not in build_cache_client
+    if (not build_cache_client.contains((project.name,
+                                         commit_sha,
+                                         coq_version))
             or (recache is not None and recache(build_cache_client,
                                                 project,
                                                 commit_sha,
@@ -776,7 +777,7 @@ def extract_cache(
 
 
 def extract_cache_new(
-        build_cache_client: CoqProjectBuildCacheClient,
+        build_cache_client: CoqProjectBuildCacheProtocol,
         switch_manager: SwitchManager,
         project: ProjectRepo,
         commit_sha: str,
@@ -1081,7 +1082,7 @@ class CacheExtractor:
         """
         return partial(
             CacheExtractor.extract_cache_func,
-            build_cache_client_map=self.cache_clients,
+            build_cache_client=self.cache_client,
             switch_manager=self.swim,
             process_project_fallback=self.process_project_fallback,
             recache=self.recache,
@@ -1162,32 +1163,19 @@ class CacheExtractor:
                     "The following projects were requested but were not "
                     f"found: {', '.join(diff)}")
         if force_serial:
-            client_keys = None
-            client_to_server_q = None
-            server_to_client_q_dict = None
             manager = None
         else:
-            client_keys = [project.name for project in projects]
             manager = mp.Manager()
-            client_to_server_q, server_to_client_q_dict = create_cpbcs_qs(
-                manager,
-                client_keys)
-        with CoqProjectBuildCacheServer(self.cache_dir,
-                                        client_keys,
-                                        client_to_server_q,
-                                        server_to_client_q_dict,
-                                        **self.cache_kwargs) as cache_server:
+        with CoqProjectBuildCacheServer() as cache_server:
             if force_serial:
-                self.cache_clients = {
-                    project.name: cache_server for project in projects
-                }
+                self.cache_client = CoqProjectBuildCache(
+                    self.cache_dir,
+                    **self.cache_kwargs)
             else:
-                self.cache_clients = {
-                    project.name: CoqProjectBuildCacheClient(
-                        cache_server.client_to_server,
-                        cache_server.server_to_client_dict[project.name],
-                        project.name) for project in projects
-                }
+                self.cache_client = CoqProjectBuildCacheClient(
+                    cache_server,
+                    self.cache_dir,
+                    **self.cache_kwargs)
             # Create semaphore for controlling file-level workers
             if manager is not None:
                 nprocs = os.cpu_count(
@@ -1292,8 +1280,7 @@ class CacheExtractor:
             project: ProjectRepo,
             commit_sha: str,
             _result: None,
-            build_cache_client_map: Dict[str,
-                                         CoqProjectBuildCacheClient],
+            build_cache_client: CoqProjectBuildCacheProtocol,
             switch_manager: SwitchManager,
             process_project_fallback: Callable[[Project],
                                                VernacDict],
@@ -1322,7 +1309,7 @@ class CacheExtractor:
             The commit to extract cache from
         _result : None
             Left empty for compatibility with `ProjectCommitMapper`
-        build_cache_client_map : Dict[str, CoqProjectbuildCacheClient]
+        build_cache_client : CoqProjectbuildCacheProtocol
             A mapping from project name to build cache client, used to
             write extracted cache to disk
         switch_manager : SwitchManager
@@ -1361,7 +1348,7 @@ class CacheExtractor:
                 f"Coq version ({project.name}@{project.short_sha}): {coq_version}"
             )
             extract_cache(
-                build_cache_client_map[project.name],
+                build_cache_client,
                 switch_manager,
                 project,
                 commit_sha,

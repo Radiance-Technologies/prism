@@ -10,11 +10,11 @@ from pathlib import Path
 
 from prism.data.build_cache import (
     CoqProjectBuildCacheClient,
+    CoqProjectBuildCacheProtocol,
     CoqProjectBuildCacheServer,
     ProjectBuildEnvironment,
     ProjectBuildResult,
     ProjectCommitData,
-    create_cpbcs_qs,
 )
 from prism.data.dataset import CoqProjectBaseDataset
 from prism.data.document import CoqDocument
@@ -86,20 +86,10 @@ class TestExtractCache(unittest.TestCase):
         Test the function to extract cache from a project.
         """
         manager = mp.Manager()
-        client_to_server_q, server_to_client_q_dict = create_cpbcs_qs(
-            manager,
-            self.dataset.projects.keys())
-        with CoqProjectBuildCacheServer(self.CACHE_DIR,
-                                        self.dataset.projects.keys(),
-                                        client_to_server_q,
-                                        server_to_client_q_dict) as cache:
-            cache_clients = {
-                project_name: CoqProjectBuildCacheClient(
-                    client_to_server_q,
-                    server_to_client_q_dict[project_name],
-                    project_name)
-                for project_name in self.dataset.projects.keys()
-            }
+        with CoqProjectBuildCacheServer() as cache_server:
+            cache_client: CoqProjectBuildCacheProtocol = CoqProjectBuildCacheClient(
+                cache_server,
+                self.CACHE_DIR)
             # fake pre-existing cached data for float
             coq_float = self.dataset.projects['float']
             coq_float.git.checkout(self.float_head)
@@ -111,14 +101,15 @@ class TestExtractCache(unittest.TestCase):
                 ProjectBuildResult(0,
                                    "",
                                    ""))
-            cache_clients['float'].insert(dummy_float_data)
+            cache_client.insert(dummy_float_data)
             coq_float.git.checkout(coq_float.reset_head)
             self.assertEqual(coq_float.commit_sha, coq_float.reset_head)
             # assert that lambda is not already cached
             self.assertFalse(
-                cache.contains(('lambda',
-                                self.lambda_head,
-                                coq_version)))
+                cache_client.contains(
+                    ('lambda',
+                     self.lambda_head,
+                     coq_version)))
             # only cache new lambda data
             for project_name, project in self.dataset.projects.items():
                 if "float" in project_name.lower():
@@ -137,7 +128,7 @@ class TestExtractCache(unittest.TestCase):
                 project: ProjectRepo
                 semaphore = manager.BoundedSemaphore(4)
                 extract_cache(
-                    cache_clients[project.name],
+                    cache_client,
                     self.swim,
                     project,
                     head,
@@ -150,15 +141,16 @@ class TestExtractCache(unittest.TestCase):
             self.assertEqual(coq_float.commit_sha, coq_float.reset_head)
             # assert that float was not re-cached
             self.assertEqual(
-                cache.get('float',
-                          self.float_head,
-                          coq_version),
+                cache_client.get('float',
+                                 self.float_head,
+                                 coq_version),
                 dummy_float_data)
             # assert that lambda was cached
             self.assertTrue(
-                cache.contains(('lambda',
-                                self.lambda_head,
-                                coq_version)))
+                cache_client.contains(
+                    ('lambda',
+                     self.lambda_head,
+                     coq_version)))
 
     def test_extract_vernac_commands(self):
         """

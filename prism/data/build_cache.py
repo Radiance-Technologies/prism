@@ -7,10 +7,20 @@ import subprocess
 import tempfile
 import warnings
 from dataclasses import dataclass, field
-from multiprocessing import Process, Queue
-from multiprocessing.managers import SyncManager
+from multiprocessing.managers import BaseManager
 from pathlib import Path
-from typing import Any, ClassVar, Dict, Iterable, List, Optional, Tuple, Union
+from typing import (
+    Any,
+    ClassVar,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Protocol,
+    Tuple,
+    Union,
+    runtime_checkable,
+)
 
 import setuptools_scm
 import seutil as su
@@ -310,236 +320,8 @@ class BuildCacheMsg:
     """
 
 
-class CoqProjectBuildCacheClient:
-    """
-    Client object for writing build cache.
-    """
-
-    def __init__(
-            self,
-            client_to_server: Queue,
-            server_to_client: Queue,
-            client_id: str):
-        self.client_to_server = client_to_server
-        """
-        This queue is used to send messages and commands from the client
-        to the server. This queue is shared among all clients.
-        """
-        self.server_to_client = server_to_client
-        """
-        This queue is used to receive messages from the server. Each
-        client instance has a unique instance of this queue.
-        """
-        self.client_id = client_id
-        """
-        Identifier for client object.
-        """
-
-    def __contains__(  # noqa: D105
-            self,
-            obj: Union[ProjectCommitData,
-                       ProjectMetadata,
-                       Tuple[str]]) -> bool:
-        msg = BuildCacheMsg(self.client_id, "contains", args=(obj,))
-        self.client_to_server.put(msg)
-        response: BuildCacheMsg = self.server_to_client.get()
-        if not isinstance(response.response, bool):
-            raise TypeError(f"Unexpected response {response.response}")
-        return response.response
-
-    def _write_kernel(
-            self,
-            server_func: str,
-            data: Union[ProjectCommitData,
-                        ProjectMetadata],
-            block: bool,
-            log: Optional[str] = None):
-        """
-        Deduplicate common features of `write`, `write_error_log`, etc.
-
-        Parameters
-        ----------
-        server_func : str
-            Key of server dispatch table to call
-        data : ProjectCommitData or ProjectMetadata
-            Data or metadata to either write to disk or at least to
-            determine the path to write to
-        block : bool
-            Whether the write operation should block or not
-        log : str or None
-            Log message to be written, if applicable
-        """
-        msg = BuildCacheMsg(
-            self.client_id,
-            server_func,
-            args=(data,
-                  block,
-                  log))
-        self.client_to_server.put(msg)
-        if block:
-            response: BuildCacheMsg = self.server_to_client.get()
-            if response.response != "write complete":
-                raise ValueError(f"Unexpected response {response.response}.")
-
-    def get(
-            self,
-            project: str,
-            commit: str,
-            coq_version: str) -> ProjectCommitData:
-        """
-        Fetch a data object from the on-disk folder structure.
-
-        Parameters
-        ----------
-        project : str
-            The name of the project
-        commit : str
-            The commit hash to fetch from
-        coq_version : str
-            The Coq version
-
-        Returns
-        -------
-        ProjectCommitData
-            The fetched cache object
-
-        Raises
-        ------
-        TypeError
-            If response from the server is not of the expected type
-        """
-        msg = BuildCacheMsg(
-            self.client_id,
-            "get",
-            args=(project,
-                  commit,
-                  coq_version))
-        self.client_to_server.put(msg)
-        response: BuildCacheMsg = self.server_to_client.get()
-        if not isinstance(response.response, ProjectCommitData):
-            raise TypeError(f"Unexpected response {response.response}")
-        return response.response
-
-    def write(self, data: ProjectCommitData, block: bool = False) -> None:
-        """
-        Cache the data to disk regardless of whether it already exists.
-
-        Parameters
-        ----------
-        data : ProjectCommitData
-            The object to be cached.
-        block : bool, optional
-            Whether to wait for the write operation to complete, by
-            default False.
-
-        Raises
-        ------
-        ValueError
-            If response from server has unexpected contents
-        """
-        self._write_kernel("write", data, block)
-
-    def write_error_log(
-            self,
-            metadata: ProjectMetadata,
-            block: bool = False,
-            cache_error_log: str = "") -> None:
-        """
-        Write a caching error log to disk.
-
-        Parameters
-        ----------
-        metadata : ProjectMetadata
-            The project metadata for the project that had an error.
-        block : bool, optional
-            Whether to wait for the write operation to complete, by
-            default False.
-        cache_error_log : str
-            Caching error log to write to file.
-
-        Raises
-        ------
-        ValueError
-            If response from server has unexpected contents
-        """
-        self._write_kernel("write_error_log", metadata, block, cache_error_log)
-
-    def write_misc_log(
-            self,
-            metadata: ProjectMetadata,
-            block: bool = False,
-            misc_log: str = "") -> None:
-        """
-        Write an otherwise uncategorized error to disk.
-
-        Parameters
-        ----------
-        metadata : ProjectMetadata
-            The project metadata for the project that had an error.
-        block : bool, optional
-            Whether to wait for the write operation to complete, by
-            default False.
-        misc_log : str
-            Error message to write to disk.
-
-        Raises
-        ------
-        ValueError
-            If response from server has unexpected contents
-        """
-        self._write_kernel("write_misc_log", metadata, block, misc_log)
-
-    def write_timing_log(
-            self,
-            metadata: ProjectMetadata,
-            block: bool = False,
-            timing_log: str = "") -> None:
-        """
-        Write a timing log file.
-
-        Parameters
-        ----------
-        metadata : ProjectMetadata
-            The project metadata for the project that had an error.
-        block : bool, optional
-            Whether to wait for the write operation to complete, by
-            default False.
-        timing_log : str
-            Timing log to write to file.
-
-        Raises
-        ------
-        ValueError
-            If response from server has unexpected contents
-        """
-        self._write_kernel("write_timing_log", metadata, block, timing_log)
-
-    # Aliases
-    insert = write
-    update = write
-
-
-def create_cpbcs_qs(manager: SyncManager,
-                    client_keys: List[str]) -> Tuple[Queue,
-                                                     Dict[str,
-                                                          Queue]]:
-    """
-    Create queues for CoqProjectBuildCacheServer objects.
-
-    Parameters
-    ----------
-    manager : SyncManager
-        A sync manager that supplies queues that can be shared among
-        non-inherited processes
-    client_keys : List[str]
-        A list of client keys for the cache server
-    """
-    client_to_server_q = manager.Queue()
-    server_to_client_q_dict = {k: manager.Queue() for k in client_keys}
-    return client_to_server_q, server_to_client_q_dict
-
-
-class CoqProjectBuildCacheServer:
+@runtime_checkable
+class CoqProjectBuildCacheProtocol(Protocol):
     """
     Object regulating access to repair mining cache on disk.
 
@@ -558,58 +340,14 @@ class CoqProjectBuildCacheServer:
     └── ...
     """
 
-    def __init__(
-            self,
-            root: Path,
-            client_keys: Optional[List[str]] = None,
-            client_to_server_q: Optional[Queue] = None,
-            server_to_client_q_dict: Optional[Dict[str,
-                                                   Queue]] = None,
-            fmt_ext: str = "yml"):
-        self.root = Path(root)
-        """
-        Root folder of repair mining cache structure
-        """
-        self.fmt_ext = fmt_ext
-        """
-        The extension for the cache files that defines their format.
-        """
-        self.client_keys = client_keys if client_keys else []
-        """
-        Keys corresponding to each client. If these keys are not
-        provided, the server loop process does not start, and it is
-        expected that this object will be used by a single producer OR
-        in a read-only context.
-        """
-        self.client_to_server = client_to_server_q
-        """
-        Queue for clients to send cache messages to write to this object
-        acting as a cache-writing server.
-        """
-        self.server_to_client_dict = server_to_client_q_dict
-        """
-        Dictionary of queues for sending messages from server to client
-        """
-        self._worker_proc: Process = Process(target=self._server_loop)
-        """
-        Consumer process that writes to disk from queue.
-        """
-        self._dispatch_table = {
-            "write": self._write,
-            "write_error_log": self._write_error_log,
-            "write_misc_log": self._write_misc_log,
-            "write_timing_log": self._write_timing_log,
-            "contains": self.contains,
-            "get": self.get
-        }
-        """
-        Dictionary mapping incoming function calls from the
-        client-to-server queue.
-        """
-        if client_keys and (self.client_to_server is None
-                            or self.server_to_client_dict is None):
-            raise RuntimeError(
-                "If client keys are provided, queues must be provided as well.")
+    root: Path = Path("")
+    """
+    Root folder of repair mining cache structure
+    """
+    fmt_ext: str = ""
+    """
+    The extension for the cache files that defines their format.
+    """
 
     def __contains__(  # noqa: D105
             self,
@@ -617,35 +355,6 @@ class CoqProjectBuildCacheServer:
                        ProjectMetadata,
                        Tuple[str]]) -> bool:
         return self.contains(obj)
-
-    def __enter__(self):
-        """
-        Enter the context manager.
-        """
-        if not self.root.exists():
-            os.makedirs(self.root)
-        if self.client_keys:
-            self._worker_proc.start()
-        return self
-
-    def __exit__(self, _exc_type, _exc_value, _exc_traceback):
-        """
-        Stop the worker process.
-        """
-        if self.client_keys:
-            # Send poison pill
-            try:
-                self.client_to_server.put(BuildCacheMsg(None, "poison pill"))
-            except AttributeError:
-                # We shouldn't ever get here, but just in case...
-                self._worker_proc.kill()
-            # Allow any remaining writes to complete
-            # Note: if this ends up being buggy, maybe try setting a
-            # timeout for join and then calling self._worker_proc.kill()
-            # after timeout.
-            self._worker_proc.join()
-            # Termination has already happened at this point, so we
-            # don't need to do it manually.
 
     @property
     def fmt(self) -> su.io.Fmt:
@@ -662,107 +371,6 @@ class CoqProjectBuildCacheServer:
 
     def _contains_metadata(self, metadata: ProjectMetadata) -> bool:
         return self.get_path_from_metadata(metadata).exists()
-
-    def _server_loop(self) -> None:
-        """
-        Provide consumer loop for build cache server.
-        """
-        while True:
-            msg: BuildCacheMsg = self.client_to_server.get()
-            try:
-                response = self._dispatch_table[msg.type](*msg.args)
-            except (KeyError, AttributeError):
-                if msg.type == "poison pill":
-                    # Break the infinite loop if we get the poison pill
-                    break
-                else:
-                    raise
-            else:
-                response_msg = BuildCacheMsg(
-                    msg.client_id,
-                    "response",
-                    response=response)
-                # Don't put a response in the queue if the client called
-                # "write" with block=False.
-                if msg.type != "write" or (msg.type == "write" and msg.args[1]):
-                    self.server_to_client_dict[msg.client_id].put(response_msg)
-
-    def _write(self,
-               data: ProjectCommitData,
-               block: bool,
-               _=None) -> Optional[str]:
-        """
-        Write to build cache.
-
-        This is a private function. Invoking it outside of the
-        client -> queue -> server route will result in undefined
-        behavior.
-
-        Parameters
-        ----------
-        data : ProjectCommitData
-            Data to write to build cache
-        block : bool
-            If true, return a ``"write complete"`` message.
-
-        Returns
-        -------
-        str or None
-            If `block`, return ``"write complete"``; otherwise, return
-            nothing
-
-        Notes
-        -----
-        The final `_` parameter in the definition is provided for
-        compatibility with the other write methods.
-        """
-        self._write_kernel(data, False, data)
-        # If there was an error in cache extraction, write an additional
-        # text file containing the output.
-        if data.build_result.exit_code != 0:
-            str_to_write = "\n".join(
-                [
-                    f"@@Exit code@@\n{data.build_result.exit_code}",
-                    f"@@stdout@@\n{data.build_result.stdout}",
-                    f"@@stderr@@\n{data.build_result.stderr}"
-                ])
-            self._write_kernel(data, block, str_to_write, "_build_error.txt")
-        if block:
-            return "write complete"
-
-    def _write_error_log(
-            self,
-            metadata: ProjectMetadata,
-            block: bool,
-            cache_error_log: str) -> Optional[str]:
-        """
-        Write caching error log to build cache directory.
-
-        This is a private function. Invoking it outside of the
-        client -> queue -> server route will result in undefined
-        behavior.
-
-        Parameters
-        ----------
-        metadata : ProjectMetadata
-            Metadata for the project that had an error. Used by this
-            method to get the correct path to write to.
-        block : bool
-            If true, return a ``"write complete"`` message.
-        cache_error_log : str
-            Caching error log string to write to file.
-
-        Returns
-        -------
-        str or None
-            If `block`, return ``"write complete"``; otherwise, return
-            nothing
-        """
-        return self._write_kernel(
-            metadata,
-            block,
-            cache_error_log,
-            "_cache_error.txt")
 
     def _write_kernel(
             self,
@@ -836,66 +444,6 @@ class CoqProjectBuildCacheServer:
         os.replace(f.name, data_path)
         if block:
             return "write complete"
-
-    def _write_misc_log(
-            self,
-            metadata: ProjectMetadata,
-            block: bool,
-            misc_log: str) -> Optional[str]:
-        """
-        Write miscellaneous error log to build cache directory.
-
-        This is a private function. Invoking it outside of the
-        client -> queue -> server route will result in undefined
-        behavior.
-
-        Parameters
-        ----------
-        metadata : ProjectMetadata
-            Metadata for the project that had an error. Used by this
-            method to get the correct path to write to.
-        block : bool
-            If true, return a "write complete" message
-        misc_log : str
-            Miscellaneous error message to write to file.
-
-        Returns
-        -------
-        str or None
-            If `block`, return "write complete"; otherwise, return
-            nothing
-        """
-        return self._write_kernel(metadata, block, misc_log, "_misc_error.txt")
-
-    def _write_timing_log(
-            self,
-            metadata: ProjectMetadata,
-            block: bool,
-            timing_log: str) -> Optional[str]:
-        """
-        Write timing log to build cache directory.
-
-        This is a private function. Invoking it outside of the
-        client -> queue -> server route will result in undefined
-        behavior.
-
-        Parameters
-        ----------
-        metadata : ProjectMetadata
-            Metadata for the project that had an error. Used by this
-            method to get the correct path to write to.
-        block : bool
-            If true, return a "write complete" message
-        timing_log : str
-            Timing log string to write to file.
-
-        Returns
-        -------
-        str or None
-            If `block`, return "write complete"; otherwise, return
-            nothing
-        """
-        return self._write_kernel(metadata, block, timing_log, "_timing.txt")
 
     def contains(
             self,
@@ -1016,38 +564,44 @@ class CoqProjectBuildCacheServer:
             metadata.commit_sha,
             metadata.coq_version)
 
-    def write(self, data: ProjectCommitData, block: bool = True) -> None:
+    def write(self,
+              data: ProjectCommitData,
+              block: bool = True,
+              _=None) -> Optional[str]:
         """
-        Cache the data to disk regardless of whether it already exists.
-
-        This method cannot be safely used in a multi-producer
-        context. It is meant for use in a single-producer context to
-        remove the need for a `CoqProjectBuildCacheClient` object.
+        Write to build cache.
 
         Parameters
         ----------
         data : ProjectCommitData
-            The object to be cached.
-        block : bool, optional
-            Whether to wait for the write operation to complete.
-            This argument currently has no effect; the method always
-            blocks.
-            The argument is allowed to maintain a uniform signature
-            with `CoqProjectBuildCacheClient.write`.
+            Data to write to build cache
+        block : bool
+            If true, return a ``"write complete"`` message.
 
-        Raises
-        ------
-        RuntimeError
-            If clients can potentially send data to the server,
-            indicating that using this method is not guaranteed to be
-            safe.
+        Returns
+        -------
+        str or None
+            If `block`, return ``"write complete"``; otherwise, return
+            nothing
+
+        Notes
+        -----
+        The final `_` parameter in the definition is provided for
+        compatibility with the other write methods.
         """
-        if self.client_keys:
-            raise RuntimeError(
-                "It is not safe to use the `write`"
-                " method when clients are connected to the server.")
-        else:
-            self._write(data, block)
+        self._write_kernel(data, block, data)
+        # If there was an error in cache extraction, write an additional
+        # text file containing the output.
+        if data.build_result.exit_code != 0:
+            str_to_write = "\n".join(
+                [
+                    f"@@Exit code@@\n{data.build_result.exit_code}",
+                    f"@@stdout@@\n{data.build_result.stdout}",
+                    f"@@stderr@@\n{data.build_result.stderr}"
+                ])
+            self._write_kernel(data, block, str_to_write, "_build_error.txt")
+        if block:
+            return "write complete"
 
     def write_error_log(
             self,
@@ -1057,32 +611,27 @@ class CoqProjectBuildCacheServer:
         """
         Write caching error log to build cache directory.
 
-        This method cannot be safely used in a multi-producer
-        context. It is meant for use in a single-producer context to
-        remove the need for a `CoqProjectBuildCacheClient` object.
-
         Parameters
         ----------
-        metadata : ProjectCommitData
-            Metadata for the project that had a caching error. Used by
-            this method to get the correct path to write to.
+        metadata : ProjectMetadata
+            Metadata for the project that had an error. Used by this
+            method to get the correct path to write to.
         block : bool
-            Whether to wait for the operation to complete.
+            If true, return a ``"write complete"`` message.
         cache_error_log : str
             Caching error log string to write to file.
 
         Returns
         -------
         str or None
-            If `block`, return "write complete"; otherwise, return
+            If `block`, return ``"write complete"``; otherwise, return
             nothing
         """
-        if self.client_keys:
-            raise RuntimeError(
-                "It is not safe to use the `write_error_log`"
-                " method when clients are connected to the server.")
-        else:
-            self._write_error_log(metadata, block, cache_error_log)
+        return self._write_kernel(
+            metadata,
+            block,
+            cache_error_log,
+            "_cache_error.txt")
 
     def write_misc_log(
             self,
@@ -1092,19 +641,15 @@ class CoqProjectBuildCacheServer:
         """
         Write miscellaneous error log to build cache directory.
 
-        This method cannot be safely used in a multi-producer
-        context. It is meant for use in a single-producer context to
-        remove the need for a `CoqProjectBuildCacheClient` object.
-
         Parameters
         ----------
-        metadata : ProjectCommitData
-            Metadata for the project that had a caching error. Used by
-            this method to get the correct path to write to.
+        metadata : ProjectMetadata
+            Metadata for the project that had an error. Used by this
+            method to get the correct path to write to.
         block : bool
-            Whether to wait for the operation to complete.
+            If true, return a "write complete" message
         misc_log : str
-            Miscellaneous error log string to write to file.
+            Miscellaneous error message to write to file.
 
         Returns
         -------
@@ -1112,12 +657,7 @@ class CoqProjectBuildCacheServer:
             If `block`, return "write complete"; otherwise, return
             nothing
         """
-        if self.client_keys:
-            raise RuntimeError(
-                "It is not safe to use the `write_misc_log`"
-                " method when clients are connected to the server.")
-        else:
-            self._write_error_log(metadata, block, misc_log)
+        return self._write_kernel(metadata, block, misc_log, "_misc_error.txt")
 
     def write_timing_log(
             self,
@@ -1127,17 +667,13 @@ class CoqProjectBuildCacheServer:
         """
         Write timing log to build cache directory.
 
-        This method cannot be safely used in a multi-producer
-        context. It is meant for use in a single-producer context to
-        remove the need for a `CoqProjectBuildCacheClient` object.
-
         Parameters
         ----------
-        metadata : ProjectCommitData
-            Metadata for the project that had a caching error. Used by
-            this method to get the correct path to write to.
+        metadata : ProjectMetadata
+            Metadata for the project that had an error. Used by this
+            method to get the correct path to write to.
         block : bool
-            Whether to wait for the operation to complete.
+            If true, return a "write complete" message
         timing_log : str
             Timing log string to write to file.
 
@@ -1147,12 +683,48 @@ class CoqProjectBuildCacheServer:
             If `block`, return "write complete"; otherwise, return
             nothing
         """
-        if self.client_keys:
-            raise RuntimeError(
-                "It is not safe to use the `write_timing_log`"
-                " method when clients are connected to the server.")
-        else:
-            self._write_timing_log(metadata, block, timing_log)
+        return self._write_kernel(metadata, block, timing_log, "_timing.txt")
 
-    insert = write
-    apply = write
+    def insert(self, *args, **kwargs):  # noqa: D102
+        return self.write(*args, **kwargs)
+
+    def apply(self, *args, **kwargs):  # noqa: D102
+        return self.write(*args, **kwargs)
+
+    def update(self, *args, **kwargs):  # noqa: D102
+        return self.write(*args, **kwargs)
+
+
+class CoqProjectBuildCache(CoqProjectBuildCacheProtocol):
+    """
+    Implementation of CoqProjectBuildCacheProtocol with added __init__.
+    """
+
+    def __init__(self, root: Path, fmt_ext: str = "yml"):
+        self.root = Path(root)
+        self.fmt_ext = fmt_ext
+        if not self.root.exists():
+            os.makedirs(self.root)
+
+
+class CoqProjectBuildCacheServer(BaseManager):
+    """
+    A BaseManager-derived server for managing build cache.
+    """
+
+    ...
+
+
+CoqProjectBuildCacheServer.register(
+    "CoqProjectBuildCache",
+    CoqProjectBuildCache)
+
+
+def CoqProjectBuildCacheClient(
+        server: CoqProjectBuildCacheServer,
+        *args,
+        **kwargs):
+    """
+    Return client object for writing build cache.
+    """
+    return server.CoqProjectBuildCache(*args, **kwargs)
