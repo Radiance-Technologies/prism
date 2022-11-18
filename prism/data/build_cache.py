@@ -34,6 +34,7 @@ from prism.project.metadata import ProjectMetadata
 
 from prism.data.ident import Identifier
 from prism.interface.coq.goals import Goals, GoalsDiff
+from prism.interface.coq.ident import Identifier
 from prism.util.opam.switch import OpamSwitch
 from prism.util.opam.version import Version, VersionString
 from prism.util.radpytools.dataclasses import default_field

@@ -23,8 +23,8 @@ from prism.data.build_cache import (
 from prism.data.dataset import CoqProjectBaseDataset
 from prism.data.document import CoqDocument
 from prism.data.extract_cache import _extract_vernac_commands, extract_cache
-from prism.data.ident import Identifier, IdentType
 from prism.interface.coq.goals import Goals, GoalsDiff
+from prism.interface.coq.ident import Identifier, IdentType
 from prism.language.gallina.parser import CoqParser
 from prism.project.base import SEM, Project
 from prism.project.metadata.storage import MetadataStorage
