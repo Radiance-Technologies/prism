@@ -1,10 +1,10 @@
 """
-Provides an object-oriented abstraction of OPAM switches.
+Provides a limited Python interface to the `coqdep` executable.
 """
 import os
 import re
 from os import PathLike
-from typing import Hashable, List
+from typing import Hashable, List, Optional
 
 import networkx as nx
 
@@ -98,6 +98,7 @@ def get_dependencies(
         file: PathLike,
         switch: OpamSwitch,
         IQR: str = '',
+        cwd: Optional[str] = None,
         boot: bool = False) -> List[str]:
     """
     Return dependencies for the given file using `coqdep`.
@@ -111,6 +112,9 @@ def get_dependencies(
     IQR : str, optional
         IQR flags for `coqdep` that bind physical paths to logical
         library names.
+    cwd : Optional[str], optional
+        The working directory in which to invoke `coqdep`, by default
+        the current working directory of the parent process.
     boot : bool, optional
         Whether to print dependencies over Coq library files, by default
         False.
@@ -131,7 +135,7 @@ def get_dependencies(
     else:
         boot = ''
     command = "coqdep {0} -sort {1} {2}".format(file, IQR, boot)
-    file_deps = switch.run(command)
+    file_deps = switch.run(command, cwd=cwd)
     file_deps = file_deps.stdout.strip().replace("./", "").split()
     file_deps = [_coq_file_regex.match(x).groups()[0] for x in file_deps]
 
@@ -144,7 +148,7 @@ def order_dependencies(
         files: List[PathLike],
         switch: OpamSwitch,
         IQR: str = '',
-        working_directory: str = None,
+        cwd: Optional[str] = None,
         boot: bool = False) -> List[str]:
     """
     Sort the given files in dependency order using `coqdep`.
@@ -158,8 +162,9 @@ def order_dependencies(
     IQR : str, optional
         IQR flags for `coqdep` that bind physical paths to logical
         library names.
-    working_directory : str, optional
-        Working directory to pass to run function.
+    cwd : Optional[str], optional
+        The working directory in which to invoke `coqdep`, by default
+        the current working directory of the parent process.
     boot : bool, optional
         Whether to print dependencies over Coq library files, by default
         False.
@@ -179,7 +184,7 @@ def order_dependencies(
     else:
         boot = ''
     command = "coqdep {0} -sort {1} {2}".format(files, IQR, boot)
-    file_deps = switch.run(command, cwd=working_directory)
+    file_deps = switch.run(command, cwd=cwd)
     file_deps = file_deps.stdout.strip().split()
     file_deps = [_coq_file_regex.match(x).groups()[0] for x in file_deps]
 
