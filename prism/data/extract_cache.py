@@ -535,6 +535,16 @@ def _extract_vernac_commands(
             text = sentence.text
             _, feedback, sexp = serapi.execute(text, return_ast=True)
             sentence.ast = sexp
+            # Attach an undocumented extra field to the CoqSentence
+            # object containing fully qualified referenced identifiers
+            # NOTE: This must be done before identifiers get shadowed in
+            # the `global_id_cache`
+            sentence.identifiers = get_all_qualified_idents(
+                serapi,
+                modpath,
+                str(sexp),
+                ordered=True,
+                id_cache=expanded_ids)
             # get new ids and shadow redefined ones
             (ids,
              local_ids,
@@ -545,14 +555,6 @@ def _extract_vernac_commands(
                  local_ids,
                  post_proof_id,
                  expanded_ids)
-            # Attach an undocumented extra field to the CoqSentence
-            # object containing fully qualified referenced identifiers
-            sentence.identifiers = get_all_qualified_idents(
-                serapi,
-                modpath,
-                str(sexp),
-                ordered=True,
-                id_cache=expanded_ids)
             proof_id_changed = post_proof_id != pre_proof_id
             # update goals
             if (use_goals_diff and pre_goals is not None and post_goals is not None):
