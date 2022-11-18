@@ -36,9 +36,14 @@ def id_re(capture_name: Optional[str]) -> re.Pattern:
 
 
 dirpath_re = re.compile(
-    rf"\(\s*DirPath\s*\((?P<dirpath>(?:\s*{id_re(None).pattern})*)\)\s*\)")
+    rf"\(\s*DirPath\s*\((?P<DirPath>(?:\s*{id_re(None).pattern})*)\)\s*\)")
+_serqualid_contexts = [
+    r"(?P<CPatAtom>\(\s*CPatAtom\s*\(\s*\(\s*\(\s*v\s*)",
+    r"(?P<CRef>\(\s*CRef\s*\(\s*\(\s*v\s*)"
+]
+_serqualid_contexts = regex_from_options(_serqualid_contexts, False, False)
 serqualid_re = re.compile(
-    rf"\(\s*Ser_Qualid\s*{dirpath_re.pattern}\s*"
+    rf"{_serqualid_contexts.pattern}?\(\s*Ser_Qualid\s*{dirpath_re.pattern}\s*"
     rf"{id_re('str_of_qualid').pattern}\s*\)")
 loc_re = re.compile(
     r"\(\s*loc\s*\(\(\(\s*fname\s+ToplevelInput\)\s*\(\s*line_nb\s+\d+\)\s*"
@@ -61,8 +66,28 @@ ident_re = regex_from_options(
 class IdentType(enum.Enum):
     """
     Enumerate different types of identifiers depending upon context.
+
+    Notes
+    -----
+    The names of these enumerated values correspond to kernel type and
+    variant constructor names in the Coq source code.
     """
 
+    # place all variants of Ser_Qualid before Ser_Qualid so that a
+    # simple <= operator can be used to detect any variant
+    CPatAtom = enum.auto()
+    """
+    A qualified ID appearing in a pattern match, e.g., ``p`` in ``S p``,
+    where ``S`` is the natural number successor constructor.
+    A `Ser_Qualid` with additional context.
+    This may reference a global ID or bind a new name.
+    """
+    CRef = enum.auto()
+    """
+    A reference to a qualified ID appearing, for example, in local
+    binders as the name of the bound type.
+    A `Ser_Qualid` with additional context.
+    """
     Ser_Qualid = enum.auto()
     """
     A qualified id, which may appear in the bodies of many commands.
@@ -75,13 +100,17 @@ class IdentType(enum.Enum):
     """
     lident = enum.auto()
     """
-    A located id, which may appear in theorem statements or other
+    A located ID, which may appear in theorem statements or other
     contexts.
+
+    This ID cannot be qualified.
     """
     lname = enum.auto()
     """
     A located name, which may appear in ``Definition``s, local binders,
     or more contexts.
+
+    This name cannot be qualified.
     """
 
 
@@ -122,11 +151,16 @@ def ident_of_match(ident: re.Match) -> Identifier:
         dirpath = [
             unquote(d['id'])
             for d in re.finditer(id_re('id'),
-                                 ident['dirpath'])
+                                 ident['DirPath'])
         ]
         dirpath.append(unquote(serqualid))
         ident_str = ".".join(dirpath)
-        ident_type = IdentType.Ser_Qualid
+        if ident['CPatAtom'] is not None:
+            ident_type = IdentType.CPatAtom
+        elif ident['CRef'] is not None:
+            ident_type = IdentType.CRef
+        else:
+            ident_type = IdentType.Ser_Qualid
     elif lident is not None:
         ident_str = unquote(lident)
         ident_type = IdentType.lident
@@ -161,7 +195,8 @@ def sexp_str_of_ident(ident: Identifier) -> str:
     str
         The s-expression representation of the given identifier.
     """
-    if ident.type == IdentType.Ser_Qualid:
+    ident_type = ident.type
+    if ident_type <= IdentType.Ser_Qualid:
         parts = ident.string.split(".")
         ident = id_of_str(parts[-1])
         dirpath = ["(DirPath("]
@@ -169,20 +204,25 @@ def sexp_str_of_ident(ident: Identifier) -> str:
         dirpath.append("))")
         dirpath = "".join(dirpath)
         sexp = f"(Ser_Qualid{dirpath}{ident})"
+        if ident_type == IdentType.CPatAtom:
+            sexp = f"(CPatAtom(((v{sexp}"
+        elif ident_type == IdentType.CRef:
+            sexp = f"(CRef((v{sexp}"
     else:
         ident_str = id_of_str(ident.string)
-        if ident.type == IdentType.lident:
+        if ident_type == IdentType.lident:
             sexp = f"(v{ident_str})"
         else:
-            assert ident.type == IdentType.lname
+            assert ident_type == IdentType.lname
             sexp = f"(v(Name{ident_str}))"
     return sexp
 
 
 def qualify_ident(
         serapi: SerAPI,
-        id_cache: Dict[str,
-                       str],
+        global_id_cache: Dict[str,
+                              str],
+        local_id_cache: Set[str],
         ident: Identifier,
         modpath: str) -> Identifier:
     """
@@ -192,9 +232,12 @@ def qualify_ident(
     ----------
     ident : Identifier
         An identifier as it appears in the AST.
-    id_cache : Dict[str, str]
+    global_id_cache : Dict[str, str]
         A map from unqualified or partially qualified IDs to fully
         qualified variants, which will be modified in-place.
+    local_id_cache : Set[str]
+        A set of locally defined IDs that shadow global definitions,
+        which will be modified in-place.
     modpath : str
         The module path to use in place of ``"SerTop."`` for locally
         defined identifiers or to prepend for appropriate
@@ -205,21 +248,34 @@ def qualify_ident(
     str
         The fully qualified identifier.
     """
+    # make identity unambiguous when the AST is used later in
+    # a non-interactive context
     ident_str = ident.string
     ident_type = ident.type
-    try:
-        fully_qualified = id_cache[ident_str]
-    except KeyError:
-        fully_qualified = serapi.query_full_qualid(ident_str)
-        if fully_qualified is None:
-            fully_qualified = ident_str
-        # make identity unambiguous when the AST is used later in
-        # a non-interactive context
-        if fully_qualified.startswith("SerTop."):
-            fully_qualified = modpath + fully_qualified[6 :]
-        elif ident_type == IdentType.lident or ident_type == IdentType.lname:
-            fully_qualified = '.'.join([modpath, fully_qualified])
-        id_cache[ident_str] = fully_qualified
+    if ident_type == IdentType.lident or ident_type == IdentType.lname:
+        # a new local identifier is being introduced and will shadow
+        # previous equivalent names for the rest of the AST
+        local_id_cache.add(ident_str)
+    if (ident_str in local_id_cache and ident_type != IdentType.CPatAtom):
+        # a locally introduced identifier
+        fully_qualified = '.'.join([modpath, ident_str])
+    else:
+        # probably a global identifier
+        try:
+            fully_qualified = global_id_cache[ident_str]
+        except KeyError:
+            fully_qualified = serapi.query_full_qualid(ident_str)
+            if fully_qualified is None:
+                fully_qualified = ident_str
+            if fully_qualified.startswith("SerTop."):
+                fully_qualified = modpath + fully_qualified[6 :]
+            elif ident_type == IdentType.CPatAtom and '.' not in fully_qualified:
+                # This identifier does not exist in the
+                # global environment.
+                # Mark it as locally defined.
+                local_id_cache.add(fully_qualified)
+                fully_qualified = '.'.join([modpath, fully_qualified])
+            global_id_cache[ident_str] = fully_qualified
     return Identifier(ident_type, fully_qualified)
 
 
@@ -229,8 +285,8 @@ def _get_all_idents(
     qualify: bool = False,
     serapi: Optional[SerAPI] = None,
     modpath: str = "SerTop",
-    id_cache: Optional[Dict[str,
-                            str]] = None
+    global_id_cache: Optional[Dict[str,
+                                   str]] = None
 ) -> Union[List[Identifier],
            Set[Identifier]]:
     """
@@ -254,7 +310,7 @@ def _get_all_idents(
         The logical library path one would use if the contents of the
         `serapi` session were dumped to file and imported or required in
         another, by default ``"SerTop"``.
-    id_cache : Optional[Dict[str, str]], optional
+    global_id_cache : Optional[Dict[str, str]], optional
         A map from unqualified or partially qualified IDs to fully
         qualified variants, which will be modified in-place.
         By default None.
@@ -273,9 +329,15 @@ def _get_all_idents(
     if qualify and serapi is None:
         raise ValueError("Cannot qualify identifiers without a SerAPI session.")
     elif qualify:
-        if id_cache is not None:
-            id_cache = {}
-        qualify = partial(qualify_ident, serapi, id_cache, modpath=modpath)
+        if global_id_cache is not None:
+            global_id_cache = {}
+        local_id_cache = set()
+        qualify = partial(
+            qualify_ident,
+            serapi,
+            global_id_cache,
+            local_id_cache,
+            modpath=modpath)
     else:
         qualify = identity
     matches = re.finditer(ident_re, ast)
