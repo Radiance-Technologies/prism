@@ -54,11 +54,13 @@ class CommitIterator:
     """
 
     def __init__(
-        self,
-        repo: ProjectRepo,
-        starting_hash: Optional[str] = None,
-        march_strategy: Optional[
-            CommitTraversalStrategy] = CommitTraversalStrategy.NEW_FIRST):
+            self,
+            repo: ProjectRepo,
+            starting_hash: Optional[str] = None,
+            march_strategy: Optional[
+                CommitTraversalStrategy] = CommitTraversalStrategy.NEW_FIRST,
+            oldest_hash_limit: Optional[str] = None,
+            newest_hash_limit: Optional[str] = None):
         """
         Initialize CommitIterator.
 
@@ -72,8 +74,15 @@ class CommitIterator:
         march_strategy : CommitTraversalStrategy
             The particular method of iterating over the repo which
             we wish to use.
+        oldest_hash_limit : str or None, optional
+            If provided, iterator will not return any commits before the
+            one with this hash, by default None.
+        newest_hash_limit : str or None, optional
+            If provided, iterator will not return any commits after the
+            one with this hash, by default None.
         """
         self._repo = repo
+        # Get every commit from repo regardless of branch, parents, etc.
         commit_generator = self._repo.iter_commits("--all")
         self.dated_hashes = [
             (c.committed_date,
@@ -82,6 +91,29 @@ class CommitIterator:
         # Sort in ascending order by date
         self.dated_hashes = sorted(self.dated_hashes, key=lambda x: x[0])
         self.hashes = [i[1] for i in self.dated_hashes]
+        # Apply limits if given
+        try:
+            oldest_idx = self.hashes.index(
+                oldest_hash_limit) if oldest_hash_limit is not None else None
+        except ValueError as e:
+            raise ValueError(
+                f"No commit found in repo {repo.name} for oldest_hash_limit"
+                f" {oldest_hash_limit}.") from e
+        try:
+            newest_idx = self.hashes.index(
+                newest_hash_limit
+            ) + 1 if newest_hash_limit is not None else None
+        except ValueError as e:
+            raise ValueError(
+                f"No commit found in repo {repo.name} for newest_hash_limit"
+                f" {newest_hash_limit}.") from e
+        self.hashes = self.hashes[oldest_idx : newest_idx]
+        # Validate starting_hash after limits are applied
+        if starting_hash is not None and starting_hash not in self.hashes:
+            raise ValueError(
+                f"starting_hash {starting_hash} not in list of hashes from"
+                f" repo {repo.name} after applying oldest/newest limits.")
+        # Apply march_strategy
         if march_strategy == CommitTraversalStrategy.NEW_FIRST:
             newest_idx = self.hashes.index(
                 starting_hash) + 1 if starting_hash is not None else None
@@ -148,10 +180,7 @@ class ChangedCoqCommitIterator(CommitIterator):
         if not hasattr(self, "_last"):
             self._last = None
         while True:
-            try:
-                hash = super().__next__()
-            except StopIteration:
-                break
+            hash = super().__next__()
             commit = self._repo.commit(hash)
             if self._last is None:
                 self._last = commit
