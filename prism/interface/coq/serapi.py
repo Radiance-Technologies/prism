@@ -37,7 +37,7 @@ from prism.language.sexp.exception import IllegalSexpOperationException
 from prism.language.sexp.list import SexpList
 from prism.language.sexp.parser import SexpParser
 from prism.language.sexp.string import SexpString
-from prism.util.iterable import CallableIterator
+from prism.util.iterable import CallableIterator, uniquify
 from prism.util.logging import default_log_level
 from prism.util.opam import OpamSwitch
 from prism.util.opam.version import OpamVersion
@@ -1260,4 +1260,4 @@ class SerAPI:
             if match is not None:
                 idents.extend(
                     [m.strip() for m in match.groupdict()["idents"].split(",")])
-        return idents
+        return uniquify(idents)
