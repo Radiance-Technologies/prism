@@ -48,6 +48,7 @@ def make_dependency_graph(
         files: List[PathLike],
         switch: OpamSwitch,
         IQR: str = '',
+        cwd: Optional[str] = None,
         boot: bool = False) -> nx.DiGraph:
     """
     Get a directed graph of dependencies for supplied Coq files.
@@ -63,6 +64,9 @@ def make_dependency_graph(
     IQR : str, optional
         IQR flags for `coqdep` that bind physical paths to logical
         library names.
+    cwd : Optional[str], optional
+        The working directory in which to invoke `coqdep`, by default
+        the current working directory of the parent process.
     boot : bool, optional
         Whether to print dependencies over Coq library files, by default
         False.
@@ -81,12 +85,13 @@ def make_dependency_graph(
     prism.project.iqr : For more about `IQR` flags.
     """
     dep_graph_dict = {}
-    cwd = os.getcwd()
+    if cwd is None:
+        cwd = os.getcwd()
     for file in files:
         file = str(get_relative_path(file, cwd))
         if file.endswith(".vo"):
             file = file[:-1]
-        deps = get_dependencies(file, switch, IQR, boot)
+        deps = get_dependencies(file, switch, IQR, cwd, boot)
         dep_graph_dict[file] = [
             _coq_file_regex.match(x).groups()[0] for x in deps
         ]
