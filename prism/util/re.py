@@ -40,6 +40,8 @@ def regex_from_options(
     regex = '|'.join(options)
     if group:
         regex = f"({regex})"
+    else:
+        regex = f"(?:{regex})"
     regex = f"{'^' if must_start else ''}{regex}{'$' if must_end else ''}"
     if compile:
         regex = re.compile(regex, flags=flags)
