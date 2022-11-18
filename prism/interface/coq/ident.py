@@ -267,15 +267,16 @@ def qualify_ident(
             fully_qualified = serapi.query_full_qualid(ident_str)
             if fully_qualified is None:
                 fully_qualified = ident_str
-            if fully_qualified.startswith("SerTop."):
-                fully_qualified = modpath + fully_qualified[6 :]
-            elif ident_type == IdentType.CPatAtom and '.' not in fully_qualified:
+            if ident_type == IdentType.CPatAtom and '.' not in fully_qualified:
                 # This identifier does not exist in the
                 # global environment.
                 # Mark it as locally defined.
                 local_id_cache.add(fully_qualified)
                 fully_qualified = '.'.join([modpath, fully_qualified])
-            global_id_cache[ident_str] = fully_qualified
+            else:
+                if fully_qualified.startswith("SerTop."):
+                    fully_qualified = modpath + fully_qualified[6 :]
+                global_id_cache[ident_str] = fully_qualified
     return Identifier(ident_type, fully_qualified)
 
 
