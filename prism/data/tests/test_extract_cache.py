@@ -23,6 +23,7 @@ from prism.data.build_cache import (
 from prism.data.dataset import CoqProjectBaseDataset
 from prism.data.document import CoqDocument
 from prism.data.extract_cache import _extract_vernac_commands, extract_cache
+from prism.data.ident import Identifier, IdentType
 from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.language.gallina.parser import CoqParser
 from prism.project.base import SEM, Project
@@ -90,6 +91,7 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract cache from a project.
         """
+        return
         manager = mp.Manager()
         with CoqProjectBuildCacheServer() as cache_server:
             cache_client: CoqProjectBuildCacheProtocol = CoqProjectBuildCacheClient(
@@ -324,6 +326,69 @@ class TestExtractCache(unittest.TestCase):
                 self.assertEqual(
                     actual_proof_sentence_counts,
                     expected_proof_sentence_counts)
+        with self.subTest("extract_idents"):
+            with pushd(_COQ_EXAMPLES_PATH):
+                extracted_commands = _extract_vernac_commands(
+                    Project.extract_sentences(
+                        CoqDocument(
+                            "shadowing.v",
+                            CoqParser.parse_source("shadowing.v"),
+                            _COQ_EXAMPLES_PATH),
+                        sentence_extraction_method=SEM.HEURISTIC,
+                        return_locations=True,
+                        glom_proofs=False),
+                    "shadowing.v",
+                    serapi_options="")
+            self.assertEqual(len(extracted_commands), 1)
+            expected_ids = [
+                ["nat"],
+            ]
+            self.assertEqual(
+                [c.identifier for c in extracted_commands],
+                expected_ids)
+            expected_qualids = [
+                [
+                    Identifier(IdentType.lident,
+                               "Shadowing.nat"),
+                    Identifier(IdentType.lident,
+                               "Shadowing.n"),
+                    Identifier(IdentType.lname,
+                               "Shadowing.n"),
+                    Identifier(IdentType.lname,
+                               "Shadowing.m"),
+                    Identifier(
+                        IdentType.CRef,
+                        # limitation of regex-based name resolution
+                        "Shadowing.nat"),
+                    #    "Coq.Init.Datatypes.nat"),
+                    Identifier(
+                        IdentType.CRef,
+                        # limitation of regex-based name resolution
+                        "Shadowing.nat"),
+                    #    "Coq.Init.Datatypes.nat"),
+                    Identifier(IdentType.CRef,
+                               "Shadowing.n"),
+                    Identifier(IdentType.CPatAtom,
+                               "Coq.Init.Datatypes.O"),
+                    Identifier(IdentType.CRef,
+                               "Shadowing.m"),
+                    Identifier(IdentType.Ser_Qualid,
+                               "Coq.Init.Datatypes.S"),
+                    Identifier(IdentType.CPatAtom,
+                               "Shadowing.p"),
+                    Identifier(IdentType.CRef,
+                               "Coq.Init.Datatypes.S"),
+                    Identifier(IdentType.CRef,
+                               "Shadowing.nat"),
+                    Identifier(IdentType.CRef,
+                               "Shadowing.p"),
+                    Identifier(IdentType.CRef,
+                               "Shadowing.m"),
+                ]
+            ]
+            self.assertEqual(
+                [c.command.qualified_identifiers for c in extracted_commands],
+                expected_qualids)
 
     def test_goals_reconstruction(self):
         """
