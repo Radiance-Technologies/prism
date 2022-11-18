@@ -183,16 +183,16 @@ class ChangedCoqCommitIterator(CommitIterator):
             hash = super().__next__()
             commit = self._repo.commit(hash)
             if self._last is None:
-                self._last = commit
-                return commit.hexsha
+                break
             else:
                 changed_files = self._repo.git.diff(
                     "--name-only",
                     commit,
                     self._last).split("\n")
                 if any(filename.endswith(".v") for filename in changed_files):
-                    self._last = commit
-                    return commit.hexsha
+                    break
+        self._last = commit
+        return commit.hexsha
 
 
 class ProjectRepo(Repo, Project):
