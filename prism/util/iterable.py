@@ -7,18 +7,23 @@ from typing import (
     Any,
     Dict,
     Generic,
+    Hashable,
     Iterable,
     Iterator,
+    List,
     Sequence,
+    Tuple,
     TypeVar,
     Union,
 )
 
 from prism.util.compare import Bottom, Comparable, Top
 from prism.util.radpytools import unzip
+from prism.util.radpytools.dataclasses import Dataclass
 
 T = TypeVar('T')
 C = TypeVar('C', bound=Comparable)
+H = TypeVar('H', bound=Hashable)
 
 
 @dataclass
@@ -151,15 +156,33 @@ class CompareIterator(Generic[C]):
         return max(nexts) if reverse else min(nexts)
 
 
-def unpack(dc) -> tuple:
+def unpack(dc: Dataclass) -> Tuple[Any, ...]:
     """
-    Return tuple of dataclass field names and values.
+    Return tuple of dataclass field values.
     """
     return tuple(getattr(dc, field.name) for field in fields(dc))
 
 
-def shallow_asdict(obj) -> Dict[str, Any]:
+def shallow_asdict(dc: Dataclass) -> Dict[str, Any]:
     """
     Non-recursively convert dataclass into dictionary.
     """
-    return dict((field.name, getattr(obj, field.name)) for field in fields(obj))
+    return dict((field.name, getattr(dc, field.name)) for field in fields(dc))
+
+
+def uniquify(it: Iterable[H]) -> List[H]:
+    """
+    Remove duplicate elements but keep the original order of iteration.
+
+    Parameters
+    ----------
+    it : Iterable[H]
+        An iterable container.
+
+    Returns
+    -------
+    List[H]
+        A list containing the unique elements of `it` in the order of
+        their appearance during iteration.
+    """
+    return list(dict.fromkeys(it).keys())
