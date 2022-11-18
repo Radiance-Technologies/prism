@@ -10,7 +10,6 @@ from dataclasses import dataclass, field
 from multiprocessing.managers import BaseManager
 from pathlib import Path
 from typing import (
-    Any,
     ClassVar,
     Dict,
     Iterable,
@@ -290,33 +289,6 @@ class ProjectCommitData(Serializable):
     """
     The result of building the project commit in the `opam_switch` or
     None if building was not required to process the commit.
-    """
-
-
-@dataclass
-class BuildCacheMsg:
-    """
-    Data class for messages passed between cache server and client.
-    """
-
-    client_id: str
-    """
-    Identifier for client object
-    """
-    type: str
-    """
-    The type of this message. If the message is meant to invoke a
-    function, this should match a key in the receiving object's
-    dispatch table.
-    """
-    args: tuple = field(default_factory=tuple)
-    """
-    Arbitrary tuple of args to be passed to a function on the receiving
-    end
-    """
-    response: Any = None
-    """
-    Response, if any, from any functions that were previously called
     """
 
 
