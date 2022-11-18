@@ -9,6 +9,14 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 from typing import List, Union
 
 import seutil.io as io
+from prism.language.gallina.analyze import SexpInfo
+from prism.language.heuristic.util import ParserUtils
+from prism.language.sexp.list import SexpList
+from prism.language.sexp.string import SexpString
+from prism.project.base import SEM, SentenceExtractionMethod
+from prism.project.metadata.storage import MetadataStorage
+from prism.project.repo import ProjectRepo
+from prism.tests import _PROJECT_EXAMPLES_PATH
 
 from prism.data.build_cache import (
     CacheObjectStatus,
@@ -22,16 +30,9 @@ from prism.data.build_cache import (
     VernacSentence,
 )
 from prism.data.dataset import CoqProjectBaseDataset
+from prism.data.ident import Identifier, IdentType
 from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.interface.coq.serapi import SerAPI
-from prism.language.gallina.analyze import SexpInfo
-from prism.language.heuristic.util import ParserUtils
-from prism.language.sexp.list import SexpList
-from prism.language.sexp.string import SexpString
-from prism.project.base import SEM, SentenceExtractionMethod
-from prism.project.metadata.storage import MetadataStorage
-from prism.project.repo import ProjectRepo
-from prism.tests import _PROJECT_EXAMPLES_PATH
 from prism.util.opam import OpamAPI
 
 TEST_DIR = Path(__file__).parent
@@ -146,6 +147,11 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                                     SexpList(
                                         [SexpString("foo"),
                                          SexpString("bar")]),
+                                    [
+                                        Identifier(
+                                            IdentType.Ser_Qualid,
+                                            f"{filename}.foo")
+                                    ],
                                     location,
                                     command_type,
                                     Goals([],

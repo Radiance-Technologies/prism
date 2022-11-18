@@ -91,7 +91,6 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract cache from a project.
         """
-        return
         manager = mp.Manager()
         with CoqProjectBuildCacheServer() as cache_server:
             cache_client: CoqProjectBuildCacheProtocol = CoqProjectBuildCacheClient(
