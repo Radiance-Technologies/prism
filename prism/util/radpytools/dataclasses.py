@@ -3,9 +3,18 @@ Utilities for working with dataclasses.
 """
 from copy import deepcopy
 from dataclasses import Field, dataclass, field
-from typing import TypeVar
+from typing import Any, Dict, Protocol, Type, TypeVar, runtime_checkable
 
 T = TypeVar('T')
+
+
+@runtime_checkable
+class Dataclass(Protocol):
+    """
+    A basic protocol for type-checking dataclasses.
+    """
+
+    __dataclass_fields__: Dict[str, Any]
 
 
 def default_field(obj: T) -> Field:
@@ -47,7 +56,7 @@ def default_field(obj: T) -> Field:
     return field(default_factory=lambda: deepcopy(obj))
 
 
-def immutable_dataclass(*args, **kwargs):
+def immutable_dataclass(*args, **kwargs) -> Type[Dataclass]:
     """
     Make an immutable, hashable dataclass.
 
