@@ -415,7 +415,7 @@ def _extract_vernac_commands(
     pre_goals = Goals()
     post_proof_id = None
     post_goals = Goals()
-    with SerAPI(serapi_options, switch_=opam_switch) as serapi:
+    with SerAPI(serapi_options, opam_switch=opam_switch) as serapi:
         for sentence in sentences:
             # TODO: Optionally filter queries out of results (and
             # execution)
