@@ -67,11 +67,7 @@ class SerAPI:
     Optional command-line options to `sertop`, especially IQR flags for
     linking logical and physical library paths.
     """
-    timeout_: InitVar[int] = 30
-    """
-    The timeout for responses from the spawned SerAPI process.
-    """
-    switch_: InitVar[Optional[OpamSwitch]] = None
+    opam_switch: InitVar[Optional[OpamSwitch]] = None
     """
     The switch in which to invoke `sertop`, which implicitly controls
     the version of Coq and SerAPI that are used.
@@ -81,6 +77,17 @@ class SerAPI:
     """
     Whether to shorten and replace locations with a filler token or to
     yield full location information, by default False.
+    """
+    max_wait_time: InitVar[int] = 30
+    """
+    The timeout for responses from the spawned SerAPI process.
+    """
+    cwd: InitVar[Optional[str]] = None
+    """
+    The working directory in which to invoke `sertop`, which implicitly
+    affects the physical and logical library path bindings.
+    By default, the current working directory of the parent process is
+    used.
     """
     frame_stack: List[List[int]] = default_field([])
     """
@@ -116,27 +123,32 @@ class SerAPI:
     def __post_init__(
             self,
             sertop_options: str,
+            opam_switch: OpamSwitch,
+            omit_loc: bool,
             timeout: int,
-            switch: OpamSwitch,
-            omit_loc: bool):
+            cwd: Optional[str]):
         """
         Initialize the SerAPI subprocess.
         """
-        if switch is None:
-            switch = OpamSwitch()
-        self._switch = switch
+        if opam_switch is None:
+            opam_switch = OpamSwitch()
+        if cwd is None:
+            cwd = os.getcwd()
+        self._switch = opam_switch
+        self._cwd = cwd
         try:
             cmd = f"sertop --implicit --print0 {sertop_options}"
             if omit_loc:
                 cmd = cmd + " --omit_loc"
-            if switch.is_clone:
-                cmd, _, _ = switch.as_clone_command(cmd)
+            if opam_switch.is_clone:
+                cmd, _, _ = opam_switch.as_clone_command(cmd)
             self._proc = PopenSpawn(
                 cmd,
                 encoding="utf-8",
                 timeout=timeout,
                 maxread=10000000,
-                env=switch.environ)
+                env=opam_switch.environ,
+                cwd=cwd)
         except FileNotFoundError:
             logger.log(
                 logging.ERROR,
@@ -243,6 +255,13 @@ class SerAPI:
         Set the timeout for responses from the SerAPI process.
         """
         self._proc.timeout = timeout
+
+    @property
+    def working_directory(self) -> str:
+        """
+        Get the directory in which the SerAPI process is being executed.
+        """
+        return self._cwd
 
     def _query_type(self, term: str, mod: int = 0) -> str:
         """

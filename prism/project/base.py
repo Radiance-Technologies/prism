@@ -499,7 +499,8 @@ class Project(ABC):
                 filtered,
                 self.opam_switch,
                 iqr.replace(",",
-                            " "))
+                            " "),
+                cwd=self.path)
         else:
             filtered = sorted(filtered)
         return filtered

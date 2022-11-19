@@ -321,7 +321,7 @@ class TestSerAPI(unittest.TestCase):
                     }
                 ],
         }
-        with SerAPI(timeout_=60) as serapi:
+        with SerAPI(max_wait_time=60) as serapi:
             serapi.execute(
                 "Inductive nat : Type := O : nat | S (n : nat) : nat.")
             serapi.execute("Lemma foo : unit.")
