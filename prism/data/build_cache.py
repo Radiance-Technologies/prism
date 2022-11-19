@@ -1,6 +1,7 @@
 """
 Tools for handling repair mining cache.
 """
+import glob
 import os
 import re
 import subprocess
@@ -292,6 +293,18 @@ class ProjectCommitData(Serializable):
     """
 
 
+@dataclass
+class CoqVersionStatus:
+    """
+    Dataclass storing status information for (project, commit, version).
+    """
+
+    project: str
+    commit_hash: str
+    coq_version: str
+    status: str
+
+
 @runtime_checkable
 class CoqProjectBuildCacheProtocol(Protocol):
     """
@@ -535,6 +548,86 @@ class CoqProjectBuildCacheProtocol(Protocol):
             metadata.project_name,
             metadata.commit_sha,
             metadata.coq_version)
+
+    def list_projects(self) -> List[str]:
+        """
+        Generate a list of projects in cache.
+
+        Returns
+        -------
+        List[str]
+            A list of project names currently present in the cache
+        """
+        projects: List[str] = []
+        for item in glob.glob(self.root):
+            abs_path_item: Path = self.root / item
+            if abs_path_item.is_dir():
+                projects.append(item)
+        return projects
+
+    def list_commits(
+            self,
+            projects: Optional[Iterable[str]] = None) -> Dict[str,
+                                                              List[str]]:
+        """
+        Generate a list of commits for a given project or all projects.
+
+        Parameters
+        ----------
+        projects : Optional[Iterable[str]], optional
+            The projects to get commit hashes for. If None, return
+            commit hashes for all projects, by default None.
+
+        Returns
+        -------
+        Dict[str, List[str]]
+            Mapping from project name to commit hash list
+        """
+        if projects is None:
+            projects = self.list_projects()
+        elif not isinstance(projects, Iterable):
+            projects = [projects]
+        output_dict = dict()
+        for project in projects:
+            commit_list: List[str] = []
+            for item in glob.glob(self.root / project):
+                abs_path_item: Path = (self.root / project) / item
+                if abs_path_item.is_dir():
+                    commit_list.append(item)
+            output_dict[project] = commit_list
+        return output_dict
+
+    def list_status(
+            self,
+            projects: Optional[Iterable[str]] = None,
+            commits: Optional[Dict[str,
+                                   List[str]]] = None,
+            coq_version: Optional[str] = None) -> List[CoqVersionStatus]:
+        """
+        Generate a list of objects detailing cache status.
+
+        Parameters
+        ----------
+        project : Optional[Iterable[str]], optional
+            If given, return status for these projects only, by default
+            None
+        commit : Optional[Dict[str, List[str]]], optional
+            If given, return status for these commit hashes only, by
+            default None
+        coq_version : Optional[str], optional
+            If given, return status for this coq version only, by
+            default None
+
+        Returns
+        -------
+        List[CoqVersionStatus]
+            List of objects detailing cache status
+        """
+        if projects is None:
+            projects = self.list_projects()
+        if commits is None:
+            commits = self.list_projects(projects)
+        ...
 
     def write(self,
               data: ProjectCommitData,
