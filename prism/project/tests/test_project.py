@@ -13,6 +13,7 @@ from itertools import chain
 from pathlib import Path
 
 import git
+import pytest
 
 from prism.data.document import CoqDocument
 from prism.project.base import SEM, Project, SentenceExtractionMethod
@@ -276,6 +277,80 @@ class TestProject(unittest.TestCase):
         self.assertTrue(
             set(stdout.splitlines()).issuperset(expected_output.splitlines()))
         self.assertTrue(stderr.endswith(expected_err))
+
+    @pytest.mark.dependency(depends=["TestProject::test_build_and_get_iqr"])
+    def test_get_file_dependencies(self):
+        """
+        Verify that interproject dependencies can be obtained.
+        """
+        file_deps = self.test_iqr_project.get_file_dependencies()
+        expected_file_deps = {
+            "src/Array.v":
+                {
+                    "src/Instances.v",
+                    "src/Mem.v",
+                    "src/Pred.v",
+                    "src/Reification/Varmap.v",
+                    "src/Reification/Sorting.v",
+                    "src/Cancel.v"
+                },
+            "src/CancelTests.v":
+                {
+                    'src/Reification/Varmap.v',
+                    'src/Reification/Sorting.v',
+                    'src/Instances.v',
+                    'src/Mem.v',
+                    'src/Pred.v',
+                    'src/Cancel.v'
+                },
+            "src/Cancel.v":
+                {
+                    'src/Reification/Varmap.v',
+                    'src/Reification/Sorting.v',
+                    'src/Instances.v',
+                    'src/Mem.v',
+                    'src/Pred.v',
+                },
+            "src/SepLogic.v":
+                {
+                    'src/Cancel.v',
+                    'src/Instances.v',
+                    'src/Mem.v',
+                    'src/Pred.v',
+                    'src/Reification/Sorting.v',
+                    'src/Reification/Varmap.v',
+                    'src/Tactics.v'
+                },
+            "src/Tactics.v":
+                {
+                    'src/Instances.v',
+                    'src/Mem.v',
+                    'src/Pred.v',
+                    'src/Reification/Varmap.v',
+                    'src/Reification/Sorting.v',
+                    'src/Cancel.v'
+                },
+            "src/TacticTests.v":
+                {
+                    'src/Instances.v',
+                    'src/Mem.v',
+                    'src/Pred.v',
+                    'src/Reification/Varmap.v',
+                    'src/Reification/Sorting.v',
+                    'src/Cancel.v',
+                    'src/Tactics.v'
+                },
+            "src/Mem.v": {"src/Instances.v"},
+            "src/Pred.v": {'src/Instances.v',
+                           'src/Mem.v'},
+            'src/PredTests.v': {'src/Pred.v',
+                                'src/Instances.v',
+                                'src/Mem.v'},
+            "src/Instances.v": set(),
+            "src/Reification/Varmap.v": set(),
+            "src/Reification/Sorting.v": set(),
+        }
+        self.assertEqual(file_deps, expected_file_deps)
 
 
 if __name__ == "__main__":

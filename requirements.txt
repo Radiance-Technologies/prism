@@ -8,6 +8,9 @@ pexpect
 prettytable
 pytest
 pytest-cov
+pytest-dependency
+pytest-doctestplus
+pytest-subtests
 setuptools_scm
 seutil >= 0.7.1
 strace-parser

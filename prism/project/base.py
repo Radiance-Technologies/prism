@@ -37,7 +37,10 @@ from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.strace import strace_build
 from prism.util.bash import escape
-from prism.util.build_tools.coqdep import order_dependencies
+from prism.util.build_tools.coqdep import (
+    make_dependency_graph,
+    order_dependencies,
+)
 from prism.util.logging import default_log_level
 from prism.util.opam import (
     OpamSwitch,
@@ -168,6 +171,29 @@ class Project(ABC):
         Return the list of commands that clean project build artifacts.
         """
         return self.metadata.clean_cmd
+
+    @property
+    def coq_options(self) -> Optional[str]:
+        """
+        Get the Coq options for compiling this project's files.
+
+        If None, then the Coq options have not yet been determined
+        and will be inferred automatically the next time the project is
+        built.
+
+        Returns
+        -------
+        Optional[str]
+            The command-line options for invoking Coq tools, e.g.,
+            ``f"coqc {coq_options} file.v"``.
+        """
+        if self.serapi_options is not None:
+            iqr = IQR.extract_iqr(self.serapi_options)
+            iqr.delim = " "
+            coq_options = str(iqr)
+        else:
+            coq_options = None
+        return coq_options
 
     @property
     def coq_version(self) -> str:
@@ -576,6 +602,29 @@ class Project(ABC):
                               self.path),
             project_path=self.path,
             source_code=CoqParser.parse_source(filename))
+
+    def get_file_dependencies(self) -> Dict[str, List[str]]:
+        """
+        Get a map from filenames to their in-project dependencies.
+
+        The map is equivalent to an adjacency list of the project's
+        inter-file dependency graph, which contains directed edges from
+        a file ``A`` to a file ``B`` if ``B`` depends upon ``A``.
+
+        Returns
+        -------
+        Dict[str, List[str]]
+            A map from filenames relative to the root of the project to
+            sets of other relative filenames in the project upon which
+            they depend.
+        """
+        G = make_dependency_graph(
+            self.get_file_list(relative=False),
+            self.opam_switch,
+            self.coq_options,
+            self.path)
+        return {u: list(N.keys()) for u,
+                N in G.adjacency()}
 
     def get_file_list(
             self,
