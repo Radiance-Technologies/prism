@@ -14,7 +14,6 @@ from prism.util.build_tools.coqdep import (
     make_dependency_graph,
     order_dependencies,
 )
-from prism.util.opam import OpamAPI
 from prism.util.radpytools.os import pushd
 
 
@@ -48,7 +47,7 @@ class TestCoqDep(unittest.TestCase):
         with pushd(self.repo_paths["lambda"]):
             files = os.listdir("./")
             files = [x for x in files if x[-2 :] == '.v']
-            deps = get_dependencies("Redexes.v", OpamAPI.active_switch)
+            deps = get_dependencies("Redexes.v")
             expected = ["Test.v", "Terms.v", "Reduction.v"]
             for file in expected:
                 self.assertTrue(file in deps)
@@ -86,7 +85,7 @@ class TestCoqDep(unittest.TestCase):
             'Substitution.v'
         ]
         with pushd(self.repo_paths["lambda"]):
-            dg = make_dependency_graph(files, OpamAPI.active_switch)
+            dg = make_dependency_graph(files)
         self.assertTrue(nx.utils.misc.edges_equal(dg.edges, expected.edges))
 
     def test_order_dependencies(self):
@@ -96,8 +95,8 @@ class TestCoqDep(unittest.TestCase):
         with pushd(self.repo_paths["lambda"]):
             files = os.listdir("./")
             files = [x for x in files if x.endswith('.v')]
-            ordered = order_dependencies(files, OpamAPI.active_switch)
-            graph = make_dependency_graph(files, OpamAPI.active_switch)
+            ordered = order_dependencies(files)
+            graph = make_dependency_graph(files)
             self.assertTrue(is_valid_topological_sort(graph, ordered))
 
     @classmethod
