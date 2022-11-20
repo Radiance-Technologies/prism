@@ -6,7 +6,7 @@
   commit_sha: 5ff00345ca0fa0c323dcf0eb1ac23f79107f863f
   coq_dependencies: []
   coq_version: 8.10.2
-  ignore_path_regex: []
+  ignore_path_regex: ["vendor.*"]
   install_cmd: []
   ocaml_version: null
   opam_dependencies: []
