@@ -802,8 +802,8 @@ def extract_cache_new(
     commit_sha : str
         The commit whose data should be extracted.
     process_project_fallback : Callable[[Project], VernacDict]
-        Function that provides fallback vernacular command
-        extraction for projects that do not build.
+        Function that provides fallback vernacular command extraction
+        for projects that do not build.
     coq_version : str or None, optional
         The version of Coq in which to build the project, by default
         None.
@@ -817,8 +817,8 @@ def extract_cache_new(
         If this argument is true, disable parallel execution. Useful for
         debugging.
     worker_semaphore : Semaphore or None
-        Semaphore used to control the number of file workers than
-        can run at once. If None, ignore.
+        Semaphore used to control the number of file workers that can
+        run at once. If None, ignore.
     """
     # Construct a logger local to this function and unique to this PID
     pid = os.getpid()
@@ -878,6 +878,7 @@ def extract_cache_new(
             data = ProjectCommitData(
                 metadata,
                 command_data,
+                project.get_file_dependencies(),
                 ProjectBuildEnvironment(project.opam_switch.export()),
                 ProjectBuildResult(*build_result))
             build_cache_client.insert(data, block)
