@@ -620,10 +620,10 @@ class Project(ABC):
         """
         G = make_dependency_graph(
             self.get_file_list(relative=False),
-            self.opam_switch,
             self.coq_options,
+            self.opam_switch,
             self.path)
-        return {u: list(N.keys()) for u,
+        return {u: sorted(N.keys()) for u,
                 N in G.adjacency()}
 
     def get_file_list(

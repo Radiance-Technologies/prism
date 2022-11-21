@@ -286,33 +286,33 @@ class TestProject(unittest.TestCase):
         file_deps = self.test_iqr_project.get_file_dependencies()
         expected_file_deps = {
             "src/Array.v":
-                {
+                [
+                    "src/Cancel.v",
                     "src/Instances.v",
                     "src/Mem.v",
                     "src/Pred.v",
-                    "src/Reification/Varmap.v",
                     "src/Reification/Sorting.v",
-                    "src/Cancel.v"
-                },
+                    "src/Reification/Varmap.v",
+                ],
             "src/CancelTests.v":
-                {
-                    'src/Reification/Varmap.v',
-                    'src/Reification/Sorting.v',
+                [
+                    'src/Cancel.v',
                     'src/Instances.v',
                     'src/Mem.v',
                     'src/Pred.v',
-                    'src/Cancel.v'
-                },
+                    'src/Reification/Sorting.v',
+                    'src/Reification/Varmap.v',
+                ],
             "src/Cancel.v":
-                {
-                    'src/Reification/Varmap.v',
-                    'src/Reification/Sorting.v',
+                [
                     'src/Instances.v',
                     'src/Mem.v',
                     'src/Pred.v',
-                },
+                    'src/Reification/Sorting.v',
+                    'src/Reification/Varmap.v',
+                ],
             "src/SepLogic.v":
-                {
+                [
                     'src/Cancel.v',
                     'src/Instances.v',
                     'src/Mem.v',
@@ -320,35 +320,35 @@ class TestProject(unittest.TestCase):
                     'src/Reification/Sorting.v',
                     'src/Reification/Varmap.v',
                     'src/Tactics.v'
-                },
+                ],
             "src/Tactics.v":
-                {
-                    'src/Instances.v',
-                    'src/Mem.v',
-                    'src/Pred.v',
-                    'src/Reification/Varmap.v',
-                    'src/Reification/Sorting.v',
-                    'src/Cancel.v'
-                },
-            "src/TacticTests.v":
-                {
-                    'src/Instances.v',
-                    'src/Mem.v',
-                    'src/Pred.v',
-                    'src/Reification/Varmap.v',
-                    'src/Reification/Sorting.v',
+                [
                     'src/Cancel.v',
+                    'src/Instances.v',
+                    'src/Mem.v',
+                    'src/Pred.v',
+                    'src/Reification/Sorting.v',
+                    'src/Reification/Varmap.v',
+                ],
+            "src/TacticTests.v":
+                [
+                    'src/Cancel.v',
+                    'src/Instances.v',
+                    'src/Mem.v',
+                    'src/Pred.v',
+                    'src/Reification/Sorting.v',
+                    'src/Reification/Varmap.v',
                     'src/Tactics.v'
-                },
-            "src/Mem.v": {"src/Instances.v"},
-            "src/Pred.v": {'src/Instances.v',
-                           'src/Mem.v'},
-            'src/PredTests.v': {'src/Pred.v',
-                                'src/Instances.v',
-                                'src/Mem.v'},
-            "src/Instances.v": set(),
-            "src/Reification/Varmap.v": set(),
-            "src/Reification/Sorting.v": set(),
+                ],
+            "src/Mem.v": ["src/Instances.v"],
+            "src/Pred.v": ['src/Instances.v',
+                           'src/Mem.v'],
+            'src/PredTests.v': ['src/Instances.v',
+                                'src/Mem.v',
+                                'src/Pred.v'],
+            "src/Instances.v": [],
+            "src/Reification/Varmap.v": [],
+            "src/Reification/Sorting.v": [],
         }
         self.assertEqual(file_deps, expected_file_deps)
 
