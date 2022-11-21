@@ -332,9 +332,15 @@ class TestProjectRepoLambda(unittest.TestCase):
                 os.path.join(self.repo_path,
                              x) for x in files if x.endswith('.v')
             ]
-            graph = make_dependency_graph(files, self.project.opam_switch)
+            graph = make_dependency_graph(
+                files,
+                self.project.coq_options,
+                self.project.opam_switch)
             self.assertTrue(len(list(nx.simple_cycles(graph))) == 0)
-            self.assertTrue(is_valid_topological_sort(graph, ordered))
+            self.assertTrue(
+                is_valid_topological_sort(graph,
+                                          ordered,
+                                          reverse=True))
 
     @classmethod
     def tearDownClass(cls):

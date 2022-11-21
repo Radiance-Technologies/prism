@@ -97,7 +97,10 @@ class TestCoqDep(unittest.TestCase):
             files = [x for x in files if x.endswith('.v')]
             ordered = order_dependencies(files)
             graph = make_dependency_graph(files)
-            self.assertTrue(is_valid_topological_sort(graph, ordered))
+            self.assertTrue(
+                is_valid_topological_sort(graph,
+                                          ordered,
+                                          reverse=True))
 
     @classmethod
     def setUpClass(cls):

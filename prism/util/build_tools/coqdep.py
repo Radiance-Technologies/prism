@@ -15,7 +15,10 @@ from prism.util.path import get_relative_path
 _coq_file_regex = re.compile(r"(.*\.v)o{0,1}")
 
 
-def is_valid_topological_sort(G: nx.DiGraph, dep_list: List[Hashable]) -> bool:
+def is_valid_topological_sort(
+        G: nx.DiGraph,
+        dep_list: List[Hashable],
+        reverse: bool = False) -> bool:
     """
     Determine whether the given topological sort of a graph is valid.
 
@@ -25,6 +28,11 @@ def is_valid_topological_sort(G: nx.DiGraph, dep_list: List[Hashable]) -> bool:
         A directed acyclic graph.
     dep_list : List[Hashable]
         A particular ordering of the nodes in `G`.
+    reverse : bool, optional
+        Whether to consider reversed topological sort order or not, by
+        default False.
+        If True, then a node must appear after its neighbors.
+        Otherwise, a node must appear before its neighbors.
 
     Returns
     -------
@@ -40,7 +48,8 @@ def is_valid_topological_sort(G: nx.DiGraph, dep_list: List[Hashable]) -> bool:
     node_indices = {v: i for (i,
                               v) in enumerate(dep_list)}
     for u, v in G.edges():
-        if node_indices[v] < node_indices[u]:
+        if (reverse and node_indices[v] > node_indices[u]) or (
+                not reverse and node_indices[v] < node_indices[u]):
             return False
     return True
 
@@ -93,7 +102,7 @@ def make_dependency_graph(
         file = str(get_relative_path(file, cwd))
         if file.endswith(".vo"):
             file = file[:-1]
-        deps = get_dependencies(file, switch, IQR, cwd, boot)
+        deps = get_dependencies(file, IQR, switch, cwd, boot)
         dep_graph_dict[file] = [
             _coq_file_regex.match(x).groups()[0] for x in deps
         ]
