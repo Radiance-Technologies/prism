@@ -107,6 +107,7 @@ class TestExtractCache(unittest.TestCase):
             dummy_float_data = ProjectCommitData(
                 coq_float.metadata,
                 {},
+                {},
                 ProjectBuildEnvironment(OpamAPI.active_switch.export()),
                 ProjectBuildResult(0,
                                    "",
