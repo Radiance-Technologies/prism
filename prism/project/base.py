@@ -523,9 +523,9 @@ class Project(ABC):
                     "Please try rebuilding the project.")
             filtered = order_dependencies(
                 filtered,
-                self.opam_switch,
                 iqr.replace(",",
                             " "),
+                self.opam_switch,
                 cwd=self.path)
         else:
             filtered = sorted(filtered)
