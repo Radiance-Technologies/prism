@@ -274,7 +274,7 @@ class ProjectCommitData(Serializable):
     """
     file_dependencies: Optional[Dict[str, List[str]]] = None
     """
-    An adjacency list containing the interproject dependencies of each
+    An adjacency list containing the intraproject dependencies of each
     file listed in `command_data`.
     If file ``B`` depends on file ``A``, then ``A`` will appear in
     ``file_dependencies[B]``.
