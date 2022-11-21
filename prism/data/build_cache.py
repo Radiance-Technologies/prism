@@ -333,6 +333,18 @@ class CoqProjectBuildCacheProtocol(Protocol):
     """
     The extension for the cache files that defines their format.
     """
+    _default_coq_versions = {
+        '8_9_1',
+        '8_10_2',
+        '8_11_2',
+        '8_12_2',
+        '8_13_2',
+        '8_14_1',
+        '8_15_2'
+    }
+    """
+    Default coq versions to look for when getting cache status.
+    """
 
     def __contains__(  # noqa: D105
             self,
@@ -602,7 +614,8 @@ class CoqProjectBuildCacheProtocol(Protocol):
             projects: Optional[Iterable[str]] = None,
             commits: Optional[Dict[str,
                                    List[str]]] = None,
-            coq_version: Optional[str] = None) -> List[CoqVersionStatus]:
+            coq_versions: Optional[Iterable[str]] = None
+    ) -> List[CoqVersionStatus]:
         """
         Generate a list of objects detailing cache status.
 
@@ -614,8 +627,8 @@ class CoqProjectBuildCacheProtocol(Protocol):
         commit : Optional[Dict[str, List[str]]], optional
             If given, return status for these commit hashes only, by
             default None
-        coq_version : Optional[str], optional
-            If given, return status for this coq version only, by
+        coq_versions : Optional[Iterable[str]], optional
+            If given, return status for these coq versions only, by
             default None
 
         Returns
@@ -627,7 +640,65 @@ class CoqProjectBuildCacheProtocol(Protocol):
             projects = self.list_projects()
         if commits is None:
             commits = self.list_projects(projects)
-        ...
+        if coq_versions is None:
+            coq_versions = self._default_coq_versions
+        status_list = []
+        for project in projects:
+            for commit in commits[project]:
+                folder: Path = (self.root / project) / commit
+                for coq_version in coq_versions:
+                    if (folder / (coq_version + "_cache_error.txt")).exists():
+                        status_msg = "cache error"
+                    elif (folder / (coq_version + "_build_error.txt")).exists():
+                        status_msg = "build error"
+                    elif (folder / (coq_version + "_misc_error.txt")).exists():
+                        status_msg = "other error"
+                    elif (folder / (coq_version + "." + self.fmt_ext)).exists():
+                        status_msg = "success"
+                    else:
+                        status_msg = None
+                    if status_msg is not None:
+                        status_list.append(
+                            CoqVersionStatus(
+                                project,
+                                commit,
+                                coq_version,
+                                status_msg))
+        return status_list
+
+    def list_status_failed_only(self,
+                                *args,
+                                **kwargs) -> List[CoqVersionStatus]:
+        """
+        Generate a list of objects detailing cache status, errors only.
+
+        Returns
+        -------
+        List[CoqVersionStatus]
+            List of objects detailing cache status
+        """
+        return list(
+            filter(
+                lambda x: x.status != "success",
+                self.list_status(*args,
+                                 **kwargs)))
+
+    def list_status_success_only(self,
+                                 *args,
+                                 **kwargs) -> List[CoqVersionStatus]:
+        """
+        Generate a list of objects detailing cache status, success only.
+
+        Returns
+        -------
+        List[CoqVersionStatus]
+            List of objects detailing cache status
+        """
+        return list(
+            filter(
+                lambda x: x.status == "success",
+                self.list_status(*args,
+                                 **kwargs)))
 
     def write(self,
               data: ProjectCommitData,
