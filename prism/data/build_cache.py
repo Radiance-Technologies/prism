@@ -272,14 +272,14 @@ class ProjectCommitData(Serializable):
     files, i.e., if file ``B`` depends on file ``A``, then ``A`` will
     appear in the iteration before ``B``.
     """
-    file_dependencies: Dict[str, List[str]]
+    file_dependencies: Optional[Dict[str, List[str]]] = None
     """
     An adjacency list containing the interproject dependencies of each
     file listed in `command_data`.
     If file ``B`` depends on file ``A``, then ``A`` will appear in
     ``file_dependencies[B]``.
     """
-    environment: ProjectBuildEnvironment
+    environment: Optional[ProjectBuildEnvironment] = None
     """
     The environment in which the commit was processed.
     """
