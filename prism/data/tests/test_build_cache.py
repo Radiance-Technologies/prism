@@ -4,12 +4,14 @@ Test suite for `prism.data.build_cache`.
 import shutil
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import List
 
 from prism.data.build_cache import (
     CoqProjectBuildCacheClient,
     CoqProjectBuildCacheProtocol,
     CoqProjectBuildCacheServer,
+    CoqVersionStatus,
     ProjectBuildEnvironment,
     ProjectBuildResult,
     ProjectCommitData,
@@ -114,6 +116,95 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                         data.project_metadata.commit_sha,
                         data.project_metadata.coq_version)
                     self.assertEqual(retrieved, data)
+
+    def test_list_status(self):
+        """
+        Test methods in cache class to get information from cache.
+        """
+        with TemporaryDirectory() as temp_dir:
+            with CoqProjectBuildCacheServer() as cache_server:
+                cache: CoqProjectBuildCacheProtocol = CoqProjectBuildCacheClient(
+                    cache_server,
+                    temp_dir)
+                environment = ProjectBuildEnvironment(
+                    OpamAPI.active_switch.export())
+                metadata = self.dataset.projects["float"].metadata
+                float_commit_sha = metadata.commit_sha
+                item1 = ProjectCommitData(
+                    metadata,
+                    {},
+                    environment,
+                    ProjectBuildResult(0,
+                                       "",
+                                       ""))
+                cache.write(item1, block=True)
+                metadata = self.dataset.projects["lambda"].metadata
+                lambda_commit_sha = metadata.commit_sha
+                cache.write_error_log(metadata, True, "Lambda cache error")
+                metadata = self.dataset.projects["float"].metadata
+                metadata.commit_sha = 40 * "a"
+                cache.write_misc_log(metadata, True, "float misc error")
+                metadata = self.dataset.projects["float"].metadata
+                metadata.commit_sha = 40 * "b"
+                item2 = ProjectCommitData(
+                    metadata,
+                    {},
+                    environment,
+                    ProjectBuildResult(1,
+                                       "build error",
+                                       "build_error"))
+                cache.write(item2, block=True)
+                expected_project_list = ["float", "lambda"]
+                expected_commit_lists = {
+                    "float": [40 * "a",
+                              float_commit_sha,
+                              40 * "b"],
+                    "lambda": [lambda_commit_sha]
+                }
+                expected_status_list = [
+                    CoqVersionStatus(
+                        "float",
+                        float_commit_sha,
+                        "8_10_2",
+                        "success"),
+                    CoqVersionStatus(
+                        "float",
+                        40 * "a",
+                        "8_10_2",
+                        "other error"),
+                    CoqVersionStatus(
+                        "float",
+                        40 * "b",
+                        "8_10_2",
+                        "build error"),
+                    CoqVersionStatus(
+                        "lambda",
+                        lambda_commit_sha,
+                        "8_10_2",
+                        "cache error")
+                ]
+                expected_status_list_success = list(
+                    filter(
+                        lambda x: x.status == "success",
+                        expected_status_list))
+                expected_status_list_failed = list(
+                    filter(
+                        lambda x: x.status != "success",
+                        expected_status_list))
+                project_list = cache.list_projects()
+                commit_lists = cache.list_commits()
+                status_list = cache.list_status()
+                status_list_success = cache.list_status_success_only()
+                status_list_failed = cache.list_status_failed_only()
+                self.assertCountEqual(project_list, expected_project_list)
+                self.assertCountEqual(commit_lists, expected_commit_lists)
+                self.assertCountEqual(status_list, expected_status_list)
+                self.assertCountEqual(
+                    status_list_success,
+                    expected_status_list_success)
+                self.assertCountEqual(
+                    status_list_failed,
+                    expected_status_list_failed)
 
     @classmethod
     def setUpClass(cls) -> None:

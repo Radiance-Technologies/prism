@@ -571,10 +571,9 @@ class CoqProjectBuildCacheProtocol(Protocol):
             A list of project names currently present in the cache
         """
         projects: List[str] = []
-        for item in glob.glob(self.root):
-            abs_path_item: Path = self.root / item
-            if abs_path_item.is_dir():
-                projects.append(item)
+        for item in glob.glob(f"{str(self.root)}/*"):
+            if Path(item).is_dir():
+                projects.append(Path(item).stem)
         return projects
 
     def list_commits(
@@ -602,10 +601,9 @@ class CoqProjectBuildCacheProtocol(Protocol):
         output_dict = dict()
         for project in projects:
             commit_list: List[str] = []
-            for item in glob.glob(self.root / project):
-                abs_path_item: Path = (self.root / project) / item
-                if abs_path_item.is_dir():
-                    commit_list.append(item)
+            for item in glob.glob(f"{self.root / project}/*"):
+                if Path(item).is_dir():
+                    commit_list.append(Path(item).stem)
             output_dict[project] = commit_list
         return output_dict
 
@@ -639,7 +637,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
         if projects is None:
             projects = self.list_projects()
         if commits is None:
-            commits = self.list_projects(projects)
+            commits = self.list_commits(projects)
         if coq_versions is None:
             coq_versions = self._default_coq_versions
         status_list = []
