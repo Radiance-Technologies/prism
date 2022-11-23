@@ -132,6 +132,7 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                 item1 = ProjectCommitData(
                     metadata,
                     {},
+                    None,
                     environment,
                     ProjectBuildResult(0,
                                        "",
@@ -148,6 +149,7 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                 item2 = ProjectCommitData(
                     metadata,
                     {},
+                    None,
                     environment,
                     ProjectBuildResult(1,
                                        "build error",
