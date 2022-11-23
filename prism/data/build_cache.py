@@ -17,6 +17,7 @@ from typing import (
     List,
     Optional,
     Protocol,
+    Set,
     Tuple,
     Union,
     runtime_checkable,
@@ -29,6 +30,7 @@ from prism.language.gallina.analyze import SexpInfo
 from prism.language.sexp.node import SexpNode
 from prism.project.metadata import ProjectMetadata
 from prism.util.opam.switch import OpamSwitch
+from prism.util.opam.version import Version, VersionString
 from prism.util.radpytools.dataclasses import default_field
 from prism.util.serialize import Serializable
 
@@ -294,15 +296,32 @@ class ProjectCommitData(Serializable):
 
 
 @dataclass
-class CoqVersionStatus:
+class CacheObjectStatus:
     """
     Dataclass storing status information for (project, commit, version).
     """
 
     project: str
+    """
+    Project that partially identifies this cache object
+    """
     commit_hash: str
+    """
+    Commit hash that partially identifies this cache object
+    """
     coq_version: str
+    """
+    Coq version that partially identifies this cache object
+    """
     status: str
+    """
+    Status of the (project, commit_hash, coq_version) cache object. This
+    string can take one of the following values:
+        * success
+        * build error
+        * cache error
+        * other error
+    """
 
 
 @runtime_checkable
@@ -333,7 +352,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
     """
     The extension for the cache files that defines their format.
     """
-    _default_coq_versions = {
+    _default_coq_versions: Set[str] = {
         '8_9_1',
         '8_10_2',
         '8_11_2',
@@ -608,12 +627,13 @@ class CoqProjectBuildCacheProtocol(Protocol):
         return output_dict
 
     def list_status(
-            self,
-            projects: Optional[Iterable[str]] = None,
-            commits: Optional[Dict[str,
-                                   List[str]]] = None,
-            coq_versions: Optional[Iterable[str]] = None
-    ) -> List[CoqVersionStatus]:
+        self,
+        projects: Optional[Iterable[str]] = None,
+        commits: Optional[Dict[str,
+                               List[str]]] = None,
+        coq_versions: Optional[Iterable[Union[Version,
+                                              VersionString]]] = None
+    ) -> List[CacheObjectStatus]:
         """
         Generate a list of objects detailing cache status.
 
@@ -625,7 +645,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
         commit : Optional[Dict[str, List[str]]], optional
             If given, return status for these commit hashes only, by
             default None
-        coq_versions : Optional[Iterable[str]], optional
+        coq_versions : Optional[Iterable[Version]], optional
             If given, return status for these coq versions only, by
             default None
 
@@ -640,6 +660,9 @@ class CoqProjectBuildCacheProtocol(Protocol):
             commits = self.list_commits(projects)
         if coq_versions is None:
             coq_versions = self._default_coq_versions
+        else:
+            coq_versions = [str(v).replace(".", "_") for v in coq_versions]
+        coq_versions: Iterable[str]
         status_list = []
         for project in projects:
             for commit in commits[project]:
@@ -657,7 +680,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
                         status_msg = None
                     if status_msg is not None:
                         status_list.append(
-                            CoqVersionStatus(
+                            CacheObjectStatus(
                                 project,
                                 commit,
                                 coq_version,
@@ -666,7 +689,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
 
     def list_status_failed_only(self,
                                 *args,
-                                **kwargs) -> List[CoqVersionStatus]:
+                                **kwargs) -> List[CacheObjectStatus]:
         """
         Generate a list of objects detailing cache status, errors only.
 
@@ -683,7 +706,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
 
     def list_status_success_only(self,
                                  *args,
-                                 **kwargs) -> List[CoqVersionStatus]:
+                                 **kwargs) -> List[CacheObjectStatus]:
         """
         Generate a list of objects detailing cache status, success only.
 
@@ -818,15 +841,6 @@ class CoqProjectBuildCacheProtocol(Protocol):
             nothing
         """
         return self._write_kernel(metadata, block, timing_log, "_timing.txt")
-
-    def insert(self, *args, **kwargs):  # noqa: D102
-        return self.write(*args, **kwargs)
-
-    def apply(self, *args, **kwargs):  # noqa: D102
-        return self.write(*args, **kwargs)
-
-    def update(self, *args, **kwargs):  # noqa: D102
-        return self.write(*args, **kwargs)
 
 
 class CoqProjectBuildCache(CoqProjectBuildCacheProtocol):

@@ -8,10 +8,10 @@ from tempfile import TemporaryDirectory
 from typing import List
 
 from prism.data.build_cache import (
+    CacheObjectStatus,
     CoqProjectBuildCacheClient,
     CoqProjectBuildCacheProtocol,
     CoqProjectBuildCacheServer,
-    CoqVersionStatus,
     ProjectBuildEnvironment,
     ProjectBuildResult,
     ProjectCommitData,
@@ -101,15 +101,13 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                     self.assertEqual(
                         expected_path,
                         cache_client.get_path_from_data(data))
-                with self.subTest(f"update_{project.name}_fail"):
+                with self.subTest(f"get_{project.name}_fail"):
                     self.assertFalse(
                         Path(cache_client.get_path_from_data(data)).exists())
-                with self.subTest(f"insert_{project.name}"):
-                    cache_client.insert(data, block=True)
+                with self.subTest(f"write_{project.name}"):
+                    cache_client.write(data, block=True)
                     self.assertTrue(
                         Path(cache_client.get_path_from_data(data)).exists())
-                with self.subTest(f"update_{project.name}"):
-                    cache_client.update(data, block=True)
                 with self.subTest(f"get_{project.name}"):
                     retrieved = cache_client.get(
                         project.name,
@@ -162,22 +160,22 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                     "lambda": [lambda_commit_sha]
                 }
                 expected_status_list = [
-                    CoqVersionStatus(
+                    CacheObjectStatus(
                         "float",
                         float_commit_sha,
                         "8_10_2",
                         "success"),
-                    CoqVersionStatus(
+                    CacheObjectStatus(
                         "float",
                         40 * "a",
                         "8_10_2",
                         "other error"),
-                    CoqVersionStatus(
+                    CacheObjectStatus(
                         "float",
                         40 * "b",
                         "8_10_2",
                         "build error"),
-                    CoqVersionStatus(
+                    CacheObjectStatus(
                         "lambda",
                         lambda_commit_sha,
                         "8_10_2",

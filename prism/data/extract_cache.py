@@ -881,7 +881,7 @@ def extract_cache_new(
                 command_data,
                 ProjectBuildEnvironment(project.opam_switch.export()),
                 ProjectBuildResult(*build_result))
-            build_cache_client.insert(data, block)
+            build_cache_client.write(data, block)
             # release the switch
             switch_manager.release_switch(project.opam_switch)
             project.opam_switch = original_switch
@@ -1166,6 +1166,11 @@ class CacheExtractor:
             manager = None
         else:
             manager = mp.Manager()
+        # The following CoqProjectBuildCacheServer is created whether or
+        # not force_serial is True, even though the server is not used
+        # if force_serial is True. The overhead of starting a server is
+        # not so great that it would be worth complicating the control
+        # flow to avoid it in the force_serial=True case.
         with CoqProjectBuildCacheServer() as cache_server:
             if force_serial:
                 self.cache_client = CoqProjectBuildCache(

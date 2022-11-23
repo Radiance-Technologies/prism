@@ -101,7 +101,7 @@ class TestExtractCache(unittest.TestCase):
                 ProjectBuildResult(0,
                                    "",
                                    ""))
-            cache_client.insert(dummy_float_data)
+            cache_client.write(dummy_float_data)
             coq_float.git.checkout(coq_float.reset_head)
             self.assertEqual(coq_float.commit_sha, coq_float.reset_head)
             # assert that lambda is not already cached
