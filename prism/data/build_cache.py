@@ -867,8 +867,6 @@ class CoqProjectBuildCacheServer(BaseManager):
     A BaseManager-derived server for managing build cache.
     """
 
-    ...
-
 
 CoqProjectBuildCacheServer.register(
     "CoqProjectBuildCache",
