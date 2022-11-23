@@ -87,6 +87,7 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                 data = ProjectCommitData(
                     project.metadata,
                     command_data,
+                    project.get_file_dependencies(),
                     environment,
                     uneventful_result)
                 expected_path = (
