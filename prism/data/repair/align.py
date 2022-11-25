@@ -4,12 +4,12 @@ Tools for aligning the same proofs across commits.
 
 import enum
 import math
-from typing import Callable, List, Optional, TypeVar
+from typing import Callable, List, Optional, Tuple, TypeVar
 
 from numpy import cumsum
 
 from prism.data.build_cache import ProjectCommitData, VernacSentence
-from prism.util.alignment import fast_edit_distance, lazy_align
+from prism.util.alignment import Alignment, fast_edit_distance, lazy_align
 
 T = TypeVar('T')
 
@@ -119,26 +119,36 @@ def normalized_edit_distance(a: str, b: str, norm: Norm) -> float:
         len)
 
 
-def file_alignment(a: List[VernacSentence], b: List[VernacSentence]):
+def order_preserving_alignment(
+        a: List[VernacSentence],
+        b: List[VernacSentence],
+        alpha: float = 0.1) -> Alignment:
     """
-    Align two lists of VernacSentences.
+    Align two lists of `VernacSentence`s.
 
-    Returns a list of tuples of optional integers.
+    The order of each sequence is preserved after alignment, i.e., the
+    resulting aligned indices are monotonically increasing.
 
-    (1,1) matches the first element of `a`
-    to the first element of `b`.
+    Parameters
+    ----------
+    a, b : List[VernacSentence]
+        Sequences of `VernacSentence` to be aligned.
+        Only the plaintext of the sentences are used in the alignment.
+    alpha : float, optional
+        An optional hyperparameter, by default 0.1, that controls the
+        trade-off between skipping an element versus mismatching.
+        A value of 1.0 always mismatches and a value of 0.0 always
+        skips.
 
-    (1,None) matches the first element of `a`
-    to no element of `b`, skipping it.
-
-    All elements of `a` and `b` are considered once,
-    in order.
-
-    Uses only the plaintext of the VernacSentences
-    to do the alignment.
-
-    WARNING: This function contains a hyperparameter,
-    described below.
+    Returns
+    -------
+    Alignment
+        A list of tuples of `Optional` integers representing aligned
+        one-indexed indices.
+        For example, ``(1,1)`` matches the first element of `a` to the
+        first element of `b`.
+        Alternatively, ``(1,None)`` matches the first element of `a` to
+        no element of `b`, skipping it.
     """
     return lazy_align(
         range(len(a)),
@@ -146,32 +156,48 @@ def file_alignment(a: List[VernacSentence], b: List[VernacSentence]):
         lambda x,
         y: normalized_edit_distance(a[x].text,
                                     b[y].text),
-        lambda x: 0.1)
-    # the last, fixed value is a hyperparameter tradeoff
-    # between skipping and mis-matching: a value of 1.0
-    # always mismatches and a value of 0.0 always skips.
+        lambda _: alpha)
 
 
-def align_commits(a: ProjectCommitData, b: ProjectCommitData):
+def align_commits_per_file(a: ProjectCommitData,
+                           b: ProjectCommitData) -> List[Tuple[int,
+                                                               int]]:
     """
-    Align two ProjectCommits.
+    Align two `ProjectCommit` based on matching files.
 
-    Returns a list of tuples of optional integers.
+    Aligns sentences in files pairwise based on file names.
+    Files that have been renamed or removed between the two commits are
+    not included.
+    Consequently, the quality of the alignment will suffer in such
+    scenarios.
 
-    (1,1) matches the first element of
-    the first file of `a` to the first
-    element of the first file of `b`.
+    Parameters
+    ----------
+    a, b : ProjectCommitData
+        Command data extracted from two commits of a project.
 
-    This function does not produces skipped
-    alignment pairs-- they will simply not
-    show up in the output.
+    Returns
+    -------
+    List[Tuple[int, int]]
+        A list of pairs of integers indicating the indices of aligned
+        sentences between each commit with sentences enumerated over all
+        matching files in `a` and `b` in the order dictated by `a`.
+        For example, ``(1,1)`` matches the first element of the first
+        file of `a` to the first element of the matching file of `b`.
+        This function does not produce skipped alignment pairs--they
+        will simply not show up in the output.
 
-    All VernacSentences of `a` and `b` are
-    considered once, but not necessarily in
-    order, since `a` and `b` do not
-    necessarily list matching files in
-    the same order!
+    Raises
+    ------
+    ValueError
+        If `a` and `b` belong to different projects.
     """
+    if a.project_metadata.project_name != b.project_metadata.project_name:
+        raise ValueError(
+            "Cannot align files from different projects: "
+            f"{a.project_metadata.project_name} and {b.project_metadata.project_name}"
+        )
+
     # only attempt to align files present in both roots.
     alignable_files = a.command_data.keys() & b.command_data.keys()
     aligned_files = {}
@@ -183,14 +209,16 @@ def align_commits(a: ProjectCommitData, b: ProjectCommitData):
     b_indexes = [0] + list(
         cumsum([len(x) for x in b.command_data.values()])[:-1])
 
-    for f in alignable_files:
+    for f in a.files:
+        if a not in alignable_files:
+            continue
         a_sentences = [x.command for x in a.command_data[f]]
         b_sentences = [x.command for x in b.command_data[f]]
         aligned_files[f] = list(
             filter(
                 lambda x: x[0] is not None and x[1] is not None,
-                file_alignment(a_sentences,
-                               b_sentences)))
+                order_preserving_alignment(a_sentences,
+                                           b_sentences)))
         # seek to the right part of the alignment
         left_acc = a_indexes[list(a.command_data.keys()).index(f)]
         right_acc = b_indexes[list(b.command_data.keys()).index(f)]
