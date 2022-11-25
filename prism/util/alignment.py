@@ -17,6 +17,7 @@ RightMatch = Tuple[Optional[T], T]
 A pair of aligned items that is guaranteed to have a non-null right
 item.
 """
+Alignment = List[Union[LeftMatch, RightMatch]]
 
 
 def lazy_align(
@@ -27,8 +28,9 @@ def lazy_align(
                          float],
         cskip: Callable[[T],
                         float],
-        return_cost: bool = False) -> List[Union[LeftMatch,
-                                                 RightMatch]]:
+        return_cost: bool = False) -> Union[Tuple[float,
+                                                  Alignment],
+                                            Alignment]:
     """
     Align two sequences according to provided cost functions.
 
@@ -156,7 +158,19 @@ def lazy_align(
         return alignment[::-1]
 
 
-def align_factory(calign, cskip, numba=True):
+def align_factory(
+    calign: Callable[[T,
+                      T],
+                     float],
+    cskip: Callable[[T],
+                    float],
+    numba: bool = True
+) -> Callable[[Sequence[T],
+               Sequence[T],
+               bool],
+              Union[Tuple[float,
+                          Alignment],
+                    Alignment]]:
     """
     Assemble an accelerated alignment function using the cost functions.
 
@@ -239,43 +253,58 @@ def align_factory(calign, cskip, numba=True):
     return align
 
 
-fast_edit_distance_raw = align_factory(
+_fast_edit_distance_raw = align_factory(
     lambda a,
     b: 1.0 if a != b else 0.0,
     lambda x: 1.0)
 
 
-def fast_edit_distance(a, b, return_cost=False):
+def fast_edit_distance(
+        a: str,
+        b: str,
+        return_alignment: bool = False) -> Union[Tuple[float,
+                                                       Alignment],
+                                                 float]:
     """
-    Convert types for fast_edit_distance_raw.
+    Compute the edit (Levenshtein) distance between two strings.
 
-    Converts strings to lists of ints, which should align faster.
+    This function mainly serves as an example application of
+    `align_factory`.
+
+    Parameters
+    ----------
+    a, b : str
+        Arbitrary strings.
+    return_alignment : bool, optional
+        Whether to return the explicit alignment of characters used to
+        compute the distance, by default False.
+
+    Returns
+    -------
+    float
+        The Levenshtein distance between `a` and `b`.
+    alignment : Alignment, optional
+        The alignment of characters between the given strings.
     """
+    # Converts strings to lists of ints, which should align faster.
     was_string = False
     if (type(a) == type(b) and type(b) == str):
-        a = np.array([ord(c) for c in a])
-        b = np.array([ord(c) for c in b])
+        a = np.asarray([ord(c) for c in a])
+        b = np.asarray([ord(c) for c in b])
         was_string = True
 
-    al = fast_edit_distance_raw(a, b, return_cost=return_cost)
+    cost, al = _fast_edit_distance_raw(a, b, return_cost=True)
 
     if (not was_string):
         return al
 
-    # need to convert back to string, currently alignment is of ints.
-
-    al2 = []
-
-    if (return_cost):
-        cost, al = al
-
-    for (x, y) in al:
-        al2.append(
+    if return_alignment:
+        alignment = [
             (
                 chr(x) if x is not None else None,
-                chr(y) if y is not None else None))
-
-    if (return_cost):
-        return cost, al2
+                chr(y) if y is not None else None) for x,
+            y in al
+        ]
+        return cost, alignment
     else:
-        return al2
+        return cost
