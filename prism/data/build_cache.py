@@ -23,6 +23,7 @@ from typing import (
     runtime_checkable,
 )
 
+import networkx as nx
 import setuptools_scm
 import seutil as su
 
@@ -300,6 +301,25 @@ class ProjectCommitData(Serializable):
     The result of building the project commit in the `opam_switch` or
     None if building was not required to process the commit.
     """
+
+    @property
+    def files(self) -> List[str]:
+        """
+        Return the list of Coq files in the project.
+
+        If `file_dependencies` is set, then the files will be listed in
+        dependency order. Otherwise, they will match the order of
+        iteration of `command_data`.
+        """
+        if self.file_dependencies is not None:
+            G = nx.DiGraph()
+            for f, deps in self.file_dependencies:
+                for dep in deps:
+                    G.add_edge(f, dep)
+            files = list(reversed(nx.topological_sort(G)))
+        else:
+            files = [k for k in self.command_data.keys()]
+        return files
 
 
 @dataclass
