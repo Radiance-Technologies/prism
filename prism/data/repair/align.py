@@ -102,7 +102,7 @@ class Norm(enum.Enum):
         return distance
 
 
-def normalized_edit_distance(a: str, b: str, norm: Norm) -> float:
+def normalized_edit_distance(a: str, b: str, norm: Norm = Norm.MAX) -> float:
     """
     Find the cost of aligning two strings.
 
@@ -204,7 +204,7 @@ def align_commits_per_file(a: ProjectCommitData,
         cumsum([len(x) for x in b.command_data.values()])[:-1])
 
     for f in a.files:
-        if a not in alignable_files:
+        if f not in alignable_files:
             continue
         a_sentences = [x.command for x in a.command_data[f]]
         b_sentences = [x.command for x in b.command_data[f]]

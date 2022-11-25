@@ -7,12 +7,13 @@ from pathlib import Path
 
 from prism.data.build_cache import ProjectCommitData, VernacSentence
 from prism.data.extract_cache import VernacCommandData
-from prism.data.repair import align_commits
+from prism.data.repair import align_commits_per_file
 from prism.language.heuristic.parser import HeuristicParser
+from prism.project.metadata import ProjectMetadata
 from prism.tests import _COQ_EXAMPLES_PATH
 
 
-class TestRepair(unittest.TestCase):
+class TestAlign(unittest.TestCase):
     """
     Tests for repair tools.
     """
@@ -24,6 +25,7 @@ class TestRepair(unittest.TestCase):
         """
         Set up some real data to try to align.
         """
+        cls.test_metadata = ProjectMetadata("test_align", [], [], [])
         files = ["verdi_core_net_a.v", "verdi_core_net_b.v", "Alphabet.v"]
 
         for f in files:
@@ -47,22 +49,22 @@ class TestRepair(unittest.TestCase):
             ]
             cls.caches[f] = definitions
 
-    def test_align(self):
+    def test_align_commits_per_file(self):
         """
-        Check that align_commits produces sane alignments on real data.
+        Check that sane alignments are produced on real data.
         """
         a = ProjectCommitData(
-            None,
-            {"core_net": TestRepair.caches["verdi_core_net_a.v"]},
+            self.test_metadata,
+            {"core_net": TestAlign.caches["verdi_core_net_a.v"]},
             None,
             None)
         b = ProjectCommitData(
-            None,
-            {"core_net": TestRepair.caches["verdi_core_net_b.v"]},
+            self.test_metadata,
+            {"core_net": TestAlign.caches["verdi_core_net_b.v"]},
             None,
             None)
 
-        alignment = align_commits(a, b)
+        alignment = align_commits_per_file(a, b)
 
         # alignments are heuristic.
         # there's only a couple formal metrics we can test.
@@ -85,25 +87,25 @@ class TestRepair(unittest.TestCase):
                 if (x.command.text == y.command.text):
                     self.assertTrue((i, j) in alignment)
 
-    def test_align_multifile(self):
+    def test_align_commits_per_file_multifile(self):
         """
-        Check that align_commits offsets file indexes correctly.
+        Check that file indices are offset correctly.
         """
         a = ProjectCommitData(
-            None,
+            self.test_metadata,
             {
-                "Alphabet'.v": TestRepair.caches["Alphabet.v"],
-                "core_net": TestRepair.caches["verdi_core_net_a.v"],
-                "Alphabet.v": TestRepair.caches["Alphabet.v"]
+                "Alphabet'.v": TestAlign.caches["Alphabet.v"],
+                "core_net": TestAlign.caches["verdi_core_net_a.v"],
+                "Alphabet.v": TestAlign.caches["Alphabet.v"]
             },
             None,
             None)
         b = ProjectCommitData(
-            None,
-            {"core_net": TestRepair.caches["verdi_core_net_b.v"]},
+            self.test_metadata,
+            {"core_net": TestAlign.caches["verdi_core_net_b.v"]},
             None,
             None)
-        alignment = align_commits(a, b)
+        alignment = align_commits_per_file(a, b)
 
         alines = list(
             chain.from_iterable(

@@ -52,9 +52,10 @@ class TestAlignment(unittest.TestCase):
             self.assertEqual(
                 (cost_measured,
                  alignment),
-                fast_edit_distance("".join(a),
-                                   "".join(b),
-                                   return_cost=True))
+                fast_edit_distance(
+                    "".join(a),
+                    "".join(b),
+                    return_alignment=True))
 
             # assert that the found alignment
             # is no worse than the mutations we caused.
