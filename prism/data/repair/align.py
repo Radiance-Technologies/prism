@@ -2,15 +2,106 @@
 Tools for aligning the same proofs across commits.
 """
 
-from typing import List
+import enum
+import math
+from typing import Callable, List, Optional, TypeVar
 
 from numpy import cumsum
 
 from prism.data.build_cache import ProjectCommitData, VernacSentence
 from prism.util.alignment import fast_edit_distance, lazy_align
 
+T = TypeVar('T')
 
-def normalized_string_alignment(a: str, b: str):
+
+class Norm(enum.Enum):
+    """
+    A normalization that can be applied to a distance function.
+    """
+
+    MAX = enum.auto()
+    """
+    Normalize by dividing by the maximum norm of both inputs.
+    """
+    PRODUCT = enum.auto()
+    """
+    Normalize by dividing by the square root of both inputs' norms.
+    """
+    TANIMOTO = enum.auto()
+    """
+    Apply the biotope transform to obtain the Tanimoto distance.
+    """
+
+    def apply(
+            self,
+            D: Callable[[T,
+                         T],
+                        float],
+            a: T,
+            b: T,
+            norm: Optional[Callable[[T],
+                                    float]] = None,
+            zero: Optional[T] = None) -> float:
+        """
+        Apply the normalization to a given distance function.
+
+        The distance function is presumed to be non-negative and
+        symmetric.
+
+        Parameters
+        ----------
+        D : Callable[[T, T], float]
+            A distance function.
+        a : T
+            The first argument to the distance function.
+        b : T
+            The second argument to the distance function.
+        norm : Callable[[T], float] | None, optional
+            A function that computes the norm of an input to `D`.
+            For the result to be a guaranteed normalization, the
+            function should satisfy ``norm(c) == D(c, zero)`` for any
+            choice of ``c``.
+        zero : T | None, optiona
+            The identity element of type `T` satisfying
+            ``norm(zero) == 0``.
+            This argument must be provided if `norm` is not.
+
+        Returns
+        -------
+        float
+            The normalized distance between the given inputs.
+
+        Raises
+        ------
+        ValueError
+            If `norm` and `zero` are not given.
+        """
+        if norm is None:
+            if zero is None:
+                raise ValueError("Either 'norm' or 'zero' must be provided.")
+            else:
+
+                def norm(c: T) -> float:
+                    return D(c, zero)
+
+        distance = D(a, b)
+        norm_a = norm(a)
+        norm_b = norm(b)
+        if norm_a == 0 and norm_b == 0:
+            # both inputs are by definition equal to `zero`
+            distance = 0
+        elif self == Norm.MAX:
+            distance = distance / max(norm_a, norm_b)
+        elif self == Norm.PRODUCT:
+            distance = norm_a + norm_b - distance
+            distance = distance / (2 * math.sqrt(norm_a * norm_b))
+            distance = 1 - distance / 2
+        elif self == Norm.TANIMOTO:
+            distance = 2 * distance / (norm_a + norm_b + distance)
+        return distance
+
+
+def normalized_edit_distance(a: str, b: str, norm: Norm) -> float:
     """
     Find the cost of aligning two strings.
 
@@ -18,8 +109,14 @@ def normalized_string_alignment(a: str, b: str):
     is the best possible alignment (a==b) and 1.0 is the worst possible
     alignment.
     """
-    cost, _ = fast_edit_distance(a, b, return_cost=True)
-    return cost / max(len(a), len(b))
+    return norm.apply(
+        lambda a,
+        b: fast_edit_distance(a,
+                              b,
+                              return_cost=True)[0],
+        a,
+        b,
+        len)
 
 
 def file_alignment(a: List[VernacSentence], b: List[VernacSentence]):
@@ -47,8 +144,8 @@ def file_alignment(a: List[VernacSentence], b: List[VernacSentence]):
         range(len(a)),
         range(len(b)),
         lambda x,
-        y: normalized_string_alignment(a[x].text,
-                                       b[y].text),
+        y: normalized_edit_distance(a[x].text,
+                                    b[y].text),
         lambda x: 0.1)
     # the last, fixed value is a hyperparameter tradeoff
     # between skipping and mis-matching: a value of 1.0
