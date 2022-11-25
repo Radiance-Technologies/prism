@@ -6,10 +6,11 @@ import enum
 import math
 from typing import Callable, List, Optional, Tuple, TypeVar
 
+from leven import levenshtein
 from numpy import cumsum
 
 from prism.data.build_cache import ProjectCommitData, VernacSentence
-from prism.util.alignment import Alignment, fast_edit_distance, lazy_align
+from prism.util.alignment import Alignment, lazy_align
 
 T = TypeVar('T')
 
@@ -109,14 +110,7 @@ def normalized_edit_distance(a: str, b: str, norm: Norm) -> float:
     is the best possible alignment (a==b) and 1.0 is the worst possible
     alignment.
     """
-    return norm.apply(
-        lambda a,
-        b: fast_edit_distance(a,
-                              b,
-                              return_cost=True)[0],
-        a,
-        b,
-        len)
+    return norm.apply(levenshtein, a, b, len)
 
 
 def order_preserving_alignment(

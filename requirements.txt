@@ -2,6 +2,7 @@ bidict
 GitPython
 gprof2dot
 graphviz
+leven
 networkx
 numba
 numpy
