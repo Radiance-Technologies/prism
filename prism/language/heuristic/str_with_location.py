@@ -8,8 +8,6 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import ClassVar, Iterable, List, Optional, Tuple, Union
 
-from typing_extensions import LiteralString
-
 from prism.language.gallina.analyze import SexpInfo
 from prism.util.radpytools.dataclasses import default_field
 
@@ -51,7 +49,7 @@ class StrWithLocation(str):
 
     def __new__(
             cls,
-            string: LiteralString = "",
+            string: str = "",
             indices: Optional[List[Tuple[int,
                                          int]]] = None,
             *args,
@@ -61,7 +59,7 @@ class StrWithLocation(str):
 
         Parameters
         ----------
-        string : LiteralString, optional
+        string : str, optional
             The string to be located, by default the empty string
         indices : Optional[List[Tuple[int, int]]], optional
             The indices locating the string within its original
