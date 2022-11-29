@@ -5,8 +5,10 @@ Defines representations of repair instances (or examples).
 from dataclasses import dataclass
 from typing import Optional, Set
 
+from prism.language.gallina.analyze import SexpInfo
 from prism.util.diff import GitDiff
 from prism.util.opam import OpamSwitch
+from prism.util.radpytools.dataclasses import default_field
 
 
 @dataclass
@@ -37,7 +39,7 @@ class ProjectRepoState:
 @dataclass
 class ErrorInstance:
     """
-    An example of an error.
+    A concise example of an error in its most raw and unprocessed form.
     """
 
     project_name: str
@@ -60,7 +62,17 @@ class ErrorInstance:
     If the diff is empty, then `initial_state` is understood to be
     broken.
     """
-    tags: Set[str]
+    error_location: Set[SexpInfo.Loc] = default_field(set())
+    """
+    A precise location for the error(s).
+
+    This field allows one to avoid needing to attempt compilation of the
+    project to identify the error(s).
+    In addition, it allows an `ErrorInstance` to focus on a subset of
+    errors in the event that the `change` induces multiple independent
+    errors.
+    """
+    tags: Set[str] = default_field(set())
     """
     Tag(s) characterizing the nature of the change or error.
 
@@ -70,11 +82,15 @@ class ErrorInstance:
 
 
 @dataclass
-class RepairInstance(ErrorInstance):
+class RepairInstance:
     """
-    An example of a repair.
+    A concise example of a repair in its most raw and unprocessed form.
     """
 
+    error: ErrorInstance
+    """
+    An erroneous project state.
+    """
     repaired_state: ProjectRepoState
     """
     A repaired proof state.
