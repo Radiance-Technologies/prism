@@ -853,13 +853,18 @@ class SerAPI:
                                 term = None
                             else:
                                 term = self.print_constr(str(t))
-                        hypotheses.append(
-                            Hypothesis(
-                                idents=[str(ident[1]) for ident in h[0][::-1]],
-                                term=term,
-                                type=self.print_constr(h_sexp),
-                                sexp=h_sexp,
-                            ))
+                        hypothesis = Hypothesis(
+                            idents=[str(ident[1]) for ident in h[0][::-1]],
+                            term=term,
+                            type=self.print_constr(h_sexp),
+                            kernel_sexp=h_sexp,
+                        )
+                        if term is not None:
+                            term_sexp = self.query_ast(f"Check {term}.")
+                            hypothesis.term_sexp = str(term_sexp)
+                        type_sexp = self.query_ast(f"Check {hypothesis.type}.")
+                        hypothesis.type_sexp = str(type_sexp)
+                        hypotheses.append(hypothesis)
 
                     type_sexp = str(g[1][1])
 
@@ -872,13 +877,15 @@ class SerAPI:
                         # name replaced with info field containing
                         # unprocessed Evar.t
                         evar = int(str(g[0][1][0][1][1]))
-                    goals.append(
-                        Goal(
-                            id=evar,
-                            type=self.print_constr(type_sexp),
-                            sexp=type_sexp,
-                            hypotheses=hypotheses[::-1],
-                        ))
+                    goal = Goal(
+                        id=evar,
+                        type=self.print_constr(type_sexp),
+                        type_sexp=type_sexp,
+                        hypotheses=hypotheses[::-1],
+                    )
+                    sexp = self.query_ast(f"Check {goal.type}.")
+                    goal.sexp = str(sexp)
+                    goals.append(goal)
                 return goals
 
             ser_goals = responses[1][2][1][0][1]

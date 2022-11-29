@@ -35,9 +35,23 @@ class Hypothesis:
     """
     The type of each identifier.
     """
-    sexp: str
+    kernel_sexp: str
     """
     The serialization of the identifier's Coq kernel type.
+    """
+    term_sexp: Optional[str] = None
+    """
+    The AST of the `term` within a Vernacular ``Check`` command.
+
+    This allows one to reliably associate nodes in an sexp with a
+    human-readable text representation of the hypothesis.
+    """
+    type_sexp: Optional[str] = None
+    """
+    The AST of the `type` within a Vernacular ``Check`` command.
+
+    This allows one to reliably associate nodes in an sexp with a
+    human-readable text representation of the hypothesis.
     """
 
     def __hash__(self) -> int:  # noqa: D105
@@ -47,8 +61,8 @@ class Hypothesis:
         """
         Pretty-print the hypothesis similar to its form in CoqIDE.
         """
-        value = f':= {self.term}' if self.term is not None else ""
-        return f"{','.join(self.idents)} {value} : {self.type}"
+        value = f' := {self.term}' if self.term is not None else ""
+        return f"{', '.join(self.idents)}{value} : {self.type}"
 
 
 @dataclass
@@ -72,13 +86,20 @@ class Goal:
 
     In essence, a statement of the goal itself.
     """
-    sexp: str
+    type_sexp: str
     """
     The serialization of the goal's Coq kernel type.
     """
     hypotheses: List[Hypothesis]
     """
     A list of hypotheses pertaining to this goal.
+    """
+    sexp: Optional[str] = None
+    """
+    The AST of the goal statement inside a Vernacular ``Check`` command.
+
+    This allows one to reliably associate nodes in the sexp with a
+    human-readable text representation of the goal.
     """
 
     def __hash__(self) -> int:  # noqa: D105

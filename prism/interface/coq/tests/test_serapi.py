@@ -456,6 +456,37 @@ class TestSerAPI(unittest.TestCase):
                 [],
                 [])
 
+        def drop_hyp_asts(hyp: Hypothesis) -> Hypothesis:
+            """
+            Drop optional AST fields from the hypothesis.
+            """
+            return Hypothesis(hyp.idents, hyp.term, hyp.type, hyp.kernel_sexp)
+
+        def drop_goal_asts(goal: Goal) -> Goal:
+            """
+            Drop optional AST fields recursively.
+            """
+            return Goal(
+                goal.id,
+                goal.type,
+                goal.type_sexp,
+                [drop_hyp_asts(h) for h in goal.hypotheses])
+
+        def drop_asts(goals: Goals) -> Goals:
+            """
+            Drop optional AST fields recursively.
+            """
+            return Goals(
+                [drop_goal_asts(g) for g in goals.foreground_goals],
+                [
+                    (
+                        [drop_goal_asts(g) for g in lgs],
+                        [drop_goal_asts(g) for g in rgs]) for lgs,
+                    rgs in goals.background_goals
+                ],
+                [drop_goal_asts(g) for g in goals.shelved_goals],
+                [drop_goal_asts(g) for g in goals.abandoned_goals])
+
         nested_kernel = (
             '(Prod ((binder_name (Name (Id A))) (binder_relevance Relevant)) '
             '(Sort (Type ((((hash 14398528522911) '
@@ -576,14 +607,21 @@ class TestSerAPI(unittest.TestCase):
             [],
             [],
             [])
+
+        def assertEqualGoals(actual: Goals, expected: Goals) -> None:
+            """
+            Assert equality irrespective of AST fields.
+            """
+            return self.assertEqual(drop_asts(actual), expected)
+
         with SerAPI() as serapi:
             with self.subTest("simple"):
                 serapi.execute("Lemma foobar : unit.")
                 goals = serapi.query_goals()
-                self.assertEqual(goals, expected_unit_goals(1))
+                assertEqualGoals(goals, expected_unit_goals(1))
                 serapi.execute("Require Import Program.")
                 goals = serapi.query_goals()
-                self.assertEqual(goals, expected_unit_goals(1))
+                assertEqualGoals(goals, expected_unit_goals(1))
                 serapi.execute("apply (const tt tt).")
                 goals = serapi.query_goals()
                 self.assertEqual(goals, no_goals)
@@ -594,25 +632,25 @@ class TestSerAPI(unittest.TestCase):
                 serapi.execute("Set Nested Proofs Allowed.")
                 serapi.execute("Lemma foobar' : unit.")
                 goals = serapi.query_goals()
-                self.assertEqual(goals, expected_unit_goals(2))
+                assertEqualGoals(goals, expected_unit_goals(2))
                 serapi.execute("Lemma aux : forall A : Type, A -> unit.")
                 goals = serapi.query_goals()
-                self.assertEqual(goals, expected_nested_goals)
+                assertEqualGoals(goals, expected_nested_goals)
                 serapi.execute("intros.")
                 goals = serapi.query_goals()
-                self.assertEqual(
+                assertEqualGoals(
                     goals,
                     expected_unit_goals(5,
                                         expected_hypotheses))
                 serapi.execute("Definition idw (A : Type) := A.")
                 goals = serapi.query_goals()
-                self.assertEqual(
+                assertEqualGoals(
                     goals,
                     expected_unit_goals(5,
                                         expected_hypotheses))
                 serapi.execute("pose (foo := idw A).")
                 goals = serapi.query_goals()
-                self.assertEqual(
+                assertEqualGoals(
                     goals,
                     expected_unit_goals(
                         6,
@@ -622,7 +660,7 @@ class TestSerAPI(unittest.TestCase):
                 self.assertEqual(goals, no_goals)
                 serapi.execute("Qed.")
                 goals = serapi.query_goals()
-                self.assertEqual(goals, expected_unit_goals(2))
+                assertEqualGoals(goals, expected_unit_goals(2))
                 serapi.execute("apply (@aux unit tt).")
                 goals = serapi.query_goals()
                 self.assertEqual(goals, no_goals)
@@ -635,7 +673,7 @@ class TestSerAPI(unittest.TestCase):
                 goals = serapi.query_goals()
                 serapi.execute("induction a as [| a IH].")
                 goals = serapi.query_goals()
-                self.assertEqual(
+                assertEqualGoals(
                     goals,
                     Goals(
                         [expected_add0_base_goal,
@@ -645,7 +683,7 @@ class TestSerAPI(unittest.TestCase):
                         []))
                 serapi.execute("-")
                 goals = serapi.query_goals()
-                self.assertEqual(
+                assertEqualGoals(
                     goals,
                     Goals(
                         [expected_add0_base_goal],
@@ -655,7 +693,7 @@ class TestSerAPI(unittest.TestCase):
                         []))
                 serapi.execute("reflexivity.")
                 goals = serapi.query_goals()
-                self.assertEqual(
+                assertEqualGoals(
                     goals,
                     Goals([],
                           [([],
@@ -664,7 +702,7 @@ class TestSerAPI(unittest.TestCase):
                           []))
                 serapi.execute("-")
                 goals = serapi.query_goals()
-                self.assertEqual(
+                assertEqualGoals(
                     goals,
                     Goals([expected_add0_ind_goal],
                           [([],
@@ -681,7 +719,7 @@ class TestSerAPI(unittest.TestCase):
                     "n + (m + p) = (n + m) + p.")
                 serapi.execute("intros.")
                 goals = serapi.query_goals()
-                self.assertEqual(goals, expected_add_assoc_goals)
+                assertEqualGoals(goals, expected_add_assoc_goals)
 
     def test_query_library(self):
         """
