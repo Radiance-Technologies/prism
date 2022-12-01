@@ -122,7 +122,7 @@ class VernacSentence:
     This is especially useful for capturing the context of commands
     nested within proofs.
     """
-    get_identifiers: Optional[InitVar[Callable[[str], List[Identifier]]]] = None
+    get_identifiers: InitVar[Optional[Callable[[str], List[Identifier]]]] = None
     """
     A function that accepts a serialized AST and returns a list of
     fully qualified identifiers in the order of their appearance in the
