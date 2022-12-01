@@ -37,9 +37,31 @@ class ProjectRepoState:
 
 
 @dataclass
+class ProjectStateDiff:
+    """
+    A change in some implicit project's state.
+    """
+
+    diff: GitDiff
+    """
+    A refactor or other change to some implicit state.
+    """
+    environment: Optional[OpamSwitch.Configuration] = None
+    """
+    The changed environment.
+
+    If None, then it is understood to be the same environment as the
+    implicit state.
+    """
+
+
+@dataclass
 class ErrorInstance:
     """
     A concise example of an error in its most raw and unprocessed form.
+
+    With this representation, one should be able to capture errors
+    induced by changes to source code and/or environment.
     """
 
     project_name: str
@@ -51,16 +73,16 @@ class ErrorInstance:
     """
     An initial project state.
 
-    An example of the project, nominally taken to be prior to a change
-    that introduced a broken proof or other bug.
+    A state of the project, nominally taken to be prior to a change that
+    introduced a broken proof or other bug.
     """
-    change: GitDiff
+    change: ProjectStateDiff
     """
     A refactor or other change that introduces an error when applied to
-    the initial state.
+    the `initial_state`.
 
-    If the diff is empty, then `initial_state` is understood to be
-    broken.
+    If the diff is empty and the environment is None, then
+    `initial_state` is understood to be broken.
     """
     error_location: Set[SexpInfo.Loc] = default_field(set())
     """
@@ -85,6 +107,10 @@ class ErrorInstance:
 class RepairInstance:
     """
     A concise example of a repair in its most raw and unprocessed form.
+
+    With this representation, one should be able to capture errors and
+    repairs due to both changes to the source code and changes in
+    environment.
     """
 
     error: ErrorInstance
@@ -95,6 +121,8 @@ class RepairInstance:
     """
     A repaired proof state.
 
-    An example of the project after an error induced by the change has
-    been fixed.
+    A state of the project after an error induced by the change has been
+    fixed.
+    If the environment is None, then it is understood to be the same
+    environment in which the error occurs.
     """
