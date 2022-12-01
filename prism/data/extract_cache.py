@@ -53,7 +53,7 @@ from prism.interface.coq.re_patterns import (
     OBLIGATION_ID_PATTERN,
     SUBPROOF_ID_PATTERN,
 )
-from prism.interface.coq.ident import get_all_qualified_idents
+from prism.interface.coq.ident import Identifier, get_all_qualified_idents
 from prism.interface.coq.serapi import SerAPI
 from prism.language.heuristic.parser import CoqSentence
 from prism.project.base import SEM, Project
@@ -93,7 +93,10 @@ class ExtractVernacCommandsError(RuntimeError):
         self.parent = parent_exception
 
 
-def _process_proof_block(block: ProofBlock) -> Proof:
+def _process_proof_block(
+        block: ProofBlock,
+        get_identifiers: Callable[[str],
+                                  List[Identifier]]) -> Proof:
     """
     Convert a proof block into the form expected for extraction.
 
@@ -102,6 +105,10 @@ def _process_proof_block(block: ProofBlock) -> Proof:
     block : List[Tuple[CoqSentence, Goals, CommandType]]
         A list of proof steps within the block paired with goals prior
         to the proof step and Vernacular types.
+    get_identifiers : Callable[[str], List[Identifier]]
+        A function that accepts a serialized AST and returns a list of
+        fully qualified identifiers in the order of their appearance in
+        the AST.
 
     Returns
     -------
@@ -121,7 +128,8 @@ def _process_proof_block(block: ProofBlock) -> Proof:
                 tactic.identifiers,
                 tactic.location,
                 command_type,
-                goal))
+                goal,
+                get_identifiers))
     return proof
 
 
@@ -139,7 +147,10 @@ def _conclude_proof(
                                 List[Tuple[str,
                                            Proof]]],
     defined_lemmas: Dict[str,
-                         VernacCommandData]) -> Optional[VernacCommandData]:
+                         VernacCommandData],
+    get_identifiers: Callable[[str],
+                              List[Identifier]]
+) -> Optional[VernacCommandData]:
     r"""
     Complete accumulation of a proof/proved conjecture.
 
@@ -167,6 +178,10 @@ def _conclude_proof(
     defined_lemmas : Dict[str, VernacCommandData]
         A map from conjecture/obligation IDs to the corresponding cache
         data structure.
+    get_identifiers : Callable[[str], List[Identifier]]
+        A function that accepts a serialized AST and returns a list of
+        fully qualified identifiers in the order of their appearance in
+        the AST.
 
     Returns
     -------
@@ -201,7 +216,8 @@ def _conclude_proof(
             lemma.identifiers,
             lemma.location,
             lemma_type,
-            pre_goals_or_diff)
+            pre_goals_or_diff,
+            get_identifiers)
         # uniquify but keep original order
         ids = dict.fromkeys(ids)
         # ensure conjecture ID is last
@@ -281,12 +297,15 @@ def _start_proof_block(
 
 
 def _start_program(
-        sentence: CoqSentence,
-        command_type: str,
-        ids: List[str],
-        pre_goals_or_diff: Optional[Union[Goals,
-                                          GoalsDiff]],
-        programs: List[SentenceState]):
+    sentence: CoqSentence,
+    command_type: str,
+    ids: List[str],
+    pre_goals_or_diff: Optional[Union[Goals,
+                                      GoalsDiff]],
+    programs: List[SentenceState],
+    get_identifiers: Callable[[str],
+                              List[Identifier]]
+) -> Optional[VernacCommandData]:
     """
     Start accumulation of a new program.
 
@@ -304,6 +323,10 @@ def _start_program(
     programs : List[SentenceState]
         The list of all unfinished programs encountered thus far in
         extraction.
+    get_identifiers : Callable[[str], List[Identifier]]
+        A function that accepts a serialized AST and returns a list of
+        fully qualified identifiers in the order of their appearance in
+        the AST.
 
     Returns
     -------
@@ -332,7 +355,8 @@ def _start_program(
                 sentence.identifiers,
                 sentence.location,
                 command_type,
-                pre_goals_or_diff))
+                pre_goals_or_diff,
+                get_identifiers))
     else:
         # some obligations remain
         programs.append((sentence, pre_goals_or_diff, command_type))
@@ -527,6 +551,12 @@ def _extract_vernac_commands(
     post_proof_id = None
     post_goals = None
     with SerAPI(serapi_options, opam_switch=opam_switch) as serapi:
+        get_identifiers = partial(
+            get_all_qualified_idents,
+            serapi,
+            modpath,
+            ordered=True,
+            id_cache=expanded_ids)
         for sentence in sentences:
             # TODO: Optionally filter queries out of results (and
             # execution)
@@ -539,12 +569,7 @@ def _extract_vernac_commands(
             # object containing fully qualified referenced identifiers
             # NOTE: This must be done before identifiers get shadowed in
             # the `global_id_cache`
-            sentence.identifiers = get_all_qualified_idents(
-                serapi,
-                modpath,
-                str(sexp),
-                ordered=True,
-                id_cache=expanded_ids)
+            sentence.identifiers = get_identifiers(str(sexp))
             # get new ids and shadow redefined ones
             (ids,
              local_ids,
@@ -634,7 +659,8 @@ def _extract_vernac_commands(
                                         sentence.identifiers,
                                         location,
                                         command_type,
-                                        pre_goals_or_diff)
+                                        pre_goals_or_diff,
+                                        get_identifiers)
                                 ])
                             continue
                 if post_proof_id not in partial_proof_stacks:
@@ -677,7 +703,8 @@ def _extract_vernac_commands(
                             sentence.identifiers,
                             location,
                             command_type,
-                            pre_goals_or_diff)))
+                            pre_goals_or_diff,
+                            get_identifiers)))
     # assert that we have extracted all proofs
     assert not conjectures
     assert not partial_proof_stacks

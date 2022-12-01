@@ -8,11 +8,13 @@ import subprocess
 import tempfile
 import warnings
 from dataclasses import dataclass, field, fields
+from dataclasses import InitVar, dataclass, field
 from functools import reduce
 from multiprocessing.managers import BaseManager
 from pathlib import Path
 from typing import (
     Any,
+    Callable,
     ClassVar,
     Dict,
     Iterable,
@@ -32,7 +34,6 @@ from prism.language.gallina.analyze import SexpInfo
 from prism.language.sexp.node import SexpNode
 from prism.project.metadata import ProjectMetadata
 
-from prism.data.ident import Identifier
 from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.interface.coq.ident import Identifier
 from prism.util.opam.switch import OpamSwitch
@@ -40,7 +41,48 @@ from prism.util.opam.version import Version, VersionString
 from prism.util.radpytools.dataclasses import default_field
 from prism.util.serialize import Serializable
 
+from ..interface.coq.goals import GoalIndex, Goals, GoalsDiff, GoalType
+
 CommandType = str
+
+
+@dataclass
+class HypothesisIndentifiers:
+    """
+    The identifers contained in an implicit `Hypothesis`.
+    """
+
+    term: List[Identifier]
+    """
+    A list of fully qualified identifiers contained within the
+    serialized AST of an hypothesis' term in the order of their
+    appearance.
+    """
+    type: List[Identifier]
+    """
+    A list of fully qualified identifiers contained within the
+    serialized ASTof an hypothesis' type in the order of their
+    appearance.
+    """
+
+
+@dataclass
+class GoalIdentifiers:
+    """
+    The identifiers contained in an implicit `Goal`.
+    """
+
+    goal: List[Identifier]
+    """
+    A list of fully qualified identifiers contained within the
+    serialized AST of an goal's type in the order of their
+    appearance.
+    """
+    hypotheses: List[HypothesisIndentifiers]
+    """
+    A list of fully qualified identifiers contained within each of the
+    `goal`'s hypotheses.
+    """
 
 
 @dataclass
@@ -80,18 +122,51 @@ class VernacSentence:
     This is especially useful for capturing the context of commands
     nested within proofs.
     """
+    get_identifiers: Optional[InitVar[Callable[[str], List[Identifier]]]] = None
+    """
+    A function that accepts a serialized AST and returns a list of
+    fully qualified identifiers in the order of their appearance in the
+    AST.
+    """
+    goals_qualified_identifiers: Dict[Tuple[GoalType,
+                                            GoalIndex],
+                                      GoalIdentifiers] = field(init=False)
+    """
+    An enumeration of fully qualified identifiers contained in each goal
+    and its hypotheses, each in the order of their appearance.
+    """
     command_index: Optional[int] = None
     """
     The index of the Vernacular command in which this sentence partakes
     either as the command itself or part of an associated proof.
     """
 
-    def __post_init__(self) -> None:
+    def __post_init__(
+            self,
+            get_identifiers: Optional[Callable[[str],
+                                               List[Identifier]]]) -> None:
         """
-        Ensure the AST is serialized.
+        Ensure the AST is serialized and extract goal identifiers.
         """
         if isinstance(self.ast, SexpNode):
             self.ast = str(self.ast)
+        if get_identifiers is not None and self.goals is not None:
+            # get qualified goal and hypothesis identifiers
+            goals_identifiers = {}
+            for goal, goal_idxs in self.goals.goal_index_map().items():
+                gids = GoalIdentifiers(
+                    get_identifiers(goal.sexp),
+                    [
+                        HypothesisIndentifiers(
+                            get_identifiers(h.term_sexp),
+                            get_identifiers(h.type_sexp))
+                        for h in goal.hypotheses
+                    ])
+                for goal_idx in goal_idxs:
+                    goals_identifiers[goal_idx] = gids
+        else:
+            goals_identifiers = None
+        self.goals_qualified_identifiers = goals_identifiers
 
     def referenced_identifiers(self) -> Set[str]:
         """
