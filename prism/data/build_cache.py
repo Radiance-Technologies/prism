@@ -7,10 +7,11 @@ import re
 import subprocess
 import tempfile
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from multiprocessing.managers import BaseManager
 from pathlib import Path
 from typing import (
+    Any,
     ClassVar,
     Dict,
     Iterable,
@@ -79,6 +80,36 @@ class VernacSentence:
         """
         if isinstance(self.ast, SexpNode):
             self.ast = str(self.ast)
+
+    @classmethod
+    def deserialize(cls, data: Dict[str, Any]) -> 'VernacSentence':
+        """
+        Deserialize the `VernacSentence` from a dictionary.
+
+        Parameters
+        ----------
+        data : Dict[str, Any]
+            The serialized storage as yielded from `su.io.serialize`.
+
+        Returns
+        -------
+        VernacSentence
+            The deserialized sentence.
+        """
+        field_values = {}
+        for f in fields(cls):
+            if f.name in data:
+                value = data[f.name]
+                if f.name == "goals":
+                    if "added_goals" in data:
+                        tp = GoalsDiff
+                    else:
+                        tp = Goals
+                else:
+                    tp = f.type
+                value = su.io.deserialize(value, tp)
+                field_values[f.name] = value
+        return cls(**field_values)
 
     @staticmethod
     def sort_sentences(sentences: List['VernacSentence']) -> List[str]:
