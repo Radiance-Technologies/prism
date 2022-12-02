@@ -56,6 +56,17 @@ class CoqDocument:
     ast_sexp_list: Optional[List[SexpNode]] = None
     tok_sexp_list: Optional[List[SexpNode]] = None
 
+    def __post_init__(self) -> None:
+        """
+        Ensure paths are strings.
+        """
+        name = self.name
+        if not isinstance(name, str):
+            self.name = str(name)
+        project_path = self.project_path
+        if project_path is not None and not isinstance(project_path, str):
+            self.project_path = str(project_path)
+
     @property
     def abspath(self) -> str:
         """
