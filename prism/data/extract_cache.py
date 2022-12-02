@@ -413,9 +413,9 @@ def _extract_vernac_commands(
                          VernacCommandData] = {}
     local_ids = {'SerTop'}
     pre_proof_id = None
-    pre_goals = Goals()
+    pre_goals = None
     post_proof_id = None
-    post_goals = Goals()
+    post_goals = None
     with SerAPI(serapi_options, opam_switch=opam_switch) as serapi:
         for sentence in sentences:
             # TODO: Optionally filter queries out of results (and
@@ -918,6 +918,8 @@ def cache_extract_commit_iterator(
     iterator = ChangedCoqCommitIterator(project, starting_commit_sha)
     i = 0
     for item in iterator:
+        # get commit object
+        item = project.commit(item)
         # Define the minimum date; convert it to seconds since epoch
         limit_date = datetime(2019, 1, 1, 0, 0, 0)
         limit_epoch = calendar.timegm(limit_date.timetuple())
