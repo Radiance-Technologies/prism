@@ -275,7 +275,13 @@ class ProjectBuildEnvironment:
         """
         Cache the commit of the coq-pearls repository.
         """
-        self.current_version = setuptools_scm.get_version()
+        try:
+            self.current_version = setuptools_scm.get_version(
+                __file__,
+                search_parent_directories=True)
+        except LookupError:
+            from importlib.metadata import version
+            self.current_version = version("coq-pearls")
         match = self.SHA_regex.search(self.current_version)
         self.switch_config = self.switch_config
         if match is not None:
@@ -283,17 +289,19 @@ class ProjectBuildEnvironment:
             # the hash remains unambiguous in the future
             try:
                 current_commit = subprocess.check_output(
-                    self.describe_cmd).strip().decode("utf-8")
+                    self.describe_cmd,
+                    cwd=Path(__file__).parent).strip().decode("utf-8")
+            except subprocess.CalledProcessError:
+                warnings.warn(
+                    "Unable to expand Git hash in version string. "
+                    "Try installing `coq-pearls` in editable mode.")
+            else:
                 self.current_version = ''.join(
                     [
                         self.current_version[: match.start()],
                         current_commit,
                         self.current_version[match.end():]
                     ])
-            except subprocess.CalledProcessError:
-                warnings.warn(
-                    "Unable to expand Git hash in version string. "
-                    "Try installing `coq-pearls` in editable mode.")
 
 
 @dataclass
