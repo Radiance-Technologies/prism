@@ -101,7 +101,7 @@ class VernacSentence:
             if f.name in data:
                 value = data[f.name]
                 if f.name == "goals":
-                    if "added_goals" in data:
+                    if "added_goals" in value:
                         tp = GoalsDiff
                     else:
                         tp = Goals
