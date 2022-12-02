@@ -100,14 +100,15 @@ class VernacSentence:
         for f in fields(cls):
             if f.name in data:
                 value = data[f.name]
-                if f.name == "goals":
-                    if "added_goals" in value:
-                        tp = GoalsDiff
+                if value is not None:
+                    if f.name == "goals":
+                        if "added_goals" in value:
+                            tp = GoalsDiff
+                        else:
+                            tp = Goals
                     else:
-                        tp = Goals
-                else:
-                    tp = f.type
-                value = su.io.deserialize(value, tp)
+                        tp = f.type
+                    value = su.io.deserialize(value, tp)
                 field_values[f.name] = value
         return cls(**field_values)
 
