@@ -829,7 +829,7 @@ class HeuristicParser:
             for ls in sentences:
                 loc = ls.get_location(
                     file_contents,
-                    document.abspath,
+                    document.name,
                     start_idx,
                     newlines_so_far)
                 located_sentences.append(CoqSentence(str(ls), loc))
