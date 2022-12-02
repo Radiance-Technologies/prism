@@ -98,10 +98,11 @@ class VernacSentence:
         """
         field_values = {}
         for f in fields(cls):
-            if f.name in data:
-                value = data[f.name]
+            field_name = f.name
+            if field_name in data:
+                value = data[field_name]
                 if value is not None:
-                    if f.name == "goals":
+                    if field_name == "goals":
                         if "added_goals" in value:
                             tp = GoalsDiff
                         else:
@@ -109,7 +110,7 @@ class VernacSentence:
                     else:
                         tp = f.type
                     value = su.io.deserialize(value, tp)
-                field_values[f.name] = value
+                field_values[field_name] = value
         return cls(**field_values)
 
     @staticmethod

@@ -4,8 +4,10 @@ Test suite for `prism.data.build_cache`.
 import shutil
 import unittest
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 from typing import List
+
+import seutil.io as io
 
 from prism.data.build_cache import (
     CacheObjectStatus,
@@ -19,7 +21,9 @@ from prism.data.build_cache import (
     VernacSentence,
 )
 from prism.data.dataset import CoqProjectBaseDataset
-from prism.interface.coq.goals import Goals
+from prism.interface.coq.goals import Goals, GoalsDiff
+from prism.interface.coq.serapi import SerAPI
+from prism.language.gallina.analyze import SexpInfo
 from prism.language.heuristic.util import ParserUtils
 from prism.language.sexp.list import SexpList
 from prism.language.sexp.string import SexpString
@@ -30,6 +34,63 @@ from prism.tests import _PROJECT_EXAMPLES_PATH
 from prism.util.opam import OpamAPI
 
 TEST_DIR = Path(__file__).parent
+
+
+class TestVernacSentence(unittest.TestCase):
+    """
+    Test suite for `VernacSentence`.
+    """
+
+    def test_serialization(self):
+        """
+        Verify that `VernacSentence` can be serialize/deserialized.
+        """
+        goals = []
+        asts = []
+        commands = [
+            "Lemma foobar : unit.",
+            "shelve.",
+            "Unshelve.",
+            "exact tt.",
+            "Qed."
+        ]
+        with SerAPI() as serapi:
+            goals.append(serapi.query_goals())
+            for c in commands:
+                _, _, ast = serapi.execute(c, return_ast=True)
+                goals.append(serapi.query_goals())
+                asts.append(ast)
+        goals = goals[0 : 1] + [
+            GoalsDiff.compute_diff(g1,
+                                   g2)
+            if g1 is not None and g2 is not None else g2 for g1,
+            g2 in zip(goals,
+                      goals[1 :])
+        ]
+        sentences = [
+            VernacSentence(
+                c,
+                a,
+                SexpInfo.Loc("test_build_cache.py",
+                             0,
+                             0,
+                             0,
+                             0,
+                             0,
+                             0),
+                "CommandType",
+                g) for c,
+            a,
+            g in zip(commands,
+                     asts,
+                     goals)
+        ]
+        with NamedTemporaryFile("w") as f:
+            with self.subTest("serialize"):
+                io.dump(f.name, sentences, fmt=io.Fmt.yaml)
+            with self.subTest("deserialize"):
+                loaded = io.load(f.name, io.Fmt.yaml, clz=List[VernacSentence])
+                self.assertEqual(loaded, sentences)
 
 
 class TestCoqProjectBuildCache(unittest.TestCase):
