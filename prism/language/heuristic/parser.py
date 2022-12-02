@@ -15,6 +15,7 @@ from prism.language.gallina.analyze import SexpAnalyzer, SexpInfo
 from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.str_with_location import StrWithLocation
 from prism.util.iterable import CallableIterator, CompareIterator
+from prism.util.path import get_relative_path
 from prism.util.radpytools.dataclasses import default_field
 from prism.util.radpytools.os import pushd
 
@@ -768,7 +769,8 @@ class HeuristicParser:
             A list of the sentences in the file.
         """
         document = CoqDocument(
-            file_path,
+            get_relative_path(file_path,
+                              project_path),
             CoqParser.parse_source(file_path),
             project_path=project_path)
         return cls.parse_sentences_from_document(

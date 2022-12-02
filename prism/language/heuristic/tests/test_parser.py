@@ -10,6 +10,7 @@ from prism.language.gallina.analyze import SexpInfo
 from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
 from prism.tests import _COQ_EXAMPLES_PATH
+from prism.util.path import get_relative_path
 
 
 class TestHeuristicParser(unittest.TestCase):
@@ -405,9 +406,10 @@ class TestHeuristicParser(unittest.TestCase):
             project_path=_COQ_EXAMPLES_PATH,
             return_locations=True,
             glom_proofs=False)
+        simple_filename = get_relative_path(simple_file, _COQ_EXAMPLES_PATH)
         expected_loc_results = {
             0: SexpInfo.Loc(
-                filename=str(simple_file),
+                filename=str(simple_filename),
                 lineno=14,
                 bol_pos=846,
                 lineno_last=16,
@@ -415,7 +417,7 @@ class TestHeuristicParser(unittest.TestCase):
                 beg_charno=846,
                 end_charno=946),
             4: SexpInfo.Loc(  # About seq.
-                filename=str(simple_file),
+                filename=str(simple_filename),
                 lineno=26,
                 bol_pos=1237,
                 lineno_last=26,
@@ -423,7 +425,7 @@ class TestHeuristicParser(unittest.TestCase):
                 beg_charno=1239,
                 end_charno=1248),
             11: SexpInfo.Loc(  # trivial.
-                filename=str(simple_file),
+                filename=str(simple_filename),
                 lineno=32,
                 bol_pos=1317,
                 lineno_last=32,
