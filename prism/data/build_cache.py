@@ -514,8 +514,8 @@ class CoqProjectBuildCacheProtocol(Protocol):
         # interrupted, we aren't left with a corrupted file.
         if suffix is None and isinstance(file_contents, Serializable):
             suffix = f".{self.fmt_ext}"
-        data_path: Path = data_path.parent / (
-            data_path.stem + suffix)  # type: ignore
+        data_path: Path = data_path.parent / (  # type: ignore
+            data_path.stem + suffix)
         with tempfile.NamedTemporaryFile("w",
                                          delete=False,
                                          dir=self.root,

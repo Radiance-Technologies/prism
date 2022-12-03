@@ -302,7 +302,9 @@ class Goals:
             list(self.abandoned_goals))
 
 
-AddedGoal = Tuple[Goal, Tuple[Tuple[GoalType, GoalIndex], ...]]
+# second Tuple is actually variadic but skipped to avoid triggering
+# bug in seutil.io.deserialize
+AddedGoal = Tuple[Goal, Tuple[Tuple[GoalType, GoalIndex]]]
 RemovedGoal = Tuple[GoalType, GoalIndex]
 MovedGoal = Tuple[Tuple[GoalType, GoalIndex], Tuple[GoalType, GoalIndex]]
 

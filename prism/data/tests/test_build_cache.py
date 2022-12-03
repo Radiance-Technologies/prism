@@ -3,9 +3,10 @@ Test suite for `prism.data.build_cache`.
 """
 import shutil
 import unittest
+from copy import deepcopy
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
-from typing import List
+from typing import List, Union
 
 import seutil.io as io
 
@@ -41,11 +42,11 @@ class TestVernacSentence(unittest.TestCase):
     Test suite for `VernacSentence`.
     """
 
-    def test_serialization(self):
+    def test_serialization(self) -> None:
         """
         Verify that `VernacSentence` can be serialize/deserialized.
         """
-        goals = []
+        goals: List[Union[Goals, GoalsDiff]] = []
         asts = []
         commands = [
             "Lemma foobar : unit.",
@@ -60,6 +61,13 @@ class TestVernacSentence(unittest.TestCase):
                 _, _, ast = serapi.execute(c, return_ast=True)
                 goals.append(serapi.query_goals())
                 asts.append(ast)
+        # force multiple added goals
+        goals[2].foreground_goals = [
+            deepcopy(g) for g in goals[1].foreground_goals * 3
+        ]
+        goals[2].foreground_goals[0].id += 1
+        goals[2].foreground_goals[1].id += 2
+        goals[2].shelved_goals.append(goals[2].foreground_goals[0])
         goals = goals[0 : 1] + [
             GoalsDiff.compute_diff(g1,
                                    g2)
