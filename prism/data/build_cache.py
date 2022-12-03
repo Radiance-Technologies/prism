@@ -28,6 +28,7 @@ import networkx as nx
 import setuptools_scm
 import seutil as su
 
+from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.language.gallina.analyze import SexpInfo
 from prism.language.sexp.node import SexpNode
 from prism.project.metadata import ProjectMetadata
@@ -35,8 +36,6 @@ from prism.util.opam.switch import OpamSwitch
 from prism.util.opam.version import Version, VersionString
 from prism.util.radpytools.dataclasses import default_field
 from prism.util.serialize import Serializable
-
-from ..interface.coq.goals import Goals, GoalsDiff
 
 CommandType = str
 
@@ -114,7 +113,8 @@ class VernacSentence:
         return cls(**field_values)
 
     @staticmethod
-    def sort_sentences(sentences: List['VernacSentence']) -> List[str]:
+    def sort_sentences(
+            sentences: List['VernacSentence']) -> List['VernacSentence']:
         """
         Sort the given sentences by their location.
 
@@ -354,7 +354,7 @@ class ProjectCommitData(Serializable):
         """
         if self.file_dependencies is not None:
             G = nx.DiGraph()
-            for f, deps in self.file_dependencies:
+            for f, deps in self.file_dependencies.items():
                 for dep in deps:
                     G.add_edge(f, dep)
             files = list(reversed(nx.topological_sort(G)))
@@ -437,7 +437,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
             self,
             obj: Union[ProjectCommitData,
                        ProjectMetadata,
-                       Tuple[str]]) -> bool:
+                       Tuple[str, str, str]]) -> bool:
         return self.contains(obj)
 
     @property
@@ -450,7 +450,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
     def _contains_data(self, data: ProjectCommitData) -> bool:
         return self.get_path_from_data(data).exists()
 
-    def _contains_fields(self, *fields: Tuple[str]) -> bool:
+    def _contains_fields(self, *fields: str) -> bool:
         return self.get_path_from_fields(*fields).exists()
 
     def _contains_metadata(self, metadata: ProjectMetadata) -> bool:
@@ -514,7 +514,8 @@ class CoqProjectBuildCacheProtocol(Protocol):
         # interrupted, we aren't left with a corrupted file.
         if suffix is None and isinstance(file_contents, Serializable):
             suffix = f".{self.fmt_ext}"
-        data_path: Path = data_path.parent / (data_path.stem + suffix)
+        data_path: Path = data_path.parent / (
+            data_path.stem + suffix)  # type: ignore
         with tempfile.NamedTemporaryFile("w",
                                          delete=False,
                                          dir=self.root,
@@ -528,12 +529,17 @@ class CoqProjectBuildCacheProtocol(Protocol):
         os.replace(f.name, data_path)
         if block:
             return "write complete"
+        else:
+            return None
 
     def contains(
-            self,
-            obj: Union[ProjectCommitData,
-                       ProjectMetadata,
-                       Tuple[str]]) -> bool:
+        self,
+        obj: Union[ProjectCommitData,
+                   ProjectMetadata,
+                   Tuple[str,
+                         str,
+                         str]]
+    ) -> bool:
         """
         Return whether an entry on disk exists for the given data.
 
@@ -727,15 +733,15 @@ class CoqProjectBuildCacheProtocol(Protocol):
         if commits is None:
             commits = self.list_commits(projects)
         if coq_versions is None:
-            coq_versions = self._default_coq_versions
+            coq_version_strs = self._default_coq_versions
         else:
-            coq_versions = [str(v).replace(".", "_") for v in coq_versions]
-        coq_versions: Iterable[str]
+            coq_version_strs = {str(v).replace(".",
+                                               "_") for v in coq_versions}
         status_list = []
         for project in projects:
             for commit in commits[project]:
                 folder: Path = (self.root / project) / commit
-                for coq_version in coq_versions:
+                for coq_version in coq_version_strs:
                     if (folder / (coq_version + "_cache_error.txt")).exists():
                         status_msg = "cache error"
                     elif (folder / (coq_version + "_build_error.txt")).exists():
@@ -817,16 +823,19 @@ class CoqProjectBuildCacheProtocol(Protocol):
         self._write_kernel(data, block, data)
         # If there was an error in cache extraction, write an additional
         # text file containing the output.
-        if data.build_result.exit_code != 0:
+        build_result = data.build_result
+        if build_result is not None and build_result.exit_code != 0:
             str_to_write = "\n".join(
                 [
-                    f"@@Exit code@@\n{data.build_result.exit_code}",
-                    f"@@stdout@@\n{data.build_result.stdout}",
-                    f"@@stderr@@\n{data.build_result.stderr}"
+                    f"@@Exit code@@\n{build_result.exit_code}",
+                    f"@@stdout@@\n{build_result.stdout}",
+                    f"@@stderr@@\n{build_result.stderr}"
                 ])
             self._write_kernel(data, block, str_to_write, "_build_error.txt")
         if block:
             return "write complete"
+        else:
+            return None
 
     def write_error_log(
             self,
@@ -941,4 +950,4 @@ def CoqProjectBuildCacheClient(
     """
     Return client object for writing build cache.
     """
-    return server.CoqProjectBuildCache(*args, **kwargs)
+    return server.CoqProjectBuildCache(*args, **kwargs)  # type: ignore
