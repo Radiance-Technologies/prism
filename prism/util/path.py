@@ -14,4 +14,9 @@ def get_relative_path(path: os.PathLike, other: os.PathLike) -> Path:
         return path.relative_to(other)
     except ValueError:
         # target does not start with origin
-        return ".." / get_relative_path(path, Path(other).parent)
+        other = Path(other)
+        if other.parts:
+            return ".." / get_relative_path(path, other.parent)
+        else:
+            # other is the system root
+            return path
