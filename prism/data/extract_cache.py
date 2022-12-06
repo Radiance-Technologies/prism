@@ -457,7 +457,11 @@ def _extract_vernac_commands(
             is_program = any(
                 program_regex.search(attr) is not None
                 for attr in vernac.attributes)
-            is_subproof = any(SUBPROOF_ID_PATTERN.search(i) for i in ids)
+            # Check if we're dealing with a subproof
+            subproof_prefix_pattern = re.compile(rf"^{post_proof_id}")
+            is_subproof = any(
+                SUBPROOF_ID_PATTERN.search(i)
+                and subproof_prefix_pattern.search(i) for i in ids)
             if is_program:
                 # A program was declared.
                 # Persist the current goals.
