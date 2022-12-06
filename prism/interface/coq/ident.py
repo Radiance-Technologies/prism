@@ -332,7 +332,7 @@ def _get_all_idents(
     elif qualify:
         if global_id_cache is None:
             global_id_cache = {}
-        local_id_cache = set()
+        local_id_cache: Set[str] = set()
         qualify = partial(
             qualify_ident,
             serapi,
@@ -424,7 +424,7 @@ def replace_idents(sexp: str, replacements: Sequence[str]) -> str:
     ----------
     sexp : str
         A serialized AST.
-    replacements : Sequence[Identifier]
+    replacements : Sequence[str]
         A sequence of new identifiers to be substituted into each match
         of `ident_re` in `sexp` in the order of iteration.
 

@@ -39,14 +39,14 @@ class Hypothesis:
     """
     The serialization of the identifier's Coq kernel type.
     """
-    term_sexp: Optional[str] = None
+    term_sexp: Optional[str]
     """
     The AST of the `term` within a Vernacular ``Check`` command.
 
     This allows one to reliably associate nodes in an sexp with a
     human-readable text representation of the hypothesis.
     """
-    type_sexp: Optional[str] = None
+    type_sexp: str
     """
     The AST of the `type` within a Vernacular ``Check`` command.
 

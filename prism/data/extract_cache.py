@@ -55,6 +55,7 @@ from prism.interface.coq.re_patterns import (
 )
 from prism.interface.coq.ident import Identifier, get_all_qualified_idents
 from prism.interface.coq.serapi import SerAPI
+from prism.language.gallina.analyze import SexpAnalyzer
 from prism.language.heuristic.parser import CoqSentence
 from prism.project.base import SEM, Project
 from prism.project.exception import ProjectBuildError
@@ -65,8 +66,6 @@ from prism.util.opam.version import Version
 from prism.util.radpytools import unzip
 from prism.util.radpytools.os import pushd
 from prism.util.swim import SwitchManager
-
-from ..language.gallina.analyze import SexpAnalyzer
 
 SentenceState = Tuple[CoqSentence,
                       Optional[Union[Goals,
@@ -135,7 +134,7 @@ def _process_proof_block(
 
 def _conclude_proof(
     local_ids: Set[str],
-    ids: List[str],
+    ids: Set[str],
     pre_proof_id: str,
     conjectures: Dict[str,
                       SentenceState],
@@ -158,7 +157,7 @@ def _conclude_proof(
     ----------
     local_ids : Set[str]
         The set of identifiers introduced in the interactive session.
-    ids : List[str]
+    ids : Set[str]
         The list of identifiers introduced by the final proof command.
     pre_proof_id : str
         The ID of the proved conjecture or obligation.
@@ -197,7 +196,10 @@ def _conclude_proof(
         # proofs/obligations at once.
         # Note that a new ID need not have an explicit proof
         # (for example, an automatically solved obligation).
-        proof_block = _process_proof_block(partial_proof_stacks.pop(new_id, []))
+        proof_block = _process_proof_block(
+            partial_proof_stacks.pop(new_id,
+                                     []),
+            get_identifiers)
         new_proofs.append((new_id, proof_block))
     finished_proof_id = obligation_map.get(pre_proof_id, pre_proof_id)
     # add to other finished obligations
@@ -244,7 +246,7 @@ def _start_proof_block(
                                    ProofBlock],
         obligation_map: Dict[str,
                              str],
-        programs: List[str]) -> None:
+        programs: List[SentenceState]) -> None:
     """
     Start accumulation of a new proof block.
 
@@ -299,7 +301,7 @@ def _start_proof_block(
 def _start_program(
     sentence: CoqSentence,
     command_type: str,
-    ids: List[str],
+    ids: Set[str],
     pre_goals_or_diff: Optional[Union[Goals,
                                       GoalsDiff]],
     programs: List[SentenceState],
@@ -315,7 +317,7 @@ def _start_program(
         The sentence that instigated the program.
     command_type : str
         The type of the sentence's Vernacular command.
-    ids : List[str]
+    ids : Set[str]
         The list of definitions emitted by the program's declaration, if
         any.
     pre_goals_or_diff : Optional[Union[Goals, GoalsDiff]]
@@ -613,7 +615,8 @@ def _extract_vernac_commands(
                     command_type,
                     ids,
                     pre_goals_or_diff,
-                    programs)
+                    programs,
+                    get_identifiers)
                 if program is not None:
                     file_commands.append(program)
             elif proof_id_changed:
@@ -633,7 +636,8 @@ def _extract_vernac_commands(
                             partial_proof_stacks,
                             obligation_map,
                             finished_proof_stacks,
-                            defined_lemmas)
+                            defined_lemmas,
+                            get_identifiers)
                         if completed_lemma is not None:
                             file_commands.append(completed_lemma)
                         continue
@@ -663,7 +667,8 @@ def _extract_vernac_commands(
                                         get_identifiers)
                                 ])
                             continue
-                if post_proof_id not in partial_proof_stacks:
+                if (post_proof_id is not None
+                        and post_proof_id not in partial_proof_stacks):
                     # We are starting a new proof (or obligation).
                     _start_proof_block(
                         (sentence,
@@ -825,7 +830,9 @@ def _extract_vernac_commands_worker(
     return result
 
 
-def _extract_vernac_commands_worker_star(args) -> List[VernacCommandData]:
+def _extract_vernac_commands_worker_star(
+        args) -> Union[List[VernacCommandData],
+                       ExtractVernacCommandsError]:
     return _extract_vernac_commands_worker(*args)
 
 

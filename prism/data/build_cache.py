@@ -52,11 +52,12 @@ class HypothesisIndentifiers:
     The identifers contained in an implicit `Hypothesis`.
     """
 
-    term: List[Identifier]
+    term: Optional[List[Identifier]]
     """
     A list of fully qualified identifiers contained within the
     serialized AST of an hypothesis' term in the order of their
     appearance.
+    None if the hypothesis has no `term` attribute.
     """
     type: List[Identifier]
     """
@@ -150,22 +151,25 @@ class VernacSentence:
         """
         if isinstance(self.ast, SexpNode):
             self.ast = str(self.ast)
+        goals_identifiers = {}
         if get_identifiers is not None and self.goals is not None:
             # get qualified goal and hypothesis identifiers
-            goals_identifiers = {}
-            for goal, goal_idxs in self.goals.goal_index_map().items():
+            if isinstance(self.goals, Goals):
+                goals_iter = self.goals.goal_index_map().items()
+            else:
+                goals_iter = self.goals.added_goals
+            for goal, goal_idxs in goals_iter:
                 gids = GoalIdentifiers(
                     get_identifiers(goal.sexp),
                     [
                         HypothesisIndentifiers(
-                            get_identifiers(h.term_sexp),
+                            get_identifiers(h.term_sexp)
+                            if h.term_sexp is not None else None,
                             get_identifiers(h.type_sexp))
                         for h in goal.hypotheses
                     ])
                 for goal_idx in goal_idxs:
                     goals_identifiers[goal_idx] = gids
-        else:
-            goals_identifiers = None
         self.goals_qualified_identifiers = goals_identifiers
 
     def referenced_identifiers(self) -> Set[str]:

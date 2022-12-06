@@ -843,7 +843,7 @@ class SerAPI:
                 for g in goals_sexp:
                     hypotheses = []
                     for h in g[2][1]:
-                        h_sexp = str(h[2])
+                        hypothesis_kernel_sexp = str(h[2])
                         assert len(h[1]) < 2
                         if len(h[1]) == 0:
                             term = None
@@ -853,17 +853,21 @@ class SerAPI:
                                 term = None
                             else:
                                 term = self.print_constr(str(t))
+                        hypothesis_type = self.print_constr(
+                            hypothesis_kernel_sexp)
+                        type_sexp = self.query_ast(f"Check {hypothesis_type}.")
+                        hypothesis_term_sexp = None
+                        if term is not None:
+                            term_sexp = self.query_ast(f"Check {term}.")
+                            hypothesis_term_sexp = str(term_sexp)
                         hypothesis = Hypothesis(
                             idents=[str(ident[1]) for ident in h[0][::-1]],
                             term=term,
-                            type=self.print_constr(h_sexp),
-                            kernel_sexp=h_sexp,
+                            type=hypothesis_type,
+                            kernel_sexp=hypothesis_kernel_sexp,
+                            term_sexp=hypothesis_term_sexp,
+                            type_sexp=str(type_sexp),
                         )
-                        if term is not None:
-                            term_sexp = self.query_ast(f"Check {term}.")
-                            hypothesis.term_sexp = str(term_sexp)
-                        type_sexp = self.query_ast(f"Check {hypothesis.type}.")
-                        hypothesis.type_sexp = str(type_sexp)
                         hypotheses.append(hypothesis)
 
                     type_sexp = str(g[1][1])
