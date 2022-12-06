@@ -5,7 +5,7 @@ import argparse
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from prism.data.extract_cache import (
     CacheExtractor,
@@ -17,6 +17,23 @@ from prism.util.swim import (
     SharedSwitchManagerClient,
     SharedSwitchManagerServer,
 )
+
+
+def load_opam_projects() -> List[str]:
+    """
+    Load project names from opam_projects.txt.
+
+    Returns
+    -------
+    List[str]
+        Project names from opam_projects.txt
+    """
+    opam_projects_file_path = (
+        Path(__name__).parent.parent.parent / "dataset") / "opam_projects.txt"
+    with open(opam_projects_file_path, "r") as f:
+        projects_to_use = f.readlines()[1 :]
+    return [p.strip() for p in projects_to_use]
+
 
 if __name__ == "__main__":
     # Get args
@@ -96,7 +113,8 @@ if __name__ == "__main__":
         default=[],
         help="A list of projects to extract cache for. If this argument is not"
         " provided, all projects in the metadata storage and default"
-        " commits file will have cache extracted.")
+        " commits file will have cache extracted. This arg overrides "
+        "--opam-projects-only if both are given.")
     parser.add_argument(
         "--max-num-commits",
         default=None,
@@ -129,6 +147,11 @@ if __name__ == "__main__":
         type=int,
         help="Maximum number of active workers to allow at once on the "
         "file-level of extraction.")
+    parser.add_argument(
+        "--opam-projects-only",
+        action="store_true",
+        help="If provided, only use the projects listed in 'opam_projects.txt'."
+        " This arg is overridden by --project-names if provided.")
     args = parser.parse_args()
     default_commits_path: str = args.default_commits_path
     cache_dir: str = args.cache_dir
@@ -139,7 +162,13 @@ if __name__ == "__main__":
     n_build_workers: int = args.n_build_workers
     force_serial: bool = args.force_serial
     num_switches: int = args.num_switches
-    project_names = args.project_names if args.project_names else None
+    # Projects to extract
+    if args.project_names:
+        project_names = args.project_names
+    elif args.opam_projects_only:
+        project_names = load_opam_projects()
+    else:
+        project_names = None
     coq_version_iterator = (
         lambda _,
         __: args.coq_versions) if args.coq_versions else None
