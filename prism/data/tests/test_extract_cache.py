@@ -252,6 +252,71 @@ class TestExtractCache(unittest.TestCase):
             self.assertEqual(
                 [c.text for c in extracted_commands[-1].sorted_sentences()],
                 expected_program)
+        with self.subTest("bullets, braces, and other subproofs"):
+            with pushd(_COQ_EXAMPLES_PATH):
+                sentences = Project.extract_sentences(
+                    CoqDocument(
+                        "fermat4_mwe.v",
+                        CoqParser.parse_source("fermat4_mwe.v"),
+                        _COQ_EXAMPLES_PATH),
+                    glom_proofs=False,
+                    return_locations=True,
+                    sentence_extraction_method=SEM.HEURISTIC)
+                actual_vernac_commands = _extract_vernac_commands(sentences)
+                actual_vernac_commands_text = {
+                    avc.command.text for avc in actual_vernac_commands
+                }
+                expected_vernac_commands_text = {
+                    r"Require Export Wf_nat.",
+                    r"Require Export ZArith.",
+                    r"Require Export Znumtheory.",
+                    r"Require Export Reals.",
+                    r"Open Scope Z_scope.",
+                    r"Definition f_Z (x : Z) := Z.abs_nat x.",
+                    r"Definition R_prime (x y : Z) := 1 < x /\ 1 < y /\ x < y.",
+                    r"Lemma R_prime_wf : well_founded R_prime.",
+                    r"Lemma ind_prime : forall P : Z -> Prop, (forall x : Z, "
+                    r"(forall y : Z, (R_prime y x -> P y)) -> P x) -> "
+                    r"forall x : Z, P x.",
+                    r"Lemma not_rel_prime1 : forall x y : Z, ~ rel_prime x y"
+                    r" -> exists d : Z, Zis_gcd x y d /\ d <> 1 /\ d <> -1.",
+                    r"Lemma Zmult_neq_0 : forall a b : Z, a * b <> 0 -> a "
+                    r"<> 0 /\ b <> 0.",
+                    r"Lemma not_prime_gen : forall a b : Z, 1 < a -> 1 < b ->"
+                    r" b < a -> ~ prime a -> (forall c : Z, b < c < a ->"
+                    r" rel_prime c a) -> exists q : Z, exists b : Z, a = "
+                    r"q * b /\ 1 < q /\ 1 < b.",
+                    r"Lemma prime_dec_gen : forall a b : Z, 1 < b -> b < a ->"
+                    r" (forall c : Z, b < c < a -> rel_prime c a) -> "
+                    r"prime a \/ ~ prime a.",
+                    r"Lemma prime_dec : forall a : Z, prime a \/ ~ prime a."
+                }
+                self.assertEqual(
+                    actual_vernac_commands_text,
+                    expected_vernac_commands_text)
+                expected_proof_sentence_counts = [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    3,
+                    3,
+                    3,
+                    3,
+                    33,
+                    3,
+                    3
+                ]
+                actual_proof_sentence_counts = [
+                    len(avc.proofs[0]) if avc.proofs else 0
+                    for avc in actual_vernac_commands
+                ]
+                self.assertEqual(
+                    actual_proof_sentence_counts,
+                    expected_proof_sentence_counts)
 
 
 if __name__ == "__main__":
