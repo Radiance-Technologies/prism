@@ -333,6 +333,18 @@ def _start_program(
         return None
 
 
+def _is_subproof(post_proof_id: str, ids: List[str]) -> bool:
+    is_subproof = False
+    for i in ids:
+        match = SUBPROOF_ID_PATTERN.match(i)
+        if match is not None:
+            proof_id_under_test = match.groupdict()['proof_id']
+            if proof_id_under_test == post_proof_id:
+                is_subproof = True
+                break
+    return is_subproof
+
+
 def _extract_vernac_commands(
         sentences: Iterable[CoqSentence],
         opam_switch: Optional[OpamSwitch] = None,
@@ -457,7 +469,8 @@ def _extract_vernac_commands(
             is_program = any(
                 program_regex.search(attr) is not None
                 for attr in vernac.attributes)
-            is_subproof = any(SUBPROOF_ID_PATTERN.search(i) for i in ids)
+            # Check if we're dealing with a subproof
+            is_subproof = _is_subproof(post_proof_id, ids)
             if is_program:
                 # A program was declared.
                 # Persist the current goals.
