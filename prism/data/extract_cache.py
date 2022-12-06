@@ -49,7 +49,10 @@ from prism.data.build_cache import (
 from prism.data.commit_map import Except, ProjectCommitUpdateMapper
 from prism.data.util import get_project_func
 from prism.interface.coq.goals import Goals, GoalsDiff
-from prism.interface.coq.re_patterns import OBLIGATION_ID_PATTERN
+from prism.interface.coq.re_patterns import (
+    OBLIGATION_ID_PATTERN,
+    SUBPROOF_ID_PATTERN,
+)
 from prism.interface.coq.serapi import SerAPI
 from prism.language.heuristic.parser import CoqSentence
 from prism.project.base import SEM, Project
@@ -330,6 +333,18 @@ def _start_program(
         return None
 
 
+def _is_subproof(post_proof_id: str, ids: List[str]) -> bool:
+    is_subproof = False
+    for i in ids:
+        match = SUBPROOF_ID_PATTERN.match(i)
+        if match is not None:
+            proof_id_under_test = match.groupdict()['proof_id']
+            if proof_id_under_test == post_proof_id:
+                is_subproof = True
+                break
+    return is_subproof
+
+
 def _extract_vernac_commands(
         sentences: Iterable[CoqSentence],
         opam_switch: Optional[OpamSwitch] = None,
@@ -455,8 +470,7 @@ def _extract_vernac_commands(
                 program_regex.search(attr) is not None
                 for attr in vernac.attributes)
             # Check if we're dealing with a subproof
-            subproof_pattern = re.compile(rf"^{post_proof_id}_subproof\d*$")
-            is_subproof = any(subproof_pattern.match(i) for i in ids)
+            is_subproof = _is_subproof(post_proof_id, ids)
             if is_program:
                 # A program was declared.
                 # Persist the current goals.
