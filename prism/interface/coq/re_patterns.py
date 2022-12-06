@@ -136,5 +136,3 @@ PRINT_ALL_IDENT_PATTERN = regex_from_options(
 
 OBLIGATION_ID_PATTERN = re.compile(
     rf"(?P<proof_id>{IDENT_PATTERN.pattern})_obligation_\d+")
-
-SUBPROOF_ID_PATTERN = re.compile(r"_subproof\d*$")

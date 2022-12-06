@@ -49,10 +49,7 @@ from prism.data.build_cache import (
 from prism.data.commit_map import Except, ProjectCommitUpdateMapper
 from prism.data.util import get_project_func
 from prism.interface.coq.goals import Goals, GoalsDiff
-from prism.interface.coq.re_patterns import (
-    OBLIGATION_ID_PATTERN,
-    SUBPROOF_ID_PATTERN,
-)
+from prism.interface.coq.re_patterns import OBLIGATION_ID_PATTERN
 from prism.interface.coq.serapi import SerAPI
 from prism.language.heuristic.parser import CoqSentence
 from prism.project.base import SEM, Project
@@ -458,10 +455,8 @@ def _extract_vernac_commands(
                 program_regex.search(attr) is not None
                 for attr in vernac.attributes)
             # Check if we're dealing with a subproof
-            subproof_prefix_pattern = re.compile(rf"^{post_proof_id}")
-            is_subproof = any(
-                SUBPROOF_ID_PATTERN.search(i)
-                and subproof_prefix_pattern.search(i) for i in ids)
+            subproof_pattern = re.compile(rf"^{post_proof_id}_subproof\d*$")
+            is_subproof = any(subproof_pattern.match(i) for i in ids)
             if is_program:
                 # A program was declared.
                 # Persist the current goals.
