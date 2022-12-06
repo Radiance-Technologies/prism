@@ -64,6 +64,13 @@ class Hypothesis:
         value = f' := {self.term}' if self.term is not None else ""
         return f"{', '.join(self.idents)}{value} : {self.type}"
 
+    @property
+    def text(self) -> str:
+        """
+        Get a human-readable representation of the hypothesis.
+        """
+        return str(self)
+
 
 @dataclass
 class Goal:
@@ -114,6 +121,13 @@ class Goal:
             [hypotheses,
              '______________________________________',
              self.type])
+
+    @property
+    def text(self) -> str:
+        """
+        Get a human-readable representation of the goal sans hypotheses.
+        """
+        return self.type
 
 
 class GoalType(enum.Enum):
