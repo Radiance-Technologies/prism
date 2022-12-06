@@ -330,7 +330,7 @@ def _get_all_idents(
     if qualify and serapi is None:
         raise ValueError("Cannot qualify identifiers without a SerAPI session.")
     elif qualify:
-        if global_id_cache is not None:
+        if global_id_cache is None:
             global_id_cache = {}
         local_id_cache = set()
         qualify = partial(
@@ -354,7 +354,7 @@ get_all_idents = partial(
     qualify=False,
     serapi=None,
     modpath="",
-    id_cache=None)
+    global_id_cache=None)
 """
 Get all of the identifiers referenced in the given serialized AST.
 
@@ -416,7 +416,7 @@ def get_all_qualified_idents(
     return _get_all_idents(ast, ordered, True, serapi, modpath, id_cache)
 
 
-def replace_idents(sexp: str, replacements: Sequence[Identifier]) -> str:
+def replace_idents(sexp: str, replacements: Sequence[str]) -> str:
     """
     Perform a one-to-one replacement of identifiers in the given AST.
 
