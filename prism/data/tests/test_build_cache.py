@@ -22,7 +22,6 @@ from prism.data.build_cache import (
     VernacSentence,
 )
 from prism.data.dataset import CoqProjectBaseDataset
-from prism.data.ident import Identifier, IdentType
 from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.interface.coq.ident import Identifier, IdentType
 from prism.interface.coq.serapi import SerAPI
