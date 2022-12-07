@@ -9,3 +9,14 @@ match n' with
 | O => m
 | S p => S (nat p m)
 end.
+
+Section nat.
+
+Lemma plus_0_n : forall n : Datatypes.nat, nat 0 n = n.
+Proof.
+intros m.
+simpl.
+reflexivity.
+Qed.
+
+End nat.

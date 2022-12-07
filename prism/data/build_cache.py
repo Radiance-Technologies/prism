@@ -7,8 +7,7 @@ import re
 import subprocess
 import tempfile
 import warnings
-from dataclasses import dataclass, field, fields
-from dataclasses import InitVar, dataclass, field
+from dataclasses import InitVar, dataclass, field, fields
 from functools import reduce
 from multiprocessing.managers import BaseManager
 from pathlib import Path
@@ -30,18 +29,16 @@ from typing import (
 import networkx as nx
 import setuptools_scm
 import seutil as su
+
+from prism.interface.coq.goals import GoalIndex, Goals, GoalsDiff, GoalType
+from prism.interface.coq.ident import Identifier
 from prism.language.gallina.analyze import SexpInfo
 from prism.language.sexp.node import SexpNode
 from prism.project.metadata import ProjectMetadata
-
-from prism.interface.coq.goals import Goals, GoalsDiff
-from prism.interface.coq.ident import Identifier
 from prism.util.opam.switch import OpamSwitch
 from prism.util.opam.version import Version, VersionString
 from prism.util.radpytools.dataclasses import default_field
 from prism.util.serialize import Serializable
-
-from ..interface.coq.goals import GoalIndex, Goals, GoalsDiff, GoalType
 
 CommandType = str
 

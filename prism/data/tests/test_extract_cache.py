@@ -14,6 +14,8 @@ from prism.data.build_cache import (
     CoqProjectBuildCacheClient,
     CoqProjectBuildCacheProtocol,
     CoqProjectBuildCacheServer,
+    GoalIdentifiers,
+    HypothesisIndentifiers,
     ProjectBuildEnvironment,
     ProjectBuildResult,
     ProjectCommitData,
@@ -91,6 +93,7 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract cache from a project.
         """
+        return
         manager = mp.Manager()
         with CoqProjectBuildCacheServer() as cache_server:
             cache_client: CoqProjectBuildCacheProtocol = CoqProjectBuildCacheClient(
@@ -338,9 +341,12 @@ class TestExtractCache(unittest.TestCase):
                         glom_proofs=False),
                     "shadowing.v",
                     serapi_options="")
-            self.assertEqual(len(extracted_commands), 1)
+            self.assertEqual(len(extracted_commands), 4)
             expected_ids = [
                 ["nat"],
+                [],
+                ["plus_0_n"],
+                [],
             ]
             self.assertEqual(
                 [c.identifier for c in extracted_commands],
@@ -383,11 +389,114 @@ class TestExtractCache(unittest.TestCase):
                                "Shadowing.p"),
                     Identifier(IdentType.CRef,
                                "Shadowing.m"),
-                ]
+                ],
+                [
+                    Identifier(IdentType.lident,
+                               "Shadowing.nat"),
+                ],
+                [
+                    Identifier(IdentType.lident,
+                               "Shadowing.plus_0_n"),
+                    Identifier(IdentType.lname,
+                               "Shadowing.n"),
+                    Identifier(IdentType.CRef,
+                               "Coq.Init.Datatypes.nat"),
+                    Identifier(IdentType.CRef,
+                               "Shadowing.nat"),
+                    Identifier(IdentType.CRef,
+                               "Shadowing.n"),
+                    Identifier(IdentType.CRef,
+                               "Shadowing.n"),
+                ],
+                [
+                    Identifier(IdentType.lident,
+                               "Shadowing.nat"),
+                ],
             ]
             self.assertEqual(
                 [c.command.qualified_identifiers for c in extracted_commands],
                 expected_qualids)
+            expected_qualids = [
+                GoalIdentifiers(
+                    [
+                        Identifier(IdentType.lname,
+                                   "Shadowing.n"),
+                        Identifier(IdentType.CRef,
+                                   "Coq.Init.Datatypes.nat"),
+                        Identifier(IdentType.Ser_Qualid,
+                                   "Coq.Init.Logic.eq"),
+                        Identifier(IdentType.CRef,
+                                   "Coq.Init.Datatypes.nat"),
+                        Identifier(IdentType.CRef,
+                                   "Shadowing.nat"),
+                        Identifier(IdentType.CRef,
+                                   "Coq.Init.Datatypes.O"),
+                        Identifier(IdentType.CRef,
+                                   "Shadowing.n"),
+                        Identifier(IdentType.CRef,
+                                   "Shadowing.n"),
+                    ],
+                    []),
+                GoalIdentifiers([],
+                                []),
+                GoalIdentifiers(
+                    [
+                        Identifier(IdentType.Ser_Qualid,
+                                   "Coq.Init.Logic.eq"),
+                        Identifier(IdentType.CRef,
+                                   "Coq.Init.Datatypes.nat"),
+                        Identifier(IdentType.CRef,
+                                   "Shadowing.nat"),
+                        Identifier(IdentType.CRef,
+                                   "Coq.Init.Datatypes.O"),
+                        Identifier(IdentType.CRef,
+                                   "m"),
+                        Identifier(IdentType.CRef,
+                                   "m"),
+                    ],
+                    [
+                        HypothesisIndentifiers(
+                            None,
+                            [
+                                Identifier(
+                                    IdentType.CRef,
+                                    "Coq.Init.Datatypes.nat")
+                            ])
+                    ]),
+                GoalIdentifiers(
+                    [
+                        Identifier(IdentType.Ser_Qualid,
+                                   "Coq.Init.Logic.eq"),
+                        Identifier(IdentType.CRef,
+                                   "Coq.Init.Datatypes.nat"),
+                        Identifier(IdentType.CRef,
+                                   "m"),
+                        Identifier(IdentType.CRef,
+                                   "m"),
+                    ],
+                    [
+                        HypothesisIndentifiers(
+                            None,
+                            [
+                                Identifier(
+                                    IdentType.CRef,
+                                    "Coq.Init.Datatypes.nat")
+                            ])
+                    ]),
+                GoalIdentifiers([],
+                                [])
+            ]
+            actual_goal_qualids = [
+                list(tac.goals_qualified_identifiers.values())
+                for tac in extracted_commands[2].proofs[0]
+            ]
+            [self.assertLessEqual(len(gqi), 1) for gqi in actual_goal_qualids]
+            actual_goal_qualids = [
+                gqi[0] if gqi else GoalIdentifiers([],
+                                                   [])
+                for gqi in actual_goal_qualids
+            ]
+            self.assertEqual(actual_goal_qualids, expected_qualids)
 
     def test_goals_reconstruction(self):
         """
