@@ -50,7 +50,15 @@ class TestGoalsDiff(unittest.TestCase):
                             None,
                             'nat',
                             '(Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
-                            '(Id Coq)))) (Id nat)) 0) (Instance ())))')
+                            '(Id Coq)))) (Id nat)) 0) (Instance ())))',
+                            None,
+                            '(VernacExpr () (VernacCheckMayEval () () '
+                            '((v (CRef ((v (Ser_Qualid (DirPath ()) (Id nat))) '
+                            '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                            '(line_nb_last 1) (bol_pos_last 0) (bp 6) (ep 9))))) ())) '
+                            '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                            '(line_nb_last 1) (bol_pos_last 0) (bp 6) (ep 9)))))))'
+                        )
                     ])
             ],
             background_goals=[
@@ -103,7 +111,15 @@ class TestGoalsDiff(unittest.TestCase):
                             None,
                             'nat',
                             '(Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
-                            '(Id Coq)))) (Id nat)) 0) (Instance ())))'),
+                            '(Id Coq)))) (Id nat)) 0) (Instance ())))',
+                            None,
+                            '(VernacExpr () (VernacCheckMayEval () () '
+                            '((v (CRef ((v (Ser_Qualid (DirPath ()) (Id nat))) '
+                            '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                            '(line_nb_last 1) (bol_pos_last 0) (bp 6) (ep 9))))) ())) '
+                            '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                            '(line_nb_last 1) (bol_pos_last 0) (bp 6) (ep 9)))))))'
+                        ),
                         Hypothesis(
                             ['IH'],
                             None,
@@ -117,7 +133,42 @@ class TestGoalsDiff(unittest.TestCase):
                             '((Var (Id a)) '
                             '(Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) '
                             '(Id Init) (Id Coq)))) (Id nat)) 0) 1) (Instance ()))))) '
-                            '(Var (Id a))))')
+                            '(Var (Id a))))',
+                            None,
+                            '(VernacExpr () (VernacCheckMayEval () () '
+                            '((v (CAppExpl (() ((v (Ser_Qualid (DirPath ()) (Id eq))) '
+                            '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                            '(line_nb_last 1) (bol_pos_last 0) (bp 7) (ep 9))))) ()) '
+                            '(((v (CRef ((v (Ser_Qualid (DirPath ()) (Id nat))) '
+                            '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                            '(line_nb_last 1) (bol_pos_last 0) (bp 10) (ep 13))))) '
+                            '())) (loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                            '(line_nb_last 1) (bol_pos_last 0) (bp 10) (ep 13))))) '
+                            '((v (CApp (() ((v (CRef ((v (Ser_Qualid (DirPath '
+                            '((Id Nat))) (Id add))) (loc (((fname ToplevelInput) '
+                            '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                            '(bp 15) (ep 22))))) ())) (loc (((fname ToplevelInput) '
+                            '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                            '(bp 15) (ep 22)))))) ((((v (CRef ((v (Ser_Qualid '
+                            '(DirPath ()) (Id a))) (loc (((fname ToplevelInput) '
+                            '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                            '(bp 23) (ep 24))))) ())) (loc (((fname ToplevelInput) '
+                            '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                            '(bp 23) (ep 24))))) ()) (((v (CRef ((v (Ser_Qualid '
+                            '(DirPath ()) (Id O))) (loc (((fname ToplevelInput) '
+                            '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                            '(bp 25) (ep 26))))) ())) (loc (((fname ToplevelInput) '
+                            '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                            '(bp 25) (ep 26))))) ())))) (loc (((fname ToplevelInput) '
+                            '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                            '(bp 15) (ep 26))))) ((v (CRef ((v (Ser_Qualid '
+                            '(DirPath ()) (Id a))) (loc (((fname ToplevelInput) '
+                            '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                            '(bp 28) (ep 29))))) ())) (loc (((fname ToplevelInput) '
+                            '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                            '(bp 28) (ep 29)))))))) (loc (((fname ToplevelInput) '
+                            '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                            '(bp 6) (ep 29)))))))')
                     ]),
                 Goal(
                     9,
@@ -143,7 +194,15 @@ class TestGoalsDiff(unittest.TestCase):
                             None,
                             'nat',
                             '(Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
-                            '(Id Coq)))) (Id nat)) 0) (Instance ())))')
+                            '(Id Coq)))) (Id nat)) 0) (Instance ())))',
+                            None,
+                            '(VernacExpr () (VernacCheckMayEval () () '
+                            '((v (CRef ((v (Ser_Qualid (DirPath ()) (Id nat))) '
+                            '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                            '(line_nb_last 1) (bol_pos_last 0) (bp 6) (ep 9))))) ())) '
+                            '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                            '(line_nb_last 1) (bol_pos_last 0) (bp 6) (ep 9)))))))'
+                        )
                     ])
             ],
             abandoned_goals=[
@@ -172,7 +231,15 @@ class TestGoalsDiff(unittest.TestCase):
                             None,
                             'nat',
                             '(Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
-                            '(Id Coq)))) (Id nat)) 0) (Instance ())))')
+                            '(Id Coq)))) (Id nat)) 0) (Instance ())))',
+                            None,
+                            '(VernacExpr () (VernacCheckMayEval () () '
+                            '((v (CRef ((v (Ser_Qualid (DirPath ()) (Id nat))) '
+                            '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                            '(line_nb_last 1) (bol_pos_last 0) (bp 6) (ep 9))))) ())) '
+                            '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                            '(line_nb_last 1) (bol_pos_last 0) (bp 6) (ep 9)))))))'
+                        )
                     ])
             ])
         cls.after = cls.before.shallow_copy()
