@@ -4,7 +4,17 @@ Data utilities related to Coq identifiers.
 import enum
 import re
 from functools import partial
-from typing import Dict, List, NamedTuple, Optional, Sequence, Set, Union
+from typing import (
+    Any,
+    Dict,
+    List,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Set,
+    Type,
+    Union,
+)
 
 from prism.interface.coq.serapi import SerAPI
 from prism.util.identity import identity
@@ -94,9 +104,10 @@ class IdentType(enum.Enum):
 
     Notes
     -----
-    Curiously, this also appears in the ASTs of ``Require`` commands but
-    never matches the name of the required library (instead matching
-    ``"object"`` in all observations).
+    Curiously, this has also appeared in the ASTs of ``Require``
+    commands without matching the name of the required library (instead
+    matching ``"object"``), but this behavior cannot currently be
+    reproduced.
     """
     lident = enum.auto()
     """
@@ -342,6 +353,7 @@ def _get_all_idents(
     else:
         qualify = identity
     matches = re.finditer(ident_re, ast)
+    container: Union[Type[List[Any]], Type[Set[Any]]]
     if ordered:
         container = list
     else:
