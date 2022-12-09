@@ -146,3 +146,4 @@ dmypy.json
 
 test_logs/
 lock
+base_df.csv
