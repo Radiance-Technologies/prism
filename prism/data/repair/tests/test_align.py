@@ -4,6 +4,7 @@ Test module for repair tools.
 import unittest
 from itertools import chain
 from pathlib import Path
+from typing import Dict, List
 
 from prism.data.build_cache import ProjectCommitData, VernacSentence
 from prism.data.extract_cache import VernacCommandData
@@ -18,7 +19,8 @@ class TestAlign(unittest.TestCase):
     Tests for repair tools.
     """
 
-    caches = {}
+    caches: Dict[str,
+                 List[VernacCommandData]] = {}
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -38,6 +40,7 @@ class TestAlign(unittest.TestCase):
                         x.text.split(":=")[0]
                         if x.text.startswith("Definition")
                         or x.text.startswith("Inductive") else x.text,
+                        None,
                         None,
                         None,
                         None))
