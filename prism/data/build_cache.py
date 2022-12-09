@@ -30,7 +30,7 @@ import networkx as nx
 import setuptools_scm
 import seutil as su
 
-from prism.interface.coq.goals import GoalIndex, Goals, GoalsDiff, GoalType
+from prism.interface.coq.goals import GoalLocation, Goals, GoalsDiff
 from prism.interface.coq.ident import Identifier
 from prism.language.gallina.analyze import SexpInfo
 from prism.language.sexp.node import SexpNode
@@ -126,8 +126,7 @@ class VernacSentence:
     fully qualified identifiers in the order of their appearance in the
     AST.
     """
-    goals_qualified_identifiers: Dict[Tuple[GoalType,
-                                            GoalIndex],
+    goals_qualified_identifiers: Dict[GoalLocation,
                                       GoalIdentifiers] = field(init=False)
     """
     An enumeration of fully qualified identifiers contained in each goal
@@ -190,7 +189,10 @@ class VernacSentence:
         VernacSentence
             The deserialized sentence.
         """
-        field_values = {}
+        field_values: Dict[str,
+                           Any] = {}
+        noninit_field_values: Dict[str,
+                                   Any] = {}
         for f in fields(cls):
             field_name = f.name
             if field_name in data:
@@ -203,9 +205,16 @@ class VernacSentence:
                             tp = Goals
                     else:
                         tp = f.type
-                    value = su.io.deserialize(value, tp)
-                field_values[field_name] = value
-        return cls(**field_values)
+                    value = su.io.deserialize(value, clz=tp)
+                if f.init:
+                    fvs = field_values
+                else:
+                    fvs = noninit_field_values
+                fvs[field_name] = value
+        result = cls(**field_values)
+        for field_name, value in noninit_field_values.items():
+            setattr(result, field_name, value)
+        return result
 
     @staticmethod
     def sort_sentences(

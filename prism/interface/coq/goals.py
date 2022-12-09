@@ -2,9 +2,10 @@
 Abstractions of Coq goals and hypotheses.
 """
 import enum
+import re
 from dataclasses import dataclass
 from itertools import chain
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, List, NamedTuple, Optional, Set, Tuple, Union
 
 from prism.util.radpytools.dataclasses import default_field
 
@@ -152,6 +153,48 @@ and whether it is in the left or right list at the given depth.
 The middle index gives the index of a goal in an actual list of goals.
 """
 
+_goal_locator_deserialize_regex = re.compile(
+    r"\((?P<type>\w+),\s*"
+    r"\((?P<index_0>\d+),\s*(?P<index_1>\d+),\s*(?P<index_2>False|True)\)\)")
+
+
+class GoalLocation(NamedTuple):
+    """
+    Identifies a goal in a collection of `Goals`.
+    """
+
+    goal_type: GoalType
+    """
+    The type of the goal.
+    """
+    goal_index: GoalIndex
+    """
+    The index of the goal within the `type`'s corresponding `Goals`
+    field.
+    """
+
+    def serialize(self) -> str:
+        """
+        Serialize to a string.
+        """
+        return f"({self.goal_type.name},{self.goal_index})"
+
+    @classmethod
+    def deserialize(cls, data: str) -> 'GoalLocation':
+        """
+        Deserialize from a string.
+        """
+        match = _goal_locator_deserialize_regex.match(data)
+        if match is None:
+            raise RuntimeError(f"Cannot deserialize GoalLocator from {data}")
+        return GoalLocation(
+            getattr(GoalType,
+                    match["type"]),
+            (
+                int(match["index_0"]),
+                int(match["index_1"]),
+                match["index_2"] == "True"))
+
 
 @dataclass
 class Goals:
@@ -275,19 +318,20 @@ class Goals:
         else:
             return goals
 
-    def goal_index_map(self) -> Dict[Goal, Set[Tuple[GoalType, GoalIndex]]]:
+    def goal_index_map(self) -> Dict[Goal, Set[GoalLocation]]:
         """
         Map these goals to their type and index.
 
         Returns
         -------
-        Dict[Goal, Set[Tuple[GoalType, GoalIndex]]]
+        Dict[Goal, Set[GoalLocator]]
             A map from each goal to its `GoalType` and index within the
             `Goals` structure.
             The possibility of the same goal appearing in multiple
             indices is supported but not expected to occur in practice.
         """
-        result = {}
+        result: Dict[Goal,
+                     Set[GoalLocation]] = {}
         for (goal_type,
              egs) in ((GoalType.FOREGROUND,
                        [(0,
@@ -306,10 +350,18 @@ class Goals:
             for gs_idx, (lgs, rgs) in egs:
                 for g_idx, g in enumerate(lgs):
                     locations = result.setdefault(g, set())
-                    locations.add((goal_type, (gs_idx, g_idx, True)))
+                    locations.add(
+                        GoalLocation(goal_type,
+                                     (gs_idx,
+                                      g_idx,
+                                      True)))
                 for g_idx, g in enumerate(rgs):
                     locations = result.setdefault(g, set())
-                    locations.add((goal_type, (gs_idx, g_idx, False)))
+                    locations.add(
+                        GoalLocation(goal_type,
+                                     (gs_idx,
+                                      g_idx,
+                                      False)))
         return result
 
     def insert(
@@ -337,8 +389,8 @@ class Goals:
             if depth < 0:
                 raise e
             while len(self.background_goals) <= depth:
-                left_goal_stack = []
-                right_goal_stack = []
+                left_goal_stack: List[Goal] = []
+                right_goal_stack: List[Goal] = []
                 self.background_goals.append(
                     (left_goal_stack,
                      right_goal_stack))
@@ -346,6 +398,7 @@ class Goals:
                 goals = left_goal_stack
             else:
                 goals = right_goal_stack
+        assert not isinstance(goals, Goal)
         goals.insert(idx, goal)
 
     def pop(self, goal_type: GoalType, goal_index: GoalIndex) -> Goal:
@@ -366,6 +419,7 @@ class Goals:
         """
         (depth, idx, is_left) = goal_index
         goals = self.get(goal_type, depth=depth, is_left=is_left)
+        assert not isinstance(goals, Goal)
         popped_goal = goals.pop(idx)
         return popped_goal
 
@@ -386,9 +440,9 @@ class Goals:
 
 # second Tuple is actually variadic but skipped to avoid triggering
 # bug in seutil.io.deserialize
-AddedGoal = Tuple[Goal, Tuple[Tuple[GoalType, GoalIndex]]]
-RemovedGoal = Tuple[GoalType, GoalIndex]
-MovedGoal = Tuple[Tuple[GoalType, GoalIndex], Tuple[GoalType, GoalIndex]]
+AddedGoal = Tuple[Goal, Tuple[GoalLocation]]
+RemovedGoal = GoalLocation
+MovedGoal = Tuple[GoalLocation, GoalLocation]
 
 
 @dataclass

@@ -23,7 +23,7 @@ from prism.data.build_cache import (
 )
 from prism.data.dataset import CoqProjectBaseDataset
 from prism.interface.coq.goals import Goals, GoalsDiff
-from prism.interface.coq.ident import Identifier, IdentType
+from prism.interface.coq.ident import Identifier, IdentType, get_all_idents
 from prism.interface.coq.serapi import SerAPI
 from prism.language.gallina.analyze import SexpInfo
 from prism.language.heuristic.util import ParserUtils
@@ -80,6 +80,12 @@ class TestVernacSentence(unittest.TestCase):
             VernacSentence(
                 c,
                 a,
+                [
+                    Identifier(IdentType.lident,
+                               "lemma"),
+                    Identifier(IdentType.CRef,
+                               "unit")
+                ],
                 SexpInfo.Loc("test_build_cache.py",
                              0,
                              0,
@@ -88,7 +94,9 @@ class TestVernacSentence(unittest.TestCase):
                              0,
                              0),
                 "CommandType",
-                g) for c,
+                g,
+                get_identifiers=lambda ast: get_all_idents(ast,
+                                                           True)) for c,
             a,
             g in zip(commands,
                      asts,
