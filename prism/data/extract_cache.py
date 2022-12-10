@@ -49,11 +49,11 @@ from prism.data.build_cache import (
 from prism.data.commit_map import Except, ProjectCommitUpdateMapper
 from prism.data.util import get_project_func
 from prism.interface.coq.goals import Goals, GoalsDiff
+from prism.interface.coq.ident import Identifier, get_all_qualified_idents
 from prism.interface.coq.re_patterns import (
     OBLIGATION_ID_PATTERN,
     SUBPROOF_ID_PATTERN,
 )
-from prism.interface.coq.ident import Identifier, get_all_qualified_idents
 from prism.interface.coq.serapi import SerAPI
 from prism.language.gallina.analyze import SexpAnalyzer
 from prism.language.heuristic.parser import CoqSentence
