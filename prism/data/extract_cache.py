@@ -365,7 +365,7 @@ def _start_program(
         return None
 
 
-def is_subproof(proof_id: str, id_under_test: str) -> bool:
+def is_subproof_of(proof_id: str, id_under_test: str) -> bool:
     """
     Check if the given ID corresponds to a subproof of a conjecture ID.
 
@@ -603,8 +603,8 @@ def _extract_vernac_commands(
             # Check if we're dealing with a subproof
             is_subproof = (
                 post_proof_id is not None
-                and any(is_subproof(post_proof_id,
-                                    i) for i in ids))
+                and any(is_subproof_of(post_proof_id,
+                                       i) for i in ids))
             if is_program:
                 # A program was declared.
                 # Persist the current goals.

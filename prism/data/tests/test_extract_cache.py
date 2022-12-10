@@ -93,7 +93,6 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract cache from a project.
         """
-        return
         manager = mp.Manager()
         with CoqProjectBuildCacheServer() as cache_server:
             cache_client: CoqProjectBuildCacheProtocol = CoqProjectBuildCacheClient(
@@ -273,7 +272,9 @@ class TestExtractCache(unittest.TestCase):
                     glom_proofs=False,
                     return_locations=True,
                     sentence_extraction_method=SEM.HEURISTIC)
-                actual_vernac_commands = _extract_vernac_commands(sentences)
+                actual_vernac_commands = _extract_vernac_commands(
+                    sentences,
+                    'fermat4_mwe.v')
                 actual_vernac_commands_text = {
                     avc.command.text for avc in actual_vernac_commands
                 }
