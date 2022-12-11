@@ -545,6 +545,7 @@ class TestExtractCache(unittest.TestCase):
                     sentence_extraction_method=SEM.HEURISTIC,
                     return_locations=True,
                     glom_proofs=False),
+                "fermat4_mwe.v",
                 serapi_options="",
                 use_goals_diff=False)
             extracted_commands_with_diffs = _extract_vernac_commands(
@@ -556,6 +557,7 @@ class TestExtractCache(unittest.TestCase):
                     sentence_extraction_method=SEM.HEURISTIC,
                     return_locations=True,
                     glom_proofs=False),
+                "fermat4_mwe.v",
                 serapi_options="",
                 use_goals_diff=True)
             sentences_no_diffs = _sort(extracted_commands_no_diffs)
