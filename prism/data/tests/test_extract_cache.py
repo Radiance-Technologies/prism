@@ -6,7 +6,9 @@ import multiprocessing as mp
 import os
 import shutil
 import unittest
+from copy import deepcopy
 from pathlib import Path
+from typing import List
 
 from prism.data.build_cache import (
     CoqProjectBuildCacheClient,
@@ -15,10 +17,13 @@ from prism.data.build_cache import (
     ProjectBuildEnvironment,
     ProjectBuildResult,
     ProjectCommitData,
+    VernacCommandData,
+    VernacSentence,
 )
 from prism.data.dataset import CoqProjectBaseDataset
 from prism.data.document import CoqDocument
 from prism.data.extract_cache import _extract_vernac_commands, extract_cache
+from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.language.gallina.parser import CoqParser
 from prism.project.base import SEM, Project
 from prism.project.metadata.storage import MetadataStorage
@@ -317,6 +322,74 @@ class TestExtractCache(unittest.TestCase):
                 self.assertEqual(
                     actual_proof_sentence_counts,
                     expected_proof_sentence_counts)
+
+    def test_goals_reconstruction(self):
+        """
+        Test the reconstruction of Goals from GoalsDiff.
+        """
+
+        def _sort(cmd_list: List[VernacCommandData]) -> List[VernacSentence]:
+            """
+            Sort all commands' sentences by locations.
+            """
+            out: List[VernacSentence] = []
+            for i, cmd in enumerate(cmd_list):
+                out.extend(cmd.sorted_sentences(True, i))
+            out = VernacSentence.sort_sentences(out)
+            return out
+
+        def _reconstruct_goals(
+                sentences: List[VernacSentence]) -> List[VernacSentence]:
+            """
+            Apply diffs to goals in a copy of the given `sentences`.
+            """
+            sentences = deepcopy(sentences)
+            previous_goals = Goals()
+            for sentence in sentences:
+                if isinstance(sentence.goals, Goals):
+                    previous_goals = sentence.goals
+                elif isinstance(sentence.goals, GoalsDiff):
+                    patched_goals = sentence.goals.patch(previous_goals)
+                    sentence.goals = patched_goals
+                    previous_goals = sentence.goals
+                else:
+                    previous_goals = Goals()
+            for sentence in sentences:
+                if sentence.goals is not None:
+                    self.assertIsInstance(sentence.goals, Goals)
+            return sentences
+
+        with pushd(_COQ_EXAMPLES_PATH):
+            extracted_commands_no_diffs = _extract_vernac_commands(
+                Project.extract_sentences(
+                    CoqDocument(
+                        "fermat4_mwe.v",
+                        CoqParser.parse_source("fermat4_mwe.v"),
+                        _COQ_EXAMPLES_PATH),
+                    sentence_extraction_method=SEM.HEURISTIC,
+                    return_locations=True,
+                    glom_proofs=False),
+                serapi_options="",
+                use_goals_diff=False)
+            extracted_commands_with_diffs = _extract_vernac_commands(
+                Project.extract_sentences(
+                    CoqDocument(
+                        "fermat4_mwe.v",
+                        CoqParser.parse_source("fermat4_mwe.v"),
+                        _COQ_EXAMPLES_PATH),
+                    sentence_extraction_method=SEM.HEURISTIC,
+                    return_locations=True,
+                    glom_proofs=False),
+                serapi_options="",
+                use_goals_diff=True)
+            sentences_no_diffs = _sort(extracted_commands_no_diffs)
+            sentences_with_diffs = _sort(extracted_commands_with_diffs)
+            sentences_reconstructed = _reconstruct_goals(sentences_with_diffs)
+            expected_goals_list = [s.goals for s in sentences_no_diffs]
+            reconstructed_goals_list = [
+                s.goals for s in sentences_reconstructed
+            ]
+            self.assertEqual(expected_goals_list, reconstructed_goals_list)
 
 
 if __name__ == "__main__":

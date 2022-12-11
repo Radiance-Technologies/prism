@@ -136,6 +136,52 @@ class Goals:
     abandoned_goals: List[Goal] = default_field([])
 
     @property
+    def counts(self) -> Dict[str, int]:
+        """
+        Return counts of goals of each category.
+
+        Returns
+        -------
+        Dict[str, int]
+            Mapping from category to counts
+        """
+        bg_count = 0
+        for bgl_list, bgr_list in self.background_goals:
+            bg_count += len(bgl_list)
+            bg_count += len(bgr_list)
+        return {
+            GoalType.FOREGROUND.name: len(self.foreground_goals),
+            GoalType.BACKGROUND.name: bg_count,
+            GoalType.SHELVED.name: len(self.shelved_goals),
+            GoalType.ABANDONED.name: len(self.abandoned_goals)
+        }
+
+    @property
+    def hypothesis_counts(self) -> Dict[str, int]:
+        """
+        Return counts of hypotheses in all goals of each category type.
+
+        Returns
+        -------
+        Dict[str, int]
+            Mapping from category to counts
+        """
+        bg_hyp_count = 0
+        for bgl_list, bgr_list in self.background_goals:
+            bg_hyp_count += sum([len(bg.hypotheses) for bg in bgl_list])
+            bg_hyp_count += sum([len(bg.hypotheses) for bg in bgr_list])
+        return {
+            GoalType.FOREGROUND.name:
+                sum([len(fg.hypotheses) for fg in self.foreground_goals]),
+            GoalType.BACKGROUND.name:
+                bg_hyp_count,
+            GoalType.SHELVED.name:
+                sum([len(sg.hypotheses) for sg in self.shelved_goals]),
+            GoalType.ABANDONED.name:
+                sum([len(ag.hypotheses) for ag in self.abandoned_goals]),
+        }
+
+    @property
     def is_empty(self) -> bool:
         """
         Return True if there are no goals, False otherwise.
@@ -251,11 +297,16 @@ class Goals:
         (depth, idx, is_left) = goal_index
         try:
             goals = self.get(goal_type, depth=depth, is_left=is_left)
-        except IndexError:
+        except IndexError as e:
             # extend depth
-            left_goal_stack = []
-            right_goal_stack = []
-            self.background_goals.append((left_goal_stack, right_goal_stack))
+            if depth < 0:
+                raise e
+            while len(self.background_goals) <= depth:
+                left_goal_stack = []
+                right_goal_stack = []
+                self.background_goals.append(
+                    (left_goal_stack,
+                     right_goal_stack))
             if is_left:
                 goals = left_goal_stack
             else:
@@ -281,10 +332,6 @@ class Goals:
         (depth, idx, is_left) = goal_index
         goals = self.get(goal_type, depth=depth, is_left=is_left)
         popped_goal = goals.pop(idx)
-        if goal_type == GoalType.BACKGROUND:
-            (left_goal_stack, right_goal_stack) = self.background_goals[depth]
-            if not left_goal_stack and not right_goal_stack:
-                self.background_goals.pop(depth)
         return popped_goal
 
     def shallow_copy(self) -> 'Goals':
@@ -318,6 +365,35 @@ class GoalsDiff:
     added_goals: Set[AddedGoal] = default_field(set())
     removed_goals: Set[RemovedGoal] = default_field(set())
     moved_goals: Set[MovedGoal] = default_field(set())
+    depth_change: int = 0
+    """
+    The change in background goals depth.
+    """
+
+    @property
+    def counts(self) -> Dict[str, int]:
+        """
+        Return changes in goal counts by category.
+
+        Returns
+        -------
+        Dict[str, int]
+            Mapping from category to change in counts
+        """
+        changes = {
+            GoalType.FOREGROUND.name: 0,
+            GoalType.BACKGROUND.name: 0,
+            GoalType.SHELVED.name: 0,
+            GoalType.ABANDONED.name: 0
+        }
+        for ag in self.added_goals:
+            changes[ag[1][0][0].name] += 1
+        for rg in self.removed_goals:
+            changes[rg[0].name] -= 1
+        for mg in self.moved_goals:
+            changes[mg[0][0].name] -= 1
+            changes[mg[1][0].name] += 1
+        return changes
 
     @property
     def is_empty(self) -> bool:
@@ -366,6 +442,15 @@ class GoalsDiff:
         sorted_additions = sorted(added_goals, key=lambda k: k[2])
         for (goal, goal_type, goal_index) in sorted_additions:
             after.insert(goal, goal_type, goal_index)
+        # adjust background depth
+        expected_depth = len(before.background_goals) + self.depth_change
+        actual_depth = len(after.background_goals)
+        if actual_depth != expected_depth:
+            delta = expected_depth - actual_depth
+            if delta < 0:
+                after.background_goals = after.background_goals[: delta]
+            elif delta > 0:
+                after.background_goals.extend([([], []) for _ in range(delta)])
         return after
 
     @classmethod
@@ -387,6 +472,8 @@ class GoalsDiff:
             `after` goals.
         """
         diff = GoalsDiff()
+        diff.depth_change = len(after.background_goals) - len(
+            before.background_goals)
         after_map = after.goal_index_map()
         for bg, bg_index in before.goal_index_map().items():
             try:
@@ -394,8 +481,10 @@ class GoalsDiff:
             except KeyError:
                 diff.removed_goals.update(bg_index)
             else:
+                bg_extra = bg_index.difference(ag_index)
+                ag_index.difference_update(bg_index)
                 # naive alignment
-                for bidx in bg_index:
+                for bidx in bg_extra:
                     try:
                         aidx = ag_index.pop()
                     except KeyError:

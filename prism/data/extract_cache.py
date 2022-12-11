@@ -348,7 +348,8 @@ def _is_subproof(post_proof_id: str, ids: List[str]) -> bool:
 def _extract_vernac_commands(
         sentences: Iterable[CoqSentence],
         opam_switch: Optional[OpamSwitch] = None,
-        serapi_options: str = "") -> List[VernacCommandData]:
+        serapi_options: str = "",
+        use_goals_diff: bool = True) -> List[VernacCommandData]:
     """
     Compile Vernacular commands from a sequence of sentences.
 
@@ -363,6 +364,9 @@ def _extract_vernac_commands(
         If None, then the default global switch is used.
     serapi_options : str, optional
         Arguments with which to initialize `sertop`, namely IQR flags.
+    use_goals_diff : bool, optional
+        If True, make use of GoalsDiff to save space in cache files, by
+        default True. This argument is for testing purposes only.
 
     Returns
     -------
@@ -456,7 +460,7 @@ def _extract_vernac_commands(
                 # update reference set
                 local_ids = all_local_ids
             pre_proof_id = post_proof_id
-            if pre_goals is not None and post_goals is not None:
+            if use_goals_diff and pre_goals is not None and post_goals is not None:
                 pre_goals_or_diff = GoalsDiff.compute_diff(
                     pre_goals,
                     post_goals)

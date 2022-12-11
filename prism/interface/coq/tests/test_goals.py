@@ -54,6 +54,8 @@ class TestGoalsDiff(unittest.TestCase):
                     ])
             ],
             background_goals=[
+                ([],
+                 []),
                 (
                     [
                         Goal(
@@ -73,7 +75,9 @@ class TestGoalsDiff(unittest.TestCase):
                             '(Id Init) (Id Coq)))) (Id nat)) 0) 1) (Instance ())))))',
                             [])
                     ],
-                    [])
+                    []),
+                ([],
+                 []),
             ],
             shelved_goals=[
                 Goal(
@@ -180,8 +184,8 @@ class TestGoalsDiff(unittest.TestCase):
         goal = cls.after.pop(GoalType.SHELVED, (0, 0, True))
         cls.after.insert(goal, GoalType.FOREGROUND, (0, 0, True))
         # increase depth of background stack
-        goal = cls.after.pop(GoalType.BACKGROUND, (0, 0, True))
-        cls.after.insert(goal, GoalType.BACKGROUND, (1, 0, True))
+        goal = cls.after.pop(GoalType.BACKGROUND, (1, 0, True))
+        cls.after.insert(goal, GoalType.BACKGROUND, (3, 0, True))
         # duplicate abandoned goal
         goal = cls.after.get(GoalType.ABANDONED, *(0, 0, True))
         cls.after.insert(goal, GoalType.ABANDONED, (0, 1, True))
@@ -196,6 +200,13 @@ class TestGoalsDiff(unittest.TestCase):
         diff = GoalsDiff.compute_diff(self.after, self.before)
         replayed_before = diff.patch(self.after)
         self.assertEqual(replayed_before, self.before)
+        with self.subTest("unchanged"):
+            for goals in [self.before, self.after]:
+                expected_diff = GoalsDiff()
+                actual_diff = GoalsDiff.compute_diff(goals, goals)
+                self.assertEqual(expected_diff.patch(goals), goals)
+                self.assertEqual(actual_diff.patch(goals), goals)
+                self.assertEqual(expected_diff, actual_diff)
 
 
 if __name__ == '__main__':

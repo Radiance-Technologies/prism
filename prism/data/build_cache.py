@@ -72,6 +72,11 @@ class VernacSentence:
     This is especially useful for capturing the context of commands
     nested within proofs.
     """
+    command_index: Optional[int] = None
+    """
+    The index of the Vernacular command in which this sentence partakes
+    either as the command itself or part of an associated proof.
+    """
 
     def __post_init__(self) -> None:
         """
@@ -145,7 +150,17 @@ class ProofSentence(VernacSentence):
     Type associating individual proof sentences to ASTs and open goals.
     """
 
-    pass
+    proof_index: Optional[int] = None
+    """
+    The index of the proof in which this sentence resides.
+
+    For example, a ``Program`` may have multiple proofs, one for each
+    outstanding ``Obligation``.
+    """
+    proof_step_index: Optional[int] = None
+    """
+    The index of this sentence within the body of its surrounding proof.
+    """
 
 
 Proof = List[ProofSentence]
@@ -199,16 +214,38 @@ class VernacCommandData:
         """
         return self.command.location
 
-    def sorted_sentences(self) -> List[VernacSentence]:
+    def sorted_sentences(
+            self,
+            attach_proof_indexes: bool = False,
+            command_idx: Optional[int] = None) -> List[VernacSentence]:
         """
         Get the sentences in this command sorted by their locations.
 
         A command may possess multiple sentences if it has any
         associated proofs.
+
+        Parameters
+        ----------
+        attach_proof_indexes : bool, optional
+            If true, add extra fields to proof sentences with proof and
+            proof step indexes, by default False
+        command_idx : int or None, optional
+            If provided, attach a command index to all sentences
+            including this command.
+            Otherwise, use the current `command_index` of this
+            `VernacCommandData`.
         """
+        if command_idx is None:
+            command_idx = self.command.command_index
+        else:
+            self.command.command_index = command_idx
         sentences = [self.command]
-        for proof in self.proofs:
-            for sentence in proof:
+        for proof_idx, proof in enumerate(self.proofs):
+            for sentence_idx, sentence in enumerate(proof):
+                if attach_proof_indexes:
+                    sentence.proof_index = proof_idx
+                    sentence.proof_step_index = sentence_idx
+                sentence.command_index = command_idx
                 sentences.append(sentence)
         if len(sentences) > 1:
             return VernacSentence.sort_sentences(sentences)
@@ -361,6 +398,28 @@ class ProjectCommitData(Serializable):
         else:
             files = [k for k in self.command_data.keys()]
         return files
+
+    def sorted_sentences(self) -> Dict[str, List[VernacSentence]]:
+        """
+        Get the sentences of each file sorted by location.
+
+        Returns
+        -------
+        Dict[str, List[VernacSentence]]
+            A map from file names relative to the project root to lists
+            of sentences in each file in order of appearance.
+        """
+        result = {}
+        for filename, commands in self.command_data.items():
+            sorted_sentences = []
+            for idx, c in enumerate(commands):
+                sorted_sentences.extend(
+                    c.sorted_sentences(
+                        attach_proof_indexes=True,
+                        command_idx=idx))
+            sorted_sentences = VernacSentence.sort_sentences(sorted_sentences)
+            result[filename] = sorted_sentences
+        return result
 
 
 @dataclass
