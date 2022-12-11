@@ -59,7 +59,7 @@ class HypothesisIndentifiers:
     type: List[Identifier]
     """
     A list of fully qualified identifiers contained within the
-    serialized ASTof an hypothesis' type in the order of their
+    serialized AST of an hypothesis' type in the order of their
     appearance.
     """
 
