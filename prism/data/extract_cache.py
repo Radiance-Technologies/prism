@@ -584,7 +584,8 @@ def _extract_vernac_commands(
                  expanded_ids)
             proof_id_changed = post_proof_id != pre_proof_id
             # update goals
-            if (use_goals_diff and pre_goals is not None and post_goals is not None):
+            if (use_goals_diff and pre_goals is not None
+                    and post_goals is not None):
                 pre_goals_or_diff = GoalsDiff.compute_diff(
                     pre_goals,
                     post_goals)
