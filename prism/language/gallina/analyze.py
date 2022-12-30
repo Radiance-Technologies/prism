@@ -251,20 +251,35 @@ class SexpInfo:
         """
 
         filename: str
+        """
+        The name (path) of the file containing this located object.
+        """
         lineno: int
+        """
+        The line number of the first line of this located object.
+        """
         bol_pos: int
         """
         The unencoded character count of the beginning position of the
         first line of this located object.
         """
         lineno_last: int
+        """
+        The line number of the last line of this located object.
+        """
         bol_pos_last: int
         """
         The unencoded character count of the beginning position of the
         last line of this located object.
         """
         beg_charno: int
+        """
+        The beginning character offset from the start of the file.
+        """
         end_charno: int
+        """
+        The ending character offset from the start of the file.
+        """
 
         def __contains__(
                 self,
