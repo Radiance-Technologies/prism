@@ -5,6 +5,7 @@ Utilities for representing and parsing Git diffs.
 import os
 import re
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 from typing import ClassVar, List, Optional
 
@@ -99,6 +100,13 @@ class Change:
 class GitDiff:
     """
     A diff between two commits.
+
+    Notes
+    -----
+    Some Git diff options that alter the format of the resulting diff
+    may not be supported or lead to unexpected behavior.
+    In particular, word diffs (``--word-diff``) are not currently
+    supported.
     """
 
     filename_regex: ClassVar[re.Pattern] = re.compile(
@@ -132,7 +140,7 @@ class GitDiff:
     The raw text of the diff as returned by ``git diff``.
     """
 
-    @property
+    @cached_property
     def changes(self) -> List[Change]:
         """
         Get the list of changes that comprise the diff.
