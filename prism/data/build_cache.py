@@ -9,6 +9,7 @@ import tempfile
 import warnings
 from dataclasses import InitVar, dataclass, field, fields
 from functools import reduce
+from itertools import chain
 from multiprocessing.managers import BaseManager
 from pathlib import Path
 from typing import (
@@ -358,6 +359,12 @@ class VernacCommandData:
             return VernacSentence.sort_sentences(sentences)
         else:
             return sentences
+
+    def spanning_location(self) -> SexpInfo.Loc:
+        """
+        Get a location spanning the command and any associated proofs.
+        """
+        return self.location.union(*[p.location for p in chain(*self.proofs)])
 
 
 VernacDict = Dict[str, List[VernacCommandData]]
