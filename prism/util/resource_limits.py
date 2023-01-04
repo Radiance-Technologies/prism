@@ -72,6 +72,13 @@ class ProcessResource(IntEnum):
 
         Parameters
         ----------
+        soft: Optional[int], optional,
+            Soft resource limit. Does not result in SIGKILL signal
+            when passed. Specific signal depends on resource.
+            By default, None.
+        hard: Optional[int], optional,
+            Hard resource limit. Results in SIGKILL signal
+            when passed. By default, None.
         exception : Optional[Exception], optional
             An exception to be raised by signal handler when soft
             limit is passed, by default None. Only supported for
