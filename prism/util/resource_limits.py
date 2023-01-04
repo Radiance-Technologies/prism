@@ -5,7 +5,7 @@ import resource
 import signal
 import warnings
 from enum import IntEnum
-from typing import Callable, Dict, Optional, Tuple, Union
+from typing import Callable, Dict, Optional, Tuple, TypedDict, Union
 
 
 class MaxRuntimeError(RuntimeError):
@@ -44,6 +44,122 @@ limit and 1 index is taken to be the hard limit.
 """
 
 
+def split_limit(
+        limit: Optional[ResourceLimits]) -> Tuple[Optional[int],
+                                                  Optional[int]]:
+    """
+    Determine soft and hard limit from a ResourceLimit.
+
+    Parameters
+    ----------
+    limit : Optional[ResourceLimits]
+        A resource limit, or None.
+
+    Returns
+    -------
+    Tuple[Optional[int], Optional[int]]
+        Tuple containing soft and hard limit.
+    """
+    if limit is None:
+        soft = None
+        hard = None
+    elif isinstance(limit, int):
+        soft = limit
+        hard = None
+    elif len(limit) == 1:
+        soft = limit[0]
+        hard = None
+    elif len(limit) == 2:
+        soft = limit[0]
+        hard = limit[1]
+    return soft, hard
+
+
+class ResourceMapValueDict(TypedDict):
+    """
+    Dictionary of keywords used to set resource limits.
+    """
+
+    exception: Optional[Exception]
+    """
+    Exception raised when resource soft limit is passed.
+    If None, then the default exception for that resource
+    is used.
+    """
+    soft: Optional[int]
+    """
+    Soft resource limit. Does not result in SIGKILL signal
+    when passed. Specific signal depends on resource.
+    By default, None.
+    """
+    hard: Optional[int]
+    """
+    Hard resource limit. Results in SIGKILL signal
+    when passed. By default, None.
+    """
+
+
+def _value_to_valuedict(
+        value: Union[ResourceLimits,
+                     Exception]) -> ResourceMapValueDict:
+    """
+    Return a ResourceMapValueDict that contains the given value.
+
+    Parameters
+    ----------
+    value : Union[ResourceLimits, Exception]
+        Value to place in ResourceMapValueDict
+
+    Returns
+    -------
+    ResourceMapValueDict
+        Dictionary mapping the value data to
+        specific keys in ResourceMapValueDict.
+    """
+    value_dict: ResourceMapValueDict = {}
+    if isinstance(value, Exception):
+        value_dict['exception'] = value
+    else:
+        soft, hard = split_limit(value)
+        if soft is not None:
+            value_dict['soft'] = soft
+        if hard is not None:
+            value_dict['hard'] = hard,
+    return value_dict
+
+
+def _repeated_valuedict_keys_msg(resource_name: str, key: str) -> str:
+    """
+    Return message for repeated values corresponding to same resource.
+
+    Parameters
+    ----------
+    resource_name : str
+        Resource name
+    key : str
+        A ResourceMapValueDict key.
+
+    Returns
+    -------
+    str
+        Messaging describing which resource name has repeated values.
+
+    Raises
+    ------
+    ValueError
+        Key is not a key expected by ResourceMapValueDict.
+    """
+    if key == "exception":
+        name = "exception"
+    elif key == "soft":
+        name = "soft limit"
+    elif key == "hard":
+        name = "hard limit"
+    else:
+        raise ValueError(f"Unexpected key ('{key}') for ResourceMapValueDict")
+    return f"Multiple {name}s given for {resource_name}"
+
+
 class ProcessResource(IntEnum):
     """
     Enumeration of resources thatcan be limited.
@@ -62,39 +178,31 @@ class ProcessResource(IntEnum):
     is sent to the process.
     """
 
-    def _limit_current_process(
-            self,
-            soft: Optional[int] = None,
-            hard: Optional[int] = None,
-            exception: Optional[Exception] = None):
+    def _limit_current_process(self, rss_map_value_dict: ResourceMapValueDict):
         """
         Limit the resource usage of the current process.
 
         Parameters
         ----------
-        soft: Optional[int], optional,
-            Soft resource limit. Does not result in SIGKILL signal
-            when passed. Specific signal depends on resource.
-            By default, None.
-        hard: Optional[int], optional,
-            Hard resource limit. Results in SIGKILL signal
-            when passed. By default, None.
-        exception : Optional[Exception], optional
-            An exception to be raised by signal handler when soft
-            limit is passed, by default None. Only supported for
-            `ProcessResource.RUNTIME`. `ProcessResource.MEMORY`
-            raises a `MemoryError` already.
+        rss_map_value_dict: ResourceMapValueDict
+            Dictionary containing soft limit, hard limit, and
+            resource specific exception. See ResourceMapValueDict
+            for details.
 
         Raises
         ------
         ValueError
-            An exception was given when `self` is not
+            An exception was given when `self` was not
             `ProcessResource.RUNTIME`.
         """
         # Get existing limits
         existing = resource.getrlimit(self.value)
-
-        # Use existing limit when requested value is None.
+        # Get requested soft and hard limits
+        soft = rss_map_value_dict.get('soft', None)
+        hard = rss_map_value_dict.get('hard', None)
+        # Get requested exception for when soft limit is passed.
+        exception = rss_map_value_dict.get('exception', None)
+        # Use existing limit when requested limit is None.
         if soft is None and hard is not None:
             # Use existing soft limit and requested hard limit.
             soft = existing[0]
@@ -159,6 +267,51 @@ class ProcessResource(IntEnum):
         elif self.value == ProcessResource.MEMORY:
             flag = f"-m {soft_limit}"
         return flag
+
+    @classmethod
+    def create_resource_map(
+        cls,
+        **kwargs: Dict[Union[str,
+                             int,
+                             'ProcessResource'],
+                       Union[ResourceLimits,
+                             Exception]]
+    ) -> Dict['ProcessResource',
+              ResourceMapValueDict]:
+        """
+        Create map between resources and limits/exception.
+
+        Returns
+        -------
+        Dict['ProcessResource', ResourceMapValueDict]
+            A mapping between a specific resource and the limits
+            on that resource, as well as the exception raised
+            when the soft resource limit is exceeded.
+
+        Raises
+        ------
+        ValueError
+            Multiple soft limits, hard limits, or exceptions
+            were given for the same resource.
+        """
+        resource_map = {}
+        for rss, value in set(kwargs.keys()):
+            value_dict = _value_to_valuedict(value)
+
+            # Convert resource to ProcessResource
+            if isinstance(rss, str):
+                rss = cls[rss]
+            elif isinstance(rss, int):
+                rss = cls(rss)
+
+            # Add values to resource map
+            if rss not in resource_map:
+                resource_map[rss] = {}
+            for k in value_dict:
+                if k in resource_map[rss]:
+                    raise ValueError(_repeated_valuedict_keys_msg(rss.name, k))
+            resource_map[rss].update(value_dict)
+        return resource_map
 
     @classmethod
     def limit_command(
@@ -232,12 +385,6 @@ class ProcessResource(IntEnum):
             Current only supported for `ProcessResource.RUNTIME`.
             `ProcessResource.MEMORY` raises a `MemoryError` already.
             Keys in `exceptions` must keys
-
-        Raises
-        ------
-        ValueError
-            An exception was given a value other than
-            `ProcessResource.RUNTIME`.
         """
         if limits is None:
             limits = {}
@@ -248,44 +395,12 @@ class ProcessResource(IntEnum):
         # uses `ProcessResource` as keys and keyword arguments of the
         # `ProcessRsource.<value>._limit_current_process` method as
         # values.
-        resource_map = {}
-        for rss in set(list(limits.keys()) + list(exceptions.keys())):
-            exception = exceptions.get(rss, None)
-
-            # Determine soft and hard limits from `limit`.
-            limit = limits.get(rss, None)
-            if limit is None:
-                soft = None
-                hard = None
-            elif isinstance(limit, int):
-                soft = limit
-                hard = None
-            elif len(limit) == 1:
-                soft = limit[0]
-                hard = None
-            elif len(limit) == 2:
-                soft = limit[0]
-                hard = limit[1]
-
-            # Convert resource to ProcessResource
-            if isinstance(rss, str):
-                rss = ProcessResource[rss]
-            elif isinstance(rss, int):
-                rss = ProcessResource(rss)
-
-            # Add values to resource map
-            if rss not in resource_map:
-                resource_map[rss] = dict()
-            if soft is not None:
-                resource_map[rss]['soft'] = soft
-            if hard is not None:
-                resource_map[rss]['hard'] = hard
-            if exception is not None:
-                resource_map[rss]['exception'] = exception
+        resource_map = cls.create_resource_map(**limits)
+        resource_map.update(cls.create_resource_map(**exceptions))
 
         # Apply resource constraints.
-        for rss, kwargs in resource_map.items():
-            rss._limit_current_process(**kwargs)
+        for rss, rss_map_value_dict in resource_map.items():
+            rss._limit_current_process(rss_map_value_dict)
 
 
 def subprocess_resource_limiter(
