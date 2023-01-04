@@ -22,7 +22,10 @@ class MaxRuntimeError(RuntimeError):
 
 def get_handler(exception: Exception):
     """
-    Create handler function to raise exception.
+    Create function to raise `exception` when called.
+
+    The fuction return is intended to passed to `signal.signal`.
+    https://docs.python.org/3.8/library/signal.html#signal.signal
     """
 
     def signal_handler(signo, frame):
@@ -44,20 +47,20 @@ limit and 1 index is taken to be the hard limit.
 class ProcessResource(IntEnum):
     """
     Enumeration of resources thatcan be limited.
-
-    Attributes
-    ----------
-    MEMORY : int
-        The maximum area (in bytes) of address space which may be taken
-        by the process.
-    RUNTIME : int
-        The maximum amount of processor time (in seconds) that a
-        process can use. If this limit is exceeded, a SIGXCPU signal
-        is sent to the process.
     """
 
     MEMORY: int = resource.RLIMIT_AS
+    """
+    The maximum area (in bytes) of address space which may be taken
+    by the process.
+    """
+
     RUNTIME: int = resource.RLIMIT_CPU
+    """
+    The maximum amount of processor time (in seconds) that a
+    process can use. If this limit is exceeded, a SIGXCPU signal
+    is sent to the process.
+    """
 
     def _limit_current_process(
             self,
@@ -78,7 +81,7 @@ class ProcessResource(IntEnum):
         Raises
         ------
         ValueError
-            An exception was given a value other than
+            An exception was given when `self` is not
             `ProcessResource.RUNTIME`.
         """
         # Get existing limits
@@ -176,11 +179,10 @@ class ProcessResource(IntEnum):
         Returns
         -------
         str
-            If `memory` and `runtime` are both `None`,
-            then an empty string is returned. Otherwise,
-            a string that can be prepended to an existing
-            command string to limit the resources of that
-            original command will be returned.
+            If `limits` is None or empty dict, `cmd` is returned
+            without modification. Otherwise the "timeout" bash command
+            with corresponding flags and values are prepended to `cmd`
+            and returned.
         """
         flags = []
         if limits is None:
@@ -280,10 +282,11 @@ class ProcessResource(IntEnum):
 
 
 def subprocess_resource_limiter(
-    memory: Optional[int] = None,
-    runtime: Optional[int] = None,
+    memory: Optional[ResourceLimits] = None,
+    runtime: Optional[ResourceLimits] = None,
     max_runtime_exception: Exception = None,
-) -> Callable:
+) -> Callable[[],
+              None]:
     """
     Return function limits resources that when called.
 
@@ -294,7 +297,11 @@ def subprocess_resource_limiter(
     runtime : Optional[int], optional
         maximum time allowed, by default None
     max_time_exception : Exception, optional
-        _description_, by default None
+        Exception that is raised when max runtime is exceeded,
+        by default `None`. If `None` is given, then a MaxRuntimeError
+        exception is used instead. See
+        `ProcessResource.limit_current_process`.
+
     Returns
     -------
     Callable
