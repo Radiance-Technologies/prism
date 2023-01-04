@@ -32,6 +32,13 @@ def get_handler(exception: Exception):
 
 
 ResourceLimits = Union[int, Tuple[int, int]]
+"""
+A max size for a resource.
+
+If an int is given, it is assumed to be a soft limit. If a
+2-tuple of ints are given, the 0 index is taken to be a soft
+limit and 1 index is taken to be the hard limit.
+"""
 
 
 class ProcessResource(IntEnum):
