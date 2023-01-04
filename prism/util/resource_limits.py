@@ -276,8 +276,7 @@ def subprocess_resource_limiter(
     memory: Optional[int] = None,
     runtime: Optional[int] = None,
     max_runtime_exception: Exception = None,
-) -> Callable[[],
-              ]:
+) -> Callable:
     """
     Return function limits resources that when called.
 
