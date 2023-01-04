@@ -386,7 +386,14 @@ class Project(ABC):
         else:
             logger.debug(msg)
 
-    def _make(self, target: str, action: str) -> Tuple[int, str, str]:
+    def _make(
+            self,
+            target: str,
+            action: str,
+            max_memory: Optional[int] = None,
+            max_runtime: Optional[int] = None) -> Tuple[int,
+                                                        str,
+                                                        str]:
         """
         Make a build target (one of build, clean, or install).
 
@@ -397,6 +404,10 @@ class Project(ABC):
         action : str
             A more descriptive term for the action represented by the
             build target, e.g., ``"compilation"``.
+        max_memory: Optional[int], optional
+            Max memory allowed to make project.
+        max_runtime: Optional[int], optional
+            Max time allowed to make project.
 
         Returns
         -------
@@ -417,7 +428,12 @@ class Project(ABC):
         # wrap in parentheses to preserve operator precedence when
         # joining commands with &&
         cmd = self._prepare_command(target)
-        r = self.opam_switch.run(cmd, cwd=self.path, check=False)
+        r = self.opam_switch.run(
+            cmd,
+            cwd=self.path,
+            check=False,
+            max_memory=max_memory,
+            max_runtime=max_runtime)
         result = (r.returncode, r.stdout, r.stderr)
         self._process_command_output(action, *result)
         return result
@@ -451,7 +467,7 @@ class Project(ABC):
                 for f in self.get_file_list(relative=True)
             ]
 
-    def build(self) -> Tuple[int, str, str]:
+    def build(self, **kwargs) -> Tuple[int, str, str]:
         """
         Build the project.
         """
@@ -459,13 +475,13 @@ class Project(ABC):
             _, rcode, stdout, stderr = self.infer_serapi_options()
             return rcode, stdout, stderr
         else:
-            return self._make("build", "Compilation")
+            return self._make("build", "Compilation", **kwargs)
 
-    def clean(self) -> Tuple[int, str, str]:
+    def clean(self, **kwargs) -> Tuple[int, str, str]:
         """
         Clean the build status of the project.
         """
-        r = self._make("clean", "Cleaning")
+        r = self._make("clean", "Cleaning", **kwargs)
         # ensure removal of Coq library files
         self._clean()
         return r

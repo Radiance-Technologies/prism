@@ -17,6 +17,7 @@ from seutil import bash
 
 from prism.util.bash import escape
 from prism.util.radpytools.dataclasses import default_field
+from prism.util.resource_limits import subprocess_resource_limiter
 
 from .file import OpamFile
 from .formula import LogicalPF, LogOp, PackageConstraint, PackageFormula
@@ -578,6 +579,8 @@ class OpamSwitch:
             check: bool = True,
             env: Optional[Dict[str,
                                str]] = None,
+            max_memory: Optional[int] = None,
+            max_runtime: Optional[int] = None,
             **kwargs) -> CompletedProcess:
         """
         Run a given command and check for errors.
@@ -586,6 +589,31 @@ class OpamSwitch:
             env = self.environ
         if self.is_clone:
             command, src, dest = self.as_clone_command(command)
+
+        if any(kwarg is not None for kwarg in [max_memory, max_runtime]):
+            # Limits resources allowed to be used by bash command
+            limiter = subprocess_resource_limiter(
+                memory=max_memory,
+                runtime=max_runtime)
+            # Run any existing `prexec_fn` arguments before running
+            # limiter. `preexec_fn_` would have to be defined
+            # prior to this function call, so it's reasonable to let
+            # it run first. If a user limits resources in `preexec_fn_`
+            # AND provided `max_<>` keyword arguments, it is assumed
+            # that the user is aware that resources were already limited
+            # by `preexec_fn_` and is applying additional constraints.
+            # The rationale behind this assumption is that the user
+            # defined `preexec_fn_` function before passing `max_<>`
+            # keyword arguments.
+            preexec_fn_ = kwargs.get('preexec_fn', None)
+
+            def preexec_fn():
+                if preexec_fn_ is not None:
+                    preexec_fn_()
+                limiter()
+
+            kwargs['preexec_fn'] = preexec_fn
+
         r = bash.run(command, env=env, **kwargs)
         if check:
             try:
