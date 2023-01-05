@@ -4,10 +4,10 @@ Tools for aligning the same proofs across commits.
 
 import enum
 import math
-from typing import Callable, List, Optional, Tuple, TypeVar
+from typing import Callable, List, Optional, TypeVar
 
+import numpy as np
 from leven import levenshtein
-from numpy import cumsum
 
 from prism.data.build_cache import ProjectCommitData, VernacSentence
 from prism.util.alignment import Alignment, lazy_align
@@ -83,6 +83,7 @@ class Norm(enum.Enum):
             else:
 
                 def norm(c: T) -> float:
+                    assert zero is not None
                     return D(c, zero)
 
         distance = D(a, b)
@@ -153,13 +154,13 @@ def order_preserving_alignment(
         lambda _: alpha)
 
 
-def align_commits_per_file(a: ProjectCommitData,
-                           b: ProjectCommitData) -> List[Tuple[int,
-                                                               int]]:
+def align_commits_per_file(
+        a: ProjectCommitData,
+        b: ProjectCommitData) -> np.ndarray:
     """
     Align two `ProjectCommit` based on matching files.
 
-    Aligns sentences in files pairwise based on file names.
+    Aligns commands in files pairwise based on file names.
     Files that have been renamed or removed between the two commits are
     not included.
     Consequently, the quality of the alignment will suffer in such
@@ -172,14 +173,14 @@ def align_commits_per_file(a: ProjectCommitData,
 
     Returns
     -------
-    List[Tuple[int, int]]
-        A list of pairs of integers indicating the indices of aligned
-        sentences between each commit with sentences enumerated over all
-        matching files in `a` and `b` in the order dictated by `a`.
+    np.ndarray
+        An array of pairs of integers indicating the indices of aligned
+        commands between each commit with commands enumerated over all
+        matching files in `a` and `b`.
         For example, ``(1,1)`` matches the first element of the first
-        file of `a` to the first element of the matching file of `b`.
-        This function does not produce skipped alignment pairs--they
-        will simply not show up in the output.
+        file of `a` to the first element of the first file of `b`.
+        Indices of elements in either `a` or `b` that were skipped in
+        the alignment do not appear in the output.
 
     Raises
     ------
@@ -194,31 +195,35 @@ def align_commits_per_file(a: ProjectCommitData,
 
     # only attempt to align files present in both roots.
     alignable_files = a.command_data.keys() & b.command_data.keys()
-    aligned_files = {}
+    aligned_files: List[np.ndarray] = []
 
-    alignment = []
+    a_files = a.files
+    b_files = b.files
 
-    a_indexes = [0] + list(
-        cumsum([len(x) for x in a.command_data.values()])[:-1])
-    b_indexes = [0] + list(
-        cumsum([len(x) for x in b.command_data.values()])[:-1])
+    a_file_offsets = dict(
+        zip(
+            a_files,
+            [0] + list(np.cumsum([len(a.command_data[x]) for x in a_files]))))
+    b_file_offsets = dict(
+        zip(
+            b_files,
+            [0] + list(np.cumsum([len(b.command_data[x]) for x in b_files]))))
 
-    for f in a.files:
+    for f in a_files:
         if f not in alignable_files:
             continue
         a_sentences = [x.command for x in a.command_data[f]]
         b_sentences = [x.command for x in b.command_data[f]]
-        aligned_files[f] = list(
-            filter(
-                lambda x: x[0] is not None and x[1] is not None,
-                order_preserving_alignment(a_sentences,
-                                           b_sentences)))
+        aligned_sentences = np.asarray(
+            list(
+                filter(
+                    lambda x: x[0] is not None and x[1] is not None,
+                    order_preserving_alignment(a_sentences,
+                                               b_sentences))))
         # seek to the right part of the alignment
-        left_acc = a_indexes[list(a.command_data.keys()).index(f)]
-        right_acc = b_indexes[list(b.command_data.keys()).index(f)]
-        if f in aligned_files:
-            for (x, y) in aligned_files[f]:
-                if (x is not None and y is not None):
-                    alignment.append((x + left_acc, y + right_acc))
-
+        a_offset = a_file_offsets[f]
+        b_offset = b_file_offsets[f]
+        aligned_sentences += np.array([a_offset, b_offset])
+        aligned_files.append(aligned_sentences)
+    alignment = np.concatenate(aligned_files, axis=0)
     return alignment
