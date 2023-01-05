@@ -86,6 +86,15 @@ class Change:
         return '\n'.join(lines)
 
     @property
+    def is_rename(self) -> bool:
+        """
+        Return whether this change includes a file rename.
+        """
+        return (
+            self.before_filename is not None and self.after_filename is not None
+            and self.before_filename != self.after_filename)
+
+    @property
     def is_pure_rename(self) -> bool:
         """
         Return whether this change represents just a rename.
