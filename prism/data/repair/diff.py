@@ -1,8 +1,9 @@
 """
 Utility functions related to Git diffs useful for repair examples.
 """
-from typing import List, Sequence
+from typing import Dict, Iterable, List
 
+from prism.data.build_cache import ProjectCommitData
 from prism.language.gallina.analyze import SexpInfo
 from prism.util.diff import Change, GitDiff
 
@@ -72,7 +73,7 @@ def is_location_in_diff(
 
 
 def locations_in_diff(
-        locs: Sequence[SexpInfo.Loc],
+        locs: Iterable[SexpInfo.Loc],
         diff: GitDiff,
         is_before: bool) -> List[int]:
     """
@@ -80,7 +81,7 @@ def locations_in_diff(
 
     Parameters
     ----------
-    locs : Sequence[SexpInfo.Loc]
+    locs : Iterable[SexpInfo.Loc]
         A sequence of locations.
     diff : GitDiff
         A collection of changes in a project.
@@ -101,3 +102,36 @@ def locations_in_diff(
                                                       diff,
                                                       is_before)
     ]
+
+
+def commands_in_diff(data: ProjectCommitData,
+                     diff: GitDiff,
+                     is_before: bool) -> Dict[str,
+                                              List[int]]:
+    """
+    Get the indices of a project's commands that intersect a diff.
+
+    Parameters
+    ----------
+    data : ProjectCommitData
+        Extracted data for a commit in a project.
+    diff : GitDiff
+        A collection of changes in a project.
+    is_before : bool
+        Whether to check if each command intersects any range of
+        changed lines in an original file (True) or if it intersects
+        any range of lines in an altered file (False).
+
+    Returns
+    -------
+    Dict[str, List[int]]
+        A map from filenames in ``data.command_data`` to the indices of
+        files' respective commands that intersect the given `diff`.
+    """
+    return {
+        k: locations_in_diff(
+            (c.spanning_location() for c in v),
+            diff,
+            is_before) for k,
+        v in data.command_data.items()
+    }
