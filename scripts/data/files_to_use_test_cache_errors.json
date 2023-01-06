@@ -1,0 +1,5 @@
+{
+  "coq-cds4ltl": [
+    "src/Bool.v"
+  ]
+}

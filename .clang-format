@@ -47,3 +47,6 @@ SpaceInEmptyParentheses: false
 Standard: Auto
 TabWidth: 4
 UseTab: Never
+---
+Language: Json
+BasedOnStyle: llvm

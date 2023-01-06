@@ -2,10 +2,11 @@
 Script to perform cache extraction.
 """
 import argparse
+import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, Iterable, List, Optional
 
 from prism.data.extract_cache import (
     CacheExtractor,
@@ -33,6 +34,29 @@ def load_opam_projects() -> List[str]:
     with open(opam_projects_file_path, "r") as f:
         projects_to_use = f.readlines()[1 :]
     return [p.strip() for p in projects_to_use]
+
+
+def load_files_to_use_file(json_file: str) -> Dict[str, Iterable[str]]:
+    """
+    Load files to use from a JSON file.
+
+    The JSON file should contain a single object with keys corresponding
+    to project names and values being lists of files to load for those
+    projects.
+
+    Parameters
+    ----------
+    json_file : str
+        JSON file to load
+
+    Returns
+    -------
+    Dict[str, Iterable[str]]
+        Loaded dictionary
+    """
+    with open(json_file, "rt") as f:
+        obj = json.load(f)
+    return obj
 
 
 if __name__ == "__main__":
@@ -152,6 +176,12 @@ if __name__ == "__main__":
         action="store_true",
         help="If provided, only use the projects listed in 'opam_projects.txt'."
         " This arg is overridden by --project-names if provided.")
+    parser.add_argument(
+        "--files-to-use-file",
+        default=None,
+        help="If provided, this should be a JSON file containing project-keyed "
+        "lists of files to use for extraction. If not provided, use all files "
+        "in projects.")
     args = parser.parse_args()
     default_commits_path: str = args.default_commits_path
     cache_dir: str = args.cache_dir
@@ -182,6 +212,10 @@ if __name__ == "__main__":
     updated_md_storage_file.parent.mkdir(parents=True, exist_ok=True)
     max_pool_size: int = args.max_switch_pool_size
     max_procs_file_level: int = args.max_procs_file_level
+    if args.files_to_use_file is not None:
+        files_to_use = load_files_to_use_file(args.files_to_use_file)
+    else:
+        files_to_use = None
     # Force redirect the root logger to a file
     # This might break due to multiprocessing. If so, it should just
     # be disabled
@@ -206,7 +240,8 @@ if __name__ == "__main__":
         swim,
         default_commits_path,
         cache_extract_commit_iterator,
-        coq_version_iterator=coq_version_iterator)
+        coq_version_iterator=coq_version_iterator,
+        files_to_use=files_to_use)
     cache_extractor.run(
         project_root_path,
         log_dir,
