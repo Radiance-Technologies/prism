@@ -300,7 +300,7 @@ class ProcessResource(IntEnum):
 
             # Convert resource to ProcessResource
             if isinstance(rss, str):
-                rss = cls[rss]
+                rss = cls[rss.upper()]
             elif isinstance(rss, int):
                 rss = cls(rss)
 
