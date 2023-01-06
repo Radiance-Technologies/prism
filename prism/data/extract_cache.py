@@ -6,6 +6,7 @@ import logging
 import multiprocessing as mp
 import os
 import re
+import traceback
 import warnings
 from datetime import datetime
 from functools import partial
@@ -86,10 +87,12 @@ class ExtractVernacCommandsError(RuntimeError):
             self,
             message: str,
             filename: str = "",
-            parent_exception: Optional[Exception] = None):
+            parent_exception: Optional[Exception] = None,
+            parent_stacktrace: Optional[str] = None):
         super().__init__(message)
         self.filename = filename
         self.parent = parent_exception
+        self.parent_stacktrace = parent_stacktrace
 
 
 def _process_proof_block(
@@ -822,7 +825,11 @@ def _extract_vernac_commands_worker(
             opam_switch=project.opam_switch,
             serapi_options=project.serapi_options)
     except Exception as e:
-        return ExtractVernacCommandsError(f"Error on {filename}", filename, e)
+        return ExtractVernacCommandsError(
+            f"Error on {filename}",
+            filename,
+            e,
+            traceback.format_exc())
     finally:
         if worker_semaphore is not None:
             worker_semaphore.release()
@@ -951,7 +958,7 @@ def extract_cache_new(
         force_serial: bool,
         worker_semaphore: Optional[BoundedSemaphore]):
     """
-    Extract a new cache and insert it into the build cache.
+    Extract a new cache object and insert it into the build cache.
 
     Parameters
     ----------
@@ -1023,6 +1030,8 @@ def extract_cache_new(
                         worker_semaphore)
                 except ExtractVernacCommandsError as e:
                     logger.critical(f"Filename: {e.filename}\n")
+                    logger.critical(
+                        f"Parent stack trace:\n{e.parent_stacktrace}\n")
                     logger.exception(e)
                     logger_stream.flush()
                     logged_text = logger_stream.getvalue()
