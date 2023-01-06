@@ -1,12 +1,20 @@
 """
 Test suite for alignment algorithms and utilities.
 """
-import unittest
-import os, psutil
+import os
 import time
-from typing import Callable, Optional
+import unittest
 from resource import getrlimit, setrlimit
-from prism.util.resource_limits import ResourceLimits, ProcessResource, MaxRuntimeError, ResourceMapValueDict
+from typing import Callable, Optional
+
+import psutil
+
+from prism.util.resource_limits import (
+    MaxRuntimeError,
+    ProcessResource,
+    ResourceLimits,
+    ResourceMapValueDict,
+)
 
 
 def _under_limit(resource: ProcessResource, offset: int = None):
