@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import ClassVar, List, Optional
+from typing import ClassVar, List, Optional, Union
 
 from prism.util.radpytools.dataclasses import default_field
 from prism.util.re import regex_from_options
@@ -116,21 +116,31 @@ class GitDiff:
     may not be supported or lead to unexpected behavior.
     In particular, word diffs (``--word-diff``) are not currently
     supported.
+
+    In addition, it is recommended that one use the ``-U0`` option to
+    limit the context of changes to zero lines so that the line ranges
+    extracted in the `changes` method correspond only to changed line
+    ranges and not unchanged context.
     """
 
     filename_regex: ClassVar[re.Pattern] = re.compile(
+        "(?:^|(?<=\n))"
         r"---\s+(?P<before_filename>\S+)\s+"
         r"\+\+\+\s+(?P<after_filename>\S+)")
     rename_regex: ClassVar[re.Pattern] = re.compile(
+        "(?:^|(?<=\n))"
         r"rename\s+from\s+(?P<before_rename>\S+)\s+"
         r"rename\s+to\s+(?P<after_rename>\S+)")
     location_regex: ClassVar[re.Pattern] = re.compile(
+        "(?:^|(?<=\n))"
         r"@@\s*-(?P<before_start>\d+)(?:,(?P<before_count>\d+))?"
         r"\s*\+(?P<after_start>\d+)(?:,(?P<after_count>\d+))?\s*@@")
     removed_line_regex: ClassVar[re.Pattern] = re.compile(
+        "(?:^|(?<=\n))"
         r"-(?P<removed_line>.*)(?:"
         "\n|$)")
     added_line_regex: ClassVar[re.Pattern] = re.compile(
+        "(?:^|(?<=\n))"
         r"\+(?P<added_line>.*)(?:"
         "\n|$)")
     change_regex: ClassVar[re.Pattern] = regex_from_options(
@@ -221,7 +231,11 @@ class GitDiff:
         return path
 
     @staticmethod
-    def mkrange(start: str, count: Optional[str]) -> range:
+    def mkrange(
+            start: Union[int,
+                         str],
+            count: Optional[Union[int,
+                                  str]]) -> range:
         """
         Make a `range` from a parsed range for a `Change` constructor.
         """
