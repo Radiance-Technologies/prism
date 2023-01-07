@@ -2,6 +2,7 @@
 A collection of utilities for iterable containers.
 """
 
+from bisect import bisect_left
 from dataclasses import InitVar, dataclass, field, fields
 from typing import (
     Any,
@@ -156,6 +157,35 @@ class CompareIterator(Generic[C]):
         return max(nexts) if reverse else min(nexts)
 
 
+def fast_contains(seq: Sequence[C], value: C) -> bool:
+    """
+    Return whether the value is in the sequence in logarithmic time.
+
+    Assumes that the sequence is sorted; otherwise the results are
+    undefined.
+    """
+    insertion_index = bisect_left(seq, value)
+    return insertion_index != len(seq) and seq[insertion_index] == value
+
+
+def fast_index(seq: Sequence[C], value: C) -> int:
+    """
+    Return first index of value in logarithmic time complexity.
+
+    Assumes that the sequence is sorted; otherwise the results are
+    undefined.
+
+    Raises
+    ------
+    ValueError
+        If the value is not present
+    """
+    insertion_index = bisect_left(seq, value)
+    if insertion_index == len(seq) or seq[insertion_index] != value:
+        raise ValueError(f"{value} is not in sequence")
+    return insertion_index
+
+
 def unpack(dc: Dataclass) -> Tuple[Any, ...]:
     """
     Return tuple of dataclass field values.
@@ -168,6 +198,16 @@ def shallow_asdict(dc: Dataclass) -> Dict[str, Any]:
     Non-recursively convert dataclass into dictionary.
     """
     return dict((field.name, getattr(dc, field.name)) for field in fields(dc))
+
+
+def split(it: Sequence[T], n: int) -> Iterator[Sequence[T]]:
+    """
+    Split a sequence into `n` sequential subsequences.
+    """
+    if n == 0:
+        return (_ for _ in range(0))
+    k, m = divmod(len(it), n)
+    return (it[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
 
 
 def uniquify(it: Iterable[H]) -> List[H]:
