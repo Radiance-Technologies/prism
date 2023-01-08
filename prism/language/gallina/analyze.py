@@ -447,6 +447,29 @@ class SexpInfo:
                 unicode_offsets)
             return SexpInfo.Loc(**kwargs)
 
+        def rename(self, new_name: str) -> 'SexpInfo.Loc':
+            """
+            Change the filename of this location.
+
+            Parameters
+            ----------
+            new_name : str
+                The new filename for the location.
+
+            Returns
+            -------
+            SexpInfo.Loc
+                The location with the new filename.
+            """
+            return SexpInfo.Loc(
+                new_name,
+                self.lineno,
+                self.bol_pos,
+                self.lineno_last,
+                self.bol_pos_last,
+                self.beg_charno,
+                self.end_charno)
+
         def shift(self, offset: int) -> 'SexpInfo.Loc':
             """
             Shift the character positions of this location.
