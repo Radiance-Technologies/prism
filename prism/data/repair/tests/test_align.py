@@ -2,16 +2,23 @@
 Test module for repair tools.
 """
 import unittest
-from itertools import chain
 from pathlib import Path
 from typing import Dict, List
 
-from prism.data.build_cache import ProjectCommitData, VernacSentence
+import numpy as np
+
+from prism.data.build_cache import (
+    CoqDocumentData,
+    ProjectCommitData,
+    VernacSentence,
+)
 from prism.data.extract_cache import VernacCommandData
-from prism.data.repair import align_commits_per_file
+from prism.data.repair import align_commits, align_commits_per_file
+from prism.data.repair.diff import compute_diff
 from prism.language.heuristic.parser import HeuristicParser
 from prism.project.metadata import ProjectMetadata
 from prism.tests import _COQ_EXAMPLES_PATH
+from prism.util.diff import GitDiff
 
 
 class TestAlign(unittest.TestCase):
@@ -21,6 +28,7 @@ class TestAlign(unittest.TestCase):
 
     caches: Dict[str,
                  List[VernacCommandData]] = {}
+    test_metadata: ProjectMetadata
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -28,7 +36,12 @@ class TestAlign(unittest.TestCase):
         Set up some real data to try to align.
         """
         cls.test_metadata = ProjectMetadata("test_align", [], [], [])
-        files = ["verdi_core_net_a.v", "verdi_core_net_b.v", "Alphabet.v"]
+        files = [
+            "verdi_core_net_a.v",
+            "verdi_core_net_b.v",
+            "Alphabet.v",
+            "simple.v"
+        ]
 
         for f in files:
             # grab a small representative set of lines
@@ -37,20 +50,37 @@ class TestAlign(unittest.TestCase):
                     None,
                     None,
                     VernacSentence(
-                        x.text.split(":=")[0]
-                        if x.text.startswith("Definition")
-                        or x.text.startswith("Inductive") else x.text,
+                        x.text,
+                        x.ast,
                         None,
-                        None,
-                        None,
+                        x.location.rename("core_net")
+                        if f.startswith("verdi") else x.location,
                         None))
                 for x in HeuristicParser.parse_sentences_from_file(
-                    Path(_COQ_EXAMPLES_PATH) / f)
+                    Path(_COQ_EXAMPLES_PATH) / f,
+                    return_locations=True,
+                    glom_proofs=False,
+                    project_path=Path(_COQ_EXAMPLES_PATH))
                 if x.text.startswith("Lemma") or x.text.startswith("Theorem")
                 or x.text.startswith("Definition")
                 or x.text.startswith("Inductive")
             ]
-            cls.caches[f] = definitions
+            cls.caches[f] = CoqDocumentData(definitions)
+
+    def assertEqualIdentifiersInAlignment(
+            self,
+            a: ProjectCommitData,
+            b: ProjectCommitData,
+            alignment: np.ndarray) -> None:
+        """
+        Assert that equivalently identified commands are aligned.
+        """
+        for i, (_, x) in enumerate(a.commands):
+            for j, (_, y) in enumerate(b.commands):
+                x_identifier = x.command.text.split(":=")[0]
+                y_identifier = y.command.text.split(":=")[0]
+                if x_identifier == y_identifier:
+                    self.assertTrue((i, j) in alignment)
 
     def test_align_commits_per_file(self):
         """
@@ -109,17 +139,32 @@ class TestAlign(unittest.TestCase):
             None,
             None)
         alignment = align_commits_per_file(a, b)
+        self.assertEqualIdentifiersInAlignment(a, b, alignment)
 
-        alines = list(
-            chain.from_iterable(
-                a.command_data[x] for x in a.command_data.keys()))
-
-        # a needs special treatment because it now consists
-        # of multiple files here
-        for i, x in enumerate(alines):
-            for j, y in enumerate(self.caches["verdi_core_net_b.v"]):
-                if (x.command.text == y.command.text):
-                    self.assertTrue((i, j) in alignment)
+    def test_align_commits(self):
+        """
+        Verify that alignments can be constrained to diffs.
+        """
+        a = ProjectCommitData(
+            self.test_metadata,
+            {
+                "simple.v": TestAlign.caches["simple.v"],
+                "core_net": TestAlign.caches["verdi_core_net_a.v"],
+                "Alphabet.v": TestAlign.caches["Alphabet.v"]
+            },
+            None,
+            None)
+        b = ProjectCommitData(
+            self.test_metadata,
+            {"core_net": TestAlign.caches["verdi_core_net_b.v"]},
+            None,
+            None)
+        diff = GitDiff("")
+        with self.assertRaises(ValueError):
+            align_commits(a, b, diff, align_commits_per_file)
+        diff = compute_diff(a, b)
+        alignment = align_commits(a, b, diff, align_commits_per_file)
+        self.assertEqualIdentifiersInAlignment(a, b, alignment)
 
 
 if __name__ == "__main__":

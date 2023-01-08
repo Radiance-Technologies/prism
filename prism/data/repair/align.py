@@ -4,16 +4,20 @@ Tools for aligning the same proofs across commits.
 
 import enum
 import math
-from bisect import bisect_left
-from typing import Callable, Dict, List, Optional, TypeVar
+from typing import Callable, Dict, List, Optional, Tuple, TypeVar, Union
 
 import numpy as np
 from leven import levenshtein
 
-from prism.data.build_cache import ProjectCommitData, VernacSentence
+from prism.data.build_cache import (
+    ProjectCommitData,
+    VernacCommandData,
+    VernacSentence,
+)
 from prism.data.repair.diff import commands_in_diff
 from prism.util.alignment import Alignment, lazy_align
 from prism.util.diff import GitDiff
+from prism.util.iterable import fast_contains
 
 T = TypeVar('T')
 
@@ -226,7 +230,10 @@ def align_commits_per_file(
         # seek to the right part of the alignment
         a_offset = a_file_offsets[f]
         b_offset = b_file_offsets[f]
-        aligned_sentences += np.array([a_offset, b_offset])
+        aligned_sentences += np.resize(
+            np.array([a_offset,
+                      b_offset]),
+            aligned_sentences.shape)
         aligned_files.append(aligned_sentences)
     alignment = np.concatenate(aligned_files, axis=0)
     return alignment
@@ -349,6 +356,12 @@ def align_commits(
         file of `a` to the first element of the first file of `b`.
         Indices of elements in either `a` or `b` that were skipped in
         the alignment do not appear in the output.
+
+    Raises
+    ------
+    ValueError
+        If the number of commands in `a` and `b` that do not appear in
+        the `diff` do not match.
     """
     # get changed and unchanged sentence per-file indices
     a_indices_in_diff = commands_in_diff(a, diff, True)
@@ -360,15 +373,13 @@ def align_commits(
     b_file_sizes = {k: len(v) for k,
                     v in b.command_data.items()}
     a_indices_not_in_diff = {
-        k: [i for i in range(a_file_sizes[k]) if bisect_left(v,
-                                                             i) == len(v)]
-        for k,
+        k: [i for i in range(a_file_sizes[k]) if not fast_contains(v,
+                                                                   i)] for k,
         v in a_indices_in_diff.items()
     }
     b_indices_not_in_diff = {
-        k: [i for i in range(b_file_sizes[k]) if bisect_left(v,
-                                                             i) == len(v)]
-        for k,
+        k: [i for i in range(b_file_sizes[k]) if not fast_contains(v,
+                                                                   i)] for k,
         v in b_indices_in_diff.items()
     }
     # calculate alignment only for those items that are known to have
@@ -420,6 +431,12 @@ def align_commits(
     # Unchanged indices should map one-to-one in ascending order.
     # Any dropped or added content will have been handled in
     # diff_alignment.
+    if unchanged_a_indices.shape != unchanged_b_indices.shape:
+        raise ValueError(
+            "The number of unchanged commands do not match: "
+            f"got {unchanged_b_indices.shape[0]}, "
+            f"expected {unchanged_a_indices.shape[0]}. "
+            "Is the diff correct?")
     no_diff_alignment: np.ndarray = np.stack(
         [unchanged_a_indices,
          unchanged_b_indices],
@@ -435,3 +452,75 @@ def align_commits(
         axis=-1)
     alignment = np.concatenate([no_diff_alignment, diff_alignment], axis=0)
     return alignment
+
+
+AlignedCommands = List[Union[Tuple[Tuple[str,
+                                         VernacCommandData],
+                                   Optional[Tuple[str,
+                                                  VernacCommandData]]],
+                             Tuple[Optional[Tuple[str,
+                                                  VernacCommandData]],
+                                   Tuple[str,
+                                         VernacCommandData]]]]
+"""
+A list of pairs of aligned commands where ``None`` in any pair indicates
+that a command has no aligned partner (in other words, the command was
+either added or dropped between the commits).
+"""
+
+
+def get_aligned_commands(
+        a: ProjectCommitData,
+        b: ProjectCommitData,
+        alignment: np.ndarray) -> AlignedCommands:
+    """
+    Get the aligned command sequences of two commits.
+
+    Parameters
+    ----------
+    a, b : ProjectCommitData
+        Command data extracted from two commits of a project.
+    alignment : np.ndarray
+        A precomputed alignment between the commands of `a` and `b`.
+
+    Returns
+    -------
+    AlignedCommands
+        The sequence of aligned commands.
+
+    Raises
+    ------
+    IndexError
+        If the given `alignment` includes any indices that are out of
+        bounds with respect to the given commits, i.e., if it indexes
+        commands that do not exist.
+    """
+    aligned_commands: List[Union[Tuple[Tuple[str,
+                                             VernacCommandData],
+                                       Optional[Tuple[str,
+                                                      VernacCommandData]]],
+                                 Tuple[Optional[Tuple[str,
+                                                      VernacCommandData]],
+                                       Tuple[str,
+                                             VernacCommandData]]]] = []
+    a_commands = a.commands
+    b_commands = b.commands
+    if np.any(alignment < 0 & alignment < (len(a_commands), len(b_commands))):
+        raise IndexError(
+            "Alignment indices are out of bounds for the given projects. "
+            f"Expected values in the ranges (0, {len(a_commands)}) and "
+            f"(0, {len(b_commands)}), respectively, but got values in the ranges "
+            f"({np.min(alignment[:,0])}, {np.max(alignment[:,0])}) and "
+            f"({np.min(alignment[:,1])}, {np.max(alignment[:,1])})")
+    align_idx = 0
+    j = 0
+    for i, acmd in enumerate(a_commands):
+        while j < alignment[align_idx, 1]:
+            aligned_commands.append((None, b_commands[j]))
+            j += 1
+        if i < alignment[align_idx, 0]:
+            aligned_commands.append((acmd, None))
+        else:
+            assert (i, j) == tuple(aligned_commands[align_idx])
+            aligned_commands.append((acmd, b_commands[j]))
+    return aligned_commands
