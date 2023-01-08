@@ -1,7 +1,12 @@
 """
 Utility functions related to Git diffs useful for repair examples.
 """
+import re
+import tempfile
+from pathlib import Path
 from typing import Dict, Iterable, List
+
+import seutil.bash as bash
 
 from prism.data.build_cache import ProjectCommitData
 from prism.language.gallina.analyze import SexpInfo
@@ -32,10 +37,10 @@ def is_location_in_change(
         True if the location intersects the diff, False otherwise.
     """
     if is_before:
-        change_filename = change.before_filename
+        change_filename = str(change.before_filename)
         change_range = change.before_range
     else:
-        change_filename = change.after_filename
+        change_filename = str(change.after_filename)
         change_range = change.after_range
     return change_filename == loc.filename and change_range and (
         # if there is any intersection, then one endpoint lies in the
@@ -135,3 +140,30 @@ def commands_in_diff(data: ProjectCommitData,
             is_before) for k,
         v in data.command_data.items()
     }
+
+
+def compute_diff(a: ProjectCommitData, b: ProjectCommitData) -> GitDiff:
+    """
+    Compute a diff between extracted commits.
+
+    Parameters
+    ----------
+    a, b : ProjectCommitData
+        Command data extracted from two commits.
+        Note that there is no requirement for the commits to be from the
+        same project.
+
+    Returns
+    -------
+    GitDiff
+        The diff between the commits.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        a_dir = Path(tmpdir) / "a"
+        b_dir = Path(tmpdir) / "b"
+        a.write_coq_project(a_dir)
+        b.write_coq_project(b_dir)
+        r = bash.run(f"git diff --no-index -U0 {a_dir} {b_dir}")
+    # remove temporary file paths
+    diff = re.sub(f"{a_dir}|{b_dir}", '', r.stdout)
+    return GitDiff(diff)
