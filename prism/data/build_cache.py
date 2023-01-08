@@ -18,12 +18,17 @@ from typing import (
     ClassVar,
     Dict,
     Iterable,
+    Iterator,
     List,
     Optional,
     Protocol,
     Set,
+    SupportsIndex,
     Tuple,
+    TypeVar,
     Union,
+    cast,
+    overload,
     runtime_checkable,
 )
 
@@ -36,12 +41,14 @@ from prism.interface.coq.ident import Identifier
 from prism.language.gallina.analyze import SexpInfo
 from prism.language.sexp.node import SexpNode
 from prism.project.metadata import ProjectMetadata
+from prism.util.iterable import split
 from prism.util.opam.switch import OpamSwitch
 from prism.util.opam.version import Version, VersionString
 from prism.util.radpytools.dataclasses import default_field
 from prism.util.serialize import Serializable
 
 CommandType = str
+_T = TypeVar('_T')
 
 
 @dataclass
@@ -313,6 +320,15 @@ class VernacCommandData:
         """
         return self.command.location
 
+    def all_text(self) -> str:
+        """
+        Get all of the text of this command, including any subproofs.
+
+        Each sentence in the command is joined by newlines in the
+        result.
+        """
+        return '\n'.join(s.text for s in self.sorted_sentences())
+
     def referenced_identifiers(self) -> Set[str]:
         """
         Get the set of identifiers referenced by this command.
@@ -367,7 +383,181 @@ class VernacCommandData:
         return self.location.union(*[p.location for p in chain(*self.proofs)])
 
 
-VernacDict = Dict[str, List[VernacCommandData]]
+@dataclass
+class CoqDocumentData:
+    """
+    A fully evaluated Coq document.
+    """
+
+    # This could have simply been a subclass of list of seutil checked
+    # for custom deserializers first instead of builtin types
+
+    commands: List[VernacCommandData] = default_field(list())
+
+    @overload
+    def __add__(
+            self,
+            o: List[VernacCommandData]) -> 'CoqDocumentData':  # noqa: D105
+        ...
+
+    @overload
+    def __add__(  # noqa: D105
+        self,
+        o: List[_T]) -> Union[List[Union[_T,
+                                         VernacCommandData]],
+                              'CoqDocumentData']:
+        ...
+
+    def __add__(  # noqa: D105
+        self,
+        o: Union[List[_T],
+                 List[VernacCommandData]]
+    ) -> Union[List[Union[_T,
+                          VernacCommandData]],
+               'CoqDocumentData']:
+        result = self.commands + o
+        if all(isinstance(i, VernacCommandData) for i in o):
+            result = cast(List[VernacCommandData], result)
+            return self.__class__(result)
+        else:
+            result = cast(List[Union[_T, VernacCommandData]], result)
+            return result
+
+    def __contains__(self, item: Any) -> bool:  # noqa: D105
+        return item in self.commands
+
+    def __getattribute__(self, name: str) -> Any:
+        """
+        Pass through attribute accesses to internal list.
+        """
+        try:
+            return super().__getattribute__(name)
+        except AttributeError:
+            return getattr(super().__getattribute__('commands'), name)
+
+    @overload
+    def __getitem__(  # noqa: D105
+            self,
+            item: SupportsIndex) -> VernacCommandData:
+        ...
+
+    @overload
+    def __getitem__(self, item: slice) -> 'CoqDocumentData':  # noqa: D105
+        ...
+
+    def __getitem__(  # noqa: D105
+        self,
+        item: Union[SupportsIndex,
+                    slice]) -> Union[VernacCommandData,
+                                     'CoqDocumentData']:
+        result = self.commands[item]
+        if not isinstance(item, SupportsIndex):
+            result = cast(List[VernacCommandData], result)
+            return self.__class__(result)
+        else:
+            result = cast(VernacCommandData, result)
+            return result
+
+    def __iter__(self) -> Iterator[VernacCommandData]:  # noqa: D105
+        return iter(self.commands)
+
+    def __len__(self) -> int:  # noqa: D105
+        return len(self.commands)
+
+    def __setitem__(self, idx: SupportsIndex, item: Any) -> None:  # noqa: D105
+        if not isinstance(item, VernacCommandData):
+            raise TypeError(
+                'CoqDocumentData may only contain VernacCommandData')
+        self.commands[idx] = item
+
+    def __mul__(self, n: SupportsIndex) -> 'CoqDocumentData':  # noqa: D105
+        return CoqDocumentData(self.commands * n)
+
+    def append(self, item: Any) -> None:  # noqa: D102
+        if not isinstance(item, VernacCommandData):
+            raise TypeError(
+                'CoqDocumentData may only contain VernacCommandData')
+        self.commands.append(item)
+
+    def copy(self) -> 'CoqDocumentData':  # noqa: D102
+        return self.__class__(self.commands.copy())
+
+    def extend(self, items: Iterable[Any]) -> None:  # noqa: D102
+        items = list(items)
+        if any(not isinstance(item, VernacCommandData) for item in items):
+            raise TypeError(
+                'CoqDocumentData may only contain VernacCommandData')
+        self.commands.extend(items)
+
+    def sorted_sentences(self) -> List[VernacSentence]:
+        """
+        Get the sentences of this file sorted by location.
+        """
+        sorted_sentences = []
+        for idx, c in enumerate(self.commands):
+            sorted_sentences.extend(
+                c.sorted_sentences(attach_proof_indexes=True,
+                                   command_idx=idx))
+        sorted_sentences = VernacSentence.sort_sentences(sorted_sentences)
+        return sorted_sentences
+
+    def write_coq_file(self, filepath: os.PathLike) -> None:
+        """
+        Dump the commands to a Coq file at the given location.
+
+        Parameters
+        ----------
+        filepath : os.PathLike
+            The location at which the file should be dumped.
+            Any file already at the given path will be overwritten.
+
+        Notes
+        -----
+        While the dumped Coq file cannot match the original from which
+        this data was extracted to to normalization of whitespace and
+        comments, the line numbers on which each sentence is written
+        should match the original Coq file.
+        """
+        lines: List[str] = []
+        linenos: List[int] = [0]
+        for sentence in self.sorted_sentences():
+            while linenos[-1] < sentence.location.lineno:
+                lines.append("")
+                linenos.append(linenos[-1] + 1)
+            # distribute sentence over lines
+            sentence_linenos = range(
+                sentence.location.lineno,
+                sentence.location.lineno_last + 1)
+            sentence_parts = split(sentence.text.split(), len(sentence_linenos))
+            for sentence_lineno, sentence_part in zip(sentence_linenos, sentence_parts):
+                sentence_part = " ".join(sentence_part)
+                if linenos and sentence_lineno == linenos[-1]:
+                    # sentence starts on same line as another ends
+                    lines[-1] = lines[-1] + sentence_part
+                else:
+                    # place each part of sentence on new line
+                    lines.append(sentence_part)
+                    linenos.append(sentence_lineno)
+        with open(filepath, "w") as f:
+            f.write("\n".join(lines))
+
+    def serialize(self, fmt: Optional[su.io.Fmt] = None) -> List[object]:
+        """
+        Serialize as a basic list.
+        """
+        return su.io.serialize(self.commands, fmt)
+
+    @classmethod
+    def deserialize(cls, data: object) -> 'CoqDocumentData':
+        """
+        Deserialize from a basic list.
+        """
+        return CoqDocumentData(
+            su.io.deserialize(data,
+                              clz=List[VernacCommandData]))
+
+
+VernacDict = Dict[str, CoqDocumentData]
 
 
 @dataclass
@@ -495,6 +685,21 @@ class ProjectCommitData(Serializable):
     """
 
     @property
+    def commands(self) -> List[Tuple[str, VernacCommandData]]:
+        """
+        Get all of the commands in the project in canonical order.
+
+        Each command is paired with the name of the file from which it
+        originated.
+        """
+        commands = []
+        for filename in self.files:
+            commands.extend(
+                [(filename,
+                  c) for c in self.command_data[filename]])
+        return commands
+
+    @property
     def files(self) -> List[str]:
         """
         Return the list of Coq files in the project.
@@ -513,6 +718,14 @@ class ProjectCommitData(Serializable):
             files = [k for k in self.command_data.keys()]
         return files
 
+    @property
+    def file_sizes(self) -> Dict[str, int]:
+        """
+        Get the number of commands in each file in this commit.
+        """
+        return {k: len(v) for k,
+                v in self.command_data.items()}
+
     def sorted_sentences(self) -> Dict[str, List[VernacSentence]]:
         """
         Get the sentences of each file sorted by location.
@@ -525,15 +738,26 @@ class ProjectCommitData(Serializable):
         """
         result = {}
         for filename, commands in self.command_data.items():
-            sorted_sentences = []
-            for idx, c in enumerate(commands):
-                sorted_sentences.extend(
-                    c.sorted_sentences(
-                        attach_proof_indexes=True,
-                        command_idx=idx))
-            sorted_sentences = VernacSentence.sort_sentences(sorted_sentences)
-            result[filename] = sorted_sentences
+            result[filename] = commands.sorted_sentences()
         return result
+
+    def write_coq_project(self, dirpath: os.PathLike) -> None:
+        """
+        Dump Coq files in the structure of the original project commit.
+
+        Parameters
+        ----------
+        dirpath : os.PathLike
+            The directory in which to dump the cached commands.
+            If the directory does not exist, it will be created.
+            Note that any existing files that clash with file names in
+            this object will be overwritten.
+        """
+        # TODO: dump a buildable project
+        dirpath = Path(dirpath)
+        os.mkdir(dirpath)
+        for filename, commands in self.command_data.items():
+            commands.write_coq_file(dirpath / filename)
 
 
 @dataclass

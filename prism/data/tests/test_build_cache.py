@@ -12,6 +12,7 @@ import seutil.io as io
 
 from prism.data.build_cache import (
     CacheObjectStatus,
+    CoqDocumentData,
     CoqProjectBuildCacheClient,
     CoqProjectBuildCacheProtocol,
     CoqProjectBuildCacheServer,
@@ -133,10 +134,9 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                 command_data = {}
                 project: ProjectRepo
                 for filename in project.get_file_list():
-                    file_commands: List[
-                        VernacCommandData] = command_data.setdefault(
-                            filename,
-                            list())
+                    file_commands: CoqDocumentData = command_data.setdefault(
+                        filename,
+                        CoqDocumentData())
                     for sentence in project.get_sentences(
                             filename,
                             sentence_extraction_method=SEM.HEURISTIC,
