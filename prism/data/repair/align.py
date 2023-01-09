@@ -4,6 +4,7 @@ Tools for aligning the same proofs across commits.
 
 import enum
 import math
+import warnings
 from typing import Callable, Dict, List, Optional, Tuple, TypeVar, Union
 
 import numpy as np
@@ -147,9 +148,9 @@ def order_preserving_alignment(
     Alignment
         A list of tuples of `Optional` integers representing aligned
         one-indexed indices.
-        For example, ``(1,1)`` matches the first element of `a` to the
+        For example, ``(0,0)`` matches the first element of `a` to the
         first element of `b`.
-        Alternatively, ``(1,None)`` matches the first element of `a` to
+        Alternatively, ``(0,None)`` matches the first element of `a` to
         no element of `b`, skipping it.
     """
     return lazy_align(
@@ -184,18 +185,18 @@ def align_commits_per_file(
         An array of pairs of integers indicating the indices of aligned
         commands between each commit with commands enumerated over all
         matching files in `a` and `b`.
-        For example, ``(1,1)`` matches the first element of the first
+        For example, ``(0,0)`` matches the first element of the first
         file of `a` to the first element of the first file of `b`.
         Indices of elements in either `a` or `b` that were skipped in
         the alignment do not appear in the output.
 
-    Raises
-    ------
-    ValueError
+    Warns
+    -----
+    UserWarning
         If `a` and `b` belong to different projects.
     """
     if a.project_metadata.project_name != b.project_metadata.project_name:
-        raise ValueError(
+        warnings.warn(
             "Cannot align files from different projects: "
             f"{a.project_metadata.project_name} and {b.project_metadata.project_name}"
         )
@@ -277,7 +278,7 @@ def _compute_diff_alignment(
         An array of pairs of integers indicating the indices of aligned
         commands between each commit with commands enumerated over all
         commands appearing within the diff in files in `a` and `b`.
-        For example, ``(1,1)`` matches the first element of the first
+        For example, ``(0,0)`` matches the first element of the first
         file of `a` that appears in the `diff` to the first element of
         the first file of `b` that appears in the `diff`.
         Indices of elements in either `a` or `b` that were skipped in
@@ -352,7 +353,7 @@ def align_commits(
         An array of pairs of integers indicating the indices of aligned
         commands between each commit with commands enumerated over all
         files in `a` and `b`.
-        For example, ``(1,1)`` matches the first element of the first
+        For example, ``(0,0)`` matches the first element of the first
         file of `a` to the first element of the first file of `b`.
         Indices of elements in either `a` or `b` that were skipped in
         the alignment do not appear in the output.
@@ -495,14 +496,7 @@ def get_aligned_commands(
         bounds with respect to the given commits, i.e., if it indexes
         commands that do not exist.
     """
-    aligned_commands: List[Union[Tuple[Tuple[str,
-                                             VernacCommandData],
-                                       Optional[Tuple[str,
-                                                      VernacCommandData]]],
-                                 Tuple[Optional[Tuple[str,
-                                                      VernacCommandData]],
-                                       Tuple[str,
-                                             VernacCommandData]]]] = []
+    aligned_commands: AlignedCommands = []
     a_commands = a.commands
     b_commands = b.commands
     if np.any(alignment < 0 & alignment < (len(a_commands), len(b_commands))):
