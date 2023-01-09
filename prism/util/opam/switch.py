@@ -613,6 +613,8 @@ class OpamSwitch:
                 limiter()
 
             kwargs['preexec_fn'] = preexec_fn
+            if max_runtime is not None:
+                kwargs['timeout'] = max_runtime
 
         r = bash.run(command, env=env, **kwargs)
         if check:

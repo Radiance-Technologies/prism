@@ -5,6 +5,7 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
+from subprocess import TimeoutExpired
 
 from prism.util.opam import OCamlVersion, OpamAPI, Version
 from prism.util.opam.formula import (
@@ -191,6 +192,20 @@ class TestOpamSwitch(unittest.TestCase):
         self.assertFalse(
             "coq-released "
             "https://coq.inria.fr/opam/released" in returned)
+
+    def test_limits(self):
+        """
+        Verify resource limits on run commands.
+        """
+        self.assertRaises(
+            TimeoutExpired,
+            self.test_switch.run,
+            "sleep 5",
+            max_runtime=3)
+        output = self.test_switch.run(
+            "python -c 'a=[1 for _ in range(int(1e7))]'",
+            max_memory=int(4 * 1e7))
+        self.assertEqual(output.returncode, 1)
 
     @classmethod
     def setUpClass(cls):

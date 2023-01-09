@@ -2,6 +2,7 @@
 Test suite for alignment algorithms and utilities.
 """
 import re
+import subprocess
 import unittest
 from resource import getrlimit
 from typing import Dict, Union
@@ -180,6 +181,8 @@ class TestResourceLimits(unittest.TestCase):
         kwargs = {
             'preexec_fn': limiter
         }
+        if resource == resource.RUNTIME:
+            kwargs['timeout'] = usage_limit
         with self.subTest("Under limit"):
             under_cmd = get_commands(1, 2)[resource]
             under_usage = get_usage(1, 2)[resource]
@@ -187,11 +190,18 @@ class TestResourceLimits(unittest.TestCase):
             output = bash.run(under_cmd, **kwargs)
             self.assertEqual(output.returncode, 0)
         with self.subTest("over limit"):
-            over_cmd = get_commands(3, 1e9)[resource]
-            over_usage = get_usage(3, 1e9)[resource]
+            over_cmd = get_commands(5, 1e7)[resource]
+            over_usage = int(get_usage(5, 1e7)[resource])
             self.assertGreater(over_usage, usage_limit)
-            output = bash.run(over_cmd, **kwargs)
-            self.assertEqual(output.returncode, 11)
+            if resource == ProcessResource.RUNTIME:
+                self.assertRaises(
+                    subprocess.TimeoutExpired,
+                    bash.run,
+                    over_cmd,
+                    **kwargs)
+            else:
+                output = bash.run(over_cmd, **kwargs)
+                self.assertEqual(output.returncode, 1)
 
     def test_memory(self):
         """
