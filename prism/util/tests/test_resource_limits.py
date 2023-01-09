@@ -1,97 +1,27 @@
 """
 Test suite for alignment algorithms and utilities.
 """
-import os
-import time
-import unittest
 import re
-from resource import getrlimit, setrlimit
-from typing import Callable, Optional, Dict, Union
+import unittest
+from resource import getrlimit
+from typing import Dict, Union
+
 from seutil import bash
 
-import psutil
-
 from prism.util.resource_limits import (
-    MaxRuntimeError,
     ProcessResource,
-    ResourceLimits,
-    ResourceMapValueDict,
-    subprocess_resource_limiter
+    subprocess_resource_limiter,
 )
 
 
-def _under_limit(resource: ProcessResource, offset: int = None):
+def command_usage():
     """
-    Set resource limit, call function, and change limit back.
-
-    Parameters
-    ----------
-    resource : ProcessResource
-        Resource whose limit will be set.
+    Return command prefix to output resource usage.
     """
-    if resource is ProcessResource.MEMORY:
-        if offset is None:
-            offset = process.memory_info().rss
-        a = 1
-        process = psutil.Process(os.getpid())
-        soft, _ = getrlimit(resource.value)
-        array = [a]* (int(((soft - process.memory_info().rss) - 64 - 8)/8) - 1)
-    if resource is ProcessResource.RUNTIME:
-        if offset is None:
-            offset = 1
-        time.sleep(offset)
-
-def _over_limit(resource: ProcessResource, offset: int = None):
-    """
-    Set resource limit, call function, and change limit back.
-
-    Parameters
-    ----------
-    resource : ProcessResource
-        Resource whose limit will be set.
-    """
-    if resource is ProcessResource.MEMORY:
-        if offset is None:
-            offset = process.memory_info().rss
-        a = 1
-        process = psutil.Process(os.getpid())
-        soft, _ = getrlimit(resource.value)
-        array = [a]* (int(((soft - process.memory_info().rss) - 64 - 8)/8) - 1)
-    if resource is ProcessResource.RUNTIME:
-        if offset is None:
-            offset = 1
-        time.sleep(offset)
+    return "/usr/bin/time -f 'Elapsed time: %es\\nMemory usage: %M KB\\nCPU usage: %P'"
 
 
-def get_time(text):
-    subtext = re.findall(r'Elapsed time: \d+.*', text)[0]
-    return float(re.findall(r"\d+\.\d+", subtext)[0])
-
-def get_memory(text):
-    subtext = re.findall(r'Memory usage: \d+.*', text)[0]
-    return int(re.findall(r'\d+', subtext))
-
-def time_command(amt: int) -> float:
-    """
-    Run sleep command for `amt` seconds.
-
-    Parameters
-    ----------
-    amt : int
-        Number of seconds to sleep.
-
-    Returns
-    -------
-    float
-        Amount of time the process ran.
-    """
-    return f"/usr/bin/time -f 'Elapsed time: %es\\nMemory usage: %M KB\\nCPU usage: %P' sleep {amt}"
-
-def get_time_command_time(amt:int)
-    return get_time(bash.run(time_command(amt)).stderr)
-
-
-def memory_command(amt: int) -> float:
+def command_memory(amt: int) -> float:
     """
     Run echo numbers from 1 to `amt`.
 
@@ -107,11 +37,89 @@ def memory_command(amt: int) -> float:
     float
         Amount of memory used in the process.
     """
-    cmd = "/usr/bin/time -f 'Elapsed time: %es\\nMemory usage: %M KB\\nCPU usage: %P' echo \{1..{amt}\}".format(amt=amt)
-    return get_memory(bash.run(cmd).stderr)
+    py_str = f"print([1 for _ in range(int({amt}))])"
+    cmd = f"python -c '{py_str}'"
+    return f"{command_usage()} {cmd}"
 
 
-def get_limits(time: int, memory: int) -> Dict[ProcessResource, Union[int,float]]:
+def command_time(amt: int) -> float:
+    """
+    Run sleep command for `amt` seconds.
+
+    Parameters
+    ----------
+    amt : int
+        Number of seconds to sleep.
+
+    Returns
+    -------
+    float
+        Amount of time the process ran.
+    """
+    cmd = f"sleep {amt}"
+    return f"{command_usage()} {cmd}"
+
+
+def get_memory(amt: int):
+    """
+    Get memory usage for command with given argument.
+    """
+    return parse_memory_output(bash.run(command_memory(amt)).stderr)
+
+
+def get_time(amt: int):
+    """
+    Get runtime for command with given argument.
+    """
+    return parse_time_output(bash.run(command_time(amt)).stderr)
+
+
+def parse_memory_output(text):
+    """
+    Extract memory usage from command output.
+    """
+    subtext = re.findall(r'Memory usage: \d+.*', text)[0]
+    return int(re.findall(r'\d+', subtext)[0])
+
+
+def parse_time_output(text):
+    """
+    Extract runtime from command output.
+    """
+    subtext = re.findall(r'Elapsed time: \d+.*', text)[0]
+    return float(re.findall(r"\d+\.\d+", subtext)[0])
+
+
+def get_commands(time: int,
+                 memory: int) -> Dict[ProcessResource,
+                                      Union[int,
+                                            float]]:
+    """
+    Return commands to get test resources.
+
+    Parameters
+    ----------
+    time : int
+        Amount of time to sleep
+    memory : int
+        Max number to echo.
+
+    Returns
+    -------
+    Dict[ProcessResource, Union[int,float]]
+        Dictionary between ProcessResource types
+        and a max resource usage given arguments.
+    """
+    return {
+        ProcessResource.MEMORY: command_memory(memory),
+        ProcessResource.RUNTIME: command_time(time)
+    }
+
+
+def get_usage(time: int,
+              memory: int) -> Dict[ProcessResource,
+                                   Union[int,
+                                         float]]:
     """
     Return amount of resources used by commands with given arguments.
 
@@ -129,8 +137,8 @@ def get_limits(time: int, memory: int) -> Dict[ProcessResource, Union[int,float]
         and a max resource usage given arguments.
     """
     return {
-        ProcessResource.MEMORY: memory_command(memory),
-        ProcessResource.RUNTIME: time_command(time)
+        ProcessResource.MEMORY: get_memory(memory) * 1e3,
+        ProcessResource.RUNTIME: get_time(time)
     }
 
 
@@ -139,50 +147,69 @@ class TestResourceLimits(unittest.TestCase):
     Test suite for resource limit utilities.
     """
 
-    def _set_soft_limit(self, resource: ProcessResource, soft: int, after_set: Optional[Callable[[int]]]=None):
+    @classmethod
+    def setUpClass(cls) -> None:
         """
-        Set resource limit, call function, and change limit back.
+        Get limits of current process.
+        """
+        cls.current_limits = {}
+        cls.current_limits[ProcessResource.MEMORY] = getrlimit(
+            ProcessResource.MEMORY.value)
+        cls.current_limits[ProcessResource.RUNTIME] = getrlimit(
+            ProcessResource.RUNTIME.value)
 
-        Parameters
-        ----------
-        resource : ProcessResource
-            Resource whose limit will be set.
+    def test_limiter(self):
         """
-        prev_soft, prev_hard = getrlimit(resource.value)
-        rss_map_value_dict: ResourceMapValueDict = {'soft': soft}
-        resource.limit_current_process(rss_map_value_dict)
-        try:
-            if after_set is not None:
-                after_set()
-        except Exception as exc:
-            raise exc
-        finally:
-            setrlimit(resource.value, (prev_soft, prev_hard))
+        Check limiter can be executed.
+        """
+        ProcessResource.limit_current_process(self.current_limits)
+        limiter = subprocess_resource_limiter(
+            memory=self.current_limits[ProcessResource.MEMORY],
+            runtime=self.current_limits[ProcessResource.RUNTIME])
+        limiter()
 
-    def test_limit_set_unchanged(self):
+    def run_subprocess_test(self, resource: ProcessResource):
         """
-        Test that resource limits can be set without error.
+        Check that subprocess resource limits work.
         """
-        for resource in ProcessResource:
-            with unittest.subtest(resource.name):
-                soft, _ = getrlimit(resource.value)
-                self._set_soft_limit(resource, soft)
+        usage_limit = get_usage(2, 1e6)[resource]
+        limiter_kwargs = {
+            resource.name.lower(): int(usage_limit)
+        }
+        limiter = subprocess_resource_limiter(**limiter_kwargs)
+        kwargs = {
+            'preexec_fn': limiter
+        }
+        with self.subTest("Under limit"):
+            under_cmd = get_commands(1, 2)[resource]
+            under_usage = get_usage(1, 2)[resource]
+            self.assertLess(under_usage, usage_limit)
+            output = bash.run(under_cmd, **kwargs)
+            self.assertEqual(output.returncode, 0)
+        with self.subTest("over limit"):
+            over_cmd = get_commands(3, 1e9)[resource]
+            over_usage = get_usage(3, 1e9)[resource]
+            self.assertGreater(over_usage, usage_limit)
+            output = bash.run(over_cmd, **kwargs)
+            self.assertEqual(output.returncode, 11)
 
-    def test_bash(self):
+    def test_memory(self):
         """
-        Test that resource limits can be set without error.
+        Check that memory usage can be limited.
         """
-        limits = get_limits(1, 1000)
-        for resource, limit in limits.items():
-            with unittest.subtest(resource.name):
-                soft, hard = getrlimit(resource.value)
-                # Limits resources allowed to be used by bash command
-                kwargs = {resource.name: limit}
-                limiter = subprocess_resource_limiter(**kwargs)
-                kwargs['preexec_fn'] = preexec_fn
-                bash.run(command, **kwargs)
+        self.run_subprocess_test(ProcessResource.MEMORY)
 
+    def test_time(self):
+        """
+        Check that runtime can be limited.
+        """
+        self.run_subprocess_test(ProcessResource.RUNTIME)
 
 
 if __name__ == '__main__':
     unittest.main()
+    # test = TestResourceLimits()
+    # test.setUpClass()
+    # test.test_limiter()
+    # test.test_memory()
+    # test.test_time()
