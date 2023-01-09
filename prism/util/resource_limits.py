@@ -124,7 +124,7 @@ def _value_to_valuedict(
         if soft is not None:
             value_dict['soft'] = soft
         if hard is not None:
-            value_dict['hard'] = hard,
+            value_dict['hard'] = hard
     return value_dict
 
 
@@ -223,7 +223,6 @@ class ProcessResource(IntEnum):
         if soft is not None and hard is not None:
             limits = (soft, hard)
             resource.setrlimit(self.value, limits)
-
         # Set handler for signal when limit is passed that
         # raises the given exception.
         if self == ProcessResource.RUNTIME:
@@ -271,11 +270,11 @@ class ProcessResource(IntEnum):
     @classmethod
     def create_resource_map(
         cls,
-        **kwargs: Dict[Union[str,
-                             int,
-                             'ProcessResource'],
-                       Union[ResourceLimits,
-                             Exception]]
+        kwargs: Dict[Union[str,
+                           int,
+                           'ProcessResource'],
+                     Union[ResourceLimits,
+                           Exception]]
     ) -> Dict['ProcessResource',
               ResourceMapValueDict]:
         """
@@ -295,7 +294,8 @@ class ProcessResource(IntEnum):
             were given for the same resource.
         """
         resource_map = {}
-        for rss, value in set(kwargs.keys()):
+        for rss in set(kwargs.keys()):
+            value = kwargs[rss]
             value_dict = _value_to_valuedict(value)
 
             # Convert resource to ProcessResource
@@ -395,8 +395,8 @@ class ProcessResource(IntEnum):
         # uses `ProcessResource` as keys and keyword arguments of the
         # `ProcessRsource.<value>._limit_current_process` method as
         # values.
-        resource_map = cls.create_resource_map(**limits)
-        resource_map.update(cls.create_resource_map(**exceptions))
+        resource_map = cls.create_resource_map(limits)
+        resource_map.update(cls.create_resource_map(exceptions))
 
         # Apply resource constraints.
         for rss, rss_map_value_dict in resource_map.items():
