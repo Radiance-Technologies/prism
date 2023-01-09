@@ -13,7 +13,13 @@ from prism.data.build_cache import (
     VernacCommandData,
     VernacCommandDataList,
 )
-from prism.data.repair.align import AlignedCommands, get_aligned_commands
+from prism.data.repair.align import (
+    AlignedCommands,
+    AlignmentFunction,
+    align_commits,
+    get_aligned_commands,
+)
+from prism.data.repair.diff import compute_git_diff
 from prism.language.gallina.analyze import SexpInfo
 from prism.util.diff import GitDiff
 from prism.util.opam import OpamSwitch
@@ -302,7 +308,7 @@ class ProjectCommitDataDiff:
         return result
 
     @classmethod
-    def from_commit_data(
+    def from_alignment(
             cls,
             a: ProjectCommitData,
             b: ProjectCommitData,
@@ -326,6 +332,51 @@ class ProjectCommitDataDiff:
             ``diff.patch(a).command_data == b.command_data``.
         """
         return cls.from_aligned_commands(get_aligned_commands(a, b, alignment))
+
+    @classmethod
+    def from_commit_data(
+            cls,
+            a: ProjectCommitData,
+            b: ProjectCommitData,
+            align: AlignmentFunction,
+            diff: Optional[GitDiff] = None,
+            compute_diff: bool = True) -> 'ProjectCommitDataDiff':
+        """
+        Create a diff between two commits.
+
+        Parameters
+        ----------
+        a, b : ProjectCommitData
+            Command data extracted from two commits of a project.
+        align : AlignmentFunction
+            A function to align the commands of `a` and `b`.
+            If a `diff` is available, then the alignment is only applied
+            to parts of each commit that intersect the `diff`.
+        diff : Optional[GitDiff], optional
+            A `diff` between the source code of each commit.
+            If ``None`` and `compute_diff` is True, then a surrogate
+            `diff` will be computed between the data in `a` and `b`.
+            By default None.
+        compute_diff : bool, optional
+            If True, then compute a default `diff` when `diff` is None.
+            Otherwise, do nothing such that `align` operates on the
+            entirety of `a` and `b`, which may be expensive depending on
+            the alignment algorithm.
+            By default True.
+
+        Returns
+        -------
+        ProjectCommitDataDiff
+            The diff between `a` and `b` such that
+            ``diff.patch(a).command_data == b.command_data``.
+        """
+        if diff is None and compute_diff:
+            diff = compute_git_diff(a, b)
+        if diff is not None:
+            alignment = align_commits(a, b, diff, align)
+        else:
+            alignment = align(a, b)
+        return cls.from_alignment(a, b, alignment)
 
 
 @dataclass

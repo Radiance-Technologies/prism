@@ -22,6 +22,17 @@ from prism.util.iterable import fast_contains
 
 T = TypeVar('T')
 
+AlignmentFunction = Callable[[ProjectCommitData, ProjectCommitData], np.ndarray]
+"""
+A function that takes two commits and produces an alignment/assignment
+between their commands as a two-dimensional Numpy array with :math:`m`
+rows corresponding to :math:`m` aligned command pairs and 2 columns.
+A row :math:`(i,j)` indicates that the :math:`i`-th command in the first
+commit is assigned to the :math:`j`-th command in the second commit.
+Unassigned commands in either commit are not enumerated in the array,
+and there is no prescribed order in which the rows must be combined.
+"""
+
 
 class Norm(enum.Enum):
     """
@@ -241,17 +252,14 @@ def align_commits_per_file(
 
 
 def _compute_diff_alignment(
-    a: ProjectCommitData,
-    b: ProjectCommitData,
-    diff: GitDiff,
-    a_indices_in_diff: Dict[str,
-                            List[int]],
-    b_indices_in_diff: Dict[str,
-                            List[int]],
-    align: Callable[[ProjectCommitData,
-                     ProjectCommitData],
-                    np.ndarray]
-) -> np.ndarray:
+        a: ProjectCommitData,
+        b: ProjectCommitData,
+        diff: GitDiff,
+        a_indices_in_diff: Dict[str,
+                                List[int]],
+        b_indices_in_diff: Dict[str,
+                                List[int]],
+        align: AlignmentFunction) -> np.ndarray:
     """
     Get the alignment only between items contained in a Git diff.
 
@@ -268,7 +276,7 @@ def _compute_diff_alignment(
     b_indices_in_diff : Dict[str, List[int]]
         A precomputed set of per-file command indices within `b` that
         intersect the `diff`.
-    align : Callable[[ProjectCommitData, ProjectCommitData], np.ndarray]
+    align : AlignmentFunction
         An alignment algorithm that will be applied to commands that
         appear in the provided `diff`.
 
@@ -326,13 +334,10 @@ def _compute_diff_alignment(
 
 
 def align_commits(
-    a: ProjectCommitData,
-    b: ProjectCommitData,
-    diff: GitDiff,
-    align: Callable[[ProjectCommitData,
-                     ProjectCommitData],
-                    np.ndarray]
-) -> np.ndarray:
+        a: ProjectCommitData,
+        b: ProjectCommitData,
+        diff: GitDiff,
+        align: AlignmentFunction) -> np.ndarray:
     """
     Align two `ProjectCommit` based on the provided alignment algorithm.
 
@@ -343,7 +348,7 @@ def align_commits(
     diff : GitDiff
         A precomputed diff between the commits represented by `a` and
         `b`.
-    align : Callable[[ProjectCommitData, ProjectCommitData], np.ndarray]
+    align : AlignmentFunction
         An alignment algorithm that will be applied to commands that
         appear in the provided `diff`.
 
