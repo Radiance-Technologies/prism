@@ -37,7 +37,6 @@ from tqdm.contrib.concurrent import process_map
 
 from prism.data.build_cache import (
     CommandType,
-    CoqDocumentData,
     CoqProjectBuildCache,
     CoqProjectBuildCacheClient,
     CoqProjectBuildCacheProtocol,
@@ -48,6 +47,7 @@ from prism.data.build_cache import (
     Proof,
     ProofSentence,
     VernacCommandData,
+    VernacCommandDataList,
     VernacDict,
     VernacSentence,
 )
@@ -631,7 +631,7 @@ def _extract_vernac_commands(
         opam_switch: Optional[OpamSwitch] = None,
         serapi_options: str = "",
         use_goals_diff: bool = True,
-        logger: Optional[logging.Logger] = None) -> CoqDocumentData:
+        logger: Optional[logging.Logger] = None) -> VernacCommandDataList:
     """
     Compile Vernacular commands from a sequence of sentences.
 
@@ -916,7 +916,7 @@ def _extract_vernac_commands(
     assert not partial_proof_stacks
     assert not finished_proof_stacks
     assert not programs
-    return CoqDocumentData(file_commands)
+    return VernacCommandDataList(file_commands)
 
 
 def extract_vernac_commands(
@@ -1004,7 +1004,7 @@ def _extract_vernac_commands_worker(
     project: ProjectRepo,
     worker_semaphore: Optional[BoundedSemaphore] = None,
     pbar: Optional[tqdm.tqdm] = None
-) -> Union[CoqDocumentData,
+) -> Union[VernacCommandDataList,
            ExtractVernacCommandsError]:
     """
     Provide worker function for file-parallel cache extraction.
@@ -1036,7 +1036,7 @@ def _extract_vernac_commands_worker(
 
 
 def _extract_vernac_commands_worker_star(
-        args) -> Union[CoqDocumentData,
+        args) -> Union[VernacCommandDataList,
                        ExtractVernacCommandsError]:
     return _extract_vernac_commands_worker(*args)
 

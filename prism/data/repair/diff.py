@@ -1,6 +1,7 @@
 """
 Utility functions related to Git diffs useful for repair examples.
 """
+
 import re
 import tempfile
 from pathlib import Path
@@ -142,7 +143,7 @@ def commands_in_diff(data: ProjectCommitData,
     }
 
 
-def compute_diff(a: ProjectCommitData, b: ProjectCommitData) -> GitDiff:
+def compute_git_diff(a: ProjectCommitData, b: ProjectCommitData) -> GitDiff:
     """
     Compute a diff between extracted commits.
 

@@ -306,6 +306,19 @@ class VernacCommandData:
         # do not include the error
         return hash((self.identifier, self.command_type, self.location))
 
+    def __lt__(self, other: 'VernacCommandData') -> bool:
+        """
+        Compare two commands based on location.
+
+        One command is less than another if its location is a subset of
+        the other or if its location starts before the other.
+        """
+        if not isinstance(other, VernacCommandData):
+            return NotImplemented
+        return (
+            self.location.beg_charno < other.location.beg_charno
+            or self.spanning_location() in other.spanning_location())
+
     @property
     def command_type(self) -> str:
         """
@@ -384,9 +397,9 @@ class VernacCommandData:
 
 
 @dataclass
-class CoqDocumentData:
+class VernacCommandDataList:
     """
-    A fully evaluated Coq document.
+    A list of extracted Vernacular commands, e.g., from a Coq document.
     """
 
     # This could have simply been a subclass of list of seutil checked
@@ -397,7 +410,8 @@ class CoqDocumentData:
     @overload
     def __add__(
             self,
-            o: List[VernacCommandData]) -> 'CoqDocumentData':  # noqa: D105
+            o: List[VernacCommandData]
+    ) -> 'VernacCommandDataList':  # noqa: D105
         ...
 
     @overload
@@ -405,7 +419,7 @@ class CoqDocumentData:
         self,
         o: List[_T]) -> Union[List[Union[_T,
                                          VernacCommandData]],
-                              'CoqDocumentData']:
+                              'VernacCommandDataList']:
         ...
 
     def __add__(  # noqa: D105
@@ -414,7 +428,7 @@ class CoqDocumentData:
                  List[VernacCommandData]]
     ) -> Union[List[Union[_T,
                           VernacCommandData]],
-               'CoqDocumentData']:
+               'VernacCommandDataList']:
         result = self.commands + o
         if all(isinstance(i, VernacCommandData) for i in o):
             result = cast(List[VernacCommandData], result)
@@ -425,6 +439,9 @@ class CoqDocumentData:
 
     def __contains__(self, item: Any) -> bool:  # noqa: D105
         return item in self.commands
+
+    def __delitem__(self, item: SupportsIndex) -> None:  # noqa: D105
+        del self.commands[item]
 
     def __getattribute__(self, name: str) -> Any:
         """
@@ -442,14 +459,14 @@ class CoqDocumentData:
         ...
 
     @overload
-    def __getitem__(self, item: slice) -> 'CoqDocumentData':  # noqa: D105
+    def __getitem__(self, item: slice) -> 'VernacCommandDataList':  # noqa: D105
         ...
 
     def __getitem__(  # noqa: D105
         self,
         item: Union[SupportsIndex,
                     slice]) -> Union[VernacCommandData,
-                                     'CoqDocumentData']:
+                                     'VernacCommandDataList']:
         result = self.commands[item]
         if not isinstance(item, SupportsIndex):
             result = cast(List[VernacCommandData], result)
@@ -470,8 +487,10 @@ class CoqDocumentData:
                 'CoqDocumentData may only contain VernacCommandData')
         self.commands[idx] = item
 
-    def __mul__(self, n: SupportsIndex) -> 'CoqDocumentData':  # noqa: D105
-        return CoqDocumentData(self.commands * n)
+    def __mul__(
+            self,
+            n: SupportsIndex) -> 'VernacCommandDataList':  # noqa: D105
+        return VernacCommandDataList(self.commands * n)
 
     def append(self, item: Any) -> None:  # noqa: D102
         if not isinstance(item, VernacCommandData):
@@ -479,7 +498,7 @@ class CoqDocumentData:
                 'CoqDocumentData may only contain VernacCommandData')
         self.commands.append(item)
 
-    def copy(self) -> 'CoqDocumentData':  # noqa: D102
+    def copy(self) -> 'VernacCommandDataList':  # noqa: D102
         return self.__class__(self.commands.copy())
 
     def extend(self, items: Iterable[Any]) -> None:  # noqa: D102
@@ -548,16 +567,16 @@ class CoqDocumentData:
         return su.io.serialize(self.commands, fmt)
 
     @classmethod
-    def deserialize(cls, data: object) -> 'CoqDocumentData':
+    def deserialize(cls, data: object) -> 'VernacCommandDataList':
         """
         Deserialize from a basic list.
         """
-        return CoqDocumentData(
+        return VernacCommandDataList(
             su.io.deserialize(data,
                               clz=List[VernacCommandData]))
 
 
-VernacDict = Dict[str, CoqDocumentData]
+VernacDict = Dict[str, VernacCommandDataList]
 
 
 @dataclass

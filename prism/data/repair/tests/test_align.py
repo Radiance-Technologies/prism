@@ -8,13 +8,13 @@ from typing import Dict, List
 import numpy as np
 
 from prism.data.build_cache import (
-    CoqDocumentData,
     ProjectCommitData,
+    VernacCommandDataList,
     VernacSentence,
 )
 from prism.data.extract_cache import VernacCommandData
 from prism.data.repair import align_commits, align_commits_per_file
-from prism.data.repair.diff import compute_diff
+from prism.data.repair.diff import compute_git_diff
 from prism.language.heuristic.parser import HeuristicParser
 from prism.project.metadata import ProjectMetadata
 from prism.tests import _COQ_EXAMPLES_PATH
@@ -65,7 +65,7 @@ class TestAlign(unittest.TestCase):
                 or x.text.startswith("Definition")
                 or x.text.startswith("Inductive")
             ]
-            cls.caches[f] = CoqDocumentData(definitions)
+            cls.caches[f] = VernacCommandDataList(definitions)
 
     def assertEqualIdentifiersInAlignment(
             self,
@@ -162,7 +162,7 @@ class TestAlign(unittest.TestCase):
         diff = GitDiff("")
         with self.assertRaises(ValueError):
             align_commits(a, b, diff, align_commits_per_file)
-        diff = compute_diff(a, b)
+        diff = compute_git_diff(a, b)
         alignment = align_commits(a, b, diff, align_commits_per_file)
         self.assertEqualIdentifiersInAlignment(a, b, alignment)
 
