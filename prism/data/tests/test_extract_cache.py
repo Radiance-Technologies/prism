@@ -499,6 +499,34 @@ class TestExtractCache(unittest.TestCase):
             ]
             self.assertEqual(actual_goal_qualids, expected_qualids)
 
+    def test_extract_aborted_proofs(self):
+        """
+        Verify that aborted proofs can be extracted.
+        """
+        with pushd(_COQ_EXAMPLES_PATH):
+            extracted_commands = _extract_vernac_commands(
+                Project.extract_sentences(
+                    CoqDocument(
+                        "aborted.v",
+                        CoqParser.parse_source("aborted.v"),
+                        _COQ_EXAMPLES_PATH),
+                    sentence_extraction_method=SEM.HEURISTIC,
+                    return_locations=True,
+                    glom_proofs=False),
+                "aborted.v",
+                serapi_options="")
+        expected_commands_text = [
+            "Definition idw (A : Type) := A.",
+            "Lemma foobar : unit.",
+            "Set Nested Proofs Allowed.",
+            "Lemma aux : forall A : Type, A -> unit.",
+            "Lemma aux' : forall A : Type, A -> unit.",
+            "Lemma foobar' : unit.",
+            "Program Definition foo := let x := _ : unit in _ : x = tt.",
+        ]
+        actual_commands_text = [c.command.text for c in extracted_commands]
+        self.assertEqual(expected_commands_text, actual_commands_text)
+
     def test_goals_reconstruction(self):
         """
         Test the reconstruction of Goals from GoalsDiff.

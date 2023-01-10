@@ -52,6 +52,7 @@ from prism.data.util import get_project_func
 from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.interface.coq.ident import Identifier, get_all_qualified_idents
 from prism.interface.coq.re_patterns import (
+    ABORT_COMMAND_PATTERN,
     OBLIGATION_ID_PATTERN,
     SUBPROOF_ID_PATTERN,
 )
@@ -139,6 +140,7 @@ def _conclude_proof(
     local_ids: Set[str],
     ids: Set[str],
     pre_proof_id: str,
+    is_proof_aborted: bool,
     conjectures: Dict[str,
                       SentenceState],
     partial_proof_stacks: Dict[str,
@@ -164,6 +166,8 @@ def _conclude_proof(
         The list of identifiers introduced by the final proof command.
     pre_proof_id : str
         The ID of the proved conjecture or obligation.
+    is_aborted : bool
+        Whether the proof has been aborted or not.
     conjectures : Dict[str, SentenceState]
         A map from conjecture IDs to their statements.
         This map will be modified in-place.
@@ -193,7 +197,7 @@ def _conclude_proof(
         but more work remains for the overall conjecture).
     """
     new_proofs = []
-    for new_id in ids:
+    for new_id in (ids.union({pre_proof_id}) if is_proof_aborted else ids):
         # Try to cover edge cases of plugins with unusual
         # behavior that may conclude multiple
         # proofs/obligations at once.
@@ -208,8 +212,10 @@ def _conclude_proof(
     # add to other finished obligations
     finished_stack = finished_proof_stacks.setdefault(finished_proof_id, [])
     finished_stack.extend(new_proofs)
-    if finished_proof_id in local_ids:
-        # A lemma has (presumably) been defined.
+    is_conjecture_completed = finished_proof_id in local_ids
+    is_obligation = finished_proof_id != pre_proof_id
+    if is_conjecture_completed or (not is_obligation and is_proof_aborted):
+        # A lemma has (presumably) been defined or aborted.
         # Note that a plugin may cause related proofs to
         # show up as separate entries if it defines custom
         # proof environments.
@@ -494,6 +500,9 @@ def _extract_vernac_commands(
       Neither a verbose info message nor ``Print All.`` command should
       indicate the lemma (or program, or other conjecture) is defined
       before its proof(s) are complete.
+    * No plugin defines their own ``Abort`` or ``Abort All``
+      equivalents, i.e., no plugin concludes a proof without emitting an
+      identifier.
     * No plugins define their own ``Obligation`` equivalents (i.e., no
       plugins define multi-block proofs).
       If any plugin does so, then each "obligation" is expected to be
@@ -601,6 +610,8 @@ def _extract_vernac_commands(
                 command_type = vernac.vernac_type
             else:
                 command_type = vernac.extend_type
+            is_proof_aborted = ABORT_COMMAND_PATTERN.match(
+                command_type) is not None
             is_program = any(
                 _program_regex.search(attr) is not None
                 for attr in vernac.attributes)
@@ -625,8 +636,8 @@ def _extract_vernac_commands(
                     file_commands.append(program)
             elif proof_id_changed:
                 post_goals = serapi.query_goals()
-                if pre_proof_id in local_ids:
-                    # a proof has concluded
+                if pre_proof_id in local_ids or is_proof_aborted:
+                    # a proof has concluded or been aborted
                     if pre_proof_id in partial_proof_stacks:
                         partial_proof_stacks[pre_proof_id].append(
                             (sentence,
@@ -636,6 +647,7 @@ def _extract_vernac_commands(
                             local_ids,
                             ids,
                             pre_proof_id,
+                            is_proof_aborted,
                             conjectures,
                             partial_proof_stacks,
                             obligation_map,
