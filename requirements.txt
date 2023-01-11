@@ -8,6 +8,7 @@ numba
 numpy
 pexpect
 prettytable
+psutil
 pytest
 pytest-cov
 pytest-dependency
