@@ -17,7 +17,7 @@ from seutil import bash
 
 from prism.util.bash import escape
 from prism.util.radpytools.dataclasses import default_field
-from prism.util.resource_limits import subprocess_resource_limiter
+from prism.util.resource_limits import get_resource_limiter_callable
 
 from .file import OpamFile
 from .formula import LogicalPF, LogOp, PackageConstraint, PackageFormula
@@ -590,11 +590,9 @@ class OpamSwitch:
         if self.is_clone:
             command, src, dest = self.as_clone_command(command)
 
-        if any(kwarg is not None for kwarg in [max_memory, max_runtime]):
+        if max_memory is not None:
             # Limits resources allowed to be used by bash command
-            limiter = subprocess_resource_limiter(
-                memory=max_memory,
-                runtime=max_runtime)
+            limiter = get_resource_limiter_callable(memory=max_memory)
             # Run any existing `prexec_fn` arguments before running
             # limiter. `preexec_fn_` would have to be defined
             # prior to this function call, so it's reasonable to let
@@ -613,8 +611,8 @@ class OpamSwitch:
                 limiter()
 
             kwargs['preexec_fn'] = preexec_fn
-            if max_runtime is not None:
-                kwargs['timeout'] = max_runtime
+        if max_runtime is not None:
+            kwargs['timeout'] = max_runtime
 
         r = bash.run(command, env=env, **kwargs)
         if check:

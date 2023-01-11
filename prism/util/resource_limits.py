@@ -1,26 +1,19 @@
 """
 Miscellaneous console-related utilities.
 """
+import os
 import resource
 import signal
+import time
 import warnings
 from enum import IntEnum
+from subprocess import TimeoutExpired
 from typing import Callable, Dict, Optional, Tuple, TypedDict, Union
 
-
-class MaxRuntimeError(RuntimeError):
-    """
-    Exception Raised when runtime is exceeded.
-    """
-
-    def __init__(self, *args, **kwargs):
-        """
-        Initialize exception.
-        """
-        super().__init__(*args, **kwargs)
+import psutil
 
 
-def get_handler(exception: Exception):
+def get_SIGXCPU_handler(soft: int):
     """
     Create function to raise `exception` when called.
 
@@ -28,8 +21,21 @@ def get_handler(exception: Exception):
     https://docs.python.org/3.8/library/signal.html#signal.signal
     """
 
-    def signal_handler(signo, frame):
-        raise exception
+    def signal_handler(*args):
+        raise TimeoutExpired('', soft)
+
+    return signal_handler
+
+
+def get_SIGALRM_handler(soft):
+    """
+    Check for timeout.
+    """
+    start = time.time()
+
+    def signal_handler(*args):
+        if soft is not None and soft > -1 and time.time() - start >= soft:
+            psutil.Process(os.getpid()).send_signal(signal.SIGXCPU)
 
     return signal_handler
 
@@ -80,12 +86,6 @@ class ResourceMapValueDict(TypedDict):
     Dictionary of keywords used to set resource limits.
     """
 
-    exception: Optional[Exception]
-    """
-    Exception raised when resource soft limit is passed.
-    If None, then the default exception for that resource
-    is used.
-    """
     soft: Optional[int]
     """
     Soft resource limit. Does not result in SIGKILL signal
@@ -99,15 +99,13 @@ class ResourceMapValueDict(TypedDict):
     """
 
 
-def _value_to_valuedict(
-        value: Union[ResourceLimits,
-                     Exception]) -> ResourceMapValueDict:
+def _value_to_valuedict(value: ResourceLimits) -> ResourceMapValueDict:
     """
     Return a ResourceMapValueDict that contains the given value.
 
     Parameters
     ----------
-    value : Union[ResourceLimits, Exception]
+    value : ResourceLimits
         Value to place in ResourceMapValueDict
 
     Returns
@@ -117,14 +115,11 @@ def _value_to_valuedict(
         specific keys in ResourceMapValueDict.
     """
     value_dict: ResourceMapValueDict = {}
-    if isinstance(value, Exception):
-        value_dict['exception'] = value
-    else:
-        soft, hard = split_limit(value)
-        if soft is not None:
-            value_dict['soft'] = soft
-        if hard is not None:
-            value_dict['hard'] = hard
+    soft, hard = split_limit(value)
+    if soft is not None:
+        value_dict['soft'] = soft
+    if hard is not None:
+        value_dict['hard'] = hard
     return value_dict
 
 
@@ -149,9 +144,7 @@ def _repeated_valuedict_keys_msg(resource_name: str, key: str) -> str:
     ValueError
         Key is not a key expected by ResourceMapValueDict.
     """
-    if key == "exception":
-        name = "exception"
-    elif key == "soft":
+    if key == "soft":
         name = "soft limit"
     elif key == "hard":
         name = "hard limit"
@@ -178,7 +171,11 @@ class ProcessResource(IntEnum):
     is sent to the process.
     """
 
-    def _limit_current_process(self, rss_map_value_dict: ResourceMapValueDict):
+    def _limit_current_process(
+            self,
+            rss_map_value_dict: ResourceMapValueDict,
+            start_alarm: bool = False,
+            alarm_offset: int = 0):
         """
         Limit the resource usage of the current process.
 
@@ -188,6 +185,12 @@ class ProcessResource(IntEnum):
             Dictionary containing soft limit, hard limit, and
             resource specific exception. See ResourceMapValueDict
             for details.
+        start_alarm : bool, optional
+            If True call signal.alarm using soft limit
+        alarm_offset : int, optional
+            Number of seconds to add runtime. The added time
+            accounts for time between context creation and
+            start of subprocess or time limited function code.
 
         Raises
         ------
@@ -200,13 +203,11 @@ class ProcessResource(IntEnum):
         # Get requested soft and hard limits
         soft = rss_map_value_dict.get('soft', None)
         hard = rss_map_value_dict.get('hard', None)
-        # Get requested exception for when soft limit is passed.
-        exception = rss_map_value_dict.get('exception', None)
         # Use existing limit when requested limit is None.
         if soft is None and hard is not None:
             # Use existing soft limit and requested hard limit.
             soft = existing[0]
-            if soft > hard:
+            if hard > 0 and soft > hard:
                 # Lower existing soft limit so that it's not larger
                 # than requested hard limit.
                 warnings.warn(
@@ -216,56 +217,30 @@ class ProcessResource(IntEnum):
         elif hard is None and soft is not None:
             # Use existing hard limit and requested soft limit.
             hard = existing[1]
+        elif soft is None and hard is None:
+            soft, hard = existing
 
         # Only set limits if one or both limits are given.
         # If invalid pair is used, `setrlimit` will raise a
         # ValueError exception.
-        if soft is not None and hard is not None:
-            limits = (soft, hard)
-            resource.setrlimit(self.value, limits)
+        limits = (soft, hard)
+        resource.setrlimit(self.value, limits)
+
         # Set handler for signal when limit is passed that
         # raises the given exception.
-        if self == ProcessResource.RUNTIME:
+        if self == ProcessResource.RUNTIME and soft is not None:
+
+            signal.signal(signal.SIGALRM, get_SIGALRM_handler(soft))
             # Raised if soft limit is passed.
-            signum = signal.SIGXCPU
-            exception = exception or MaxRuntimeError(
-                f"Max runtime exceeded: {soft}")
-            # Get handler
-            handler = get_handler(exception)
-            # Set handler
-            signal.signal(signum, handler)
-        if self == ProcessResource.MEMORY and exception is not None:
-            # Python already returns MemoryError.
-            raise ValueError(
-                "MemoryError is raised when memory limit is exceeded."
-                " Cannot set custom exception for memory limits.")
-
-    def _timeout_command_flag(self, limit: ResourceLimits) -> str:
-        """
-        Return flag and value corresponding to `timeout` shell command.
-
-        Parameters
-        ----------
-        limit : int
-            Maximum allowed resource usage.
-
-        Returns
-        -------
-        str
-            A string containing the flag used by `timeout`
-            to limit the corresponding resource usage followed
-            by the given `limit`.
-        """
-        if isinstance(limit, int):
-            soft_limit = limit
-        elif isinstance(limit, tuple):
-            soft_limit, _ = limit
-
-        if self.value == ProcessResource.RUNTIME:
-            flag = f"-t {soft_limit}"
-        elif self.value == ProcessResource.MEMORY:
-            flag = f"-m {soft_limit}"
-        return flag
+            signal.signal(signal.SIGXCPU, get_SIGXCPU_handler(soft))
+            if start_alarm:
+                signal.alarm(soft + alarm_offset)
+            else:
+                warnings.warn(
+                    "User has to manually monitor and send"
+                    " `signal.SIGXCPU` signal themselves when"
+                    " when runtime is exceeded. Or pass `start_alarm=True`"
+                    " to `ProcessResource.limit_current_process`.")
 
     @classmethod
     def create_resource_map(
@@ -273,8 +248,7 @@ class ProcessResource(IntEnum):
         kwargs: Dict[Union[str,
                            int,
                            'ProcessResource'],
-                     Union[ResourceLimits,
-                           Exception]]
+                     ResourceLimits]
     ) -> Dict['ProcessResource',
               ResourceMapValueDict]:
         """
@@ -296,13 +270,13 @@ class ProcessResource(IntEnum):
         resource_map = {}
         for rss in set(kwargs.keys()):
             value = kwargs[rss]
-            value_dict = _value_to_valuedict(value)
+            if not isinstance(value, dict):
+                value_dict = _value_to_valuedict(value)
+            else:
+                value_dict = value
 
             # Convert resource to ProcessResource
-            if isinstance(rss, str):
-                rss = cls[rss.upper()]
-            elif isinstance(rss, int):
-                rss = cls(rss)
+            rss = cls.get(rss)
 
             # Add values to resource map
             if rss not in resource_map:
@@ -314,49 +288,39 @@ class ProcessResource(IntEnum):
         return resource_map
 
     @classmethod
-    def limit_command(
-        cls,
-        cmd: str,
-        limits: Optional[Dict[Union[str,
-                                    int,
-                                    'ProcessResource'],
-                              ResourceLimits]] = None
-    ) -> str:
+    def get(cls, rss: Union[int, str, 'ProcessResource']) -> 'ProcessResource':
         """
-        Return bash command run `cmd` with resource constraints.
-
-        If `kwargs` is empty then `cmd` is returned.
+        Return correct ProcessResource type for given value.
 
         Parameters
         ----------
-        cmd : str
-            Command that will run with resource constraints.
-        limits: Optional[Dict[Union[str, int, 'ProcessResource'],
-                              ResourceLimits]], optional
-            A dictionary mapping different ProcessResource
-            enumeration names to maximum values.
+        rss : Union[int, str, ProcessResource]
+            The integer value of the resource or resource name.
+            Passing a `ProcessResource` results in returning the
+            value back unchanged.
 
         Returns
         -------
-        str
-            If `limits` is None or empty dict, `cmd` is returned
-            without modification. Otherwise the "timeout" bash command
-            with corresponding flags and values are prepended to `cmd`
-            and returned.
+        ProcessResource
+            A process resource.
+
+        Raises
+        ------
+        TypeError
+            The type of `rss` is not an
+            integer or string.
         """
-        flags = []
-        if limits is None:
-            limits = {}
-        for rss, limit in limits.items():
-            if isinstance(rss, str):
-                rss = ProcessResource[rss]
-            elif isinstance(resource, int):
-                rss = ProcessResource(rss)
-            flag = rss._timeout_command_flag(limit)
-            flags.append(flag)
-        if len(flags) > 0:
-            cmd = ' '.join(['timeout'] + flags + [cmd])
-        return cmd
+        # Convert resource to ProcessResource
+        if isinstance(rss, str):
+            rss = cls[rss.upper()]
+        elif isinstance(rss, int):
+            rss = cls(rss)
+        elif isinstance(rss, ProcessResource):
+            pass
+        else:
+            raise TypeError(
+                "Integer value of resource or resource name expected.")
+        return rss
 
     @classmethod
     def limit_current_process(
@@ -365,48 +329,57 @@ class ProcessResource(IntEnum):
                                     int,
                                     'ProcessResource'],
                               ResourceLimits]] = None,
-        exceptions: Optional[Dict[Union[str,
-                                        int,
-                                        'ProcessResource'],
-                                  Exception]] = None):
+        start_alarm: bool = False,
+        alarm_offset: int = 0,
+    ):
         """
         Limit the resource usage of the current process.
+
+        If this is being called in a subprocess's `preexec_fn`
+        then `start_alarm=True` will result in return code of -14
+        from process. If `start_alarm=False` then the alarm should
+        be started (via `signal.alarm(...)`) prior to subprocess start.
+        In the case of the latter, an exception will be raised in the
+        main thread if RUNTIME is exceeded.
 
         Parameters
         ----------
         limits: Optional[Dict[Union[str, int, 'ProcessResource'],
                          ResourceLimits]], optional
-            A dictionary mapping different ProcessResource
-            and a limit on that resource.
-        exceptions : Optional[Dict[Union[str, int, 'ProcessResource'],
-                              Exception]], optional
-            A dictionary mapping different ProcessResource
-            and exceptions to be raised when limit is exceeded.
-            Current only supported for `ProcessResource.RUNTIME`.
-            `ProcessResource.MEMORY` raises a `MemoryError` already.
-            Keys in `exceptions` must keys
+            A dictionary mapping different ProcessResource(s)
+            to resource limits.
+        start_alarm : bool, optional
+            If True call signal.alarm using soft limit
+        alarm_offset : int, optional
+            Number of seconds to add runtime. The added time
+            accounts for time between context creation and
+            start of subprocess or time limited function code.
         """
-        if limits is None:
-            limits = {}
-        if exceptions is None:
-            exceptions = {}
+        if limits is not None:
+            # Aggregate limits and exceptions into single dictionary
+            # that uses `ProcessResource` as keys and keyword
+            # arguments of the
+            # `ProcessRsource.<value>._limit_current_process` method
+            # as values.
+            resource_map = cls.create_resource_map(limits)
 
-        # Aggregate limits and exceptions into single dictionary that
-        # uses `ProcessResource` as keys and keyword arguments of the
-        # `ProcessRsource.<value>._limit_current_process` method as
-        # values.
-        resource_map = cls.create_resource_map(limits)
-        resource_map.update(cls.create_resource_map(exceptions))
+            # Apply resource constraints.
+            for rss, rss_map_value_dict in resource_map.items():
+                if rss == cls.RUNTIME:
+                    kw = {
+                        'start_alarm': start_alarm,
+                        'alarm_offset': alarm_offset,
+                    }
+                else:
+                    kw = {}
+                rss._limit_current_process(rss_map_value_dict, **kw)
 
-        # Apply resource constraints.
-        for rss, rss_map_value_dict in resource_map.items():
-            rss._limit_current_process(rss_map_value_dict)
 
-
-def subprocess_resource_limiter(
+def get_resource_limiter_callable(
     memory: Optional[ResourceLimits] = None,
     runtime: Optional[ResourceLimits] = None,
-    max_runtime_exception: Exception = None,
+    start_alarm: bool = False,
+    alarm_offset: int = 0,
 ) -> Callable[[],
               None]:
     """
@@ -418,11 +391,13 @@ def subprocess_resource_limiter(
         Maximum memory allowed, by default None
     runtime : Optional[int], optional
         maximum time allowed, by default None
-    max_time_exception : Exception, optional
-        Exception that is raised when max runtime is exceeded,
-        by default `None`. If `None` is given, then a MaxRuntimeError
-        exception is used instead. See
-        `ProcessResource.limit_current_process`.
+    start_alarm : bool, optional
+        If True call signal.alarm using soft limit
+        after setting the limit.
+    alarm_offset : int, optional
+        Number of seconds to add runtime. The added time
+        accounts for time between context creation and
+        start of subprocess or time limited function code.
 
     Returns
     -------
@@ -436,9 +411,119 @@ def subprocess_resource_limiter(
             ProcessResource.MEMORY: memory,
             ProcessResource.RUNTIME: runtime
         }
-        exceptions = {
-            ProcessResource.RUNTIME: max_runtime_exception,
-        }
-        ProcessResource.limit_current_process(limits, exceptions)
+        ProcessResource.limit_current_process(
+            limits,
+            start_alarm=start_alarm,
+            alarm_offset=alarm_offset)
 
     return limiter
+
+
+class ProcessLimiterContext:
+    """
+    Class to create context that handles alarms for resource limits.
+
+    Using this context manager and passing instance as a subprocess's
+    `preexec_fn` function will result in exception being raised in the
+    parent process.
+    """
+
+    def __init__(
+            self,
+            memory: Optional[ResourceLimits] = None,
+            runtime: Optional[ResourceLimits] = None,
+            alarm_offset: int = 0,
+            subprocess: bool = False,
+            **kwargs):
+        """
+        Return function limits resources that when called.
+
+        Parameters
+        ----------
+        memory : Optional[ResourceLimits], optional
+            Maximum memory allowed, by default None
+        runtime : Optional[ResourceLimits], optional
+            maximum time allowed, by default None
+        alarm_offset : int, optional
+            Number of seconds to add runtime. The added time
+            accounts for time between context creation and
+            start of subprocess or time limited function code.
+        subprocess : bool, optional
+            If True, instance must be called to set resource limits
+            and alarm will be created at context creation. If False,
+            then resource limits are set at context creation.
+        """
+        if memory is not None:
+            kwargs['memory'] = memory
+        if runtime is not None:
+            kwargs['runtime'] = runtime
+        self.limits = ProcessResource.create_resource_map(kwargs)
+        if self._soft_limit(ProcessResource.RUNTIME) is not None:
+            self.set_runtime_alarm = True
+        else:
+            self.set_runtime_alarm = False
+        self.subprocess = subprocess
+        self._cache = {}
+        self._alarm_offset = alarm_offset
+
+    def _cache_current_limits(self):
+        """
+        Create an in-memory cache of existing resource limits.
+        """
+        for rss in self.limits:
+            self._cache[rss] = resource.getrlimit(rss.value)
+
+    def _restore_limits(self):
+        """
+        Create an in-memory cache of existing resource limits.
+        """
+        for rss in self.limits:
+            limit = self._cache.pop(rss)
+            resource.setrlimit(rss.value, limit)
+
+    def _soft_limit(self, rss: ProcessResource) -> Optional[int]:
+        """
+        Return soft limit of resource.
+
+        Parameters
+        ----------
+        rss : ProcessResource
+            A process resource.
+
+        Returns
+        -------
+        Optional[int]
+            Returns value from `self.limits` if present, otherwise
+            returns None.
+        """
+        if rss in self.limits and "soft" in self.limits[rss]:
+            return self.limits[rss]["soft"]
+        return None
+
+    def __enter__(self) -> 'ProcessLimiterContext':
+        """
+        Call process limiting functions.
+        """
+        if not self.subprocess:
+            self._cache_current_limits()
+            ProcessResource.limit_current_process(self.limits)
+        if self.set_runtime_alarm:
+            soft = self._soft_limit(ProcessResource.RUNTIME)
+            signal.signal(signal.SIGALRM, get_SIGALRM_handler(soft))
+            signal.alarm(soft + self._alarm_offset)
+        return self
+
+    def __exit__(self, type, value, traceback):
+        """
+        Disable alarm.
+        """
+        if not self.subprocess:
+            self._restore_limits()
+        if self.set_runtime_alarm:
+            signal.alarm(0)
+
+    def __call__(self):
+        """
+        Set resource Limits.
+        """
+        ProcessResource.limit_current_process(self.limits)
