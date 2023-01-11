@@ -336,11 +336,12 @@ class ProcessResource(IntEnum):
         Limit the resource usage of the current process.
 
         If this is being called in a subprocess's `preexec_fn`
-        then `start_alarm=True` will result in return code of -14
-        from process. If `start_alarm=False` then the alarm should
-        be started (via `signal.alarm(...)`) prior to subprocess start.
-        In the case of the latter, an exception will be raised in the
-        main thread if RUNTIME is exceeded.
+        function then `start_alarm=True` will result in return code
+        of -14 from the subprocess. If `start_alarm=False` then the
+        alarm should be started (via `signal.alarm(...)`) prior to
+        subprocess start in parent process. In the case of the latter,
+        an exception will be raised in the main thread if RUNTIME is
+        exceeded.
 
         Parameters
         ----------
@@ -396,14 +397,16 @@ def get_resource_limiter_callable(
         after setting the limit.
     alarm_offset : int, optional
         Number of seconds to add runtime. The added time
-        accounts for time between context creation and
-        start of subprocess or time limited function code.
+        accounts for time between calling the returned function
+        and start of runtime limited code. Only used when
+        `alarm_offset=True`.
 
     Returns
     -------
     Callable
-        Function that can be called in a subprocess to
-        limit resources of that subprocess.
+        Function that can be called to limit resources of in calling
+        process. Can be passed as `preexec_fn` keyword argument used
+        in `subprocess` library.
     """
 
     def limiter():
@@ -425,7 +428,8 @@ class ProcessLimiterContext:
 
     Using this context manager and passing instance as a subprocess's
     `preexec_fn` function will result in exception being raised in the
-    parent process.
+    parent process. To obtain the above functionality, use
+    `subprocess=True` keyword argument.
     """
 
     def __init__(
