@@ -5,7 +5,7 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
-from subprocess import TimeoutExpired
+from subprocess import CalledProcessError, TimeoutExpired
 
 from prism.util.opam import OCamlVersion, OpamAPI, Version
 from prism.util.opam.formula import (
@@ -203,10 +203,17 @@ class TestOpamSwitch(unittest.TestCase):
             "sleep 5",
             max_runtime=3)
         self.assertRaises(
-            MemoryError,
+            CalledProcessError,
             self.test_switch.run,
-            "python -c 'a=[1 for _ in range(int(1e7))]'",
-            max_memory=int(4 * 1e7))
+            "python -c 'a=[1 for _ in range(int(1e8))]'",
+            max_memory=int(4 * 1e7),
+        )
+        output = self.test_switch.run(
+            "python -c 'a=[1 for _ in range(int(1e8))]'",
+            max_memory=int(4 * 1e7),
+            check=False,
+        )
+        self.assertIn("MemoryError", output.stderr)
 
     @classmethod
     def setUpClass(cls):
@@ -226,4 +233,12 @@ class TestOpamSwitch(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    # unittest.main()
+    test = TestOpamSwitch()
+    test.setUpClass()
+    try:
+        test.test_limits()
+    except Exception as exc:
+        raise exc
+    finally:
+        test.tearDownClass()

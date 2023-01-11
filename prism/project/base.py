@@ -424,6 +424,8 @@ class Project(ABC):
             If no commands for this target are specified.
         ProjectBuildError
             If commands are specified but fail with nonzero exit code.
+        TimeoutExpired
+            If runtime of command exceeds `max_runtime`.
         """
         # wrap in parentheses to preserve operator precedence when
         # joining commands with &&

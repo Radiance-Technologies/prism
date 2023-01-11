@@ -13,6 +13,7 @@ from functools import partial
 from io import StringIO
 from multiprocessing import Pool
 from pathlib import Path
+from subprocess import TimeoutExpired
 from threading import BoundedSemaphore
 from time import time
 from typing import (
@@ -861,23 +862,26 @@ def _extract_vernac_commands_worker_star(
 
 
 def extract_cache(
-        build_cache_client: CoqProjectBuildCacheProtocol,
-        switch_manager: SwitchManager,
-        project: ProjectRepo,
-        commit_sha: str,
-        process_project_fallback: Callable[[Project],
-                                           VernacDict],
-        coq_version: Optional[str] = None,
-        recache: Optional[Callable[
-            [CoqProjectBuildCacheServer,
-             ProjectRepo,
-             str,
-             str],
-            bool]] = None,
-        block: bool = False,
-        files_to_use: Optional[Iterable[str]] = None,
-        force_serial: bool = False,
-        worker_semaphore: Optional[BoundedSemaphore] = None) -> None:
+    build_cache_client: CoqProjectBuildCacheProtocol,
+    switch_manager: SwitchManager,
+    project: ProjectRepo,
+    commit_sha: str,
+    process_project_fallback: Callable[[Project],
+                                       VernacDict],
+    coq_version: Optional[str] = None,
+    recache: Optional[Callable[
+        [CoqProjectBuildCacheServer,
+         ProjectRepo,
+         str,
+         str],
+        bool]] = None,
+    block: bool = False,
+    files_to_use: Optional[Iterable[str]] = None,
+    force_serial: bool = False,
+    worker_semaphore: Optional[BoundedSemaphore] = None,
+    max_memory: Optional[int] = None,
+    max_runtime: Optional[int] = None,
+) -> None:
     r"""
     Extract data from project commit and insert into `build_cache`.
 
@@ -932,6 +936,10 @@ def extract_cache(
     worker_semaphore : Semaphore or None, optional
         Semaphore used to control the number of file workers than
         can run at once, by default None. If None, ignore.
+    max_memory : Optional[ResourceLimits], optional
+        Maximum memory allowed to build project, by default None
+    max_runtime : Optional[ResourceLimits], optional
+        Maximum cpu time allowed to build project, by default None
 
     See Also
     --------
@@ -958,21 +966,26 @@ def extract_cache(
             block,
             files_to_use,
             force_serial,
-            worker_semaphore)
+            worker_semaphore,
+            max_memory,
+            max_runtime)
 
 
 def extract_cache_new(
-        build_cache_client: CoqProjectBuildCacheProtocol,
-        switch_manager: SwitchManager,
-        project: ProjectRepo,
-        commit_sha: str,
-        process_project_fallback: Callable[[Project],
-                                           VernacDict],
-        coq_version: str,
-        block: bool,
-        files_to_use: Optional[Iterable[str]],
-        force_serial: bool,
-        worker_semaphore: Optional[BoundedSemaphore]):
+    build_cache_client: CoqProjectBuildCacheProtocol,
+    switch_manager: SwitchManager,
+    project: ProjectRepo,
+    commit_sha: str,
+    process_project_fallback: Callable[[Project],
+                                       VernacDict],
+    coq_version: str,
+    block: bool,
+    files_to_use: Optional[Iterable[str]],
+    force_serial: bool,
+    worker_semaphore: Optional[BoundedSemaphore],
+    max_memory: Optional[int],
+    max_runtime: Optional[int],
+):
     """
     Extract a new cache object and insert it into the build cache.
 
@@ -1005,6 +1018,10 @@ def extract_cache_new(
     worker_semaphore : Semaphore or None
         Semaphore used to control the number of file workers that can
         run at once. If None, ignore.
+    max_memory : Optional[ResourceLimits]
+        Maximum memory allowed to build project
+    max_runtime : Optional[ResourceLimits]
+        Maximum cpu time allowed to build project
     """
     # Construct a logger local to this function and unique to this PID
     pid = os.getpid()
@@ -1032,10 +1049,14 @@ def extract_cache_new(
             # process the commit
             metadata = project.metadata
             try:
-                build_result = project.build()
+                build_result = project.build(
+                    max_runtime=max_runtime,
+                    max_memory=max_memory)
             except ProjectBuildError as pbe:
                 build_result = (pbe.return_code, pbe.stdout, pbe.stderr)
                 command_data = process_project_fallback(project)
+            except TimeoutExpired as exc:
+                build_result = (1, '', str(exc))
             else:
                 start_time = time()
                 try:
@@ -1259,7 +1280,9 @@ class CacheExtractor:
     def get_extract_cache_func(
         self,
         force_serial: bool = False,
-        worker_semaphore: Optional[BoundedSemaphore] = None
+        worker_semaphore: Optional[BoundedSemaphore] = None,
+        max_memory: Optional[int] = None,
+        max_runtime: Optional[int] = None,
     ) -> Callable[[ProjectRepo,
                    str,
                    None],
@@ -1275,6 +1298,10 @@ class CacheExtractor:
         worker_semaphore : Semaphore or None, optional
             Semaphore used to control the number of file workers than
             can run at once, by default None. If None, ignore.
+        max_memory : Optional[ResourceLimits], optional
+            Maximum memory allowed to build project, by default None
+        max_runtime : Optional[ResourceLimits], optional
+            Maximum cpu time allowed to build project, by default None
 
         Returns
         -------
@@ -1290,19 +1317,25 @@ class CacheExtractor:
             coq_version_iterator=self.coq_version_iterator,
             files_to_use=self.files_to_use,
             force_serial=force_serial,
-            worker_semaphore=worker_semaphore)
+            worker_semaphore=worker_semaphore,
+            max_memory=max_memory,
+            max_runtime=max_runtime,
+        )
 
     def run(
-            self,
-            root_path: os.PathLike,
-            log_dir: Optional[os.PathLike] = None,
-            updated_md_storage_file: Optional[os.PathLike] = None,
-            extract_nprocs: int = 8,
-            force_serial: bool = False,
-            n_build_workers: int = 1,
-            project_names: Optional[List[str]] = None,
-            max_num_commits: Optional[int] = None,
-            max_procs_file_level: int = 0) -> None:
+        self,
+        root_path: os.PathLike,
+        log_dir: Optional[os.PathLike] = None,
+        updated_md_storage_file: Optional[os.PathLike] = None,
+        extract_nprocs: int = 8,
+        force_serial: bool = False,
+        n_build_workers: int = 1,
+        project_names: Optional[List[str]] = None,
+        max_num_commits: Optional[int] = None,
+        max_procs_file_level: int = 0,
+        max_memory: Optional[int] = None,
+        max_runtime: Optional[int] = None,
+    ) -> None:
         """
         Build all projects at `root_path` and save updated metadata.
 
@@ -1339,6 +1372,10 @@ class CacheExtractor:
             Maximum number of active workers to allow at once on the
             file-level of extraction, by default 0. If 0, allow
             unlimited processes at this level.
+        max_memory : Optional[ResourceLimits], optional
+            Maximum memory allowed to build project, by default None
+        max_runtime : Optional[ResourceLimits], optional
+            Maximum cpu time allowed to build project, by default None
         """
         if log_dir is None:
             log_dir = Path(self.md_storage_file).parent
@@ -1396,8 +1433,11 @@ class CacheExtractor:
             project_looper = ProjectCommitUpdateMapper[None](
                 projects,
                 self.get_commit_iterator_func(max_num_commits),
-                self.get_extract_cache_func(force_serial,
-                                            worker_semaphore),
+                self.get_extract_cache_func(
+                    force_serial,
+                    worker_semaphore,
+                    max_memory=max_memory,
+                    max_runtime=max_runtime),
                 "Extracting cache",
                 terminate_on_except=False)
             # Extract cache in parallel
@@ -1485,28 +1525,30 @@ class CacheExtractor:
 
     @classmethod
     def extract_cache_func(
-            cls,
-            project: ProjectRepo,
-            commit_sha: str,
-            _result: None,
-            build_cache_client: CoqProjectBuildCacheProtocol,
-            switch_manager: SwitchManager,
-            process_project_fallback: Callable[[Project],
-                                               VernacDict],
-            recache: Callable[
-                [CoqProjectBuildCacheServer,
-                 ProjectRepo,
-                 str,
-                 str],
-                bool],
-            coq_version_iterator: Callable[[Project,
-                                            str],
-                                           Iterable[Union[str,
-                                                          Version]]],
-            files_to_use: Optional[Dict[str,
-                                        Iterable[str]]],
-            force_serial: bool,
-            worker_semaphore: Optional[BoundedSemaphore]):
+        cls,
+        project: ProjectRepo,
+        commit_sha: str,
+        _result: None,
+        build_cache_client: CoqProjectBuildCacheProtocol,
+        switch_manager: SwitchManager,
+        process_project_fallback: Callable[[Project],
+                                           VernacDict],
+        recache: Callable[[CoqProjectBuildCacheServer,
+                           ProjectRepo,
+                           str,
+                           str],
+                          bool],
+        coq_version_iterator: Callable[[Project,
+                                        str],
+                                       Iterable[Union[str,
+                                                      Version]]],
+        files_to_use: Optional[Dict[str,
+                                    Iterable[str]]],
+        force_serial: bool,
+        worker_semaphore: Optional[BoundedSemaphore],
+        max_memory: Optional[int],
+        max_runtime: Optional[int],
+    ):
         r"""
         Extract cache.
 
@@ -1545,6 +1587,10 @@ class CacheExtractor:
         worker_semaphore : Semaphore or None
             Semaphore used to control the number of file workers than
             can run at once. If None, ignore.
+        max_memory : Optional[ResourceLimits]
+            Maximum memory allowed to build project
+        max_runtime : Optional[ResourceLimits]
+            Maximum cpu time allowed to build project
         """
         pbar = tqdm.tqdm(
             coq_version_iterator(project,
@@ -1566,4 +1612,7 @@ class CacheExtractor:
                 recache,
                 files_to_use=files_to_use,
                 force_serial=force_serial,
-                worker_semaphore=worker_semaphore)
+                worker_semaphore=worker_semaphore,
+                max_memory=max_memory,
+                max_runtime=max_runtime,
+            )

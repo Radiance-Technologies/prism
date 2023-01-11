@@ -89,7 +89,7 @@ class TestExtractCache(unittest.TestCase):
             if os.path.exists(project_root):
                 shutil.rmtree(project_root)
 
-    def test_extract_cache(self):
+    def _extract_cache(self, **kwargs):
         """
         Test the function to extract cache from a project.
         """
@@ -144,7 +144,8 @@ class TestExtractCache(unittest.TestCase):
                     lambda x: {},
                     coq_version,
                     block=True,
-                    worker_semaphore=semaphore)
+                    worker_semaphore=semaphore,
+                    **kwargs)
                 self.logger.debug(f"Success {project_name}")
             # assert that the other float commit was not checked out
             self.assertEqual(coq_float.commit_sha, coq_float.reset_head)
@@ -160,6 +161,25 @@ class TestExtractCache(unittest.TestCase):
                     ('lambda',
                      self.lambda_head,
                      coq_version)))
+        return cache_client, cache_server
+
+    def test_extract_cache(self):
+        """
+        Test the function to extract cache from a project.
+        """
+        cache_client, cache_server = self._extract_cache()
+
+    def test_extract_cache_limited_runtime(self):
+        """
+        Test the function to extract cache from a project.
+        """
+        cache_client, cache_server = self._extract_cache(max_runtime=0)
+
+    def test_extract_cache_limited_memory(self):
+        """
+        Test the function to extract cache from a project.
+        """
+        cache_client, cache_server = self._extract_cache(max_memory=0)
 
     def test_extract_vernac_commands(self):
         """

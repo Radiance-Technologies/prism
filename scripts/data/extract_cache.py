@@ -174,6 +174,20 @@ if __name__ == "__main__":
         help="Maximum number of active workers to allow at once on the "
         "file-level of extraction.")
     parser.add_argument(
+        "--max-proj-build-memory",
+        default=None,
+        type=int,
+        help="Maximum amount of memory (bytes) allowed in subprocess used to "
+        "execute  a project build command. Exceeding limit results in a "
+        "MemoryError captured within a ProjectBuildError")
+    parser.add_argument(
+        "--max-proj-build-runtime",
+        default=None,
+        type=int,
+        help="Maximum amount of CPU time (seconds) allowed by subprocess used "
+        "to execute a project build command. Exceeding limit results in a "
+        "TimeoutExpired exception instead of ProjectBuildError")
+    parser.add_argument(
         "--opam-projects-only",
         action="store_true",
         help="If provided, only use the projects listed in 'opam_projects.txt'."
@@ -213,6 +227,8 @@ if __name__ == "__main__":
     n_build_workers: int = args.n_build_workers
     force_serial: bool = args.force_serial
     num_switches: int = args.num_switches
+    max_memory: Optional[int] = args.max_proj_build_memory
+    max_runtime: Optional[int] = args.max_proj_build_runtime
     # Projects to extract
     if args.project_names:
         project_names = args.project_names
@@ -279,4 +295,7 @@ if __name__ == "__main__":
         project_names=project_names,
         max_num_commits=max_num_commits,
         updated_md_storage_file=updated_md_storage_file,
-        max_procs_file_level=max_procs_file_level)
+        max_procs_file_level=max_procs_file_level,
+        max_memory=max_memory,
+        max_runtime=max_runtime,
+    )
