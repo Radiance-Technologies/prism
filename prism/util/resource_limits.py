@@ -15,7 +15,7 @@ import psutil
 
 def get_SIGXCPU_handler(soft: int):
     """
-    Create function to raise `exception` when called.
+    Create function to raise `TimeoutExpired` when called.
 
     The fuction return is intended to passed to `signal.signal`.
     https://docs.python.org/3.8/library/signal.html#signal.signal
@@ -29,7 +29,21 @@ def get_SIGXCPU_handler(soft: int):
 
 def get_SIGALRM_handler(soft):
     """
-    Check for timeout.
+    Create function to check runtime when alarm is raised.
+
+    If runtime has been exceed by time alarm is called, then
+    the returned function will send a `signal.SIGXCPU` to the
+    current process. Results of previous step will depende on
+    if `signal.alarm` is called in subprocess or main process.
+
+    The fuction returned is intended to passed to `signal.signal`.
+    https://docs.python.org/3.8/library/signal.html#signal.signal
+
+    The function returned assumes `signal.alarm(soft)` has been called
+    prior to when the runtime counter would starts. It is only
+    neccessary to use this function for `ProcessResource.RUNTIME`
+    limits because python doesn't automatically handle sending a
+    signal.SIGXCPU signal when runtime is exceeded.
     """
     start = time.time()
 
@@ -230,12 +244,25 @@ class ProcessResource(IntEnum):
         # raises the given exception.
         if self == ProcessResource.RUNTIME and soft is not None:
 
+            # Depending on the process being resource limited
+            # a SIGXCPU signal may not sent automatically.
+            # So instead we rely on an external triggered alarm signal
+            # to be sent to tell us to send the SIGXCPU signal.
             signal.signal(signal.SIGALRM, get_SIGALRM_handler(soft))
-            # Raised if soft limit is passed.
+            # signal.SIGXCPU is sent when runtime is exceeded, or
+            # from handler in expression above when alarm signal is
+            # sent.
             signal.signal(signal.SIGXCPU, get_SIGXCPU_handler(soft))
             if start_alarm:
+                # Starting the alarm here in a subprocess's preexec_fn
+                # will result in a returncode of -14.
+                # Otherwise it will result in a resource specific
+                # exception being raised with return code 1.
                 signal.alarm(soft + alarm_offset)
             else:
+                # Warn the user that they should be maintaing the alarm
+                # if they want the signal.SIGXCPU to ever be sent once
+                # runtime limit is passed.
                 warnings.warn(
                     "User has to manually monitor and send"
                     " `signal.SIGXCPU` signal themselves when"
@@ -268,7 +295,7 @@ class ProcessResource(IntEnum):
             were given for the same resource.
         """
         resource_map = {}
-        for rss in set(kwargs.keys()):
+        for rss in kwargs:
             value = kwargs[rss]
             if not isinstance(value, dict):
                 value_dict = _value_to_valuedict(value)
@@ -388,9 +415,9 @@ def get_resource_limiter_callable(
 
     Parameters
     ----------
-    memory : Optional[int], optional
+    memory : Optional[ResourceLimits], optional
         Maximum memory allowed, by default None
-    runtime : Optional[int], optional
+    runtime : Optional[ResourceLimits], optional
         maximum time allowed, by default None
     start_alarm : bool, optional
         If True call signal.alarm using soft limit

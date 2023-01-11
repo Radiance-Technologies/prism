@@ -203,7 +203,7 @@ class TestOpamSwitch(unittest.TestCase):
             "sleep 5",
             max_runtime=3)
         self.assertRaises(
-            TimeoutExpired,
+            MemoryError,
             self.test_switch.run,
             "python -c 'a=[1 for _ in range(int(1e7))]'",
             max_memory=int(4 * 1e7))
