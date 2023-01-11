@@ -1328,6 +1328,9 @@ class CacheExtractor:
         if log_dir is None:
             log_dir = Path(self.md_storage_file).parent
         # Generate list of projects
+        project_list = self.md_storage.projects
+        if project_names is not None:
+            project_list = [p for p in project_list if p in project_names]
         projects = list(
             tqdm.tqdm(
                 Pool(20).imap(
@@ -1335,12 +1338,12 @@ class CacheExtractor:
                         root_path,
                         self.md_storage,
                         n_build_workers),
-                    self.md_storage.projects),
+                    project_list),
                 desc="Initializing Project instances",
-                total=len(self.md_storage.projects)))
-        # If a list of projects is specified, use only those projects
+                total=len(project_list)))
+        # Issue a warning if any requested projects are not present in
+        # metadata.
         if project_names is not None:
-            projects = [p for p in projects if p.name in project_names]
             actual_project_set = {p.name for p in projects}
             requested_project_set = set(project_names)
             diff = requested_project_set.difference(actual_project_set)
