@@ -1,6 +1,7 @@
 """
 Test suite for alignment algorithms and utilities.
 """
+import logging
 import resource
 import unittest
 import warnings
@@ -15,6 +16,8 @@ from prism.util.resource_limits import (
 )
 
 warnings.filterwarnings("ignore")
+
+logger = logging.getLogger()
 
 
 class TestResourceLimits(unittest.TestCase):
@@ -49,6 +52,9 @@ class TestResourceLimits(unittest.TestCase):
         for rss, tool in cls.tool.items():
             fudge_factor = cls.fudge_Factor[rss]
             output, usage = tool(0)
+            logger.info("STDOUT: ", output.stdout)
+            logger.info("STDERR: ", output.stderr)
+            logger.info("RETURNCODE: ", output.returncode)
             offset = int(usage[cls.key[rss]])  # smallest value
             under_limit = offset + fudge_factor
             limit = under_limit + fudge_factor
