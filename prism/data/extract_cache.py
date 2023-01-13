@@ -937,9 +937,11 @@ def extract_cache(
         Semaphore used to control the number of file workers than
         can run at once, by default None. If None, ignore.
     max_memory : Optional[ResourceLimits], optional
-        Maximum memory allowed to build project, by default None
+        Maximum memory (bytes) allowed to build project, by default
+        None
     max_runtime : Optional[ResourceLimits], optional
-        Maximum cpu time allowed to build project, by default None
+        Maximum cpu time (seconds) allowed to build project, by default
+        None
 
     See Also
     --------
@@ -1019,9 +1021,9 @@ def extract_cache_new(
         Semaphore used to control the number of file workers that can
         run at once. If None, ignore.
     max_memory : Optional[ResourceLimits]
-        Maximum memory allowed to build project
+        Maximum memory (bytes) allowed to build project
     max_runtime : Optional[ResourceLimits]
-        Maximum cpu time allowed to build project
+        Maximum cpu time (seconds) allowed to build project
     """
     # Construct a logger local to this function and unique to this PID
     pid = os.getpid()
@@ -1303,9 +1305,11 @@ class CacheExtractor:
             Semaphore used to control the number of file workers than
             can run at once, by default None. If None, ignore.
         max_memory : Optional[ResourceLimits], optional
-            Maximum memory allowed to build project, by default None
+            Maximum memory (bytes) allowed to build project, by default
+            None
         max_runtime : Optional[ResourceLimits], optional
-            Maximum cpu time allowed to build project, by default None
+            Maximum cpu time (seconds) allowed to build project, by
+            default None
 
         Returns
         -------
@@ -1377,9 +1381,11 @@ class CacheExtractor:
             file-level of extraction, by default 0. If 0, allow
             unlimited processes at this level.
         max_memory : Optional[ResourceLimits], optional
-            Maximum memory allowed to build project, by default None
+            Maximum memory (bytes) allowed to build project, by default
+            None
         max_runtime : Optional[ResourceLimits], optional
-            Maximum cpu time allowed to build project, by default None
+            Maximum cpu time (seconds) allowed to build project, by
+            default None
         """
         if log_dir is None:
             log_dir = Path(self.md_storage_file).parent
@@ -1592,9 +1598,9 @@ class CacheExtractor:
             Semaphore used to control the number of file workers than
             can run at once. If None, ignore.
         max_memory : Optional[ResourceLimits]
-            Maximum memory allowed to build project
+            Maximum memory (bytes) allowed to build project
         max_runtime : Optional[ResourceLimits]
-            Maximum cpu time allowed to build project
+            Maximum cpu time (seconds) allowed to build project
         """
         pbar = tqdm.tqdm(
             coq_version_iterator(project,

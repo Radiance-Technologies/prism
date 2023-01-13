@@ -405,9 +405,9 @@ class Project(ABC):
             A more descriptive term for the action represented by the
             build target, e.g., ``"compilation"``.
         max_memory: Optional[int], optional
-            Max memory allowed to make project.
+            Max memory (bytes) allowed to make project.
         max_runtime: Optional[int], optional
-            Max time allowed to make project.
+            Max time (seconds) allowed to make project.
 
         Returns
         -------
