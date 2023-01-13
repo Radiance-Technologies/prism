@@ -89,7 +89,7 @@ class TestExtractCache(unittest.TestCase):
             if os.path.exists(project_root):
                 shutil.rmtree(project_root)
 
-    def _extract_cache(self, exception: bool = False, **kwargs):
+    def _extract_cache(self, exception_expected: bool = False, **kwargs):
         """
         Test the function to extract cache from a project.
         """
@@ -156,7 +156,7 @@ class TestExtractCache(unittest.TestCase):
                                  coq_version),
                 dummy_float_data)
             # assert that lambda was cached
-            if not exception:
+            if not exception_expected:
                 self.assertTrue(
                     cache_client.contains(
                         ('lambda',
@@ -174,7 +174,7 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract cache from a project.
         """
-        cache_client, cache_server = self._extract_cache(max_runtime=0, exception=True)
+        cache_client, cache_server = self._extract_cache(max_runtime=0, exception_expected=True)
         if os.path.exists(self.CACHE_DIR):
             shutil.rmtree(self.CACHE_DIR)
 
@@ -182,7 +182,7 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract cache from a project.
         """
-        cache_client, cache_server = self._extract_cache(max_memory=0, exception=True)
+        cache_client, cache_server = self._extract_cache(max_memory=0, exception_expected=True)
         if os.path.exists(self.CACHE_DIR):
             shutil.rmtree(self.CACHE_DIR)
 
