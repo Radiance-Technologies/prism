@@ -41,7 +41,7 @@ class TestResourceLimits(unittest.TestCase):
         # Factor to add between limits(under, at, over).
         cls.fudge_Factor = {
             ProcessResource.MEMORY: int(100e6),  # 100 MB
-            ProcessResource.RUNTIME: 2,  # 2 seconds
+            ProcessResource.RUNTIME: 1,  # 2 seconds
         }
 
         cls.current_limits = {}
