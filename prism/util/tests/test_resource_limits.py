@@ -140,9 +140,4 @@ class TestResourceLimits(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    # unittest.main()
-    test = TestResourceLimits()
-    test.setUpClass()
-    test.test_limiter()
-    test.test_memory()
-    test.test_time()
+    unittest.main()
