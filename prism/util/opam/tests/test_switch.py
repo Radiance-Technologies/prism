@@ -233,12 +233,4 @@ class TestOpamSwitch(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    # unittest.main()
-    test = TestOpamSwitch()
-    test.setUpClass()
-    try:
-        test.test_limits()
-    except Exception as exc:
-        raise exc
-    finally:
-        test.tearDownClass()
+    unittest.main()
