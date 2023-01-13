@@ -19,6 +19,12 @@ def get_SIGXCPU_handler(soft: int):
 
     The fuction return is intended to passed to `signal.signal`.
     https://docs.python.org/3.8/library/signal.html#signal.signal
+
+    The returned function raises a TimeoutExpired in the main process
+    when a SIGXCPU signal is sent to subprocess. The SIGXCPU signal is
+    currently sent inside the handler returned by
+    `get_SIGALRM_handler`. The returned function should be passed to
+    `signal.signal` for the `signal.SIGXCPU` signal.
     """
 
     def signal_handler(*args):
