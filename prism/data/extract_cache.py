@@ -1056,7 +1056,11 @@ def extract_cache_new(
                 build_result = (pbe.return_code, pbe.stdout, pbe.stderr)
                 command_data = process_project_fallback(project)
             except TimeoutExpired as exc:
-                build_result = (1, '', str(exc))
+                stdout = exc.stdout.decode(
+                    "utf-8") if exc.stdout is not None else ''
+                stderr = exc.stderr.decode(
+                    "utf-8") if exc.stderr is not None else ''
+                build_result = (1, stdout, stderr)
             else:
                 start_time = time()
                 try:
