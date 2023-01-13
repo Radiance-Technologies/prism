@@ -174,17 +174,17 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract cache from a project.
         """
-        cache_client, cache_server = self._extract_cache(max_runtime=0, exception_expected=True)
-        if os.path.exists(self.CACHE_DIR):
-            shutil.rmtree(self.CACHE_DIR)
+        cache_client, cache_server = self._extract_cache(max_runtime=0, exception=True)
+        self.tearDownClass()
+        self.setUpClass()
 
     def test_extract_cache_limited_memory(self):
         """
         Test the function to extract cache from a project.
         """
-        cache_client, cache_server = self._extract_cache(max_memory=0, exception_expected=True)
-        if os.path.exists(self.CACHE_DIR):
-            shutil.rmtree(self.CACHE_DIR)
+        cache_client, cache_server = self._extract_cache(max_memory=0, exception=True)
+        self.tearDownClass()
+        self.setUpClass()
 
     def test_extract_cache(self):
         """
