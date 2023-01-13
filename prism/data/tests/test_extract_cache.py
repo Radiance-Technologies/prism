@@ -174,7 +174,8 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract cache from a project.
         """
-        cache_client, cache_server = self._extract_cache(max_runtime=0, exception=True)
+        cache_client, cache_server = self._extract_cache(max_runtime=0,
+                                                         exception_expected=True)
         self.tearDownClass()
         self.setUpClass()
 
@@ -182,7 +183,8 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract cache from a project.
         """
-        cache_client, cache_server = self._extract_cache(max_memory=0, exception=True)
+        cache_client, cache_server = self._extract_cache(max_memory=0,
+                                                         exception_expected=True)
         self.tearDownClass()
         self.setUpClass()
 
@@ -190,7 +192,7 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract cache from a project.
         """
-        cache_client, cache_server = self._extract_cache()
+        cache_client, cache_server = self._extract_cache(exception_expected=False)
 
     def test_extract_vernac_commands(self):
         """
