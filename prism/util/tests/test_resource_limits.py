@@ -97,8 +97,6 @@ class TestResourceLimits(unittest.TestCase):
         kwargs = {
             rss.name.lower(): LIMIT
         }
-        # if resource == resource.RUNTIME:
-        #     kwargs['timeout'] = self.limit[resource]
         with self.subTest():
             subtest_limit = self.under_limit[rss]
             output, usage = TOOL(subtest_limit)
