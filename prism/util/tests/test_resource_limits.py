@@ -97,7 +97,7 @@ class TestResourceLimits(unittest.TestCase):
         kwargs = {
             rss.name.lower(): LIMIT
         }
-        with self.subTest():
+        with self.subTest("Under Limit"):
             subtest_limit = self.under_limit[rss]
             output, usage = TOOL(subtest_limit)
             subtest_usage = usage[KEY]
