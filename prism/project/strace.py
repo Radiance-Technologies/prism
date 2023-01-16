@@ -315,7 +315,7 @@ def strace_build(
     strace_logdir : Optional[str]
         The directory in which to store the temporary strace logs.
     kwargs : Dict[str, Any]
-        Additional keyword arguments to `subprocess.run`.
+        Additional keyword arguments to `OpamSwitch.run`.
 
     Returns
     -------
