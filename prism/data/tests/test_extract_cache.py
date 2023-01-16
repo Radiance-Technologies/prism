@@ -10,6 +10,8 @@ from copy import deepcopy
 from pathlib import Path
 from typing import List
 
+import pytest
+
 from prism.data.build_cache import (
     CoqProjectBuildCacheClient,
     CoqProjectBuildCacheProtocol,
@@ -89,7 +91,7 @@ class TestExtractCache(unittest.TestCase):
             if os.path.exists(project_root):
                 shutil.rmtree(project_root)
 
-    def _extract_cache(self, exception_expected: bool = False, **kwargs):
+    def _extract_cache(self, build_error_expected: bool = False, **kwargs):
         """
         Test the function to extract cache from a project.
         """
@@ -156,18 +158,18 @@ class TestExtractCache(unittest.TestCase):
                                  coq_version),
                 dummy_float_data)
             # assert that lambda was cached
-            if not exception_expected:
-                self.assertTrue(
-                    cache_client.contains(
-                        ('lambda',
-                         self.lambda_head,
-                         coq_version)))
-            else:
-                self.assertFalse(
-                    cache_client.contains(
-                        ('lambda',
-                         self.lambda_head,
-                         coq_version)))
+            self.assertTrue(
+                cache_client.contains(
+                    ('lambda',
+                     self.lambda_head,
+                     coq_version)))
+            if build_error_expected:
+                self.assertEquals(
+                    cache_client.get_status(
+                        'lambda',
+                        self.lambda_head,
+                        coq_version),
+                    "build error")
         return cache_client, cache_server
 
     def test_extract_cache_limited_runtime(self):
@@ -175,7 +177,7 @@ class TestExtractCache(unittest.TestCase):
         Test the function to extract cache from a project.
         """
         cache_client, cache_server = self._extract_cache(max_runtime=0,
-                                                         exception_expected=True)
+                                                         build_error_expected=True)
         self.tearDownClass()
         self.setUpClass()
 
@@ -183,16 +185,23 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract cache from a project.
         """
-        cache_client, cache_server = self._extract_cache(max_memory=0,
-                                                         exception_expected=True)
+        cache_client, cache_server = self._extract_cache(max_memory=10000,
+                                                         build_error_expected=True)
         self.tearDownClass()
         self.setUpClass()
 
+    # must run after other cache extractions as it will otherwise mess
+    # up their initial state
+    @pytest.mark.dependency(
+        depends=[
+            "TestExtractCache::test_extract_cache_limited_runtime",
+            "TestExtractCache::test_extract_cache_limited_memory"
+        ])
     def test_extract_cache(self):
         """
         Test the function to extract cache from a project.
         """
-        cache_client, cache_server = self._extract_cache(exception_expected=False)
+        cache_client, cache_server = self._extract_cache(build_error_expected=False)
 
     def test_extract_vernac_commands(self):
         """
