@@ -1063,6 +1063,7 @@ def extract_cache_new(
                 stderr = exc.stderr.decode(
                     "utf-8") if exc.stderr is not None else ''
                 build_result = (1, stdout, stderr)
+                command_data = process_project_fallback(project)
             else:
                 start_time = time()
                 try:
