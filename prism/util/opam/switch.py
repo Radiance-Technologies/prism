@@ -4,6 +4,7 @@ Provides an object-oriented abstraction of OPAM switches.
 import logging
 import os
 import re
+import resource
 import tempfile
 import warnings
 from dataclasses import InitVar, dataclass, field, fields
@@ -17,7 +18,6 @@ from seutil import bash
 
 from prism.util.bash import escape
 from prism.util.radpytools.dataclasses import default_field
-from prism.util.resource_limits import get_resource_limiter_callable
 
 from .file import OpamFile
 from .formula import LogicalPF, LogOp, PackageConstraint, PackageFormula
@@ -592,7 +592,6 @@ class OpamSwitch:
 
         if max_memory is not None:
             # Limits resources allowed to be used by bash command
-            limiter = get_resource_limiter_callable(memory=max_memory)
             # Run any existing `prexec_fn` arguments before running
             # limiter. `preexec_fn_` would have to be defined
             # prior to this function call, so it's reasonable to let
@@ -608,11 +607,16 @@ class OpamSwitch:
             def preexec_fn():
                 if preexec_fn_ is not None:
                     preexec_fn_()
-                limiter()
+                resource.setrlimit(resource.RLIMIT_AS, (max_memory, -1))
 
             kwargs['preexec_fn'] = preexec_fn
         if max_runtime is not None:
             kwargs['timeout'] = max_runtime
+        if kwargs['preexec_fn'] is not None:
+            # escape the command because the mode by which the
+            # subprocess is invoked changes in the presence of a
+            # preexec_fn
+            command = f'"{escape(command)}"'
 
         r = bash.run(command, env=env, **kwargs)
         if check:
