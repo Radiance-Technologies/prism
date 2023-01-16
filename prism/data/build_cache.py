@@ -820,6 +820,37 @@ class CoqProjectBuildCacheProtocol(Protocol):
             metadata.commit_sha,
             metadata.coq_version)
 
+    def get_status(self, *args, **kwargs) -> Optional[str]:
+        """
+        Get the status of an indicated cache object.
+
+        Parameters
+        ----------
+        args
+            Positional arguments to `get_path`.
+        kwargs
+            Keyword arguments to `get_path`.
+
+        Returns
+        -------
+        Optional[str]
+            A string describing the status of the cached object or None
+            if the arguments do not describe an object in the cache.
+        """
+        path = self.get_path(*args, **kwargs)
+        prefix = str(path.with_suffix(''))
+        if Path(prefix + "_cache_error.txt").exists():
+            status_msg = "cache error"
+        elif Path(prefix + "_build_error.txt").exists():
+            status_msg = "build error"
+        elif Path(prefix + "_misc_error.txt").exists():
+            status_msg = "other error"
+        elif path.exists():
+            status_msg = "success"
+        else:
+            status_msg = None
+        return status_msg
+
     def list_projects(self) -> List[str]:
         """
         Generate a list of projects in cache.
@@ -906,18 +937,8 @@ class CoqProjectBuildCacheProtocol(Protocol):
         status_list = []
         for project in projects:
             for commit in commits[project]:
-                folder: Path = (self.root / project) / commit
                 for coq_version in coq_version_strs:
-                    if (folder / (coq_version + "_cache_error.txt")).exists():
-                        status_msg = "cache error"
-                    elif (folder / (coq_version + "_build_error.txt")).exists():
-                        status_msg = "build error"
-                    elif (folder / (coq_version + "_misc_error.txt")).exists():
-                        status_msg = "other error"
-                    elif (folder / (coq_version + "." + self.fmt_ext)).exists():
-                        status_msg = "success"
-                    else:
-                        status_msg = None
+                    status_msg = self.get_status(project, commit, coq_version)
                     if status_msg is not None:
                         status_list.append(
                             CacheObjectStatus(
