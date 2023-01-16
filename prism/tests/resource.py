@@ -2,9 +2,8 @@
 Module for tool to help run commands get resource usage.
 """
 import re
-from math import ceil
 from subprocess import CompletedProcess
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Union
 
 from seutil import bash
 
@@ -39,12 +38,12 @@ class ResourceTestTool:
     it. Should be prepended and executed with a command.
     """
 
-    RE_MEMORY_USAGE: str = r'Memory usage: \d+.*'
+    RE_MEMORY_USAGE: str = r'Memory usage: (?P<memory>\d+(?:\.\d+)?)'
     """
     REGEX pattern to extract memory from output of `PREFIX`.
     """
 
-    RE_RUNTIME_USAGE: str = r'Elapsed time: \d+.*'
+    RE_RUNTIME_USAGE: str = r'Elapsed time: (?P<runtime>\d+(?:\.\d+)?)'
     """
     REGEX pattern to extract runtime from output of `PREFIX`.
     """
@@ -120,7 +119,10 @@ class ResourceTestTool:
         return cls._make_command(cls.COMMAND_RUNTIME, amt)
 
     @classmethod
-    def _parse_resource_usage(cls, text: str) -> Dict[str, Optional[int]]:
+    def _parse_resource_usage(cls,
+                              text: str) -> Dict[str,
+                                                 Optional[Union[float,
+                                                                int]]]:
         """
         Extract resource used values from text.
 
@@ -134,29 +136,19 @@ class ResourceTestTool:
 
         Returns
         -------
-        Dict[str, Optional[int]]
+        Dict[str, Optional[Union[float, int]]]
             Mapping of resource usage to resource names
             extracted from `text`. If a value is None,
             then the resource amount was not found in
             the text.
         """
-        mapping = {
-            cls.MEMORY_KEY: cls.RE_MEMORY_USAGE,
-            cls.RUNTIME_KEY: cls.RE_RUNTIME_USAGE,
-        }
-        scaling = {
-            cls.MEMORY_KEY: 1000,
-            cls.RUNTIME_KEY: 1,
-        }
         usage = {}
-        for name, pattern in mapping.items():
-            try:
-                subtext = re.findall(pattern, text)[0]
-                subpattern = r'\d+\.\d+' if '.' in subtext else r'\d+'
-                value = re.findall(subpattern, subtext)[0]
-                usage[name] = int(ceil(float(value))) * scaling[name]
-            except Exception:
-                usage[name] = None
+        match = re.search(cls.RE_RUNTIME_USAGE, text)
+        if match is not None:
+            usage[cls.RUNTIME_KEY] = float(match['runtime'])
+        match = re.search(cls.RE_MEMORY_USAGE, text)
+        if match is not None:
+            usage[cls.MEMORY_KEY] = int(match['memory']) * 1000
         return usage
 
     @classmethod

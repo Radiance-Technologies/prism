@@ -7,6 +7,7 @@ import unittest
 import warnings
 from resource import getrlimit
 from subprocess import TimeoutExpired
+from typing import Callable, Dict, Tuple
 
 from prism.tests.resource import ResourceTestTool
 from prism.util.resource_limits import (
@@ -25,6 +26,15 @@ class TestResourceLimits(unittest.TestCase):
     Test suite for resource limit utilities.
     """
 
+    tool: Dict[ProcessResource, Callable]
+    key: Dict[ProcessResource, str]
+    fudge_factor: Dict[ProcessResource, int]
+    current_limits: Dict[ProcessResource, Tuple[int, int]]
+    offset: Dict[ProcessResource, int]
+    limit: Dict[ProcessResource, int]
+    under_limit: Dict[ProcessResource, int]
+    over_limit: Dict[ProcessResource, int]
+
     @classmethod
     def setUpClass(cls) -> None:
         """
@@ -39,7 +49,7 @@ class TestResourceLimits(unittest.TestCase):
             ProcessResource.RUNTIME: ResourceTestTool.RUNTIME_KEY,
         }
         # Factor to add between limits(under, at, over).
-        cls.fudge_Factor = {
+        cls.fudge_factor = {
             ProcessResource.MEMORY: int(100e6),  # 100 MB
             ProcessResource.RUNTIME: 1,  # 2 seconds
         }
@@ -50,11 +60,11 @@ class TestResourceLimits(unittest.TestCase):
         cls.under_limit = {}
         cls.over_limit = {}
         for rss, tool in cls.tool.items():
-            fudge_factor = cls.fudge_Factor[rss]
+            fudge_factor = cls.fudge_factor[rss]
             output, usage = tool(0)
-            logger.info("STDOUT: ", output.stdout)
-            logger.info("STDERR: ", output.stderr)
-            logger.info("RETURNCODE: ", output.returncode)
+            logger.info("STDOUT: %s", output.stdout)
+            logger.info("STDERR: %s", output.stderr)
+            logger.info("RETURNCODE: %s", output.returncode)
             offset = int(usage[cls.key[rss]])  # smallest value
             under_limit = offset + fudge_factor
             limit = under_limit + fudge_factor
@@ -87,7 +97,7 @@ class TestResourceLimits(unittest.TestCase):
             self,
             rss: ProcessResource,
             returncode: int,
-            exception: Exception):
+            exception: bool):
         """
         Check that subprocess resource limits work.
         """
@@ -111,12 +121,9 @@ class TestResourceLimits(unittest.TestCase):
             subtest_usage = usage[KEY]
             self.assertGreater(subtest_usage, self.limit[rss])
             with ProcessLimiterContext(subprocess=True, **kwargs) as limiter:
-                if exception is not None:
-                    self.assertRaises(
-                        exception,
-                        TOOL,
-                        subtest_limit,
-                        preexec_fn=limiter)
+                if exception:
+                    with self.assertRaises(TimeoutExpired):
+                        TOOL(subtest_limit, preexec_fn=limiter)
                 else:
                     output, usage = TOOL(subtest_limit, preexec_fn=limiter)
                     self.assertEqual(output.returncode, returncode)
@@ -130,13 +137,13 @@ class TestResourceLimits(unittest.TestCase):
         """
         Check that memory usage can be limited.
         """
-        self.run_subprocess_test(ProcessResource.MEMORY, 1, None)
+        self.run_subprocess_test(ProcessResource.MEMORY, 1, False)
 
     def test_time(self):
         """
         Check that runtime can be limited.
         """
-        self.run_subprocess_test(ProcessResource.RUNTIME, -14, TimeoutExpired)
+        self.run_subprocess_test(ProcessResource.RUNTIME, -14, True)
 
 
 if __name__ == '__main__':
