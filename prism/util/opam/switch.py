@@ -612,11 +612,6 @@ class OpamSwitch:
             kwargs['preexec_fn'] = preexec_fn
         if max_runtime is not None:
             kwargs['timeout'] = max_runtime
-        if kwargs.get('preexec_fn', None) is not None:
-            # escape the command because the mode by which the
-            # subprocess is invoked changes in the presence of a
-            # preexec_fn
-            command = f'"{escape(command)}"'
 
         r = bash.run(command, env=env, **kwargs)
         if check:
