@@ -474,7 +474,7 @@ class Project(ABC):
         Build the project.
         """
         if self.serapi_options is None:
-            _, rcode, stdout, stderr = self.infer_serapi_options()
+            _, rcode, stdout, stderr = self.infer_serapi_options(**kwargs)
             return rcode, stdout, stderr
         else:
             return self._make("build", "Compilation", **kwargs)
@@ -860,12 +860,17 @@ class Project(ABC):
         self._update_metadata(opam_dependencies=formula)
         return formula
 
-    def infer_serapi_options(self) -> Tuple[str, int, str, str]:
+    def infer_serapi_options(self, **kwargs) -> Tuple[str, int, str, str]:
         """
         Build project and get IQR options, simultaneously.
 
         Invoking this function will replace any serapi_options already
         present in the metadata.
+
+        Parameters
+        ----------
+        kwargs
+            Keyword arguments to `OpamSwitch.run`.
 
         Returns
         -------
@@ -880,7 +885,7 @@ class Project(ABC):
         """
         # ensure we are building from a clean slate
         try:
-            self.clean()
+            self.clean(**kwargs)
         except ProjectBuildError:
             # cleaning may fail if nothing to clean or the project has
             # not yet been configured by a prior build
@@ -890,7 +895,8 @@ class Project(ABC):
             self.opam_switch,
             cmd,
             workdir=self.path,
-            check=False)
+            check=False,
+            **kwargs)
         self._process_command_output("Strace", rcode_out, stdout, stderr)
 
         def or_(x, y):
