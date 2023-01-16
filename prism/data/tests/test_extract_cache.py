@@ -164,7 +164,7 @@ class TestExtractCache(unittest.TestCase):
                      self.lambda_head,
                      coq_version)))
             if build_error_expected:
-                self.assertEquals(
+                self.assertEqual(
                     cache_client.get_status(
                         'lambda',
                         self.lambda_head,
@@ -176,8 +176,7 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract cache from a project.
         """
-        cache_client, cache_server = self._extract_cache(max_runtime=0,
-                                                         build_error_expected=True)
+        self._extract_cache(max_runtime=0, build_error_expected=True)
         self.tearDownClass()
         self.setUpClass()
 
@@ -185,8 +184,7 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract cache from a project.
         """
-        cache_client, cache_server = self._extract_cache(max_memory=10000,
-                                                         build_error_expected=True)
+        self._extract_cache(max_memory=20000, build_error_expected=True)
         self.tearDownClass()
         self.setUpClass()
 
@@ -201,7 +199,7 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract cache from a project.
         """
-        cache_client, cache_server = self._extract_cache(build_error_expected=False)
+        self._extract_cache(build_error_expected=False)
 
     def test_extract_vernac_commands(self):
         """
