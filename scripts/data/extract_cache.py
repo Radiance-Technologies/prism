@@ -5,6 +5,7 @@ import argparse
 import json
 import logging
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
@@ -13,6 +14,7 @@ from prism.data.extract_cache import (
     cache_extract_commit_iterator,
 )
 from prism.data.setup import create_default_switches
+from prism.project.repo import CommitTraversalStrategy
 from prism.util.swim import (
     AutoSwitchManager,
     SharedSwitchManagerClient,
@@ -182,6 +184,25 @@ if __name__ == "__main__":
         help="If provided, this should be a JSON file containing project-keyed "
         "lists of files to use for extraction. If not provided, use all files "
         "in projects.")
+    parser.add_argument(
+        "--commit-iterator-march-strategy",
+        default="CURLICUE_NEW",
+        choices=["NEW_FIRST",
+                 "OLD_FIRST",
+                 "CURLICUE_NEW",
+                 "CURLICUE_OLD"],
+        help="Commit traversal strategy to use for the commit iterator. See the "
+        "documentation for prism.project.repo.CommitTraversalStrategy for "
+        "details on how each option works.")
+    parser.add_argument(
+        "--limit-commits-by-date",
+        action="store_true",
+        help="If provided, limit commits to those that were made on or after "
+        "January 1, 2019, which roughly coincides with the release date of the "
+        "earliest supported version of Coq, 8.9. This date limit was "
+        "introduced as a stopgap measure to prevent runaway resource usage "
+        "during the build of certain projects prior to the introduction of "
+        "explicit memory-limiting functionality.")
     args = parser.parse_args()
     default_commits_path: str = args.default_commits_path
     cache_dir: str = args.cache_dir
@@ -216,6 +237,9 @@ if __name__ == "__main__":
         files_to_use = load_files_to_use_file(args.files_to_use_file)
     else:
         files_to_use = None
+    commit_iterator_march_strategy = CommitTraversalStrategy[
+        args.commit_iterator_march_strategy]
+    limit_commits_by_date: bool = args.limit_commits_by_date
     # Force redirect the root logger to a file
     # This might break due to multiprocessing. If so, it should just
     # be disabled
@@ -234,12 +258,16 @@ if __name__ == "__main__":
         swim = SharedSwitchManagerClient(
             swim_server,
             max_pool_size=max_pool_size)
+
     cache_extractor = CacheExtractor(
         cache_dir,
         mds_file,
         swim,
         default_commits_path,
-        cache_extract_commit_iterator,
+        partial(
+            cache_extract_commit_iterator,
+            march_strategy=commit_iterator_march_strategy,
+            date_limit=limit_commits_by_date),
         coq_version_iterator=coq_version_iterator,
         files_to_use=files_to_use)
     cache_extractor.run(

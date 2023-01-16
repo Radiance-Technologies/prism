@@ -62,7 +62,11 @@ from prism.language.heuristic.parser import CoqSentence
 from prism.project.base import SEM, Project
 from prism.project.exception import ProjectBuildError
 from prism.project.metadata.storage import MetadataStorage
-from prism.project.repo import ChangedCoqCommitIterator, ProjectRepo
+from prism.project.repo import (
+    ChangedCoqCommitIterator,
+    CommitTraversalStrategy,
+    ProjectRepo,
+)
 from prism.util.opam.switch import OpamSwitch
 from prism.util.opam.version import Version
 from prism.util.radpytools import unzip
@@ -1086,19 +1090,29 @@ def extract_cache_new(
             raise
 
 
+# Abbreviation defined to satisfy conflicting autoformatting and style
+# requirements in cache_extract_commit_iterator.
+CTS = CommitTraversalStrategy
+
+
 def cache_extract_commit_iterator(
         project: ProjectRepo,
         starting_commit_sha: str,
-        max_num_commits: Optional[int]) -> Generator[str,
-                                                     None,
-                                                     None]:
+        max_num_commits: Optional[int],
+        march_strategy: CTS = CTS.CURLICUE_NEW,
+        date_limit: bool = False) -> Generator[str,
+                                               None,
+                                               None]:
     """
     Provide default commit iterator for cache extraction.
 
     Commits are limited to those that occur on or after January 1, 2019,
     which roughly coincides with the release of Coq 8.9.1.
     """
-    iterator = ChangedCoqCommitIterator(project, starting_commit_sha)
+    iterator = ChangedCoqCommitIterator(
+        project,
+        starting_commit_sha,
+        march_strategy)
     i = 0
     for item in iterator:
         # get commit object
@@ -1107,7 +1121,8 @@ def cache_extract_commit_iterator(
         limit_date = datetime(2019, 1, 1, 0, 0, 0)
         limit_epoch = calendar.timegm(limit_date.timetuple())
         # committed_date is in seconds since epoch
-        if item.committed_date is not None and item.committed_date >= limit_epoch:
+        if not date_limit or (item.committed_date is not None
+                              and item.committed_date >= limit_epoch):
             i += 1
             yield item.hexsha
         if max_num_commits is not None and i >= max_num_commits:
