@@ -1037,6 +1037,11 @@ def extract_cache_new(
             logger.removeHandler(h)
         logger.addHandler(handler)
         try:
+            # Make sure there aren't any changes or uncommitted files
+            # left over from previous iterations, then check out the
+            # current commit
+            project.git.reset('--hard')
+            project.git.clean('-fdx')
             project.git.checkout(commit_sha)
             # get a switch
             dependency_formula = project.get_dependency_formula(coq_version)
@@ -1083,7 +1088,6 @@ def extract_cache_new(
                         project.metadata,
                         block,
                         logged_text)
-                    raise
                 finally:
                     elapsed_time = time() - start_time
                     build_cache_client.write_timing_log(
@@ -1103,7 +1107,7 @@ def extract_cache_new(
             project.opam_switch = original_switch
         except ExtractVernacCommandsError:
             # Don't re-log extract_vernac_commands errors
-            raise
+            pass
         except Exception as e:
             logger.critical(
                 "An exception occurred outside of extracting vernacular commands.\n"
@@ -1115,7 +1119,7 @@ def extract_cache_new(
                 project.metadata,
                 block,
                 logged_text)
-            raise
+            pass
 
 
 # Abbreviation defined to satisfy conflicting autoformatting and style
@@ -1511,7 +1515,15 @@ class CacheExtractor:
         """
         By default, extract build caches only for Coq 8.10.2.
         """
-        return ["8.10.2"]
+        return [
+            "8.9.1",
+            "8.10.2",
+            "8.11.2",
+            "8.12.2",
+            "8.13.2",
+            "8.14.1",
+            "8.15.2"
+        ]
 
     @classmethod
     def default_process_project_fallback(
