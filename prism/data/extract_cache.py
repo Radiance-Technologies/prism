@@ -1119,7 +1119,6 @@ def extract_cache_new(
                 project.metadata,
                 block,
                 logged_text)
-            pass
 
 
 # Abbreviation defined to satisfy conflicting autoformatting and style
@@ -1513,7 +1512,7 @@ class CacheExtractor:
                                      _project: Project,
                                      _commit: str) -> List[str]:
         """
-        By default, extract build caches only for Coq 8.10.2.
+        Extract build caches only for all Coq versions we consider.
         """
         return [
             "8.9.1",
