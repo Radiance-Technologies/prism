@@ -1102,9 +1102,6 @@ def extract_cache_new(
                 ProjectBuildEnvironment(project.opam_switch.export()),
                 ProjectBuildResult(*build_result))
             build_cache_client.write(data, block)
-            # release the switch
-            switch_manager.release_switch(project.opam_switch)
-            project.opam_switch = original_switch
         except ExtractVernacCommandsError:
             # Don't re-log extract_vernac_commands errors
             pass
@@ -1119,6 +1116,10 @@ def extract_cache_new(
                 project.metadata,
                 block,
                 logged_text)
+        finally:
+            # release the switch
+            switch_manager.release_switch(project.opam_switch)
+            project.opam_switch = original_switch
 
 
 # Abbreviation defined to satisfy conflicting autoformatting and style
