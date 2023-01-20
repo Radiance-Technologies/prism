@@ -4,7 +4,7 @@ Defines representations of repair instances (or examples).
 
 import copy
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set
+from typing import Dict, Generic, List, Optional, Set, TypeVar, Union
 
 import numpy as np
 
@@ -24,6 +24,7 @@ from prism.language.gallina.analyze import SexpInfo
 from prism.util.diff import GitDiff
 from prism.util.opam import OpamSwitch
 from prism.util.radpytools.dataclasses import default_field
+from prism.util.serialize import deserialize_generic_dataclass
 
 
 @dataclass
@@ -379,19 +380,23 @@ class ProjectCommitDataDiff:
         return cls.from_alignment(a, b, alignment)
 
 
+_State = TypeVar("_State")
+_Diff = TypeVar("_Diff")
+
+
 @dataclass
-class ProjectRepoState:
+class ProjectState(Generic[_State, _Diff]):
     """
     The state of a project.
     """
 
-    commit_sha: str
+    project_state: _State
     """
-    A hash identifying a commit within a Git repository.
+    A representation of the state of the project.
     """
-    offset: Optional[GitDiff] = None
+    offset: Optional[_Diff] = None
     """
-    A set of changes relative to the `commit_sha`.
+    A set of changes relative to the `project_state`.
 
     This field is useful for representing working tree changes.
     """
@@ -403,14 +408,23 @@ class ProjectRepoState:
     Coq compiler.
     """
 
+    @classmethod
+    def deserialize(cls, data: object) -> 'ProjectState':
+        """
+        Deserialize a project state.
+
+        Note that this only works for monomorphic subclasses.
+        """
+        return deserialize_generic_dataclass(data, cls, error="raise")
+
 
 @dataclass
-class ProjectStateDiff:
+class ProjectStateDiff(Generic[_Diff]):
     """
     A change in some implicit project's state.
     """
 
-    diff: GitDiff
+    diff: _Diff
     """
     A refactor or other change to some implicit state.
     """
@@ -419,14 +433,23 @@ class ProjectStateDiff:
     The changed environment.
 
     If None, then it is understood to be the same environment as the
-    implicit state.
+    environment associatd with implicit state.
     """
+
+    @classmethod
+    def deserialize(cls, data: object) -> 'ProjectStateDiff':
+        """
+        Deserialize a project state diff.
+
+        Note that this only works for monomorphic subclasses.
+        """
+        return deserialize_generic_dataclass(data, cls, error="raise")
 
 
 @dataclass
-class ErrorInstance:
+class ErrorInstance(Generic[_State, _Diff]):
     """
-    A concise example of an error in its most raw and unprocessed form.
+    A concise example of an error.
 
     With this representation, one should be able to capture errors
     induced by changes to source code and/or environment.
@@ -437,14 +460,14 @@ class ErrorInstance:
     An identifier that uniquely determines the project and is implicitly
     linked to a Git repository through some external correspondence.
     """
-    initial_state: ProjectRepoState
+    initial_state: ProjectState[_State, _Diff]
     """
     An initial project state.
 
     A state of the project, nominally taken to be prior to a change that
     introduced a broken proof or other bug.
     """
-    change: ProjectStateDiff
+    change: ProjectStateDiff[_Diff]
     """
     A refactor or other change that introduces an error when applied to
     the `initial_state`.
@@ -472,22 +495,33 @@ class ErrorInstance:
     custom taxonomy for finer-grained evaluation or meta-studies.
     """
 
+    @classmethod
+    def deserialize(cls, data: object) -> 'ErrorInstance':
+        """
+        Deserialize an error instance.
+
+        Note that this only works for monomorphic subclasses.
+        """
+        return deserialize_generic_dataclass(data, cls, error="raise")
+
 
 @dataclass
-class RepairInstance:
+class RepairInstance(Generic[_State, _Diff]):
     """
-    A concise example of a repair in its most raw and unprocessed form.
+    A concise example of a repair.
 
     With this representation, one should be able to capture errors and
     repairs due to both changes to the source code and changes in
     environment.
     """
 
-    error: ErrorInstance
+    error: ErrorInstance[_State, _Diff]
     """
     An erroneous project state.
     """
-    repaired_state: ProjectRepoState
+    repaired_state_or_diff: Union[ProjectState[_State,
+                                               _Diff],
+                                  ProjectStateDiff[_Diff]]
     """
     A repaired proof state.
 
@@ -496,3 +530,111 @@ class RepairInstance:
     If the environment is None, then it is understood to be the same
     environment in which the error occurs.
     """
+
+    @classmethod
+    def deserialize(cls, data: object) -> 'RepairInstance':
+        """
+        Deserialize a repair instance.
+
+        Note that this only works for monomorphic subclasses.
+        """
+        return deserialize_generic_dataclass(data, cls, error="raise")
+
+
+@dataclass
+class GitProjectState(ProjectState[str, GitDiff]):
+    """
+    The state of a project in terms of Git commits and diffs.
+    """
+
+    @property
+    def commit_sha(self) -> str:
+        """
+        Get a hash identifying a commit within a Git repository.
+        """
+        return self.project_state
+
+
+@dataclass
+class GitProjectStateDiff(ProjectStateDiff[GitDiff]):
+    """
+    A change in some implicit Git repository's state.
+    """
+
+    pass
+
+
+@dataclass
+class GitErrorInstance(ErrorInstance[str, GitDiff]):
+    """
+    A concise example of an error in its most raw and unprocessed form.
+
+    With this representation, one should be able to capture errors
+    induced by changes to source code and/or environment.
+    """
+
+    pass
+
+
+@dataclass
+class GitRepairInstance(RepairInstance[str, GitDiff]):
+    """
+    A concise example of a repair in its most raw and unprocessed form.
+
+    With this representation, one should be able to capture errors and
+    repairs due to both changes to the source code and changes in
+    environment.
+    """
+
+    pass
+
+
+@dataclass
+class ProjectCommitDataState(ProjectState[ProjectCommitData,
+                                          ProjectCommitDataDiff]):
+    """
+    The state of a project in terms of extracted commit data.
+    """
+
+    @property
+    def commit_data(self) -> ProjectCommitData:
+        """
+        Get the commit data containing the state of the project.
+        """
+        return self.project_state
+
+
+@dataclass
+class ProjectCommitDataStateDiff(ProjectStateDiff[ProjectCommitDataDiff]):
+    """
+    A change in some implicit commit's extracted state.
+    """
+
+    pass
+
+
+@dataclass
+class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
+                                                   ProjectCommitDataDiff]):
+    """
+    An example of an error in a standalone, precomputed offline format.
+
+    With this representation, one should be able to capture errors
+    induced by changes to source code and/or environment.
+    """
+
+    pass
+
+
+@dataclass
+class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
+                                                     ProjectCommitDataDiff]):
+    """
+    A concise example of a repair in its most raw and unprocessed form.
+
+    With this representation, one should be able to capture errors and
+    repairs due to both changes to the source code and changes in
+    environment.
+    """
+
+    pass
