@@ -6,6 +6,7 @@ import os
 import tempfile
 import time
 from pathlib import Path
+from subprocess import CalledProcessError
 from typing import Dict, Optional
 
 from prism.util.compare import Top
@@ -165,12 +166,20 @@ class AdaptiveSwitchManager(SwitchManager):
         if minimum_size > 0:
             # add a new switch to the persistent pool
             clone = self._clone_switch(closest_switch)
-            clone.install_formula(formula)
-            with self._lock:
-                self.switches.add(clone)
-                if (len(self.switches) > self._max_pool_size):
-                    self._evict()
-                closest_switch = clone
+            try:
+                clone.install_formula(formula)
+            except CalledProcessError:
+                # This exception almost certainly means the Coq version
+                # can't be satisfied. So, clean up the clone and report
+                # the error.
+                OpamAPI.remove_switch(clone)
+                raise UnsatisfiableConstraints(formula)
+            else:
+                with self._lock:
+                    self.switches.add(clone)
+                    if (len(self.switches) > self._max_pool_size):
+                        self._evict()
+                    closest_switch = clone
         # return a temporary clone
         clone = self._clone_switch(closest_switch)
         with self._lock:
