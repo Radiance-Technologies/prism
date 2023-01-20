@@ -13,7 +13,7 @@ from functools import partial
 from io import StringIO
 from multiprocessing import Pool
 from pathlib import Path
-from subprocess import TimeoutExpired
+from subprocess import CalledProcessError, TimeoutExpired
 from threading import BoundedSemaphore
 from time import time
 from typing import (
@@ -1110,6 +1110,11 @@ def extract_cache_new(
             logger.critical(
                 "An exception occurred outside of extracting vernacular commands.\n"
             )
+            # If a subprocess command failed, capture the standard
+            # output and error
+            if isinstance(e, CalledProcessError):
+                logger.critical(f"stdout:\n{e.stdout}\n")
+                logger.critical(f"stderr:\n{e.stderr}\n")
             logger.exception(e)
             logger_stream.flush()
             logged_text = logger_stream.getvalue()
