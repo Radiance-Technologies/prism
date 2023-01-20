@@ -1088,6 +1088,7 @@ def extract_cache_new(
                         project.metadata,
                         block,
                         logged_text)
+                    raise
                 finally:
                     elapsed_time = time() - start_time
                     build_cache_client.write_timing_log(
@@ -1513,7 +1514,7 @@ class CacheExtractor:
                                      _project: Project,
                                      _commit: str) -> List[str]:
         """
-        Extract build caches only for all Coq versions we consider.
+        Extract build caches for all Coq versions we consider.
         """
         return [
             "8.9.1",
