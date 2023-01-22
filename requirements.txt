@@ -16,6 +16,7 @@ pytest-dependency
 pytest-doctestplus
 pytest-subtests
 recordclass <= 0.18.0.1
+scipy
 setuptools_scm
 seutil >= 0.7.1
 strace-parser

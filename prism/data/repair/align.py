@@ -5,10 +5,12 @@ Tools for aligning the same proofs across commits.
 import enum
 import math
 import warnings
+from functools import partial
 from typing import Callable, Dict, List, Optional, Tuple, TypeVar, Union
 
 import numpy as np
 from leven import levenshtein
+from scipy.optimize import linear_sum_assignment
 
 from prism.data.build_cache import (
     ProjectCommitData,
@@ -122,15 +124,70 @@ class Norm(enum.Enum):
         return distance
 
 
-def normalized_edit_distance(a: str, b: str, norm: Norm = Norm.MAX) -> float:
+def thresholded_distance(
+        D: Callable[[T,
+                     T],
+                    float],
+        a: T,
+        b: T,
+        threshold: float) -> float:
+    """
+    Apply a threshold to a given distance function.
+
+    Parameters
+    ----------
+    D : Callable[[T, T], float]
+        A distance function.
+    a : T
+        The first argument to the distance function.
+    b : T
+        The second argument to the distance function.
+    threshold : float
+        An upper limit on the distance.
+
+    Returns
+    -------
+    float
+        The thresholded distance between two inputs.
+    """
+    if threshold < 0:
+        raise ValueError(
+            f"Distance threshold must be non-negative, got {threshold}")
+    distance = D(a, b)
+    distance = min(distance, float(threshold))
+    return distance
+
+
+def normalized_edit_distance(
+        a: str,
+        b: str,
+        norm: Norm = Norm.TANIMOTO) -> float:
     """
     Find the cost of aligning two strings.
 
     Returns a value independent of the length of the strings, where 0.0
-    is the best possible alignment (a==b) and 1.0 is the worst possible
-    alignment.
+    is the best possible alignment (``a == b``) and 1.0 is the worst
+    possible alignment.
     """
     return norm.apply(levenshtein, a, b, len)
+
+
+def thresholded_edit_distance(
+        a: str,
+        b: str,
+        threshold: float = 0.4,
+        norm: Norm = Norm.TANIMOTO) -> float:
+    """
+    Find the cost of aligning two strings.
+
+    Returns a value independent of the length of the strings, where 0.0
+    is the best possible alignment (``a == b``) and `threshold` is the
+    worst possible alignment.
+    """
+    if threshold >= 1:
+        warnings.warn("A threshold greater than 1 will not have any effect")
+    normed_distance = partial(normalized_edit_distance, norm=norm)
+    return thresholded_distance(normed_distance, a, b, threshold)
 
 
 def order_preserving_alignment(
@@ -249,6 +306,67 @@ def align_commits_per_file(
         aligned_files.append(aligned_sentences)
     alignment = np.concatenate(aligned_files, axis=0)
     return alignment
+
+
+def assign_commits(
+        a: ProjectCommitData,
+        b: ProjectCommitData,
+        cost_function: Callable[[VernacCommandData,
+                                 VernacCommandData],
+                                float],
+        threshold: float = np.inf) -> np.ndarray:
+    r"""
+    Align two `ProjectCommit` based on a minimum cost assignment.
+
+    Commands in each commit are assigned to one another according to
+    a `cost_function` such that the overall sum of assigned commands is
+    minimized.
+
+    Parameters
+    ----------
+    a, b : ProjectCommitData
+        Command data extracted from two commits of a project.
+    cost_function : Callable[[VernacCommandData, VernacCommandData], \
+                             float]
+        A non-negative function that measures the distance or
+        dissimilarity between two commands.
+    threshold : float
+        An upper limit on the cost of assigning two commands such that
+        no assignments returned by this function will meet or exceed the
+        threshold.
+
+    Returns
+    -------
+    np.ndarray
+        An array of pairs of integers indicating the indices of aligned
+        commands between each commit with commands enumerated over all
+        matching files in `a` and `b`.
+        For example, ``(0,0)`` matches the first element of the first
+        file of `a` to the first element of the first file of `b`.
+        Indices of elements in either `a` or `b` that were skipped in
+        the alignment do not appear in the output.
+    """
+    # calculate cost matrix
+    a_commands = a.commands
+    b_commands = b.commands
+    cost_matrix = np.asarray(
+        [
+            cost_function(a_command,
+                          b_command) for _,
+            a_command in a_commands for _,
+            b_command in b_commands
+        ]).reshape(len(a_commands),
+                   len(b_commands))
+    # compute assignment
+    assignment = linear_sum_assignment(cost_matrix, maximize=False)
+    # apply threshold
+    assignment = assignment[
+        cost_matrix[
+            assignment[:, 0],
+            assignment[:, 1]
+        ] < threshold,
+        :]
+    return assignment
 
 
 def _compute_diff_alignment(
