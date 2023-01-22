@@ -3,8 +3,9 @@ Defines representations of repair instances (or examples).
 """
 
 import copy
-from dataclasses import dataclass
-from typing import Dict, Generic, List, Optional, Set, TypeVar, Union
+import typing
+from dataclasses import dataclass, fields
+from typing import Dict, Generic, List, Optional, Set, Type, TypeVar, Union
 
 import numpy as np
 
@@ -23,7 +24,7 @@ from prism.data.repair.diff import compute_git_diff
 from prism.language.gallina.analyze import SexpInfo
 from prism.util.diff import GitDiff
 from prism.util.opam import OpamSwitch
-from prism.util.radpytools.dataclasses import default_field
+from prism.util.radpytools.dataclasses import Dataclass, default_field
 from prism.util.serialize import deserialize_generic_dataclass
 
 
@@ -380,6 +381,19 @@ class ProjectCommitDataDiff:
         return cls.from_alignment(a, b, alignment)
 
 
+T = TypeVar('T', bound=Dataclass)
+
+
+def cast_from_base_cls(cls: Type[T], obj: T, base_cls: Type[T]) -> T:
+    """
+    Cast a value to a subclass of a given base dataclass.
+    """
+    if not isinstance(obj, cls):
+        obj = cls(**{f.name: getattr(obj,
+                                     f.name) for f in fields(base_cls)})
+    return obj
+
+
 _State = TypeVar("_State")
 _Diff = TypeVar("_Diff")
 
@@ -603,6 +617,28 @@ class ProjectCommitDataState(ProjectState[ProjectCommitData,
         """
         return self.project_state
 
+    @property
+    def offset_state(self) -> ProjectCommitData:
+        """
+        Get the cumulative project state represented by this object.
+        """
+        state = self.project_state
+        if self.offset is not None:
+            state = self.offset.patch(state)
+        return state
+
+    def compress(self) -> GitProjectState:
+        """
+        Get a concise Git-based representation of this state.
+        """
+        offset = self.offset
+        if self.offset is not None:
+            offset = compute_git_diff(self.project_state, self.offset_state)
+        return GitProjectState(
+            self.project_state.project_metadata.commit_sha,
+            offset,
+            self.environment)
+
 
 @dataclass
 class ProjectCommitDataStateDiff(ProjectStateDiff[ProjectCommitDataDiff]):
@@ -610,7 +646,24 @@ class ProjectCommitDataStateDiff(ProjectStateDiff[ProjectCommitDataDiff]):
     A change in some implicit commit's extracted state.
     """
 
-    pass
+    def compress(self, reference: ProjectCommitData) -> GitProjectStateDiff:
+        """
+        Compress this diff data into a text-based Git diff.
+
+        Parameters
+        ----------
+        reference : ProjectCommitData
+            A reference point against which to compute the Git diff.
+
+        Returns
+        -------
+        GitProjectStateDiff
+            A concise representation of this diff.
+        """
+        return GitProjectStateDiff(
+            compute_git_diff(reference,
+                             self.diff.patch(reference)),
+            self.environment)
 
 
 @dataclass
@@ -623,7 +676,38 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
     induced by changes to source code and/or environment.
     """
 
-    pass
+    @property
+    def error_state(self) -> ProjectCommitData:
+        """
+        Get the project state containing the error.
+        """
+        initial_state = cast_from_base_cls(
+            ProjectCommitDataState,
+            self.initial_state,
+            ProjectState)
+        initial_state = typing.cast(ProjectCommitDataState, initial_state)
+        return self.change.diff.patch(initial_state.offset_state)
+
+    def compress(self) -> GitErrorInstance:
+        """
+        Get a concise Git-based representation of this error instance.
+        """
+        initial_state = cast_from_base_cls(
+            ProjectCommitDataState,
+            self.initial_state,
+            ProjectState)
+        initial_state = typing.cast(ProjectCommitDataState, initial_state)
+        change = cast_from_base_cls(
+            ProjectCommitDataStateDiff,
+            self.change,
+            ProjectStateDiff)
+        change = typing.cast(ProjectCommitDataStateDiff, change)
+        return GitErrorInstance(
+            initial_state.project_state.project_metadata.project_name,
+            initial_state.compress(),
+            change.compress(initial_state.project_state),
+            self.error_location,
+            set(self.tags))
 
 
 @dataclass
@@ -637,4 +721,31 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
     environment.
     """
 
-    pass
+    def compress(self) -> GitRepairInstance:
+        """
+        Get a concise Git-based representation of this repair instance.
+        """
+        error = cast_from_base_cls(
+            ProjectCommitDataErrorInstance,
+            self.error,
+            ErrorInstance)
+        error = typing.cast(ProjectCommitDataErrorInstance, error)
+        if isinstance(self.repaired_state_or_diff, ProjectState):
+            repaired = cast_from_base_cls(
+                ProjectCommitDataStateDiff,
+                self.repaired_state_or_diff,
+                ProjectStateDiff)
+            repaired = typing.cast(ProjectCommitDataState, repaired)
+            repaired = repaired.compress()
+        else:
+            repaired = cast_from_base_cls(
+                ProjectCommitDataStateDiff,
+                self.repaired_state_or_diff,
+                ProjectStateDiff)
+            repaired = typing.cast(ProjectCommitDataStateDiff, repaired)
+            repaired = repaired.compress(error.error_state)
+        repaired = typing.cast(
+            Union[GitProjectState,
+                  GitProjectStateDiff],
+            repaired)
+        return GitRepairInstance(error.compress(), repaired)
