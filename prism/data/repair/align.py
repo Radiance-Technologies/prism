@@ -190,6 +190,27 @@ def thresholded_edit_distance(
     return thresholded_distance(normed_distance, a, b, threshold)
 
 
+def command_text_distance(
+        D: Callable[[str,
+                     str],
+                    float],
+        a: VernacCommandData,
+        b: VernacCommandData) -> float:
+    """
+    Create a distance function between commands based on their text.
+    """
+    return D(a.command.text, b.command.text)
+
+
+def default_command_distance(
+        a: VernacCommandData,
+        b: VernacCommandData) -> float:
+    """
+    Return the default distance between commands.
+    """
+    return command_text_distance(thresholded_edit_distance, a, b)
+
+
 def order_preserving_alignment(
         a: List[VernacSentence],
         b: List[VernacSentence],
