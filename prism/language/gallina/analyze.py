@@ -395,6 +395,24 @@ class SexpInfo:
             else:
                 return False
 
+        def contains_lineno(self, lineno: int) -> bool:
+            """
+            Return whether a given line number is in this location.
+
+            Parameters
+            ----------
+            lineno : int
+                A line number.
+
+            Returns
+            -------
+            bool
+                Whether the given line number is in the range of lines
+                spanned by this location.
+            """
+            line_range = range(self.lineno, self.lineno_last + 1)
+            return lineno in line_range
+
         def offset_byte_to_char(
                 self,
                 unicode_offsets: List[int]) -> 'SexpInfo.Loc':
