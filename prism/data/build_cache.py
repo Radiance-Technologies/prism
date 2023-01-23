@@ -774,7 +774,7 @@ class ProjectCommitData(Serializable):
         """
         # TODO: dump a buildable project
         dirpath = Path(dirpath)
-        os.mkdir(dirpath)
+        dirpath.mkdir(parents=True, exist_ok=True)
         for filename, commands in self.command_data.items():
             commands.write_coq_file(dirpath / filename)
 
