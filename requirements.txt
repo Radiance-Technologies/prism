@@ -21,3 +21,4 @@ setuptools_scm
 seutil >= 0.7.1
 strace-parser
 tqdm
+typing-inspect
