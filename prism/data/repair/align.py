@@ -616,7 +616,8 @@ either added or dropped between the commits).
 def get_aligned_commands(
         a: ProjectCommitData,
         b: ProjectCommitData,
-        alignment: np.ndarray) -> AlignedCommands:
+        alignment: np.ndarray,
+        sort: bool = True) -> AlignedCommands:
     """
     Get the aligned command sequences of two commits.
 
@@ -626,6 +627,10 @@ def get_aligned_commands(
         Command data extracted from two commits of a project.
     alignment : np.ndarray
         A precomputed alignment between the commands of `a` and `b`.
+    sort : bool, optional
+        Whether to sort the given `alignment` lexicographically by
+        column, by default True.
+        If False, then `alignment` is presumed to already be sorted.
 
     Returns
     -------
@@ -639,6 +644,8 @@ def get_aligned_commands(
         bounds with respect to the given commits, i.e., if it indexes
         commands that do not exist.
     """
+    if sort:
+        alignment = alignment[np.lexsort(alignment.T, axis=-1)]
     aligned_commands: AlignedCommands = []
     a_commands = a.commands
     b_commands = b.commands
