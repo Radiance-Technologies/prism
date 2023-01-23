@@ -616,8 +616,7 @@ either added or dropped between the commits).
 def get_aligned_commands(
         a: ProjectCommitData,
         b: ProjectCommitData,
-        alignment: np.ndarray,
-        sort: bool = True) -> AlignedCommands:
+        alignment: np.ndarray) -> AlignedCommands:
     """
     Get the aligned command sequences of two commits.
 
@@ -627,10 +626,6 @@ def get_aligned_commands(
         Command data extracted from two commits of a project.
     alignment : np.ndarray
         A precomputed alignment between the commands of `a` and `b`.
-    sort : bool, optional
-        Whether to sort the given `alignment` lexicographically by
-        column, by default True.
-        If False, then `alignment` is presumed to already be sorted.
 
     Returns
     -------
@@ -644,8 +639,6 @@ def get_aligned_commands(
         bounds with respect to the given commits, i.e., if it indexes
         commands that do not exist.
     """
-    if sort:
-        alignment = alignment[np.lexsort(alignment.T, axis=-1)]
     aligned_commands: AlignedCommands = []
     a_commands = a.commands
     b_commands = b.commands
@@ -658,17 +651,19 @@ def get_aligned_commands(
             f"(0, {len(b_commands)}), respectively, but got values in the ranges "
             f"({np.min(alignment[:,0])}, {np.max(alignment[:,0])}) and "
             f"({np.min(alignment[:,1])}, {np.max(alignment[:,1])})")
-    align_idx = 0
-    j = 0
-    for i, acmd in enumerate(a_commands):
-        while j < alignment[align_idx, 1]:
-            aligned_commands.append((None, b_commands[j]))
-            j += 1
-        if i < alignment[align_idx, 0]:
-            aligned_commands.append((acmd, None))
-        else:
-            assert (i, j) == tuple(alignment[align_idx])
-            aligned_commands.append((acmd, b_commands[j]))
-            align_idx += 1
-            j += 1
+    # add matched commands
+    aligned_commands.extend(
+        (a_commands[i],
+         b_commands[j]) for i,
+        j in alignment)
+    # add unmatched commands from first commit
+    skipped_a_mask = np.ones(len(a_commands), dtype=bool)
+    skipped_a_mask[alignment[:, 0]] = 0
+    skipped_a_mask = np.arange(len(a_commands))[skipped_a_mask]
+    aligned_commands.extend((a_commands[i], None) for i in skipped_a_mask)
+    # add unmatched commands from second commit
+    skipped_b_mask = np.ones(len(b_commands), dtype=bool)
+    skipped_b_mask[alignment[:, 1]] = 0
+    skipped_b_mask = np.arange(len(b_commands))[skipped_b_mask]
+    aligned_commands.extend((None, b_commands[j]) for j in skipped_b_mask)
     return aligned_commands
