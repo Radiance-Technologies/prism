@@ -732,7 +732,7 @@ class ProjectCommitData(Serializable):
             for f, deps in self.file_dependencies.items():
                 for dep in deps:
                     G.add_edge(f, dep)
-            files = list(reversed(nx.topological_sort(G)))
+            files = list(reversed(list(nx.topological_sort(G))))
         else:
             files = [k for k in self.command_data.keys()]
         return files
