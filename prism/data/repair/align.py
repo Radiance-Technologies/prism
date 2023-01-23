@@ -381,12 +381,11 @@ def assign_commits(
     # compute assignment
     assignment = linear_sum_assignment(cost_matrix, maximize=False)
     # apply threshold
-    assignment = assignment[
-        cost_matrix[
-            assignment[:, 0],
-            assignment[:, 1]
-        ] < threshold,
-        :]
+    assignment_mask = cost_matrix[assignment[0], assignment[1]] < threshold
+    assignment = np.stack(
+        [assignment[0][assignment_mask],
+         assignment[1][assignment_mask]],
+        axis=-1)
     return assignment
 
 
