@@ -660,7 +660,7 @@ def get_aligned_commands(
         if i < alignment[align_idx, 0]:
             aligned_commands.append((acmd, None))
         else:
-            assert (i, j) == tuple(aligned_commands[align_idx])
+            assert (i, j) == tuple(alignment[align_idx])
             aligned_commands.append((acmd, b_commands[j]))
             align_idx += 1
     return aligned_commands
