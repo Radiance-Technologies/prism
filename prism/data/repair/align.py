@@ -642,7 +642,9 @@ def get_aligned_commands(
     aligned_commands: AlignedCommands = []
     a_commands = a.commands
     b_commands = b.commands
-    if np.any(alignment < 0 & alignment < (len(a_commands), len(b_commands))):
+    if np.any(np.logical_and(alignment < 0,
+                             alignment < (len(a_commands),
+                                          len(b_commands)))):
         raise IndexError(
             "Alignment indices are out of bounds for the given projects. "
             f"Expected values in the ranges (0, {len(a_commands)}) and "
