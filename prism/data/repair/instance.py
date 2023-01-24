@@ -206,17 +206,19 @@ class ProjectCommitDataDiff:
             dropped.update(change.moved_commands.keys())
             for moved_idx, loc_diffs in change.moved_commands.items():
                 assert loc_diffs, "moves require destinations"
+                destination_file = loc_diffs[0].after_filename
                 assert all(
-                    ld.after_filename == loc_diffs[0].after_filename
+                    ld.after_filename == destination_file
                     for ld in loc_diffs), "commands move atomically"
-                added = added_commands.setdefault(
-                    loc_diffs[0].after_filename,
-                    VernacCommandDataList())
+                command = result_command_data[filename][moved_idx]
                 for (sentence,
-                     loc_diff) in zip(result_command_data[filename]
-                                      [moved_idx].sorted_sentences(),
+                     loc_diff) in zip(command.sorted_sentences(),
                                       loc_diffs):
                     sentence.location = loc_diff.patch(sentence.location)
+                added = added_commands.setdefault(
+                    destination_file,
+                    VernacCommandDataList())
+                added.append(command)
             # decompose changes into drops and adds
             dropped.update(change.changed_commands.keys())
             for command in change.changed_commands.values():
@@ -225,20 +227,28 @@ class ProjectCommitDataDiff:
                     VernacCommandDataList())
                 added.append(command)
         # apply changes
-        for filename, added in added_commands.items():
-            dropped = dropped_commands.setdefault(filename, set())
+        for filename, dropped in dropped_commands.items():
             try:
                 command_data = result_command_data[filename]
             except KeyError:
                 command_data = VernacCommandDataList()
                 assert not dropped, "cannot drop commands from non-existent files"
+                result_command_data[filename] = command_data
             command_data = VernacCommandDataList(
                 [c for i,
                  c in enumerate(command_data) if i not in dropped])
-            command_data.extend(added)
-            if command_data:
+            if not command_data:
+                # the resulting file would be empty; remove it
+                result_command_data.pop(filename, None)
+        for filename, added in added_commands.items():
+            try:
+                command_data = result_command_data[filename]
+            except KeyError:
+                command_data = VernacCommandDataList()
                 result_command_data[filename] = command_data
-            else:
+            command_data.extend(added)
+            if not command_data:
+                assert not added, "file cannot be empty if commands were added"
                 # the resulting file would be empty; remove it
                 result_command_data.pop(filename, None)
         return result
