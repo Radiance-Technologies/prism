@@ -615,14 +615,19 @@ def align_commits(
     return alignment
 
 
-AlignedCommands = List[Union[Tuple[Tuple[str,
-                                         VernacCommandData],
-                                   Optional[Tuple[str,
-                                                  VernacCommandData]]],
-                             Tuple[Optional[Tuple[str,
-                                                  VernacCommandData]],
-                                   Tuple[str,
-                                         VernacCommandData]]]]
+IndexedCommand = Tuple[int, str, VernacCommandData]
+"""
+A tuple containing a index, filename, and command.
+
+The filename is the file that contains the command, and the index is the
+index of the command in the total list of project commands in canonical
+order.
+"""
+
+AlignedCommands = List[Union[Tuple[IndexedCommand,
+                                   Optional[IndexedCommand]],
+                             Tuple[Optional[IndexedCommand],
+                                   IndexedCommand]]]
 """
 A list of pairs of aligned commands where ``None`` in any pair indicates
 that a command has no aligned partner (in other words, the command was
@@ -672,17 +677,25 @@ def get_aligned_commands(
             f"({np.min(alignment[:,1])}, {np.max(alignment[:,1])})")
     # add matched commands
     aligned_commands.extend(
-        (a_commands[i],
-         b_commands[j]) for i,
+        ((i,
+          ) + a_commands[i],
+         (j,
+          ) + b_commands[j]) for i,
         j in alignment)
     # add unmatched commands from first commit
     skipped_a_mask = np.ones(len(a_commands), dtype=bool)
     skipped_a_mask[alignment[:, 0]] = 0
     skipped_a_mask = np.arange(len(a_commands))[skipped_a_mask]
-    aligned_commands.extend((a_commands[i], None) for i in skipped_a_mask)
+    aligned_commands.extend(
+        ((i,
+          ) + a_commands[i],
+         None) for i in skipped_a_mask)
     # add unmatched commands from second commit
     skipped_b_mask = np.ones(len(b_commands), dtype=bool)
     skipped_b_mask[alignment[:, 1]] = 0
     skipped_b_mask = np.arange(len(b_commands))[skipped_b_mask]
-    aligned_commands.extend((None, b_commands[j]) for j in skipped_b_mask)
+    aligned_commands.extend(
+        (None,
+         (j,
+          ) + b_commands[j]) for j in skipped_b_mask)
     return aligned_commands

@@ -169,10 +169,16 @@ class ProjectCommitDataDiff:
 
     changes: Dict[str,
                   VernacCommandDataListDiff] = default_field({})
+    """
+    A map containing per-file changes.
+    """
 
     def patch(self, data: ProjectCommitData) -> ProjectCommitData:
         """
         Apply this diff to given project data.
+
+        Note that only the command elements of the `data` will be
+        patched.
 
         Parameters
         ----------
@@ -194,10 +200,10 @@ class ProjectCommitDataDiff:
         for filename, change in self.changes.items():
             dropped = dropped_commands.setdefault(filename, set())
             dropped.update(change.dropped_commands)
-            dropped.update(change.moved_commands.keys())
-            dropped.update(change.changed_commands.keys())
             added = added_commands.setdefault(filename, VernacCommandDataList())
             added.extend(change.added_commands)
+            # decompose moves into drops and adds
+            dropped.update(change.moved_commands.keys())
             for moved_idx, loc_diffs in change.moved_commands.items():
                 assert loc_diffs, "moves require destinations"
                 assert all(
@@ -211,6 +217,8 @@ class ProjectCommitDataDiff:
                                       [moved_idx].sorted_sentences(),
                                       loc_diffs):
                     sentence.location = loc_diff.patch(sentence.location)
+            # decompose changes into drops and adds
+            dropped.update(change.changed_commands.keys())
             for command in change.changed_commands.values():
                 added = added_commands.setdefault(
                     command.location.filename,
@@ -257,7 +265,14 @@ class ProjectCommitDataDiff:
         changes = result.changes
         a_file_offsets: Dict[str,
                              int] = {}
-        aidx = 0
+        for a, _ in aligned_commands:
+            if a is not None:
+                aidx, filename, _ = a
+            try:
+                offset = a_file_offsets[filename]
+            except KeyError:
+                offset = aidx
+            a_file_offsets[filename] = min(aidx, offset)
         for a, b in aligned_commands:
             if a is None:
                 # added command
@@ -270,26 +285,17 @@ class ProjectCommitDataDiff:
             elif b is None:
                 # dropped command
                 assert a is not None, "cannot skip both sequences in alignment"
-                filename, _ = a
-                try:
-                    offset = a_file_offsets[filename]
-                except KeyError:
-                    offset = aidx
-                    a_file_offsets[filename] = offset
+                aidx, filename, _ = a
+                offset = a_file_offsets[filename]
                 file_diff = changes.setdefault(
                     filename,
                     VernacCommandDataListDiff())
                 file_diff.dropped_commands.add(aidx - offset)
-                aidx += 1
             else:
                 # a command with a match
-                filename, acmd = a
+                aidx, filename, acmd = a
                 _, bcmd = b
-                try:
-                    offset = a_file_offsets[filename]
-                except KeyError:
-                    offset = aidx
-                    a_file_offsets[filename] = offset
+                offset = a_file_offsets[filename]
                 file_diff = changes.setdefault(
                     filename,
                     VernacCommandDataListDiff())
@@ -306,7 +312,6 @@ class ProjectCommitDataDiff:
                             bcmd.sorted_sentences())
                     ]
                 # else the command is unchanged and not in the diff
-                aidx += 1
         return result
 
     @classmethod
