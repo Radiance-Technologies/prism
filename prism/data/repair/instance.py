@@ -268,6 +268,8 @@ class ProjectCommitDataDiff:
         for a, _ in aligned_commands:
             if a is not None:
                 aidx, filename, _ = a
+            else:
+                continue
             try:
                 offset = a_file_offsets[filename]
             except KeyError:
@@ -277,7 +279,7 @@ class ProjectCommitDataDiff:
             if a is None:
                 # added command
                 assert b is not None, "cannot skip both sequences in alignment"
-                filename, cmd = b
+                _, filename, cmd = b
                 file_diff = changes.setdefault(
                     filename,
                     VernacCommandDataListDiff())
@@ -294,7 +296,7 @@ class ProjectCommitDataDiff:
             else:
                 # a command with a match
                 aidx, filename, acmd = a
-                _, bcmd = b
+                _, _, bcmd = b
                 offset = a_file_offsets[filename]
                 file_diff = changes.setdefault(
                     filename,
@@ -639,10 +641,16 @@ class ProjectCommitDataState(ProjectState[ProjectCommitData,
         offset = self.offset
         if self.offset is not None:
             offset = compute_git_diff(self.project_state, self.offset_state)
+        offset = typing.cast(Optional[GitDiff], offset)
+        environment = self.environment
+        if environment is None and self.project_state.environment is not None:
+            environment = self.project_state.environment.switch_config
+        if self.project_state.project_metadata.commit_sha is None:
+            raise RuntimeError("Commit SHA must be known")
         return GitProjectState(
             self.project_state.project_metadata.commit_sha,
             offset,
-            self.environment)
+            environment)
 
 
 @dataclass
