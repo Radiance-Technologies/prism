@@ -559,33 +559,33 @@ def align_commits(
     # get final indices of changed elements of a
     changed_a_indices = np.concatenate(
         [
-            np.asarray(v,
-                       dtype=int) + a_file_offsets[k] for k,
-            v in a_indices_in_diff.items()
+            np.asarray(a_indices_in_diff[filename],
+                       dtype=int) + a_file_offsets[filename]
+            for filename in a_files
         ],
         axis=0)
     # get final indices of changed elements of b
     changed_b_indices = np.concatenate(
         [
-            np.asarray(v,
-                       dtype=int) + b_file_offsets[k] for k,
-            v in b_indices_in_diff.items()
+            np.asarray(b_indices_in_diff[filename],
+                       dtype=int) + b_file_offsets[filename]
+            for filename in b_files
         ],
         axis=0)
     # get final indices of unchanged elements of a
     unchanged_a_indices = np.concatenate(
         [
-            np.asarray(v,
-                       dtype=int) + a_file_offsets[k] for k,
-            v in a_indices_not_in_diff.items()
+            np.asarray(a_indices_not_in_diff[filename],
+                       dtype=int) + a_file_offsets[filename]
+            for filename in a_files
         ],
         axis=0)
     # get final indices of unchanged elements of b
     unchanged_b_indices = np.concatenate(
         [
-            np.asarray(v,
-                       dtype=int) + b_file_offsets[k] for k,
-            v in b_indices_not_in_diff.items()
+            np.asarray(b_indices_not_in_diff[filename],
+                       dtype=int) + b_file_offsets[filename]
+            for filename in b_files
         ],
         axis=0)
     # Compute alignment
