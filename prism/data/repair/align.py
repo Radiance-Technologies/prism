@@ -24,7 +24,18 @@ from prism.util.iterable import fast_contains
 
 T = TypeVar('T')
 
-AlignmentFunction = Callable[[ProjectCommitData, ProjectCommitData], np.ndarray]
+Assignment = np.ndarray
+"""
+An array of pairs of integers indicating the indices of assigned object
+pairs from two implicit indexed sets.
+A row :math:`(i,j)` indicates that the :math:`i`-th command in the first
+commit is assigned to the :math:`j`-th command in the second commit.
+Unassigned commands in either commit are not enumerated in the array,
+and there is no prescribed order in which the rows must be combined.
+Indices may be ordered in any manner.
+"""
+
+AlignmentFunction = Callable[[ProjectCommitData, ProjectCommitData], Assignment]
 """
 A function that takes two commits and produces an alignment/assignment
 between their commands as a two-dimensional Numpy array with :math:`m`
@@ -253,7 +264,7 @@ def order_preserving_alignment(
 
 def align_commits_per_file(
         a: ProjectCommitData,
-        b: ProjectCommitData) -> np.ndarray:
+        b: ProjectCommitData) -> Assignment:
     """
     Align two `ProjectCommit` based on matching files.
 
@@ -270,7 +281,7 @@ def align_commits_per_file(
 
     Returns
     -------
-    np.ndarray
+    Assignment
         An array of pairs of integers indicating the indices of aligned
         commands between each commit with commands enumerated over all
         matching files in `a` and `b`.
@@ -322,10 +333,11 @@ def align_commits_per_file(
         b_offset = b_file_offsets[f]
         aligned_sentences += np.resize(
             np.array([a_offset,
-                      b_offset]),
+                      b_offset],
+                     dtype=int),
             aligned_sentences.shape)
         aligned_files.append(aligned_sentences)
-    alignment = np.concatenate(aligned_files, axis=0)
+    alignment = np.concatenate(aligned_files, axis=0, dtype=int)
     return alignment
 
 
@@ -335,7 +347,7 @@ def assign_commits(
         cost_function: Callable[[VernacCommandData,
                                  VernacCommandData],
                                 float],
-        threshold: float = np.inf) -> np.ndarray:
+        threshold: float = np.inf) -> Assignment:
     r"""
     Align two `ProjectCommit` based on a minimum cost assignment.
 
@@ -358,7 +370,7 @@ def assign_commits(
 
     Returns
     -------
-    np.ndarray
+    Assignment
         An array of pairs of integers indicating the indices of aligned
         commands between each commit with commands enumerated over all
         matching files in `a` and `b`.
@@ -397,7 +409,7 @@ def _compute_diff_alignment(
                                 List[int]],
         b_indices_in_diff: Dict[str,
                                 List[int]],
-        align: AlignmentFunction) -> np.ndarray:
+        align: AlignmentFunction) -> Assignment:
     """
     Get the alignment only between items contained in a Git diff.
 
@@ -420,7 +432,7 @@ def _compute_diff_alignment(
 
     Returns
     -------
-    np.ndarray
+    Assignment
         An array of pairs of integers indicating the indices of aligned
         commands between each commit with commands enumerated over all
         commands appearing within the diff in files in `a` and `b`.
@@ -475,7 +487,7 @@ def align_commits(
         a: ProjectCommitData,
         b: ProjectCommitData,
         diff: GitDiff,
-        align: AlignmentFunction) -> np.ndarray:
+        align: AlignmentFunction) -> Assignment:
     """
     Align two `ProjectCommit` based on the provided alignment algorithm.
 
@@ -492,7 +504,7 @@ def align_commits(
 
     Returns
     -------
-    np.ndarray
+    Assignment
         An array of pairs of integers indicating the indices of aligned
         commands between each commit with commands enumerated over all
         files in `a` and `b`.
@@ -546,28 +558,32 @@ def align_commits(
     # get final indices of changed elements of a
     changed_a_indices = np.concatenate(
         [
-            np.asarray(v) + a_file_offsets[k] for k,
+            np.asarray(v,
+                       dtype=int) + a_file_offsets[k] for k,
             v in a_indices_in_diff.items()
         ],
         axis=0)
     # get final indices of changed elements of b
     changed_b_indices = np.concatenate(
         [
-            np.asarray(v) + b_file_offsets[k] for k,
+            np.asarray(v,
+                       dtype=int) + b_file_offsets[k] for k,
             v in b_indices_in_diff.items()
         ],
         axis=0)
     # get final indices of unchanged elements of a
     unchanged_a_indices = np.concatenate(
         [
-            np.asarray(v) + a_file_offsets[k] for k,
+            np.asarray(v,
+                       dtype=int) + a_file_offsets[k] for k,
             v in a_indices_not_in_diff.items()
         ],
         axis=0)
     # get final indices of unchanged elements of b
     unchanged_b_indices = np.concatenate(
         [
-            np.asarray(v) + b_file_offsets[k] for k,
+            np.asarray(v,
+                       dtype=int) + b_file_offsets[k] for k,
             v in b_indices_not_in_diff.items()
         ],
         axis=0)
@@ -581,7 +597,7 @@ def align_commits(
             f"got {unchanged_b_indices.shape[0]}, "
             f"expected {unchanged_a_indices.shape[0]}. "
             "Is the diff correct?")
-    no_diff_alignment: np.ndarray = np.stack(
+    no_diff_alignment: Assignment = np.stack(
         [unchanged_a_indices,
          unchanged_b_indices],
         axis=-1)
@@ -616,7 +632,7 @@ either added or dropped between the commits).
 def get_aligned_commands(
         a: ProjectCommitData,
         b: ProjectCommitData,
-        alignment: np.ndarray) -> AlignedCommands:
+        alignment: Assignment) -> AlignedCommands:
     """
     Get the aligned command sequences of two commits.
 
@@ -624,7 +640,7 @@ def get_aligned_commands(
     ----------
     a, b : ProjectCommitData
         Command data extracted from two commits of a project.
-    alignment : np.ndarray
+    alignment : Assignment
         A precomputed alignment between the commands of `a` and `b`.
 
     Returns
@@ -639,6 +655,8 @@ def get_aligned_commands(
         bounds with respect to the given commits, i.e., if it indexes
         commands that do not exist.
     """
+    if alignment.dtype != int:
+        alignment = alignment.astype(int)
     aligned_commands: AlignedCommands = []
     a_commands = a.commands
     b_commands = b.commands
