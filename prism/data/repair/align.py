@@ -327,7 +327,8 @@ def align_commits_per_file(
                 filter(
                     lambda x: x[0] is not None and x[1] is not None,
                     order_preserving_alignment(a_sentences,
-                                               b_sentences))))
+                                               b_sentences))),
+            dtype=int)
         # seek to the right part of the alignment
         a_offset = a_file_offsets[f]
         b_offset = b_file_offsets[f]
