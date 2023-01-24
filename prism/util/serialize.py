@@ -129,10 +129,13 @@ def get_typevar_bindings(
     return clz_origin, type_bindings
 
 
+_T = TypeVar("_T", bound=Dataclass)
+
+
 def deserialize_generic_dataclass(
         data: object,
-        clz: Type[Dataclass],
-        error: str = "ignore") -> Dataclass:
+        clz: Type[_T],
+        error: str = "ignore") -> _T:
     """
     Deserialize a generic dataclass.
 
