@@ -311,7 +311,7 @@ class ProjectCommitDataDiff:
                 file_diff = changes.setdefault(
                     filename,
                     VernacCommandDataListDiff())
-                if acmd.all_text != bcmd.all_text:
+                if acmd.all_text() != bcmd.all_text():
                     # changed command
                     file_diff.changed_commands[aidx - offset] = bcmd
                 elif acmd.spanning_location() != bcmd.spanning_location():
