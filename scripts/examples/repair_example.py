@@ -33,11 +33,9 @@ def load_from_cache(
         commit_sha_2: str,
         coq_version: str):
     initial_state = cache.get(project, commit_sha_1, coq_version)
-    if not os.path.exists("initial_state"):
-        initial_state.write_coq_project("initial_state")
+    initial_state.write_coq_project("initial_state")
     repaired_state = cache.get(project, commit_sha_2, coq_version)
-    if not os.path.exists("repaired_state"):
-        repaired_state.write_coq_project("repaired_state")
+    repaired_state.write_coq_project("repaired_state")
     return initial_state, repaired_state
 
 
@@ -58,18 +56,17 @@ def get_error_state_diff(repaired_state_diff, changed_proof_file: str):
     modified_repaired_state_diff = deepcopy(repaired_state_diff)
     changes = modified_repaired_state_diff.changes[changed_proof_file]
     cmds = changes.changed_commands  # + changes.added_commands + changes.moved_commands # + changes.dropped_commands
-    opening_sentence = None
+    changed_cmd = None
     for cmd_idx, cmd in cmds.items():
-        if opening_sentence is not None:
+        if changed_cmd is not None:
             break
         for proof in cmd.proofs:
-            opening_sentence = proof[0]
+            changed_cmd = cmd
             break
-    if opening_sentence is None:
+    if changed_cmd is None:
         raise ValueError("No proof changes found")
     cmds.pop(cmd_idx)
-    changed_proof_idx: int = opening_sentence.proof_index
-    changed_proof_data: VernacCommandData = cmd
+    changed_proof_data: VernacCommandData = changed_cmd
     # remove changed proof from repaired_state_diff to yield error state
     error_state_diff: ProjectCommitDataDiff = modified_repaired_state_diff
     return changed_proof_data, error_state_diff
@@ -77,6 +74,7 @@ def get_error_state_diff(repaired_state_diff, changed_proof_file: str):
 
 def get_error_state(initial_state, error_state_diff):
     error_state = error_state_diff.patch(initial_state)
+    error_state.write_coq_project("error_state")
     return error_state
 
 
