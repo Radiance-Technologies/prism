@@ -106,7 +106,7 @@ class LocDiff:
             b.filename,
             b.lineno - a.lineno,
             b.bol_pos - a.bol_pos,
-            b.lineno_last - b.lineno_last,
+            b.lineno_last - a.lineno_last,
             b.bol_pos_last - a.bol_pos_last,
             b.beg_charno - a.beg_charno,
             b.end_charno - a.end_charno)
@@ -208,7 +208,7 @@ class ProjectCommitDataDiff:
             added.extend(change.added_commands)
 
             # decompose moves into drops and adds
-
+            dropped.update(change.moved_commands.keys())
             for moved_idx, loc_diffs in change.moved_commands.items():
 
                 # Verify all sentences for the command have same
