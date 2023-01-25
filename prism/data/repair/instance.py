@@ -208,7 +208,6 @@ class ProjectCommitDataDiff:
             added.extend(change.added_commands)
 
             # decompose moves into drops and adds
-            dropped.update(change.moved_commands.keys())
 
             for moved_idx, loc_diffs in change.moved_commands.items():
 
@@ -235,7 +234,7 @@ class ProjectCommitDataDiff:
                     VernacCommandDataList())
                 added.append(command)
             # decompose changes into drops and adds
-            # dropped.update(change.changed_commands.keys())
+            dropped.update(change.changed_commands.keys())
             for command in change.changed_commands.values():
                 added = added_commands.setdefault(
                     command.location.filename,
