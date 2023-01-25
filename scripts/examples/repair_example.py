@@ -126,7 +126,8 @@ def make_repair_instance(
             repaired_state_diff,
             None))
     compressed = repair_instance.compress()
-    seutil.io.dump("repair_instance.yml", compressed)
+    seutil.io.dump("repair_instance_compressed.yml", compressed)
+    seutil.io.dump("repair_instance_uncompressed.yml", repair_instance)
     return repair_instance
 
 
