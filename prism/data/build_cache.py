@@ -837,13 +837,13 @@ class CoqProjectBuildCacheProtocol(Protocol):
     The extension for the cache files that defines their format.
     """
     _default_coq_versions: Set[str] = {
-        '8_9_1',
-        '8_10_2',
-        '8_11_2',
-        '8_12_2',
-        '8_13_2',
-        '8_14_1',
-        '8_15_2'
+        '8.9.1',
+        '8.10.2',
+        '8.11.2',
+        '8.12.2',
+        '8.13.2',
+        '8.14.1',
+        '8.15.2'
     }
     """
     Default coq versions to look for when getting cache status.
@@ -1182,19 +1182,19 @@ class CoqProjectBuildCacheProtocol(Protocol):
         if coq_versions is None:
             coq_version_strs = self._default_coq_versions
         else:
-            coq_version_strs = {str(v).replace(".",
-                                               "_") for v in coq_versions}
+            coq_version_strs = {str(v) for v in coq_versions}
         status_list = []
-        for project in projects:
-            for commit in commits[project]:
-                for coq_version in coq_version_strs:
+        for coq_version_str in coq_version_strs:
+            coq_version = coq_version_str.replace(".", "_")
+            for project in projects:
+                for commit in commits[project]:
                     status_msg = self.get_status(project, commit, coq_version)
                     if status_msg is not None:
                         status_list.append(
                             CacheObjectStatus(
                                 project,
                                 commit,
-                                coq_version,
+                                coq_version_str,
                                 status_msg))
         return status_list
 
