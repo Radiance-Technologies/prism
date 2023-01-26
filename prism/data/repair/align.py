@@ -15,6 +15,7 @@ from scipy.optimize import linear_sum_assignment
 from prism.data.build_cache import (
     ProjectCommitData,
     VernacCommandData,
+    VernacCommandDataList,
     VernacSentence,
 )
 from prism.data.repair.diff import commands_in_diff
@@ -447,7 +448,8 @@ def _compute_diff_alignment(
     a_in_diff = ProjectCommitData(
         a.project_metadata,
         {
-            k: [v[i] for i in a_indices_in_diff[k]] for k,
+            k: VernacCommandDataList([v[i] for i in a_indices_in_diff[k]])
+            for k,
             v in a.command_data.items()
         },
         a.file_dependencies,
@@ -456,7 +458,8 @@ def _compute_diff_alignment(
     b_in_diff = ProjectCommitData(
         b.project_metadata,
         {
-            k: [v[i] for i in b_indices_in_diff[k]] for k,
+            k: VernacCommandDataList([v[i] for i in b_indices_in_diff[k]])
+            for k,
             v in b.command_data.items()
         },
         b.file_dependencies,
@@ -467,7 +470,9 @@ def _compute_diff_alignment(
                      str] = {k: k for k in b.command_data.keys()}
     for change in diff.changes:
         if change.is_rename:
-            rename_map[change.after_filename] = change.before_filename
+            assert change.after_filename is not None
+            assert change.before_filename is not None
+            rename_map[str(change.after_filename)] = str(change.before_filename)
     b_in_diff.command_data = {
         rename_map[k]: v for k,
         v in b_in_diff.command_data.items()
@@ -539,6 +544,27 @@ def align_commits(
                                                                    i)] for k,
         v in b_indices_in_diff.items()
     }
+    # sort unchanged indices by command location
+    a_indices_not_in_diff = {
+        k: [
+            i for _,
+            i in sorted(
+                zip([a.command_data[k][i] for i in v],
+                    v),
+                key=lambda p: p[0])
+        ] for k,
+        v in a_indices_not_in_diff.items()
+    }
+    b_indices_not_in_diff = {
+        k: [
+            i for _,
+            i in sorted(
+                zip([b.command_data[k][i] for i in v],
+                    v),
+                key=lambda p: p[0])
+        ] for k,
+        v in b_indices_not_in_diff.items()
+    }
     # calculate alignment only for those items that are known to have
     # changed
     diff_alignment = _compute_diff_alignment(
@@ -572,6 +598,7 @@ def align_commits(
             for filename in b_files
         ],
         axis=0)
+    # sort unchanged indices
     # get final indices of unchanged elements of a
     unchanged_a_indices = np.concatenate(
         [
