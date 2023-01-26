@@ -14,7 +14,7 @@ from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess
 from typing import Any, ClassVar, Dict, List, Optional, Tuple, Union
 
-from seutil import bash
+from seutil import bash, io
 
 from prism.util.bash import escape
 from prism.util.radpytools import PathLike
@@ -764,3 +764,26 @@ class OpamSwitch:
                     for name, metadata in field_value:
                         s.append(f'package "{name}"{metadata}\n')
             return ''.join(s)
+
+        def serialize(
+                self,
+                fmt: Optional[io.Fmt] = None,
+                portable: bool = True) -> Dict[str,
+                                               Any]:
+            """
+            Serialize this configuration.
+
+            By default, ignores non-portable fields indicating the
+            switch name, root, and whether it is a clone.
+            """
+            serialized = {
+                f.name: io.serialize(getattr(self,
+                                             f.name),
+                                     fmt) for f in fields(self)
+            }
+            if portable:
+                # remove non-portable configuration information
+                serialized.pop('opam_root', None)
+                serialized.pop('switch_name', None)
+                serialized.pop('is_clone', None)
+            return serialized
