@@ -249,22 +249,22 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                     CacheObjectStatus(
                         "float",
                         float_commit_sha,
-                        "8_10_2",
+                        "8.10.2",
                         "success"),
                     CacheObjectStatus(
                         "float",
                         40 * "a",
-                        "8_10_2",
+                        "8.10.2",
                         "other error"),
                     CacheObjectStatus(
                         "float",
                         40 * "b",
-                        "8_10_2",
+                        "8.10.2",
                         "build error"),
                     CacheObjectStatus(
                         "lambda",
                         lambda_commit_sha,
-                        "8_10_2",
+                        "8.10.2",
                         "cache error")
                 ]
                 expected_status_list_success = list(
