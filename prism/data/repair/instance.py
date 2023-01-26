@@ -198,19 +198,15 @@ class ProjectCommitDataDiff:
         added_commands: Dict[str,
                              VernacCommandDataList] = {}
         for filename, change in self.changes.items():
-
             # Set of commands to be dropped from original state.
             dropped = dropped_commands.setdefault(filename, set())
             dropped.update(change.dropped_commands)
-
             # Include added commands from diff being applied.
             added = added_commands.setdefault(filename, VernacCommandDataList())
             added.extend(change.added_commands)
-
             # decompose moves into drops and adds
             dropped.update(change.moved_commands.keys())
             for moved_idx, loc_diffs in change.moved_commands.items():
-
                 # Verify all sentences for the command have same
                 # destination file.
                 assert loc_diffs, "moves require destinations"
@@ -218,10 +214,8 @@ class ProjectCommitDataDiff:
                 assert all(
                     ld.after_filename == destination_file
                     for ld in loc_diffs), "commands move atomically"
-
                 # Get command from the state being patched.
                 command = result_command_data[filename][moved_idx]
-
                 # Change sentence location in place for each sentence
                 # in the command to the location in this diff.
                 for (sentence,
@@ -240,14 +234,12 @@ class ProjectCommitDataDiff:
                     command.location.filename,
                     VernacCommandDataList())
                 added.append(command)
-
         # Apply Changes
         # Drop commands. This results in:
         #   1) removal of commands removed by diff
         #   2) removal of commands moved by diff
         #      from original locations
         for filename, dropped in dropped_commands.items():
-
             # Get the command data from original file.
             try:
                 command_data = result_command_data[filename]
@@ -255,12 +247,10 @@ class ProjectCommitDataDiff:
                 command_data = VernacCommandDataList()
                 assert not dropped, "cannot drop commands from non-existent files"
                 result_command_data[filename] = command_data
-
             # Create new command data without dropped commands
             command_data = VernacCommandDataList(
                 [c for i,
                  c in enumerate(command_data) if i not in dropped])
-
             # Replace original command data with new one.
             # Empty command data implies the whole file was dropped.
             if not command_data:
@@ -268,7 +258,6 @@ class ProjectCommitDataDiff:
                 result_command_data.pop(filename, None)
             else:
                 result_command_data[filename] = command_data
-
         # Apply Changes
         # Add commands. This results in:
         #   1) Add commands added by the diff.
