@@ -736,6 +736,21 @@ class OpamSwitch:
         switch_name: Optional[str] = None
         is_clone: Optional[str] = None
 
+        def __eq__(self, other: object) -> bool:
+            """
+            Compare equality only according to derived fields.
+            """
+            if not isinstance(other, OpamSwitch.Configuration):
+                return NotImplemented
+            for f in fields(self):
+                if f.name in {'opam_root',
+                              'switch_name',
+                              'is_clone'}:
+                    continue
+                if getattr(self, f.name) != getattr(other, f.name):
+                    return False
+            return True
+
         def __str__(self) -> str:
             """
             Pretty-print the configuration in the Opam file format.
@@ -768,21 +783,21 @@ class OpamSwitch:
         def serialize(
                 self,
                 fmt: Optional[io.Fmt] = None,
-                portable: bool = True) -> Dict[str,
-                                               Any]:
+                derived_only: bool = True) -> Dict[str,
+                                                   Any]:
             """
             Serialize this configuration.
 
-            By default, ignores non-portable fields indicating the
-            switch name, root, and whether it is a clone.
+            By default, ignores non-derived fields indicating the switch
+            name, root, and whether it is a clone.
             """
             serialized = {
                 f.name: io.serialize(getattr(self,
                                              f.name),
                                      fmt) for f in fields(self)
             }
-            if portable:
-                # remove non-portable configuration information
+            if derived_only:
+                # remove non-derived configuration information
                 serialized.pop('opam_root', None)
                 serialized.pop('switch_name', None)
                 serialized.pop('is_clone', None)
