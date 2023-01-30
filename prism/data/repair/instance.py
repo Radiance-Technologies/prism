@@ -548,6 +548,16 @@ class ErrorInstance(Generic[_State, _Diff]):
     custom taxonomy for finer-grained evaluation or meta-studies.
     """
 
+    @property
+    def environment(self) -> Optional[OpamSwitch.Configuration]:
+        """
+        Get the environment of the error state, if specified.
+        """
+        environment = self.change.environment
+        if environment is None:
+            environment = self.initial_state.environment
+        return environment
+
     @classmethod
     def deserialize(cls, data: object) -> 'ErrorInstance':
         """
@@ -583,6 +593,16 @@ class RepairInstance(Generic[_State, _Diff]):
     If the environment is None, then it is understood to be the same
     environment in which the error occurs.
     """
+
+    @property
+    def environment(self) -> Optional[OpamSwitch.Configuration]:
+        """
+        Get the environment of the repaired state, if specified.
+        """
+        environment = self.repaired_state_or_diff.environment
+        if environment is None:
+            environment = self.error.environment
+        return environment
 
     @classmethod
     def deserialize(cls, data: object) -> 'RepairInstance':
@@ -691,7 +711,11 @@ class ProjectCommitDataStateDiff(ProjectStateDiff[ProjectCommitDataDiff]):
     A change in some implicit commit's extracted state.
     """
 
-    def compress(self, reference: ProjectCommitData) -> GitProjectStateDiff:
+    def compress(
+        self,
+        reference: ProjectCommitData,
+        reference_environment: Optional[OpamSwitch.Configuration]
+    ) -> GitProjectStateDiff:
         """
         Compress this diff data into a text-based Git diff.
 
@@ -699,16 +723,22 @@ class ProjectCommitDataStateDiff(ProjectStateDiff[ProjectCommitDataDiff]):
         ----------
         reference : ProjectCommitData
             A reference point against which to compute the Git diff.
+        reference_environment : Optional[OpamSwitch.Configuration]
+            The environment corresponding to the `reference` point.
 
         Returns
         -------
         GitProjectStateDiff
             A concise representation of this diff.
         """
+        environment = None
+        if (reference_environment is None
+                or reference_environment != self.environment):
+            environment = self.environment
         return GitProjectStateDiff(
             compute_git_diff(reference,
                              self.diff.patch(reference)),
-            self.environment)
+            environment)
 
 
 @dataclass
@@ -750,7 +780,9 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
         return GitErrorInstance(
             initial_state.project_state.project_metadata.project_name,
             initial_state.compress(),
-            change.compress(initial_state.project_state),
+            change.compress(
+                initial_state.project_state,
+                initial_state.environment),
             self.error_location,
             set(self.tags))
 
@@ -788,7 +820,7 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
                 self.repaired_state_or_diff,
                 ProjectStateDiff)
             repaired = typing.cast(ProjectCommitDataStateDiff, repaired)
-            repaired = repaired.compress(error.error_state)
+            repaired = repaired.compress(error.error_state, error.environment)
         repaired = typing.cast(
             Union[GitProjectState,
                   GitProjectStateDiff],
