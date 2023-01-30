@@ -242,10 +242,12 @@ class TestVersion(unittest.TestCase):
         """
         version = OCamlVersion.parse("8.4pl1")
         serialized = version.serialize()
-        self.assertEqual(
-            serialized,
-            f"{OpamVersion.__module__},OpamVersion,8.4pl1")
+        self.assertEqual(serialized, "8.4pl1")
         deserialized = Version.deserialize(serialized)
+        self.assertEqual(version, deserialized)
+        # test backwards compatibility with old-style serialization
+        deserialized = Version.deserialize(
+            f"{OpamVersion.__module__},OpamVersion,8.4pl1")
         self.assertEqual(version, deserialized)
 
     def test_str(self):
