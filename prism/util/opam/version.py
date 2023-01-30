@@ -4,6 +4,7 @@ Supplies utilities for parsing OCaml versions and constraints.
 
 import abc
 import re
+import typing
 from abc import abstractmethod, abstractproperty
 from dataclasses import dataclass
 from functools import cached_property, total_ordering
@@ -93,14 +94,8 @@ class Version(Parseable, abc.ABC):
     def serialize(self) -> str:
         """
         Serialize the version to a string representation.
-
-        The name of the `Version` subclass is prepended to the version
-        for enhanced deserialization.
         """
-        return ",".join(
-            [self.__class__.__module__,
-             self.__class__.__name__,
-             str(self)])
+        return str(self)
 
     @classmethod
     def _chain_parse(
@@ -165,9 +160,16 @@ class Version(Parseable, abc.ABC):
                         f.type)
             return clz(**field_values)
         else:
-            module_name, class_name, version = version.split(",")
-            module = import_module(module_name)
-            clz = getattr(module, class_name)
+            try:
+                module_name, class_name, version = version.split(",")
+            except ValueError:
+                # new-style serialization
+                # just a str representation of the version
+                clz = cls
+            else:
+                # old-style serialization
+                module = import_module(module_name)
+                clz = getattr(module, class_name)
             return clz.parse(version)
 
     @classmethod
@@ -181,12 +183,14 @@ class Version(Parseable, abc.ABC):
         """
         Parse a version string with or without enclosing quotes.
         """
-        return super().parse(
+        version = super().parse(
             input,
             exhaustive,
             lstrip,
             require_quotes=require_quotes,
             check_syntax=check_syntax)
+        version = typing.cast(Version, version)
+        return version
 
 
 @dataclass(frozen=True)
