@@ -148,3 +148,6 @@ test_logs/
 lock
 base_df.csv
 .lia.cache
+
+# Jupyter notebooks
+*.ipynb
