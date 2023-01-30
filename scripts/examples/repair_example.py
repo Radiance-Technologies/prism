@@ -19,6 +19,7 @@ from prism.data.repair.instance import (
     ProjectCommitDataState,
     ProjectCommitDataStateDiff,
 )
+from prism.language.gallina.analyze import SexpInfo
 
 
 def get_cache(cache_root: str, coq_version: str) -> CoqProjectBuildCache:
@@ -144,7 +145,7 @@ def repaired_proof_location(
 def make_repair_instance(
     initial_state: ProjectCommitData,
     error_state_diff: ProjectCommitDataDiff,
-    error_location,
+    error_location: SexpInfo.Loc,
     changed_proof_data: VernacCommandData,
     repaired_state: ProjectCommitData,
     repaired_state_diff: ProjectCommitDataDiff
@@ -167,7 +168,7 @@ def make_repair_instance(
                                                  None),
             change=ProjectCommitDataStateDiff(error_state_diff,
                                               None),
-            error_location=error_location,
+            error_location={error_location},
             tags={changed_proof_data.command_type}),
         repaired_state_or_diff=ProjectCommitDataStateDiff(
             repaired_state_diff,
