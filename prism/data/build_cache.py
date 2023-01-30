@@ -144,6 +144,13 @@ class VernacSentence:
     """
     The index of the Vernacular command in which this sentence partakes
     either as the command itself or part of an associated proof.
+
+    Note that this index should not be relied upon in general to give a
+    canonical index of the command.
+    Instead, one should get a canonical index from
+    `ProjectCommitData.commands` or a list of commands sorted by
+    location.
+    This attribute does not get serialized.
     """
 
     def __post_init__(
@@ -181,6 +188,22 @@ class VernacSentence:
         Get the set of identifiers referenced by this sentence.
         """
         return {ident.string for ident in self.qualified_identifiers}
+
+    def serialize(self, fmt: Optional[su.io.Fmt] = None) -> Dict[str, Any]:
+        """
+        Serialize this configuration.
+
+        By default, ignores non-derived fields indicating the switch
+        name, root, and whether it is a clone.
+        """
+        serialized = {
+            f.name: su.io.serialize(getattr(self,
+                                            f.name),
+                                    fmt) for f in fields(self)
+        }
+        # remove non-derived configuration information
+        serialized.pop('command_index', None)
+        return serialized
 
     @classmethod
     def deserialize(cls, data: Dict[str, Any]) -> 'VernacSentence':
@@ -262,11 +285,30 @@ class ProofSentence(VernacSentence):
 
     For example, a ``Program`` may have multiple proofs, one for each
     outstanding ``Obligation``.
+
+    This attribute does not get serialized.
+    See `VernacSentence.command_index`.
     """
     proof_step_index: Optional[int] = None
     """
     The index of this sentence within the body of its surrounding proof.
+
+    This attribute does not get serialized.
+    See `VernacSentence.command_index`.
     """
+
+    def serialize(self, fmt: Optional[su.io.Fmt] = None) -> Dict[str, Any]:
+        """
+        Serialize this configuration.
+
+        By default, ignores non-derived fields indicating the switch
+        name, root, and whether it is a clone.
+        """
+        serialized = super().serialize(fmt)
+        # remove non-derived configuration information
+        serialized.pop('proof_index', None)
+        serialized.pop('proof_step_index', None)
+        return serialized
 
 
 Proof = List[ProofSentence]
