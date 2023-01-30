@@ -156,10 +156,11 @@ def make_repair_instance(
     # create the actual repair instance
     repaired_environment = None
     if repaired_state.environment is not None:
-        if (initial_state.environment is None
-                or repaired_state.environment.switch_config
-                == initial_state.environment.switch_config):
-            repaired_environment = repaired_state.environment.switch_config
+        repaired_environment = repaired_state.environment.switch_config
+        if initial_state.environment is not None:
+            initial_environment = initial_state.environment.switch_config
+            if repaired_environment != initial_environment:
+                repaired_environment = repaired_state.environment.switch_config
     repair_instance: ProjectCommitDataRepairInstance = ProjectCommitDataRepairInstance(
         error=ProjectCommitDataErrorInstance(
             project_name=initial_state.project_metadata.project_name,

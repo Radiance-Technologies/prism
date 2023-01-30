@@ -453,13 +453,20 @@ class ProjectState(Generic[_State, _Diff]):
 
     This field is useful for representing working tree changes.
     """
-    environment: Optional[OpamSwitch.Configuration] = None
+    _environment: Optional[OpamSwitch.Configuration] = None
     """
     The environment in which the project is built.
 
     This field identifies other installed package versions including the
     Coq compiler.
     """
+
+    @property
+    def environment(self) -> Optional[OpamSwitch.Configuration]:
+        """
+        Get the environment for the state.
+        """
+        return self._environment
 
     @classmethod
     def deserialize(cls, data: object) -> 'ProjectState':
@@ -677,6 +684,16 @@ class ProjectCommitDataState(ProjectState[ProjectCommitData,
         return self.project_state
 
     @property
+    def environment(self) -> Optional[OpamSwitch.Configuration]:
+        """
+        Get the environment from the project commit data.
+        """
+        environment = self._environment
+        if environment is None and self.project_state.environment is not None:
+            environment = self.project_state.environment.switch_config
+        return environment
+
+    @property
     def offset_state(self) -> ProjectCommitData:
         """
         Get the cumulative project state represented by this object.
@@ -694,15 +711,12 @@ class ProjectCommitDataState(ProjectState[ProjectCommitData,
         if self.offset is not None:
             offset = compute_git_diff(self.project_state, self.offset_state)
         offset = typing.cast(Optional[GitDiff], offset)
-        environment = self.environment
-        if environment is None and self.project_state.environment is not None:
-            environment = self.project_state.environment.switch_config
         if self.project_state.project_metadata.commit_sha is None:
             raise RuntimeError("Commit SHA must be known")
         return GitProjectState(
             self.project_state.project_metadata.commit_sha,
             offset,
-            environment)
+            self.environment)
 
 
 @dataclass
@@ -782,7 +796,7 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
             initial_state.compress(),
             change.compress(
                 initial_state.project_state,
-                initial_state.environment),
+                initial_state._environment),
             self.error_location,
             set(self.tags))
 
