@@ -5,10 +5,11 @@ import json
 import os
 from multiprocessing import Pool
 from pathlib import Path
-from typing import Dict, Set, Tuple
+from typing import Dict, List, Set, Tuple
 
 from prism.project import ProjectDir
 from prism.project.base import SEM
+from prism.project.metadata.storage import MetadataStorage
 from prism.project.util import name_variants
 
 
@@ -36,18 +37,21 @@ def ignore_roots(path: Path) -> Set[str]:
     return projects
 
 
-def proofs(path: os.PathLike) -> Tuple[str, int]:
+def proofs(path: os.PathLike, storage: MetadataStorage) -> Tuple[str, int]:
     """
     Count number proofs.
     """
     path = Path(path)
     ignore = ignore_roots(path)
 
-    project = ProjectDir(path, sentence_extraction_method=SEM.HEURISTIC)
+    project = ProjectDir(
+        path,
+        storage,
+        sentence_extraction_method=SEM.HEURISTIC)
     parser = project.sentence_extraction_method.parser()
     file_list = project.get_file_list()
     count: int = 0
-    project_dirs = []
+    project_dirs: List[Path] = []
     for file in file_list:
         if Path(file).stem in ignore or any(Path(file).is_relative_to(p)
                                             for p in project_dirs):
@@ -58,22 +62,25 @@ def proofs(path: os.PathLike) -> Tuple[str, int]:
             document,
             glom_proofs=False,
             sentence_extraction_method=project.sentence_extraction_method)
-        stats = parser._compute_sentence_statistics(sentences)
+        stats = parser._compute_sentence_statistics([s.text for s in sentences])
         count += len(stats.ender_indices)
     return os.path.basename(path), count
 
 
-def sentences(path: os.PathLike) -> Tuple[str, int]:
+def sentences(path: os.PathLike, storage: MetadataStorage) -> Tuple[str, int]:
     """
     Count number of sentences.
     """
     path = Path(path)
     ignore = ignore_roots(path)
 
-    project = ProjectDir(path, sentence_extraction_method=SEM.HEURISTIC)
+    project = ProjectDir(
+        path,
+        storage,
+        sentence_extraction_method=SEM.HEURISTIC)
     file_list = project.get_file_list()
     count: int = 0
-    project_dirs = []
+    project_dirs: List[Path] = []
     for file in file_list:
         if Path(file).stem in ignore or any(Path(file).is_relative_to(p)
                                             for p in project_dirs):
@@ -89,13 +96,16 @@ def sentences(path: os.PathLike) -> Tuple[str, int]:
     return os.path.basename(path), count
 
 
-def all_counts(path: os.PathLike) -> Dict[str, Dict[str, int]]:
+def all_counts(path: os.PathLike,
+               storage: MetadataStorage) -> Dict[str,
+                                                 Dict[str,
+                                                      int]]:
     """
     Generate counting for sentences and proofs.
     """
     try:
-        name, p = proofs(path)
-        name, s = sentences(path)
+        name, p = proofs(path, storage)
+        name, s = sentences(path, storage)
         return {
             name: {
                 "proofs": p,
@@ -123,6 +133,7 @@ if __name__ == '__main__':
         nargs='?',
         default=1)
     args = parser.parse_args()
+    storage = MetadataStorage.load("../../dataset/agg_coq_repos.yml")
 
     dirs = [
         os.path.join(args.root_dir,
@@ -131,7 +142,7 @@ if __name__ == '__main__':
 
     counts = {}
     with Pool(args.num_workers) as p:
-        data = p.map(all_counts, dirs)
+        data = p.starmap(all_counts, [(d, storage) for d in dirs])
     for d in data:
         counts.update(d)
 
