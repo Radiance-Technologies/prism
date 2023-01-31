@@ -154,6 +154,15 @@ class VernacCommandDataListDiff:
     that should be removed.
     """
 
+    @property
+    def is_empty(self) -> bool:
+        """
+        Return whether this diff is empty.
+        """
+        return not (
+            self.added_commands or self.moved_commands or self.changed_commands
+            or self.dropped_commands)
+
 
 @dataclass
 class ProjectCommitDataDiff:
@@ -172,6 +181,13 @@ class ProjectCommitDataDiff:
     """
     A map containing per-file changes.
     """
+
+    @property
+    def is_empty(self) -> bool:
+        """
+        Return whether this diff is empty.
+        """
+        return all([v.is_empty for v in self.changes.values()])
 
     def patch(self, data: ProjectCommitData) -> ProjectCommitData:
         """
