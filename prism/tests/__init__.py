@@ -10,6 +10,7 @@ from pathlib import Path
 _TEST_ROOT = Path(__file__)
 _PROJECT_ROOT = _TEST_ROOT.parent
 _COQ_EXAMPLES_PATH = _PROJECT_ROOT / "coq_examples"
+_DATA_PATH = _PROJECT_ROOT / "data"
 _SCRIPTS_PATH = _PROJECT_ROOT / "scripts"
 _TIMEOUT_SCRIPT_PATH = _SCRIPTS_PATH / "timeout.py"
 _MEMORY_SCRIPT_PATH = _SCRIPTS_PATH / "memory.py"
