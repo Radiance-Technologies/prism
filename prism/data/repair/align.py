@@ -726,3 +726,19 @@ def get_aligned_commands(
          (j,
           ) + b_commands[j]) for j in skipped_b_mask)
     return aligned_commands
+
+
+def default_align(a: ProjectCommitData, b: ProjectCommitData) -> Assignment:
+    """
+    Compute the default alignment algorithm.
+
+    Performs a bipartite assignment with a normalized, thresholded edit
+    distance.
+    Aligned pairs whose distance matches or exceeds the threshold are
+    unmatched prior to returning the result.
+
+    See Also
+    --------
+    default_command_distance : A normalized, thresholded edit distance.
+    """
+    return assign_commits(a, b, default_command_distance, 0.4)
