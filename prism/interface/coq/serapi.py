@@ -145,6 +145,7 @@ class SerAPI:
             self._proc = PopenSpawn(
                 cmd,
                 encoding="utf-8",
+                codec_errors='surrogateescape',
                 timeout=timeout,
                 maxread=10000000,
                 env=opam_switch.environ,
@@ -599,9 +600,13 @@ class SerAPI:
             ast = self.ast_cache[cmd]
         except KeyError:
             responses, _, _ = self.send(f'(Parse () "{escape(cmd)}")')
-            ast = responses[1][2][1][0]
+            ast: AbstractSyntaxTree = responses[1][2][1][0]
             assert ast[0] == SexpString("CoqAst")
-            ast = ast[1][1]
+            if OpamVersion.less_than("8.10.2", self.serapi_version):
+                # vernac_control data structure changed in Coq 8.11
+                ast = ast[1][0][1]
+            else:
+                ast = ast[1][1]
             self.ast_cache[cmd] = ast
         return ast
 
@@ -1143,7 +1148,9 @@ class SerAPI:
                     r"\(Of_sexp_error.*\)\x00"
                 ])
         except pexpect.TIMEOUT:
-            print(self._proc.before)
+            print(
+                self._proc.before[: 500]
+                + "..." if len(self._proc.before) > 500 else "")
             raise CoqTimeout
         raw_responses = self._proc.after
         ack_num = re.search(r"^\(Answer (?P<num>\d+)", raw_responses)

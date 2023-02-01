@@ -3,6 +3,7 @@ Test suite for `prism.interface.coq.serapi`.
 """
 import multiprocessing
 import os
+import re
 import unittest
 from dataclasses import asdict
 from typing import Dict, List, Optional
@@ -16,7 +17,7 @@ from prism.language.sexp.node import SexpNode
 from prism.language.sexp.parser import SexpParser
 from prism.language.sexp.string import SexpString
 from prism.tests import _COQ_EXAMPLES_PATH
-from prism.util.opam import OpamSwitch
+from prism.util.opam import OpamSwitch, OpamVersion
 from prism.util.string import normalize_spaces
 
 
@@ -60,6 +61,28 @@ def execute_sentences(
             serapi.execute(sentence)
 
 
+def update_vernac_control(sexp: str, do_update: bool) -> str:
+    """
+    Transform a `vernac_control` structure to post-8.10.2 format.
+    """
+    if do_update:
+        sexp = normalize_spaces(sexp)
+        match = re.match(r"\(VernacExpr \(\) \((?P<vernac_sexp>.*)\)\)", sexp)
+        if match is not None:
+            sexp = f"((control ()) (attrs ()) (expr ({match['vernac_sexp']})))"
+    return sexp
+
+
+def update_GType(sexp: str, do_update: bool) -> str:
+    """
+    Transform an anonymous GType to post-8.10.2 format.
+    """
+    if do_update:
+        sexp = normalize_spaces(sexp)
+        sexp = re.sub(r"GType \(\)", "UAnonymous (rigid true)", sexp)
+    return sexp
+
+
 class TestSerAPI(unittest.TestCase):
     """
     Test suite for the interactive `SerAPI` interface.
@@ -67,12 +90,16 @@ class TestSerAPI(unittest.TestCase):
 
     test_switch: OpamSwitch = OpamSwitch()
     sentences: Dict[str, List[str]]
+    update_8_11: bool
 
     @classmethod
     def setUpClass(cls) -> None:
         """
         Set up some example documents for realistic inputs.
         """
+        cls.update_8_11 = OpamVersion.less_than(
+            "8.10.2",
+            cls.test_switch.get_installed_version("coq-serapi"))
         cls.sentences = {}
         for filename in ['simple', 'nested', 'Alphabet']:
             sentences = HeuristicParser.parse_sentences_from_file(
@@ -84,8 +111,7 @@ class TestSerAPI(unittest.TestCase):
         """
         Verify some simple commands can be executed.
         """
-        expected_ast = SexpParser.parse(
-            """
+        expected_ast = """
             (VernacExpr ()
                   (VernacLocate
                     (LocateAny
@@ -103,7 +129,9 @@ class TestSerAPI(unittest.TestCase):
                               (bol_pos_last 0)
                               (bp 7)
                               (ep 16))))))))
-            """)
+            """
+        expected_ast = update_vernac_control(expected_ast, self.update_8_11)
+        expected_ast = SexpParser.parse(expected_ast)
         with SerAPI(opam_switch=self.test_switch) as serapi:
             responses, _ = serapi.execute("Require Import Coq.Program.Basics.")
             self.assertEqual(str(responses[0]), '(Answer 22 Ack)')
@@ -220,9 +248,11 @@ class TestSerAPI(unittest.TestCase):
         """
         Verify that queried ASTs match those obtained from `sercomp`.
         """
-        expected_asts = CoqParser.parse_asts(_COQ_EXAMPLES_PATH / "simple.v")
+        expected_asts = CoqParser.parse_asts(
+            _COQ_EXAMPLES_PATH / "simple.v",
+            opam_switch=self.test_switch)
         actual_asts = []
-        with SerAPI(omit_loc=True) as serapi:
+        with SerAPI(omit_loc=True, opam_switch=self.test_switch) as serapi:
             for sentence in self.sentences["simple"]:
                 # actually execute to ensure notations/imports exist
                 serapi.execute(sentence)
@@ -329,7 +359,7 @@ class TestSerAPI(unittest.TestCase):
                     }
                 ],
         }
-        with SerAPI(max_wait_time=60) as serapi:
+        with SerAPI(max_wait_time=120, opam_switch=self.test_switch) as serapi:
             serapi.execute(
                 "Inductive nat : Type := O : nat | S (n : nat) : nat.")
             serapi.execute("Lemma foo : unit.")
@@ -435,6 +465,7 @@ class TestSerAPI(unittest.TestCase):
             self.assertEqual(serapi.query_full_qualid("nat"), "SerTop.nat")
             with self.subTest("idempotent"):
                 qualid = serapi.query_full_qualid("Logic.or")
+                assert qualid is not None
                 self.assertEqual(qualid, "Coq.Init.Logic.or")
                 qualid = serapi.query_full_qualid(qualid)
                 self.assertEqual(qualid, "Coq.Init.Logic.or")
@@ -512,21 +543,28 @@ class TestSerAPI(unittest.TestCase):
                 '(Sort (Type ((((hash 14398528522911) '
                 '(data (Level ((DirPath ((Id SerTop))) 1)))) 0))))',
                 None,
-                '(VernacExpr () (VernacCheckMayEval () () ((v (CSort (GType ()))) '
-                '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) (line_nb_last 1) '
-                '(bol_pos_last 0) (bp 6) (ep 10)))))))'),
+                update_GType(
+                    update_vernac_control(
+                        '(VernacExpr () (VernacCheckMayEval () () '
+                        '((v (CSort (GType ()))) '
+                        '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                        '(line_nb_last 1) (bol_pos_last 0) (bp 6) (ep 10)))))))',
+                        self.update_8_11),
+                    self.update_8_11)),
             Hypothesis(
                 ['X'],
                 None,
                 'A',
                 '(Var (Id A))',
                 None,
-                '(VernacExpr () (VernacCheckMayEval () () '
-                '((v (CRef ((v (Ser_Qualid (DirPath ()) (Id A))) '
-                '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
-                '(line_nb_last 1) (bol_pos_last 0) (bp 6) (ep 7))))) ())) '
-                '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
-                '(line_nb_last 1) (bol_pos_last 0) (bp 6) (ep 7)))))))')
+                update_vernac_control(
+                    '(VernacExpr () (VernacCheckMayEval () () '
+                    '((v (CRef ((v (Ser_Qualid (DirPath ()) (Id A))) '
+                    '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                    '(line_nb_last 1) (bol_pos_last 0) (bp 6) (ep 7))))) ())) '
+                    '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                    '(line_nb_last 1) (bol_pos_last 0) (bp 6) (ep 7)))))))',
+                    self.update_8_11))
         ]
         posed_hypothesis = Hypothesis(
             ['foo'],
@@ -534,22 +572,30 @@ class TestSerAPI(unittest.TestCase):
             'Type',
             '(Sort (Type ((((hash 14398528588510) '
             '(data (Level ((DirPath ((Id SerTop))) 2)))) 0))))',
-            '(VernacExpr () (VernacCheckMayEval () () '
-            '((v (CApp (() ((v (CRef ((v (Ser_Qualid (DirPath ()) (Id idw))) '
-            '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) (line_nb_last 1) '
-            '(bol_pos_last 0) (bp 6) (ep 9))))) ())) '
-            '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) (line_nb_last 1) '
-            '(bol_pos_last 0) (bp 6) (ep 9)))))) '
-            '((((v (CRef ((v (Ser_Qualid (DirPath ()) (Id A))) '
-            '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) (line_nb_last 1) '
-            '(bol_pos_last 0) (bp 10) (ep 11))))) ())) '
-            '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) (line_nb_last 1) '
-            '(bol_pos_last 0) (bp 10) (ep 11))))) ())))) (loc (((fname ToplevelInput) '
-            '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) (bp 6) '
-            '(ep 11)))))))',
-            '(VernacExpr () (VernacCheckMayEval () () ((v (CSort (GType ()))) '
-            '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) (line_nb_last 1) '
-            '(bol_pos_last 0) (bp 6) (ep 10)))))))')
+            update_vernac_control(
+                '(VernacExpr () (VernacCheckMayEval () () '
+                '((v (CApp (() ((v (CRef ((v (Ser_Qualid (DirPath ()) (Id idw))) '
+                '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) (line_nb_last 1) '
+                '(bol_pos_last 0) (bp 6) (ep 9))))) ())) '
+                '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) (line_nb_last 1) '
+                '(bol_pos_last 0) (bp 6) (ep 9)))))) '
+                '((((v (CRef ((v (Ser_Qualid (DirPath ()) (Id A))) '
+                '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) (line_nb_last 1) '
+                '(bol_pos_last 0) (bp 10) (ep 11))))) ())) '
+                '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) (line_nb_last 1) '
+                '(bol_pos_last 0) (bp 10) (ep 11))))) ())))) (loc '
+                '(((fname ToplevelInput) '
+                '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) (bp 6) '
+                '(ep 11)))))))',
+                self.update_8_11),
+            update_GType(
+                update_vernac_control(
+                    '(VernacExpr () (VernacCheckMayEval () () ((v (CSort (GType ()))) '
+                    '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                    '(line_nb_last 1) '
+                    '(bol_pos_last 0) (bp 6) (ep 10)))))))',
+                    self.update_8_11),
+                self.update_8_11))
         no_goals = None
         focused_no_goals = Goals([], [([], [])], [], [])
         expected_add0_base_goal = Goal(
@@ -591,12 +637,14 @@ class TestSerAPI(unittest.TestCase):
                     '(Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
                     '(Id Coq)))) (Id nat)) 0) (Instance ())))',
                     None,
-                    '(VernacExpr () (VernacCheckMayEval () () '
-                    '((v (CRef ((v (Ser_Qualid (DirPath ()) (Id nat))) '
-                    '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
-                    '(line_nb_last 1) (bol_pos_last 0) (bp 6) (ep 9))))) ())) '
-                    '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
-                    '(line_nb_last 1) (bol_pos_last 0) (bp 6) (ep 9)))))))'),
+                    update_vernac_control(
+                        '(VernacExpr () (VernacCheckMayEval () () '
+                        '((v (CRef ((v (Ser_Qualid (DirPath ()) (Id nat))) '
+                        '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                        '(line_nb_last 1) (bol_pos_last 0) (bp 6) (ep 9))))) ())) '
+                        '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                        '(line_nb_last 1) (bol_pos_last 0) (bp 6) (ep 9)))))))',
+                        self.update_8_11)),
                 Hypothesis(
                     ['IH'],
                     None,
@@ -610,40 +658,42 @@ class TestSerAPI(unittest.TestCase):
                     '(Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
                     '(Id Coq)))) (Id nat)) 0) 1) (Instance ()))))) (Var (Id a))))',
                     None,
-                    '(VernacExpr () (VernacCheckMayEval () () '
-                    '((v (CAppExpl (() ((v (Ser_Qualid (DirPath ()) (Id eq))) '
-                    '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
-                    '(line_nb_last 1) (bol_pos_last 0) (bp 7) (ep 9))))) ()) '
-                    '(((v (CRef ((v (Ser_Qualid (DirPath ()) (Id nat))) '
-                    '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
-                    '(line_nb_last 1) (bol_pos_last 0) (bp 10) (ep 13))))) '
-                    '())) (loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
-                    '(line_nb_last 1) (bol_pos_last 0) (bp 10) (ep 13))))) '
-                    '((v (CApp (() ((v (CRef ((v (Ser_Qualid (DirPath '
-                    '((Id Nat))) (Id add))) (loc (((fname ToplevelInput) '
-                    '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                    '(bp 15) (ep 22))))) ())) (loc (((fname ToplevelInput) '
-                    '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                    '(bp 15) (ep 22)))))) ((((v (CRef ((v (Ser_Qualid '
-                    '(DirPath ()) (Id a))) (loc (((fname ToplevelInput) '
-                    '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                    '(bp 23) (ep 24))))) ())) (loc (((fname ToplevelInput) '
-                    '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                    '(bp 23) (ep 24))))) ()) (((v (CRef ((v (Ser_Qualid '
-                    '(DirPath ()) (Id O))) (loc (((fname ToplevelInput) '
-                    '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                    '(bp 25) (ep 26))))) ())) (loc (((fname ToplevelInput) '
-                    '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                    '(bp 25) (ep 26))))) ())))) (loc (((fname ToplevelInput) '
-                    '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                    '(bp 15) (ep 26))))) ((v (CRef ((v (Ser_Qualid '
-                    '(DirPath ()) (Id a))) (loc (((fname ToplevelInput) '
-                    '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                    '(bp 28) (ep 29))))) ())) (loc (((fname ToplevelInput) '
-                    '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                    '(bp 28) (ep 29)))))))) (loc (((fname ToplevelInput) '
-                    '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                    '(bp 6) (ep 29)))))))')
+                    update_vernac_control(
+                        '(VernacExpr () (VernacCheckMayEval () () '
+                        '((v (CAppExpl (() ((v (Ser_Qualid (DirPath ()) (Id eq))) '
+                        '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                        '(line_nb_last 1) (bol_pos_last 0) (bp 7) (ep 9))))) ()) '
+                        '(((v (CRef ((v (Ser_Qualid (DirPath ()) (Id nat))) '
+                        '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                        '(line_nb_last 1) (bol_pos_last 0) (bp 10) (ep 13))))) '
+                        '())) (loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                        '(line_nb_last 1) (bol_pos_last 0) (bp 10) (ep 13))))) '
+                        '((v (CApp (() ((v (CRef ((v (Ser_Qualid (DirPath '
+                        '((Id Nat))) (Id add))) (loc (((fname ToplevelInput) '
+                        '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                        '(bp 15) (ep 22))))) ())) (loc (((fname ToplevelInput) '
+                        '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                        '(bp 15) (ep 22)))))) ((((v (CRef ((v (Ser_Qualid '
+                        '(DirPath ()) (Id a))) (loc (((fname ToplevelInput) '
+                        '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                        '(bp 23) (ep 24))))) ())) (loc (((fname ToplevelInput) '
+                        '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                        '(bp 23) (ep 24))))) ()) (((v (CRef ((v (Ser_Qualid '
+                        '(DirPath ()) (Id O))) (loc (((fname ToplevelInput) '
+                        '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                        '(bp 25) (ep 26))))) ())) (loc (((fname ToplevelInput) '
+                        '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                        '(bp 25) (ep 26))))) ())))) (loc (((fname ToplevelInput) '
+                        '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                        '(bp 15) (ep 26))))) ((v (CRef ((v (Ser_Qualid '
+                        '(DirPath ()) (Id a))) (loc (((fname ToplevelInput) '
+                        '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                        '(bp 28) (ep 29))))) ())) (loc (((fname ToplevelInput) '
+                        '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                        '(bp 28) (ep 29)))))))) (loc (((fname ToplevelInput) '
+                        '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                        '(bp 6) (ep 29)))))))',
+                        self.update_8_11))
             ])
         expected_add_assoc_goals = Goals(
             [
@@ -674,24 +724,28 @@ class TestSerAPI(unittest.TestCase):
                             '(Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
                             '(Id Coq)))) (Id nat)) 0) (Instance ())))',
                             None,
-                            '(VernacExpr () (VernacCheckMayEval () () '
-                            '((v (CRef ((v (Ser_Qualid (DirPath ()) (Id nat))) '
-                            '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
-                            '(line_nb_last 1) (bol_pos_last 0) (bp 6) (ep 9))))) ())) '
-                            '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
-                            '(line_nb_last 1) (bol_pos_last 0) (bp 6) (ep 9)))))))'
-                        )
+                            update_vernac_control(
+                                '(VernacExpr () (VernacCheckMayEval () () '
+                                '((v (CRef ((v (Ser_Qualid (DirPath ()) (Id nat))) '
+                                '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                                '(line_nb_last 1) (bol_pos_last 0) (bp 6) (ep 9))))) '
+                                '())) '
+                                '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                                '(line_nb_last 1) (bol_pos_last 0) (bp 6) (ep 9)))))))',
+                                self.update_8_11))
                     ])
             ],
             [],
             [],
             [])
 
-        def assertEqualGoals(actual: Goals, expected: Goals) -> None:
+        def assertEqualGoals(actual: Optional[Goals], expected: Goals) -> None:
             """
             Assert equality irrespective of AST fields.
             """
-            return self.assertEqual(drop_asts(actual), expected)
+            return self.assertEqual(
+                drop_asts(actual) if actual is not None else actual,
+                expected)
 
         with SerAPI(opam_switch=self.test_switch) as serapi:
             with self.subTest("simple"):
