@@ -1,0 +1,13 @@
+prism.language.sexp.exception.IllegalSexpOperationException, PEARLS-325
+ValueError: 'loc' is not a valid ControlFlag, PEARLS-326
+re.error: bad escape, PEARLS-327
+prism.interface.coq.exception.CoqExn: Syntax error: illegal begin of vernac, PEARLS-328
+prism.interface.coq.exception.CoqExn: Syntax Error: Lexer: Undefined token, PEARLS-329
+prism.interface.coq.exception.CoqExn: Syntax error: 'Ltac', PEARLS-330
+RuntimeError: Invalid command:, PEARLS-331
+assert post_proof_id in partial_proof_stacks, PEARLS-332
+prism.interface.coq.exception.CoqExn: Cannot find a physical path bound to logical path matching suffix, PEARLS-333
+prism.interface.coq.exception.CoqExn: Syntax Error:, PEARLS-334
+prism.interface.coq.exception.CoqExn: Syntax error:, PEARLS-334-2
+assert program_id in conjectures, PEARLS-335
+prism.interface.coq.exception.CoqExn: Syntax error: 'Infix' or 'Notation', PEARLS-336

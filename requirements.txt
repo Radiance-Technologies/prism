@@ -6,6 +6,7 @@ leven
 networkx
 numba
 numpy
+pandas
 pexpect
 prettytable
 psutil
