@@ -857,6 +857,8 @@ class SexpAnalyzer:
 
                 if v_child[0].content:
                     vernac_control = v_child[1]
+                else:
+                    vernac_control = v_child
             else:
                 vernac_control = sexp
                 loc = None
