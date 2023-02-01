@@ -1,0 +1,9 @@
+No targets specified and no makefile found, PEARLS-337
+./configure: No such file or directory, PEARLS-338
+Error: Unable to locate library, PEARLS-339
+Cannot find a physical path bound to logical path matching suffix, PEARLS-340
+coqc: no: no such file or directory, PEARLS-341
+coq_makefile: Command not found, PEARLS-342
+Sorry, no solution found: there seems to be a problem with your request, PEARLS-343
+error 57: Synopsis and description must not be both empty, PEARLS-344
+Error: Make: No such file or directory, PEARLS-345
