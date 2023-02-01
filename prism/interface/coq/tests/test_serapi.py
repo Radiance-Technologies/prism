@@ -16,6 +16,7 @@ from prism.language.sexp.node import SexpNode
 from prism.language.sexp.parser import SexpParser
 from prism.language.sexp.string import SexpString
 from prism.tests import _COQ_EXAMPLES_PATH
+from prism.util.opam import OpamSwitch
 from prism.util.string import normalize_spaces
 
 
@@ -48,11 +49,13 @@ def omit_locs(sexp: SexpNode) -> SexpNode:
         return SexpString(sexp.get_content())
 
 
-def execute(sentences: List[str]) -> None:
+def execute_sentences(
+        sentences: List[str],
+        test_switch: Optional[OpamSwitch]) -> None:
     """
     Execute the given sentences in an interactive session.
     """
-    with SerAPI() as serapi:
+    with SerAPI(opam_switch=test_switch) as serapi:
         for sentence in sentences:
             serapi.execute(sentence)
 
@@ -62,12 +65,14 @@ class TestSerAPI(unittest.TestCase):
     Test suite for the interactive `SerAPI` interface.
     """
 
+    test_switch: OpamSwitch = OpamSwitch()
+    sentences: Dict[str, List[str]]
+
     @classmethod
     def setUpClass(cls) -> None:
         """
         Set up some example documents for realistic inputs.
         """
-        cls.sentences: Dict[str, List[str]]
         cls.sentences = {}
         for filename in ['simple', 'nested', 'Alphabet']:
             sentences = HeuristicParser.parse_sentences_from_file(
@@ -99,7 +104,7 @@ class TestSerAPI(unittest.TestCase):
                               (bp 7)
                               (ep 16))))))))
             """)
-        with SerAPI() as serapi:
+        with SerAPI(opam_switch=self.test_switch) as serapi:
             responses, _ = serapi.execute("Require Import Coq.Program.Basics.")
             self.assertEqual(str(responses[0]), '(Answer 22 Ack)')
             self.assertEqual(str(responses[1]), '(Answer 22 Completed)')
@@ -112,7 +117,7 @@ class TestSerAPI(unittest.TestCase):
         """
         Verify that locally defined identifiers can be obtained.
         """
-        with SerAPI() as serapi:
+        with SerAPI(opam_switch=self.test_switch) as serapi:
             for sentence in self.sentences['simple']:
                 serapi.execute(sentence)
             serapi.execute("Parameter (A : Set).")
@@ -136,7 +141,7 @@ class TestSerAPI(unittest.TestCase):
         """
         Verify that conjecture names can be obtained.
         """
-        with SerAPI() as serapi:
+        with SerAPI(opam_switch=self.test_switch) as serapi:
             actual_ids = [serapi.get_conjecture_id()]
             for sentence in self.sentences['nested']:
                 serapi.execute(sentence)
@@ -169,7 +174,7 @@ class TestSerAPI(unittest.TestCase):
         """
         simple_sentences = self.sentences['simple']
         with self.subTest("simple"):
-            with SerAPI() as serapi:
+            with SerAPI(opam_switch=self.test_switch) as serapi:
                 self.assertFalse(serapi.has_open_goals())
                 serapi.execute(simple_sentences[0])
                 self.assertFalse(serapi.has_open_goals())
@@ -180,7 +185,7 @@ class TestSerAPI(unittest.TestCase):
                 self.assertTrue(serapi.is_in_proof_mode)
         nested_sentences = self.sentences['nested']
         with self.subTest("nested"):
-            with SerAPI() as serapi:
+            with SerAPI(opam_switch=self.test_switch) as serapi:
                 self.assertFalse(serapi.has_open_goals())
                 serapi.execute(nested_sentences[0])
                 self.assertFalse(serapi.has_open_goals())
@@ -206,7 +211,10 @@ class TestSerAPI(unittest.TestCase):
         Verify that multiple SerAPI contexts can be managed at once.
         """
         with multiprocessing.Pool(3) as p:
-            p.map(execute, self.sentences.values())
+            p.starmap(
+                execute_sentences,
+                [(s,
+                  self.test_switch) for s in self.sentences.values()])
 
     def test_query_ast(self):
         """
@@ -236,7 +244,6 @@ class TestSerAPI(unittest.TestCase):
         Also verify that the environment can be extended with local
         definitions.
         """
-        return
         mut_ind_example = """
         Inductive tree : Set := node : A -> forest -> tree
 
@@ -398,7 +405,7 @@ class TestSerAPI(unittest.TestCase):
         """
         Verify that fully qualified identifiers can be retrieved.
         """
-        with SerAPI() as serapi:
+        with SerAPI(opam_switch=self.test_switch) as serapi:
             self.assertEqual(
                 serapi.query_full_qualids("nat"),
                 ["Coq.Init.Datatypes.nat"])
@@ -686,7 +693,7 @@ class TestSerAPI(unittest.TestCase):
             """
             return self.assertEqual(drop_asts(actual), expected)
 
-        with SerAPI() as serapi:
+        with SerAPI(opam_switch=self.test_switch) as serapi:
             with self.subTest("simple"):
                 serapi.execute("Lemma foobar : unit.")
                 goals = serapi.query_goals()
@@ -797,7 +804,7 @@ class TestSerAPI(unittest.TestCase):
         """
         Verify that libraries' physical paths can be queried.
         """
-        with SerAPI() as serapi:
+        with SerAPI(opam_switch=self.test_switch) as serapi:
             actual = serapi.query_library("Datatypes")
             expected = serapi.switch.path.joinpath(
                 "lib",
@@ -813,7 +820,7 @@ class TestSerAPI(unittest.TestCase):
         """
         Verify that minimally qualified identifiers can be retrieved.
         """
-        with SerAPI() as serapi:
+        with SerAPI(opam_switch=self.test_switch) as serapi:
             self.assertEqual(serapi.query_qualids("nat"), ["nat"])
             serapi.execute(
                 "Inductive nat : Type := O : nat | S (n : nat) : nat.")
@@ -839,7 +846,7 @@ class TestSerAPI(unittest.TestCase):
         """
         Verify that types of expressions and identifiers can be queried.
         """
-        with SerAPI() as serapi:
+        with SerAPI(opam_switch=self.test_switch) as serapi:
             expected_type = 'forall (A : Type) (x : A), @eq A x x'
             self.assertEqual(serapi.query_type("eq_refl"), expected_type)
             self.assertEqual(serapi.query_type(expected_type), "Prop")
@@ -848,7 +855,7 @@ class TestSerAPI(unittest.TestCase):
         """
         Verify that queries generate feedback.
         """
-        with SerAPI() as serapi:
+        with SerAPI(opam_switch=self.test_switch) as serapi:
             serapi.execute(
                 "Inductive nat : Type := O : nat | S (n : nat) : nat.")
             actual = serapi.query_vernac("Print nat.")
@@ -861,7 +868,7 @@ class TestSerAPI(unittest.TestCase):
         """
         Verify that control may be recovered after an exception.
         """
-        with SerAPI() as serapi:
+        with SerAPI(opam_switch=self.test_switch) as serapi:
             with self.assertRaises(CoqExn):
                 serapi.execute("Require Import.")
             try:
@@ -892,7 +899,7 @@ class TestSerAPI(unittest.TestCase):
         """
         Verify that new identifiers can be parsed from feedback.
         """
-        with SerAPI() as serapi:
+        with SerAPI(opam_switch=self.test_switch) as serapi:
             _, feedback = serapi.execute(
                 "Inductive nat : Type := O : nat | S (n : nat) : nat.")
             actual_idents = serapi.parse_new_identifiers(feedback)
