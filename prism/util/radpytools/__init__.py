@@ -431,7 +431,7 @@ def mutable_method_caches(cls):
     return cls
 
 
-def unzip(zipped: Iterable[Tuple]) -> Tuple[Iterable]:
+def unzip(zipped: Iterable[Tuple[Any, ...]]) -> Tuple[Iterable[Any], ...]:
     """
     Unzip an iterable of tuples.
 
