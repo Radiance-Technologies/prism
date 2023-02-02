@@ -175,6 +175,7 @@ class TestSerAPI(unittest.TestCase):
         cls.update_8_9 = OpamVersion.less_than(cls.serapi_version, "8.10")
         cls.update_8_11 = OpamVersion.less_than("8.10.2", cls.serapi_version)
         cls.update_8_12 = OpamVersion.less_than("8.11.2", cls.serapi_version)
+        cls.update_8_13 = OpamVersion.less_than("8.12.2", cls.serapi_version)
         cls.sentences = {}
         for filename in ['simple', 'nested', 'Alphabet']:
             sentences = HeuristicParser.parse_sentences_from_file(
@@ -1032,11 +1033,16 @@ class TestSerAPI(unittest.TestCase):
                 # capture an error message
                 serapi.execute("Require Import.")
             except CoqExn as e:
-                expected_exception = (
-                    "[constr:global] expected after "
-                    "[export_token] (in [vernac:gallina_ext])")
-                if not self.update_8_9:
-                    expected_exception = f"Syntax error: {expected_exception}."
+                if self.update_8_13:
+                    expected_exception = (
+                        "Syntax error: [global] expected after "
+                        "[export_token] (in [gallina_ext]).")
+                else:
+                    expected_exception = (
+                        "[constr:global] expected after "
+                        "[export_token] (in [vernac:gallina_ext])")
+                    if not self.update_8_9:
+                        expected_exception = f"Syntax error: {expected_exception}."
                 self.assertEqual(e.msg, expected_exception)
             # verify execution of normal commands is successful
             serapi.execute("Inductive const := C | D.")
