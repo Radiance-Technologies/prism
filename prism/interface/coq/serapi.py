@@ -9,6 +9,7 @@ import os
 import re
 import signal
 import sys
+import typing
 from dataclasses import InitVar, dataclass, field
 from functools import cached_property
 from pathlib import Path
@@ -40,7 +41,7 @@ from prism.language.sexp.string import SexpString
 from prism.util.iterable import CallableIterator, uniquify
 from prism.util.logging import default_log_level
 from prism.util.opam import OpamSwitch
-from prism.util.opam.version import OpamVersion
+from prism.util.opam.version import OpamVersion, Version
 from prism.util.radpytools.dataclasses import default_field
 from prism.util.string import escape, normalize_spaces, unquote
 
@@ -123,7 +124,7 @@ class SerAPI:
     def __post_init__(
             self,
             sertop_options: str,
-            opam_switch: OpamSwitch,
+            opam_switch: Optional[OpamSwitch],
             omit_loc: bool,
             timeout: int,
             cwd: Optional[str]):
@@ -228,13 +229,13 @@ class SerAPI:
             return self.has_open_goals()
 
     @cached_property
-    def serapi_version(self) -> OpamVersion:
+    def serapi_version(self) -> Version:
         """
         Get the version of SerAPI for this session.
         """
         version = self.switch.get_installed_version("coq-serapi")
         assert version is not None
-        return OpamVersion.parse(version)
+        return Version.parse(version)
 
     @property
     def switch(self) -> OpamSwitch:
@@ -485,7 +486,7 @@ class SerAPI:
         """
         print_all_message = self.query_vernac("Print All.")
         print_all_message = '\n'.join(print_all_message)
-        idents = []
+        idents: List[str] = []
         # replace each span covered by a named def or assumption
         # by a constant-parseable equivalent
         print_all_message = NAMED_DEF_ASSUM_PATTERN.sub(
@@ -603,7 +604,7 @@ class SerAPI:
                     f"(Print {pp_opts} (CoqConstr {sexp_str}))"
                 )
             except CoqExn as ex:
-                if ex.err_msg == "Not_found":
+                if ex.msg == "Not_found":
                     return None
                 else:
                     raise ex
@@ -721,10 +722,15 @@ class SerAPI:
         constants = []
         for const in env_constants:
             ker_name = const[0]
-            qualid, modpath = print_ker_name(ker_name, self.serapi_version)
+            (qualid,
+             modpath) = print_ker_name(
+                 ker_name,
+                 self.serapi_version,
+                 return_modpath=True)
+            assert isinstance(modpath, SexpNode)
             if qualid.startswith("SerTop."):
                 logical_path = "SerTop"
-                physical_path = current_file
+                physical_path = str(current_file)
             else:
                 logical_path = mod_path_file(modpath)
                 assert qualid.startswith(logical_path)
@@ -732,10 +738,12 @@ class SerAPI:
                     self.query_library(logical_path))
             physical_path += ":" + qualid[len(logical_path) + 1 :]
             short_ident = self.query_qualid(qualid)
+            assert short_ident is not None
             # type
             assert const[1][0][2][0].get_content() == "const_type"
             type_sexp = str(const[1][0][2][1])
             type = self.print_constr(type_sexp)
+            assert type is not None
             sort = self.query_type(type)
             # term
             assert const[1][0][1][0] == SexpString("const_body")
@@ -770,11 +778,17 @@ class SerAPI:
         inductives = []
         for induct in env_inductives:
             ker_name = induct[0]
-            qualid, modpath = print_ker_name(ker_name, self.serapi_version)
+            (qualid,
+             modpath) = print_ker_name(
+                 ker_name,
+                 self.serapi_version,
+                 return_modpath=True)
+            assert isinstance(modpath, SexpNode)
             short_ident = self.query_qualid(qualid)
+            assert short_ident is not None
             if qualid.startswith("SerTop."):
                 logical_path = "SerTop"
-                physical_path = current_file
+                physical_path = str(current_file)
             else:
                 logical_path = mod_path_file(modpath)
                 physical_path = os.path.relpath(
@@ -791,6 +805,7 @@ class SerAPI:
                 mind_user_lc = blk[4][1]
                 blk_qualid = ".".join([logical_path, str(mind_typename[1])])
                 blk_short_ident = self.query_qualid(blk_qualid)
+                assert blk_short_ident is not None
                 # constructors
                 constructors = []
                 assert len(mind_consnames) == len(mind_user_lc)
@@ -931,6 +946,7 @@ class SerAPI:
                                 term = self.print_constr(str(t))
                         hypothesis_type = self.print_constr(
                             hypothesis_kernel_sexp)
+                        assert hypothesis_type is not None
                         type_sexp = self.query_ast(f"Check {hypothesis_type}.")
                         hypothesis_term_sexp = None
                         if term is not None:
@@ -959,7 +975,8 @@ class SerAPI:
                         evar = int(str(g[0][1][0][1][1]))
                     goal = Goal(
                         id=evar,
-                        type=self.print_constr(type_sexp),
+                        type=typing.cast(str,
+                                         self.print_constr(type_sexp)),
                         type_sexp=type_sexp,
                         hypotheses=hypotheses[::-1],
                     )
@@ -1129,7 +1146,7 @@ class SerAPI:
                 obj = obj_list[0]
                 assert obj[0].get_content() == "CoqConstr"
                 type_sexp = obj[1]
-                result = self.print_constr(str(type_sexp))
+                result = typing.cast(str, self.print_constr(str(type_sexp)))
             else:
                 # fall back to vernacular query
                 try:
@@ -1226,10 +1243,10 @@ class SerAPI:
                 self._proc.before[: 500]
                 + "..." if len(self._proc.before) > 500 else "")
             raise CoqTimeout
-        raw_responses = self._proc.after
-        ack_num = re.search(r"^\(Answer (?P<num>\d+)", raw_responses)
-        if ack_num is not None:
-            ack_num = int(ack_num["num"])
+        raw_responses: str = self._proc.after
+        ack_num_match = re.search(r"^\(Answer (?P<num>\d+)", raw_responses)
+        if ack_num_match is not None:
+            ack_num = int(ack_num_match["num"])
         else:
             assert raw_responses.startswith("(Of_sexp_error")
             raise RuntimeError(f"Invalid command: {cmd}\n{raw_responses}")
@@ -1290,8 +1307,8 @@ class SerAPI:
         feedback : List[str]
             Feedback from the added command.
         """
-        verbose = "(verb true)" if verbose else ""
-        _, feedback, raw_responses = self.send(f'(Add ({verbose}) "{escape(cmd)}")')
+        verbose_opt = "(verb true)" if verbose else ""
+        _, feedback, raw_responses = self.send(f'(Add ({verbose_opt}) "{escape(cmd)}")')
         state_ids = [
             int(sid) for sid in ADDED_STATE_PATTERN.findall(raw_responses)
         ]

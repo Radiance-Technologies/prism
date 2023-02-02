@@ -1,7 +1,7 @@
 """
 Utilities related to Coq kernel names and qualified identifiers.
 """
-from typing import List, Optional, Tuple, Union
+from typing import List, Tuple, Union
 
 from prism.language.sexp import SexpNode
 from prism.util.opam.version import OpamVersion, Version
@@ -150,7 +150,7 @@ def print_ker_name(
         return qualid
 
 
-def mod_path_file(mod_path: SexpNode) -> Optional[str]:
+def mod_path_file(mod_path: SexpNode) -> str:
     """
     Get the logical filename, if any, from a ``ModPath`` data type.
 
