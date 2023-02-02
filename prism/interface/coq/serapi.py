@@ -12,7 +12,7 @@ import sys
 from dataclasses import InitVar, dataclass, field
 from functools import cached_property
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple, Union
+from typing import Dict, Iterable, List, NoReturn, Optional, Tuple, Union
 
 import pexpect
 from pexpect.popen_spawn import PopenSpawn
@@ -264,6 +264,74 @@ class SerAPI:
         """
         return self._cwd
 
+    def _process_coq_exn(self, exception: SexpNode) -> NoReturn:
+        """
+        Process and raise a `CoqExn`.
+
+        Parameters
+        ----------
+        exception : SexpNode
+            A serialized `CoqExn` object.
+
+        Raises
+        ------
+        CoqExn
+            An exception conveying the message of the given serialized
+            exception.
+        """
+        coq_exn = exception[2]
+        assert coq_exn[0] == SexpString("CoqExn")
+        if OpamVersion.less_than(self.serapi_version, "8.10"):
+            # Multiple exception types may appear here, each
+            # with their own structure.
+            # Instead of trying to anticipate every potential
+            # exception, just grab all of the strings (expected
+            # to be messages) and concatenate them.
+            msg = '; '.join(
+                [
+                    unquote(s.get_content())
+                    for s in coq_exn[4][1].flatten()
+                    if isinstance(s,
+                                  SexpString) and unquote(s.get_content())
+                ])
+        else:
+            msg = coq_exn[1][5][1]
+            assert isinstance(msg, SexpString)
+            msg = unquote(msg.get_content())
+        raise CoqExn(msg, str(coq_exn))
+
+    def _process_feedback(self, feedback: SexpNode) -> Optional[str]:
+        """
+        Process and return a serialized feedback message.
+
+        Parameters
+        ----------
+        feedback : SexpNode
+            A serialized message containing user feedback.
+
+        Returns
+        -------
+        Optional[str]
+            The message contained in the `feedback` or None if
+            `feedback` does not match the expected structure.
+        """
+        msg = feedback[1][3][1]
+        if (msg.is_list() and msg != [] and msg[0] == SexpString("Message")):
+            if OpamVersion.less_than(self.serapi_version, "8.10"):
+                (msg,
+                 _,
+                 _
+                 ) = self.send(f"(Print ((pp_format PpStr)) (CoqPp {msg[3]}))")
+                msg = msg[1][2][1][0][1]
+            else:
+                msg = msg[4][1]
+            assert msg.is_string()
+            msg = msg.get_content()
+            assert msg is not None
+            return unquote(msg)
+        else:
+            return None
+
     def _query_type(self, term: str, mod: int = 0) -> str:
         """
         Get the type of the given expression.
@@ -447,7 +515,10 @@ class SerAPI:
         except CoqExn:
             return None
         ids = '\n'.join(ids)
-        return ids.split()[0]
+        try:
+            return ids.split()[0]
+        except IndexError:
+            return None
 
     def has_open_goals(self) -> bool:
         """
@@ -1065,7 +1136,10 @@ class SerAPI:
                     # About query is easier to parse
                     result = self.query_vernac(f"About {term}.")
                 except CoqExn as e:
-                    if e.msg.startswith("Syntax error: [smart_global]"):
+                    smart_global_msg = "[smart_global]"
+                    if not OpamVersion.less_than(self.serapi_version, "8.10"):
+                        smart_global_msg = f"Syntax error: {smart_global_msg}"
+                    if e.msg.startswith(smart_global_msg):
                         result = self.query_vernac(f"Check {term}.")
                     else:
                         raise e
@@ -1161,8 +1235,8 @@ class SerAPI:
             raise RuntimeError(f"Invalid command: {cmd}\n{raw_responses}")
         for num in re.findall(r"(?<=\(Answer) \d+", raw_responses):
             assert int(num) == ack_num
-        responses = []
-        feedback = []
+        responses: List[SexpNode] = []
+        feedback: List[str] = []
         for item in raw_responses.split("\x00"):
             item = item.strip()
             if item == "":
@@ -1176,20 +1250,11 @@ class SerAPI:
                 assert item.endswith(")")
             parsed_item = SexpParser.parse(item)
             if "CoqExn" in item:  # an error occured in Coq
-                assert parsed_item[2][0] == SexpString("CoqExn")
-                assert isinstance(parsed_item[2][1][5][1], SexpString)
-                raise CoqExn(
-                    unquote(parsed_item[2][1][5][1].get_content()),
-                    str(parsed_item[2]))
+                self._process_coq_exn(parsed_item)
             if item.startswith("(Feedback"):
-                try:
-                    msg = parsed_item[1][3][1]
-                    if (msg.is_list() and msg != []
-                            and msg[0] == SexpString("Message")):
-                        assert msg[4][1].is_string()
-                        feedback.append(unquote(msg[4][1].get_content()))
-                except IndexError:
-                    pass
+                msg = self._process_feedback(parsed_item)
+                if msg is not None:
+                    feedback.append(msg)
                 continue
             responses.append(parsed_item)
         return responses, feedback, raw_responses

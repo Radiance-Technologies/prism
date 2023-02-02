@@ -40,10 +40,8 @@ def omit_locs(sexp: SexpNode) -> SexpNode:
         ``[LOC]`` atom.
     """
     if sexp.is_list():
-        if sexp.head() == "loc":
-            return SexpList(
-                [SexpString("loc"),
-                 SexpList([SexpString("[LOC]")])])
+        if sexp.head() == "fname" and sexp.num_nodes == 25:
+            return SexpList([SexpString('"[LOC]"')])
         else:
             return SexpList([omit_locs(c) for c in sexp.get_children()])
     else:
@@ -83,6 +81,78 @@ def update_GType(sexp: str, do_update: bool) -> str:
     return sexp
 
 
+def update_kername(sexp: str, do_update: bool) -> str:
+    """
+    Transform KerNames to pre-8.10 format.
+    """
+
+    def _update_kername(s: SexpNode) -> SexpNode:
+        if s.is_list():
+            children = s.get_children()
+            assert children is not None
+            if (children and children[0].is_string()
+                    and children[0].get_content() in {"MutInd",
+                                                      "Constant"}):
+                children = list(children)
+                # NOTE: SerAPI's capitalization for its internal version
+                # of MutInd changed between versions 8.9 and 8.10
+                if children[0].get_content() == "MutInd":
+                    children[0] = SexpString("Mutind")
+                children.insert(
+                    2,
+                    SexpList([SexpString("DirPath"),
+                              SexpList()]))
+            else:
+                children = [_update_kername(c) for c in children]
+            return SexpList(children)
+        else:
+            content = s.get_content()
+            assert content is not None
+            return SexpString(content)
+
+    if do_update:
+        updated_sexp = SexpParser.parse(sexp)
+        updated_sexp = _update_kername(updated_sexp)
+        sexp = str(updated_sexp)
+    return sexp
+
+
+def update_binders_and_levels(sexp: str, do_update: bool) -> str:
+    """
+    Update binder and `Level` structures to pre-8.10 format.
+    """
+
+    def _update_binders(s: SexpNode) -> SexpNode:
+        if s.is_list():
+            children = s.get_children()
+            assert children is not None
+            if children and children[0].is_string():
+                if children[0].get_content() == "Prod":
+                    children = [
+                        children[0],
+                        children[1][0][1],
+                        _update_binders(children[2]),
+                        _update_binders(children[3])
+                    ]
+                elif children[0].get_content() == "Level":
+                    children = [children[0], children[1][1], children[1][0]]
+                else:
+                    children = [_update_binders(c) for c in children]
+            else:
+                children = [_update_binders(c) for c in children]
+            return SexpList(children)
+        else:
+            content = s.get_content()
+            assert content is not None
+            return SexpString(content)
+
+    if do_update:
+        updated_sexp = SexpParser.parse(sexp)
+        updated_sexp = _update_binders(updated_sexp)
+        sexp = str(updated_sexp)
+    return sexp
+
+
 class TestSerAPI(unittest.TestCase):
     """
     Test suite for the interactive `SerAPI` interface.
@@ -90,6 +160,7 @@ class TestSerAPI(unittest.TestCase):
 
     test_switch: OpamSwitch = OpamSwitch()
     sentences: Dict[str, List[str]]
+    update_8_9: bool
     update_8_11: bool
 
     @classmethod
@@ -97,6 +168,9 @@ class TestSerAPI(unittest.TestCase):
         """
         Set up some example documents for realistic inputs.
         """
+        cls.update_8_9 = OpamVersion.less_than(
+            cls.test_switch.get_installed_version("coq-serapi"),
+            "8.10")
         cls.update_8_11 = OpamVersion.less_than(
             "8.10.2",
             cls.test_switch.get_installed_version("coq-serapi"))
@@ -132,13 +206,22 @@ class TestSerAPI(unittest.TestCase):
             """
         expected_ast = update_vernac_control(expected_ast, self.update_8_11)
         expected_ast = SexpParser.parse(expected_ast)
+        expected_state_id = 20 if self.update_8_9 else 22
         with SerAPI(opam_switch=self.test_switch) as serapi:
             responses, _ = serapi.execute("Require Import Coq.Program.Basics.")
-            self.assertEqual(str(responses[0]), '(Answer 22 Ack)')
-            self.assertEqual(str(responses[1]), '(Answer 22 Completed)')
+            self.assertEqual(
+                str(responses[0]),
+                f'(Answer {expected_state_id} Ack)')
+            self.assertEqual(
+                str(responses[1]),
+                f'(Answer {expected_state_id} Completed)')
             responses, _, ast = serapi.execute('Locate "_ ∘ _".', True)
-            self.assertEqual(str(responses[0]), '(Answer 25 Ack)')
-            self.assertEqual(str(responses[1]), '(Answer 25 Completed)')
+            self.assertEqual(
+                str(responses[0]),
+                f'(Answer {expected_state_id+3} Ack)')
+            self.assertEqual(
+                str(responses[1]),
+                f'(Answer {expected_state_id+3} Completed)')
             self.assertEqual(ast, expected_ast)
 
     def test_get_local_ids(self):
@@ -156,13 +239,10 @@ class TestSerAPI(unittest.TestCase):
             'seq_rect',
             'seq_ind',
             'seq_rec',
+        ] + ([
             'seq_sind',
-            'length',
-            'm',
-            'length_corr',
-            'b2Prop',
-            'A'
-        ]
+        ] if not self.update_8_9 else [])
+        expected_idents += ['length', 'm', 'length_corr', 'b2Prop', 'A']
         self.assertEqual(actual_idents, expected_idents)
 
     def test_get_conjecture_id(self):
@@ -477,9 +557,10 @@ class TestSerAPI(unittest.TestCase):
         Likewise, verify that no goals are obtained when not in the
         middle of a proof.
         """
-        unit_kernel = (
+        unit_kernel = update_kername(
             '(Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) (Id Coq)))) '
-            '(Id unit)) 0) (Instance ())))')
+            '(Id unit)) 0) (Instance ())))',
+            self.update_8_9)
 
         def expected_unit_goals(
                 evar: int,
@@ -520,13 +601,16 @@ class TestSerAPI(unittest.TestCase):
                 [drop_goal_asts(g) for g in goals.shelved_goals],
                 [drop_goal_asts(g) for g in goals.abandoned_goals])
 
-        nested_kernel = (
-            '(Prod ((binder_name (Name (Id A))) (binder_relevance Relevant)) '
-            '(Sort (Type ((((hash 14398528522911) '
-            '(data (Level ((DirPath ((Id SerTop))) 1)))) 0)))) '
-            '(Prod ((binder_name Anonymous) (binder_relevance Relevant)) '
-            '(Rel 1) (Ind (((MutInd (MPfile (DirPath ((Id Datatypes) '
-            '(Id Init) (Id Coq)))) (Id unit)) 0) (Instance ())))))')
+        nested_kernel = update_binders_and_levels(
+            update_kername(
+                '(Prod ((binder_name (Name (Id A))) (binder_relevance Relevant)) '
+                '(Sort (Type ((((hash 14398528522911) '
+                '(data (Level ((DirPath ((Id SerTop))) 1)))) 0)))) '
+                '(Prod ((binder_name Anonymous) (binder_relevance Relevant)) '
+                '(Rel 1) (Ind (((MutInd (MPfile (DirPath ((Id Datatypes) '
+                '(Id Init) (Id Coq)))) (Id unit)) 0) (Instance ())))))',
+                self.update_8_9),
+            self.update_8_9)
         expected_nested_goals = Goals(
             [Goal(3,
                   'forall (A : Type) (_ : A), unit',
@@ -540,8 +624,10 @@ class TestSerAPI(unittest.TestCase):
                 ['A'],
                 None,
                 'Type',
-                '(Sort (Type ((((hash 14398528522911) '
-                '(data (Level ((DirPath ((Id SerTop))) 1)))) 0))))',
+                update_binders_and_levels(
+                    '(Sort (Type ((((hash 14398528522911) '
+                    '(data (Level ((DirPath ((Id SerTop))) 1)))) 0))))',
+                    self.update_8_9),
                 None,
                 update_GType(
                     update_vernac_control(
@@ -570,8 +656,10 @@ class TestSerAPI(unittest.TestCase):
             ['foo'],
             'idw A',
             'Type',
-            '(Sort (Type ((((hash 14398528588510) '
-            '(data (Level ((DirPath ((Id SerTop))) 2)))) 0))))',
+            update_binders_and_levels(
+                '(Sort (Type ((((hash 14398528588510) '
+                '(data (Level ((DirPath ((Id SerTop))) 2)))) 0))))',
+                self.update_8_9),
             update_vernac_control(
                 '(VernacExpr () (VernacCheckMayEval () () '
                 '((v (CApp (() ((v (CRef ((v (Ser_Qualid (DirPath ()) (Id idw))) '
@@ -601,41 +689,47 @@ class TestSerAPI(unittest.TestCase):
         expected_add0_base_goal = Goal(
             10,
             '@eq nat (Nat.add O O) O',
-            '(App (Ind (((MutInd (MPfile (DirPath ((Id Logic) (Id Init) (Id Coq)))) '
-            '(Id eq)) 0) (Instance ()))) '
-            '((Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) (Id Coq)))) '
-            '(Id nat)) 0) (Instance ()))) '
-            '(App (Const ((Constant (MPfile (DirPath ((Id Nat) (Id Init) (Id Coq)))) '
-            '(Id add)) (Instance ()))) '
-            '((Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
-            '(Id Coq)))) (Id nat)) 0) 1) (Instance ()))) '
-            '(Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
-            '(Id Coq)))) (Id nat)) 0) 1) (Instance ()))))) '
-            '(Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
-            '(Id Coq)))) (Id nat)) 0) 1) (Instance ())))))',
+            update_kername(
+                '(App (Ind (((MutInd (MPfile (DirPath ((Id Logic) (Id Init) '
+                '(Id Coq)))) (Id eq)) 0) (Instance ()))) '
+                '((Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
+                '(Id Coq)))) (Id nat)) 0) (Instance ()))) '
+                '(App (Const ((Constant (MPfile (DirPath ((Id Nat) (Id Init) '
+                '(Id Coq)))) (Id add)) (Instance ()))) '
+                '((Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
+                '(Id Coq)))) (Id nat)) 0) 1) (Instance ()))) '
+                '(Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
+                '(Id Coq)))) (Id nat)) 0) 1) (Instance ()))))) '
+                '(Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
+                '(Id Coq)))) (Id nat)) 0) 1) (Instance ())))))',
+                self.update_8_9),
             [])
         expected_add0_ind_goal = Goal(
             13,
             '@eq nat (Nat.add (S a) O) (S a)',
-            '(App (Ind (((MutInd (MPfile (DirPath ((Id Logic) (Id Init) (Id Coq)))) '
-            '(Id eq)) 0) (Instance ()))) '
-            '((Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) (Id Coq)))) '
-            '(Id nat)) 0) (Instance ()))) '
-            '(App (Const ((Constant (MPfile (DirPath ((Id Nat) (Id Init) (Id Coq)))) '
-            '(Id add)) (Instance ()))) '
-            '((App (Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
-            '(Id Coq)))) (Id nat)) 0) 2) (Instance ()))) ((Var (Id a)))) '
-            '(Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
-            '(Id Coq)))) (Id nat)) 0) 1) (Instance ()))))) '
-            '(App (Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
-            '(Id Coq)))) (Id nat)) 0) 2) (Instance ()))) ((Var (Id a))))))',
+            update_kername(
+                '(App (Ind (((MutInd (MPfile (DirPath ((Id Logic) (Id Init) '
+                '(Id Coq)))) (Id eq)) 0) (Instance ()))) '
+                '((Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
+                '(Id Coq)))) (Id nat)) 0) (Instance ()))) '
+                '(App (Const ((Constant (MPfile (DirPath ((Id Nat) (Id Init) '
+                '(Id Coq)))) (Id add)) (Instance ()))) '
+                '((App (Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) '
+                '(Id Init) (Id Coq)))) (Id nat)) 0) 2) (Instance ()))) ((Var (Id a)))) '
+                '(Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
+                '(Id Coq)))) (Id nat)) 0) 1) (Instance ()))))) '
+                '(App (Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
+                '(Id Coq)))) (Id nat)) 0) 2) (Instance ()))) ((Var (Id a))))))',
+                self.update_8_9),
             [
                 Hypothesis(
                     ['a'],
                     None,
                     'nat',
-                    '(Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
-                    '(Id Coq)))) (Id nat)) 0) (Instance ())))',
+                    update_kername(
+                        '(Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
+                        '(Id Coq)))) (Id nat)) 0) (Instance ())))',
+                        self.update_8_9),
                     None,
                     update_vernac_control(
                         '(VernacExpr () (VernacCheckMayEval () () '
@@ -649,14 +743,17 @@ class TestSerAPI(unittest.TestCase):
                     ['IH'],
                     None,
                     '@eq nat (Nat.add a O) a',
-                    '(App (Ind (((MutInd (MPfile (DirPath ((Id Logic) (Id Init) '
-                    '(Id Coq)))) (Id eq)) 0) (Instance ()))) '
-                    '((Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
-                    '(Id Coq)))) (Id nat)) 0) (Instance ()))) '
-                    '(App (Const ((Constant (MPfile (DirPath ((Id Nat) (Id Init) '
-                    '(Id Coq)))) (Id add)) (Instance ()))) ((Var (Id a)) '
-                    '(Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
-                    '(Id Coq)))) (Id nat)) 0) 1) (Instance ()))))) (Var (Id a))))',
+                    update_kername(
+                        '(App (Ind (((MutInd (MPfile (DirPath ((Id Logic) (Id Init) '
+                        '(Id Coq)))) (Id eq)) 0) (Instance ()))) '
+                        '((Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
+                        '(Id Coq)))) (Id nat)) 0) (Instance ()))) '
+                        '(App (Const ((Constant (MPfile (DirPath ((Id Nat) (Id Init) '
+                        '(Id Coq)))) (Id add)) (Instance ()))) ((Var (Id a)) '
+                        '(Construct ((((MutInd (MPfile (DirPath ((Id Datatypes) '
+                        '(Id Init) '
+                        '(Id Coq)))) (Id nat)) 0) 1) (Instance ()))))) (Var (Id a))))',
+                        self.update_8_9),
                     None,
                     update_vernac_control(
                         '(VernacExpr () (VernacCheckMayEval () () '
@@ -700,20 +797,22 @@ class TestSerAPI(unittest.TestCase):
                 Goal(
                     11,
                     '@eq nat (Nat.add n (Nat.add m p)) (Nat.add (Nat.add n m) p)',
-                    '(App (Ind (((MutInd (MPfile (DirPath ((Id Logic) (Id Init) '
-                    '(Id Coq)))) (Id eq)) 0) (Instance ()))) '
-                    '((Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
-                    '(Id Coq)))) (Id nat)) 0) (Instance ()))) '
-                    '(App (Const ((Constant (MPfile (DirPath ((Id Nat) (Id Init) '
-                    '(Id Coq)))) (Id add)) (Instance ()))) ((Var (Id n)) '
-                    '(App (Const ((Constant (MPfile (DirPath ((Id Nat) (Id Init) '
-                    '(Id Coq)))) (Id add)) (Instance ()))) ((Var (Id m)) '
-                    '(Var (Id p)))))) '
-                    '(App (Const ((Constant (MPfile (DirPath ((Id Nat) (Id Init) '
-                    '(Id Coq)))) (Id add)) (Instance ()))) '
-                    '((App (Const ((Constant (MPfile (DirPath ((Id Nat) (Id Init) '
-                    '(Id Coq)))) (Id add)) (Instance ()))) ((Var (Id n)) '
-                    '(Var (Id m)))) (Var (Id p))))))',
+                    update_kername(
+                        '(App (Ind (((MutInd (MPfile (DirPath ((Id Logic) (Id Init) '
+                        '(Id Coq)))) (Id eq)) 0) (Instance ()))) '
+                        '((Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
+                        '(Id Coq)))) (Id nat)) 0) (Instance ()))) '
+                        '(App (Const ((Constant (MPfile (DirPath ((Id Nat) (Id Init) '
+                        '(Id Coq)))) (Id add)) (Instance ()))) ((Var (Id n)) '
+                        '(App (Const ((Constant (MPfile (DirPath ((Id Nat) (Id Init) '
+                        '(Id Coq)))) (Id add)) (Instance ()))) ((Var (Id m)) '
+                        '(Var (Id p)))))) '
+                        '(App (Const ((Constant (MPfile (DirPath ((Id Nat) (Id Init) '
+                        '(Id Coq)))) (Id add)) (Instance ()))) '
+                        '((App (Const ((Constant (MPfile (DirPath ((Id Nat) (Id Init) '
+                        '(Id Coq)))) (Id add)) (Instance ()))) ((Var (Id n)) '
+                        '(Var (Id m)))) (Var (Id p))))))',
+                        self.update_8_9),
                     [
                         Hypothesis(
                             ['p',
@@ -721,8 +820,11 @@ class TestSerAPI(unittest.TestCase):
                              'n'],
                             None,
                             'nat',
-                            '(Ind (((MutInd (MPfile (DirPath ((Id Datatypes) (Id Init) '
-                            '(Id Coq)))) (Id nat)) 0) (Instance ())))',
+                            update_kername(
+                                '(Ind (((MutInd (MPfile (DirPath ((Id Datatypes) '
+                                '(Id Init) '
+                                '(Id Coq)))) (Id nat)) 0) (Instance ())))',
+                                self.update_8_9),
                             None,
                             update_vernac_control(
                                 '(VernacExpr () (VernacCheckMayEval () () '
@@ -786,7 +888,7 @@ class TestSerAPI(unittest.TestCase):
                 assertEqualGoals(
                     goals,
                     expected_unit_goals(
-                        6,
+                        7 if self.update_8_9 else 6,
                         expected_hypotheses + [posed_hypothesis]))
                 serapi.execute("exact tt.")
                 goals = serapi.query_goals()
@@ -929,10 +1031,12 @@ class TestSerAPI(unittest.TestCase):
                 # capture an error message
                 serapi.execute("Require Import.")
             except CoqExn as e:
-                self.assertEqual(
-                    e.msg,
-                    "Syntax error: [constr:global] expected after "
-                    "[export_token] (in [vernac:gallina_ext]).")
+                expected_exception = (
+                    "[constr:global] expected after "
+                    "[export_token] (in [vernac:gallina_ext])")
+                if not self.update_8_9:
+                    expected_exception = f"Syntax error: {expected_exception}."
+                self.assertEqual(e.msg, expected_exception)
             # verify execution of normal commands is successful
             serapi.execute("Inductive const := C | D.")
             serapi.execute(
@@ -962,8 +1066,9 @@ class TestSerAPI(unittest.TestCase):
                 "nat_rect",
                 "nat_ind",
                 "nat_rec",
-                "nat_sind"
             ]
+            if not self.update_8_9:
+                expected_idents.append("nat_sind")
             self.assertEqual(actual_idents, expected_idents)
             _, feedback = serapi.execute("Module foo.")
             actual_idents = serapi.parse_new_identifiers(feedback)

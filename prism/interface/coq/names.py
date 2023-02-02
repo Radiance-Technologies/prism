@@ -140,7 +140,9 @@ def print_ker_name(
         modpath = ker_name[1]
         dirpath = None
         knlabel = ker_name[2]
-    qualid = f"#{print_dir_path(dirpath)}#" if dirpath is not None else "."
+    if dirpath is not None:
+        dirpath = print_dir_path(dirpath)
+    qualid = f"#{dirpath}#" if dirpath else "."
     qualid = print_mod_path(modpath) + qualid + str(knlabel[1])
     if return_modpath:
         return qualid, modpath
