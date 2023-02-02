@@ -160,20 +160,21 @@ class TestSerAPI(unittest.TestCase):
 
     test_switch: OpamSwitch = OpamSwitch()
     sentences: Dict[str, List[str]]
+    serapi_version: str
     update_8_9: bool
     update_8_11: bool
+    update_8_12: bool
 
     @classmethod
     def setUpClass(cls) -> None:
         """
         Set up some example documents for realistic inputs.
         """
-        cls.update_8_9 = OpamVersion.less_than(
-            cls.test_switch.get_installed_version("coq-serapi"),
-            "8.10")
-        cls.update_8_11 = OpamVersion.less_than(
-            "8.10.2",
-            cls.test_switch.get_installed_version("coq-serapi"))
+        cls.serapi_version = cls.test_switch.get_installed_version("coq-serapi")
+        assert cls.serapi_version is not None
+        cls.update_8_9 = OpamVersion.less_than(cls.serapi_version, "8.10")
+        cls.update_8_11 = OpamVersion.less_than("8.10.2", cls.serapi_version)
+        cls.update_8_12 = OpamVersion.less_than("8.11.2", cls.serapi_version)
         cls.sentences = {}
         for filename in ['simple', 'nested', 'Alphabet']:
             sentences = HeuristicParser.parse_sentences_from_file(
@@ -687,7 +688,7 @@ class TestSerAPI(unittest.TestCase):
         no_goals = None
         focused_no_goals = Goals([], [([], [])], [], [])
         expected_add0_base_goal = Goal(
-            10,
+            9 if self.update_8_12 else 10,
             '@eq nat (Nat.add O O) O',
             update_kername(
                 '(App (Ind (((MutInd (MPfile (DirPath ((Id Logic) (Id Init) '
@@ -705,7 +706,7 @@ class TestSerAPI(unittest.TestCase):
                 self.update_8_9),
             [])
         expected_add0_ind_goal = Goal(
-            13,
+            12 if self.update_8_12 else 13,
             '@eq nat (Nat.add (S a) O) (S a)',
             update_kername(
                 '(App (Ind (((MutInd (MPfile (DirPath ((Id Logic) (Id Init) '
@@ -795,7 +796,7 @@ class TestSerAPI(unittest.TestCase):
         expected_add_assoc_goals = Goals(
             [
                 Goal(
-                    11,
+                    9 if self.update_8_12 else 11,
                     '@eq nat (Nat.add n (Nat.add m p)) (Nat.add (Nat.add n m) p)',
                     update_kername(
                         '(App (Ind (((MutInd (MPfile (DirPath ((Id Logic) (Id Init) '
