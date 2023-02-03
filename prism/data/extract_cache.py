@@ -217,8 +217,9 @@ def _conclude_proof(
     # add to other finished obligations
     finished_stack = finished_proof_stacks.setdefault(finished_proof_id, [])
     finished_stack.extend(new_proofs)
-    is_conjecture_completed = finished_proof_id in local_ids
-    is_obligation = finished_proof_id != pre_proof_id
+    is_obligation = pre_proof_id in obligation_map
+    is_program_completed = finished_proof_id in local_ids
+    is_conjecture_completed = not is_obligation or is_program_completed
     if is_conjecture_completed or (not is_obligation and is_proof_aborted):
         # A lemma has (presumably) been defined or aborted.
         # Note that a plugin may cause related proofs to
@@ -453,6 +454,7 @@ def _update_ids(
         expanded_ids.pop(ident, None)
     if ids:
         local_ids = local_ids.union(ids)
+        ids = set(ids)
     else:
         all_local_ids = set(serapi.get_local_ids())
         # get new identifiers
@@ -744,7 +746,7 @@ def _extract_vernac_commands(
                     file_commands.append(program)
             elif proof_id_changed:
                 post_goals = serapi.query_goals()
-                if pre_proof_id in local_ids or is_proof_aborted:
+                if ids or is_proof_aborted:
                     # a proof has concluded or been aborted
                     if pre_proof_id in partial_proof_stacks:
                         partial_proof_stacks[pre_proof_id].append(

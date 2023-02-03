@@ -591,6 +591,25 @@ class TestExtractCache(unittest.TestCase):
         actual_commands_text = [c.command.text for c in extracted_commands]
         self.assertEqual(expected_commands_text, actual_commands_text)
 
+    def test_saved_proofs(self):
+        """
+        Verify that proofs concluded with Save have the correct ids.
+        """
+        with pushd(_COQ_EXAMPLES_PATH):
+            extracted_commands = _extract_vernac_commands(
+                Project.extract_sentences(
+                    CoqDocument(
+                        "delayed_proof_save.v",
+                        CoqParser.parse_source("delayed_proof_save.v"),
+                        _COQ_EXAMPLES_PATH),
+                    sentence_extraction_method=SEM.HEURISTIC,
+                    return_locations=True,
+                    glom_proofs=False),
+                "delayed_proof_save.v",
+                serapi_options="")
+            self.assertTrue(
+                any("foobaz" in ec.identifier for ec in extracted_commands))
+
     @pytest.mark.coq_all
     def test_goals_reconstruction(self):
         """
