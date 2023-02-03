@@ -29,6 +29,23 @@ def escape(s: str) -> str:
     return _escape_regex.sub(CallableIterator(replacements), s)
 
 
+def escape_backslash(s: str) -> str:
+    """
+    Escape only backslashes.
+
+    Parameters
+    ----------
+    s : str
+        A string.
+
+    Returns
+    -------
+    str
+        An escaped string.
+    """
+    return s.replace("\\", r"\\")
+
+
 def normalize_spaces(s: str) -> str:
     """
     Replace each span of contiguous whitespace with a single space.

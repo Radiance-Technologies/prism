@@ -10,6 +10,7 @@ from typing import ClassVar, Iterable, List, Optional, Tuple, Union
 
 from prism.language.gallina.analyze import SexpInfo
 from prism.util.radpytools.dataclasses import default_field
+from prism.util.string import escape_backslash
 
 
 @dataclass(frozen=True, init=False)
@@ -381,7 +382,8 @@ class StrWithLocation(str):
         match = pattern.search(string)
         if not match:
             return string
-        subbed_string = pattern.sub(repl, string, count)
+
+        subbed_string = pattern.sub(escape_backslash(repl), string, count)
         subbed_indices = []
         prev_end = 0
         idx = 0

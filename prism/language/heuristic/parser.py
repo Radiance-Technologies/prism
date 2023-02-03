@@ -590,7 +590,10 @@ class HeuristicParser:
         return result
 
     @classmethod
-    def _get_sentences(cls, file_contents: str) -> List['StrWithLocation']:
+    def _get_sentences(
+            cls,
+            file_contents: str,
+            skip_sentence_errors: bool = False) -> List['StrWithLocation']:
         """
         Get the sentences of the given file.
 
@@ -598,6 +601,10 @@ class HeuristicParser:
         ----------
         file_contents : str
             The contents of a Coq document.
+        skip_sentence_errors : bool, optional
+            If True, return list of sentences that were successfully
+            parsed while ignoring sentences where an exception was
+            raised, otherwise raise the exception.
 
         Returns
         -------
@@ -638,60 +645,64 @@ class HeuristicParser:
         string_it = CallableIterator(strings)
         processed_sentences: List[StrWithLocation] = []
         while i < len(sentences):  # `sentences` length may change
-            # Replace any whitespace or group of whitespace with a
-            # single space.
-            sentence = sentences[i]
-            # If the sentence is whitespace only, skip it.
-            if not sentence.strip():
-                i += 1
-                continue
-            # If the sentence is just a period, skip it
-            if re.match(r"\.\s", sentence):
-                i += 1
-                continue
-            sentence = StrWithLocation.re_sub(r"(\s)+", " ", sentence)
-            sentence = sentence.strip()
-            # restore periods
-            if not sentence.endswith("."):
-                period = sentences[i + 1][0]
-                assert str(period) == "."
-                sentence += period
-            # split braces and bullets
-            (braces_and_bullets,
-             sentence) = ParserUtils.split_braces_and_bullets(sentence)
-            # split on ellipses
-            new_sentences = StrWithLocation.re_split(r"(\.\.\.)", sentence)
-            new_new_sentences = []
-            for j, new_sentence in enumerate(new_sentences):
-                if not new_sentence or new_sentence == "...":
-                    continue
-                elif (j < len(new_sentences) - 1
-                      and new_sentences[j + 1] == "..."):
-                    # Restore the ellipsis if one is present
-                    new_new_sentences.append(
-                        new_sentence + new_sentences[j + 1])
-                else:
-                    new_new_sentences.append(new_sentence)
-            num_new = len(new_new_sentences) - 1
-            if num_new > 0:
-                sentences[i : i + 1] = new_new_sentences
+            try:
+                # Replace any whitespace or group of whitespace with a
+                # single space.
                 sentence = sentences[i]
-            sentence_sans_control = ParserUtils.strip_control(sentence)
-            sentence_sans_attributes, _ = ParserUtils.strip_attributes(
-                sentence_sans_control)
-            # restore notation
-            if sentence_sans_attributes.startswith(cls.notation_mask):
+                # If the sentence is whitespace only, skip it.
+                if not sentence.strip():
+                    i += 1
+                    continue
+                # If the sentence is just a period, skip it
+                if re.match(r"\.\s", sentence):
+                    i += 1
+                    continue
+                sentence = StrWithLocation.re_sub(r"(\s)+", " ", sentence)
+                sentence = sentence.strip()
+                # restore periods
+                if not sentence.endswith("."):
+                    period = sentences[i + 1][0]
+                    assert str(period) == "."
+                    sentence += period
+                # split braces and bullets
+                (braces_and_bullets,
+                 sentence) = ParserUtils.split_braces_and_bullets(sentence)
+                # split on ellipses
+                new_sentences = StrWithLocation.re_split(r"(\.\.\.)", sentence)
+                new_new_sentences = []
+                for j, new_sentence in enumerate(new_sentences):
+                    if not new_sentence or new_sentence == "...":
+                        continue
+                    elif (j < len(new_sentences) - 1
+                          and new_sentences[j + 1] == "..."):
+                        # Restore the ellipsis if one is present
+                        new_new_sentences.append(
+                            new_sentence + new_sentences[j + 1])
+                    else:
+                        new_new_sentences.append(new_sentence)
+                num_new = len(new_new_sentences) - 1
+                if num_new > 0:
+                    sentences[i : i + 1] = new_new_sentences
+                    sentence = sentences[i]
+                sentence_sans_control = ParserUtils.strip_control(sentence)
+                sentence_sans_attributes, _ = ParserUtils.strip_attributes(
+                    sentence_sans_control)
+                # restore notation
+                if sentence_sans_attributes.startswith(cls.notation_mask):
+                    sentence = StrWithLocation.re_sub(
+                        cls.notation_mask,
+                        next(notation_it),
+                        sentence)
+                # restore strings
                 sentence = StrWithLocation.re_sub(
-                    cls.notation_mask,
-                    next(notation_it),
+                    cls.string_mask,
+                    string_it,
                     sentence)
-            # restore strings
-            sentence = StrWithLocation.re_sub(
-                cls.string_mask,
-                string_it,
-                sentence)
-            processed_sentences.extend(braces_and_bullets)
-            processed_sentences.append(sentence)
+                processed_sentences.extend(braces_and_bullets)
+                processed_sentences.append(sentence)
+            except Exception as exc:
+                if not skip_sentence_errors:
+                    raise exc
             i += 1
         # Lop off the final line if it's just a period, i.e., blank.
         if processed_sentences[-1] == ".":
@@ -787,6 +798,7 @@ class HeuristicParser:
             encoding: str = 'utf-8',
             glom_proofs: bool = True,
             return_locations: bool = False,
+            skip_sentence_errors: bool = False,
             **kwargs) -> List[CoqSentence]:
         """
         Split the Coq file text by sentences.
@@ -810,6 +822,10 @@ class HeuristicParser:
             A flag indicating whether sentence locations are returned,
             by default False. If glom_proofs is True, locations are not
             returned no matter what.
+        skip_sentence_errors : bool, optional
+            If True, return list of sentences that were successfully
+            parsed while ignoring sentences where an exception was
+            raised, otherwise raise the exception.
         kwargs : Dict[str, Any]
             Optional keyword arguments for subclass implementations.
 
@@ -823,7 +839,7 @@ class HeuristicParser:
                 "Returning locations alongside glommed proofs "
                 "is not currently supported.")
         file_contents = document.source_code
-        sentences = cls._get_sentences(file_contents)
+        sentences = cls._get_sentences(file_contents, skip_sentence_errors)
         if return_locations:
             start_idx = 0
             newlines_so_far = 0

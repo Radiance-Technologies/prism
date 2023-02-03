@@ -439,14 +439,16 @@ class CoqProjectBaseDataset:
             commit_name=commit_name)
 
     def sentences(
-            self,
-            commit_names: Optional[Dict[str,
-                                        str]] = None,
-            glom_proofs: bool = True,
-            glom_ltac: bool = False,
-            return_asts: bool = False) -> Generator[CoqSentence,
-                                                    None,
-                                                    None]:
+        self,
+        commit_names: Optional[Dict[str,
+                                    str]] = None,
+        glom_proofs: bool = True,
+        glom_ltac: bool = False,
+        return_asts: bool = False,
+        skip_file_errors: bool = False,
+        skip_sentence_errors: bool = False) -> Generator[CoqSentence,
+                                                         None,
+                                                         None]:
         """
         Yield Coq sentences from `CoqProjectBaseDataset`.
 
@@ -455,6 +457,13 @@ class CoqProjectBaseDataset:
         commit_names : Optional[Dict[str, str]], optional
             The commit (named by branch, hash, or tag) to load from, if
             relevant, for each project, by default None
+        skip_file_errors : bool, optional
+            If True, ignore errors on a per-file basis,
+            otherwise raise the exception.
+        skip_sentence_errors : bool, optional
+            If True, return list of sentences that were successfully
+            parsed while ignoring sentences where an exception was
+            raised, otherwise raise the exception.
 
         Yields
         ------
@@ -465,11 +474,18 @@ class CoqProjectBaseDataset:
         """
         for project in self.projects.values():
             for filename in project.get_file_list():
-                sentence_list = project.get_sentences(
-                    filename,
-                    glom_proofs=glom_proofs,
-                    glom_ltac=glom_ltac,
-                    return_asts=return_asts,
-                    sentence_extraction_method=self.sentence_extraction_method)
+                try:
+                    sentence_list = project.get_sentences(
+                        filename,
+                        glom_proofs=glom_proofs,
+                        glom_ltac=glom_ltac,
+                        return_asts=return_asts,
+                        sentence_extraction_method=self
+                        .sentence_extraction_method,
+                        skip_sentence_errors=skip_sentence_errors)
+                except Exception as exc:
+                    if skip_file_errors:
+                        continue
+                    raise exc
                 for sentence in sentence_list:
                     yield sentence
