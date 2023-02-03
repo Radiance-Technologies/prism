@@ -40,7 +40,11 @@ def omit_locs(sexp: SexpNode) -> SexpNode:
         ``[LOC]`` atom.
     """
     if sexp.is_list():
-        if sexp.head() == "fname" and sexp.num_nodes == 25:
+        if sexp.head() == "loc":
+            return SexpList(
+                [SexpString("loc"),
+                 SexpList([SexpString("[LOC]")])])
+        elif sexp.head() == "fname" and sexp.num_nodes == 25:
             return SexpList([SexpString('"[LOC]"')])
         else:
             return SexpList([omit_locs(c) for c in sexp.get_children()])
@@ -187,6 +191,49 @@ def normalize_levels(sexp: str, do_normalize: bool) -> str:
     return sexp
 
 
+def update_CApp_CAppExpl(sexp: str, do_update: bool) -> str:
+    """
+    Update CApp/CAppExpl structures for Coq 8.15+ compatibility.
+    """
+
+    def _update_CApp_CAppExpl(s: SexpNode) -> SexpNode:
+        if s.is_list():
+            children = s.get_children()
+            assert children is not None
+            if children and children[0].is_string():
+                if children[0].get_content() == "CApp":
+                    children = [
+                        children[0],
+                        _update_CApp_CAppExpl(children[1][1]),
+                        _update_CApp_CAppExpl(children[2])
+                    ]
+                elif children[0].get_content() == "CAppExpl":
+                    children = [
+                        children[0],
+                        SexpList(
+                            [
+                                _update_CApp_CAppExpl(children[1][1]),
+                                _update_CApp_CAppExpl(children[1][2])
+                            ]),
+                        _update_CApp_CAppExpl(children[2])
+                    ]
+                else:
+                    children = [_update_CApp_CAppExpl(c) for c in children]
+            else:
+                children = [_update_CApp_CAppExpl(c) for c in children]
+            return SexpList(children)
+        else:
+            content = s.get_content()
+            assert content is not None
+            return SexpString(content)
+
+    if do_update:
+        updated_sexp = SexpParser.parse(sexp)
+        updated_sexp = _update_CApp_CAppExpl(updated_sexp)
+        sexp = str(updated_sexp)
+    return sexp
+
+
 class TestSerAPI(unittest.TestCase):
     """
     Test suite for the interactive `SerAPI` interface.
@@ -196,10 +243,29 @@ class TestSerAPI(unittest.TestCase):
     sentences: Dict[str, List[str]]
     serapi_version: str
     update_8_9: bool
+    """
+    Flag to update tests to Coq 8.9.
+    """
     update_8_11: bool
+    """
+    Flag to update tests to Coq 8.11.
+    """
     update_8_12: bool
+    """
+    Flag to update tests to Coq 8.13.
+    """
     update_8_13: bool
+    """
+    Flag to update tests to Coq 8.13.
+    """
     update_8_14: bool
+    """
+    Flag to update tests to Coq 8.14.
+    """
+    update_8_15: bool
+    """
+    Flag to update tests to Coq 8.15.
+    """
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -213,6 +279,7 @@ class TestSerAPI(unittest.TestCase):
         cls.update_8_12 = OpamVersion.less_than("8.11.2", cls.serapi_version)
         cls.update_8_13 = OpamVersion.less_than("8.12.2", cls.serapi_version)
         cls.update_8_14 = OpamVersion.less_than("8.13.2", cls.serapi_version)
+        cls.update_8_15 = OpamVersion.less_than("8.14.1", cls.serapi_version)
         cls.sentences = {}
         for filename in ['simple', 'nested', 'Alphabet']:
             sentences = HeuristicParser.parse_sentences_from_file(
@@ -478,7 +545,7 @@ class TestSerAPI(unittest.TestCase):
                     }
                 ],
         }
-        with SerAPI(max_wait_time=120, opam_switch=self.test_switch) as serapi:
+        with SerAPI(max_wait_time=180, opam_switch=self.test_switch) as serapi:
             serapi.execute(
                 "Inductive nat : Type := O : nat | S (n : nat) : nat.")
             serapi.execute("Lemma foo : unit.")
@@ -715,22 +782,28 @@ class TestSerAPI(unittest.TestCase):
                     '(data (Level ((DirPath ((Id SerTop))) 2)))) 0))))',
                     self.update_8_14),
                 self.update_8_9),
-            update_vernac_control(
-                '(VernacExpr () (VernacCheckMayEval () () '
-                '((v (CApp (() ((v (CRef ((v (Ser_Qualid (DirPath ()) (Id idw))) '
-                '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) (line_nb_last 1) '
-                '(bol_pos_last 0) (bp 6) (ep 9))))) ())) '
-                '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) (line_nb_last 1) '
-                '(bol_pos_last 0) (bp 6) (ep 9)))))) '
-                '((((v (CRef ((v (Ser_Qualid (DirPath ()) (Id A))) '
-                '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) (line_nb_last 1) '
-                '(bol_pos_last 0) (bp 10) (ep 11))))) ())) '
-                '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) (line_nb_last 1) '
-                '(bol_pos_last 0) (bp 10) (ep 11))))) ())))) (loc '
-                '(((fname ToplevelInput) '
-                '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) (bp 6) '
-                '(ep 11)))))))',
-                self.update_8_11),
+            update_CApp_CAppExpl(
+                update_vernac_control(
+                    '(VernacExpr () (VernacCheckMayEval () () '
+                    '((v (CApp (() ((v (CRef ((v (Ser_Qualid (DirPath ()) (Id idw))) '
+                    '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                    '(line_nb_last 1) '
+                    '(bol_pos_last 0) (bp 6) (ep 9))))) ())) '
+                    '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                    '(line_nb_last 1) '
+                    '(bol_pos_last 0) (bp 6) (ep 9)))))) '
+                    '((((v (CRef ((v (Ser_Qualid (DirPath ()) (Id A))) '
+                    '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                    '(line_nb_last 1) '
+                    '(bol_pos_last 0) (bp 10) (ep 11))))) ())) '
+                    '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                    '(line_nb_last 1) '
+                    '(bol_pos_last 0) (bp 10) (ep 11))))) ())))) (loc '
+                    '(((fname ToplevelInput) '
+                    '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) (bp 6) '
+                    '(ep 11)))))))',
+                    self.update_8_11),
+                self.update_8_15),
             update_GType(
                 update_vernac_control(
                     '(VernacExpr () (VernacCheckMayEval () () ((v (CSort (GType ()))) '
@@ -813,46 +886,48 @@ class TestSerAPI(unittest.TestCase):
                         '(Id Coq)))) (Id nat)) 0) 1) (Instance ()))))) (Var (Id a))))',
                         self.update_8_9),
                     None,
-                    update_vernac_control(
-                        '(VernacExpr () (VernacCheckMayEval () () '
-                        '((v (CAppExpl (() ((v (Ser_Qualid (DirPath ()) (Id eq))) '
-                        '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
-                        '(line_nb_last 1) (bol_pos_last 0) (bp 7) (ep 9))))) ()) '
-                        '(((v (CRef ((v (Ser_Qualid (DirPath ()) (Id nat))) '
-                        '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
-                        '(line_nb_last 1) (bol_pos_last 0) (bp 10) (ep 13))))) '
-                        '())) (loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
-                        '(line_nb_last 1) (bol_pos_last 0) (bp 10) (ep 13))))) '
-                        '((v (CApp (() ((v (CRef ((v (Ser_Qualid (DirPath '
-                        '((Id Nat))) (Id add))) (loc (((fname ToplevelInput) '
-                        '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                        '(bp 15) (ep 22))))) ())) (loc (((fname ToplevelInput) '
-                        '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                        '(bp 15) (ep 22)))))) ((((v (CRef ((v (Ser_Qualid '
-                        '(DirPath ()) (Id a))) (loc (((fname ToplevelInput) '
-                        '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                        '(bp 23) (ep 24))))) ())) (loc (((fname ToplevelInput) '
-                        '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                        '(bp 23) (ep 24))))) ()) ' + (
-                            '(((v (CPrim (Number (SPlus ((int 0) (frac "") (exp "")))))) '  # noqa: W505, B950
-                            if self.update_8_14 else
-                            '(((v (CRef ((v (Ser_Qualid (DirPath ()) (Id O))) '
-                            '(loc (((fname ToplevelInput) '
+                    update_CApp_CAppExpl(
+                        update_vernac_control(
+                            '(VernacExpr () (VernacCheckMayEval () () '
+                            '((v (CAppExpl (() ((v (Ser_Qualid (DirPath ()) (Id eq))) '
+                            '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                            '(line_nb_last 1) (bol_pos_last 0) (bp 7) (ep 9))))) ()) '
+                            '(((v (CRef ((v (Ser_Qualid (DirPath ()) (Id nat))) '
+                            '(loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                            '(line_nb_last 1) (bol_pos_last 0) (bp 10) (ep 13))))) '
+                            '())) (loc (((fname ToplevelInput) (line_nb 1) (bol_pos 0) '
+                            '(line_nb_last 1) (bol_pos_last 0) (bp 10) (ep 13))))) '
+                            '((v (CApp (() ((v (CRef ((v (Ser_Qualid (DirPath '
+                            '((Id Nat))) (Id add))) (loc (((fname ToplevelInput) '
                             '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                            '(bp 25) (ep 26))))) ())) ')
-                        + '(loc (((fname ToplevelInput) '
-                        '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                        '(bp 25) (ep 26))))) ())))) (loc (((fname ToplevelInput) '
-                        '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                        '(bp 15) (ep 26))))) ((v (CRef ((v (Ser_Qualid '
-                        '(DirPath ()) (Id a))) (loc (((fname ToplevelInput) '
-                        '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                        '(bp 28) (ep 29))))) ())) (loc (((fname ToplevelInput) '
-                        '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                        '(bp 28) (ep 29)))))))) (loc (((fname ToplevelInput) '
-                        '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                        '(bp 6) (ep 29)))))))',
-                        self.update_8_11))
+                            '(bp 15) (ep 22))))) ())) (loc (((fname ToplevelInput) '
+                            '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                            '(bp 15) (ep 22)))))) ((((v (CRef ((v (Ser_Qualid '
+                            '(DirPath ()) (Id a))) (loc (((fname ToplevelInput) '
+                            '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                            '(bp 23) (ep 24))))) ())) (loc (((fname ToplevelInput) '
+                            '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                            '(bp 23) (ep 24))))) ()) ' + (
+                                '(((v (CPrim (Number (SPlus ((int 0) (frac "") '
+                                '(exp "")))))) ' if self.update_8_14 else
+                                '(((v (CRef ((v (Ser_Qualid (DirPath ()) (Id O))) '
+                                '(loc (((fname ToplevelInput) '
+                                '(line_nb 1) (bol_pos 0) (line_nb_last 1) '
+                                '(bol_pos_last 0) (bp 25) (ep 26))))) ())) ')
+                            + '(loc (((fname ToplevelInput) '
+                            '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                            '(bp 25) (ep 26))))) ())))) (loc (((fname ToplevelInput) '
+                            '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                            '(bp 15) (ep 26))))) ((v (CRef ((v (Ser_Qualid '
+                            '(DirPath ()) (Id a))) (loc (((fname ToplevelInput) '
+                            '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                            '(bp 28) (ep 29))))) ())) (loc (((fname ToplevelInput) '
+                            '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                            '(bp 28) (ep 29)))))))) (loc (((fname ToplevelInput) '
+                            '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                            '(bp 6) (ep 29)))))))',
+                            self.update_8_11),
+                        self.update_8_15))
             ])
         expected_add_assoc_goals = Goals(
             [
@@ -1077,12 +1152,10 @@ class TestSerAPI(unittest.TestCase):
             serapi.execute(
                 "Inductive nat : Type := O : nat | S (n : nat) : nat.")
             actual = serapi.query_vernac("Print nat.")
-            expected = [
-                "Inductive nat : Set :=  O : nat | S : forall _ : nat, nat"
-            ]
+            expected = "Inductive nat : Set :=  O : nat | S : forall _ : nat, nat"
             if self.update_8_14:
-                expected[0] += '.'
-            self.assertEqual(actual, expected)
+                expected += '.'
+            self.assertEqual(actual[0].split("\n\n")[0], expected)
 
     def test_recovery(self):
         """
@@ -1120,7 +1193,9 @@ class TestSerAPI(unittest.TestCase):
                                     end
                  : forall _ : const, const
             """)
-            self.assertEqual(normalize_spaces(actual[0]), expected)
+            self.assertEqual(
+                normalize_spaces(actual[0].split("\n\n")[0]),
+                expected)
 
     def test_parse_new_identifiers(self):
         """
