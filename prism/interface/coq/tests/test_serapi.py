@@ -153,6 +153,40 @@ def update_binders_and_levels(sexp: str, do_update: bool) -> str:
     return sexp
 
 
+def normalize_levels(sexp: str, do_normalize: bool) -> str:
+    """
+    Normalize `Level` numbers for Coq 8.14+ compatibility.
+
+    Levels become unpredictable hashes in Coq 8.14. Replace them with
+    known constants.
+    """
+
+    def _normalize_levels(s: SexpNode) -> SexpNode:
+        if s.is_list():
+            children = s.get_children()
+            assert children is not None
+            if (children and children[0].is_string()
+                    and children[0].get_content() == "Level"):
+                children = [
+                    children[0],
+                    SexpList([children[1][0],
+                              SexpString("[LEVEL]")])
+                ]
+            else:
+                children = [_normalize_levels(c) for c in children]
+            return SexpList(children)
+        else:
+            content = s.get_content()
+            assert content is not None
+            return SexpString(content)
+
+    if do_normalize:
+        normalized_sexp = SexpParser.parse(sexp)
+        normalized_sexp = _normalize_levels(normalized_sexp)
+        sexp = str(normalized_sexp)
+    return sexp
+
+
 class TestSerAPI(unittest.TestCase):
     """
     Test suite for the interactive `SerAPI` interface.
@@ -164,6 +198,8 @@ class TestSerAPI(unittest.TestCase):
     update_8_9: bool
     update_8_11: bool
     update_8_12: bool
+    update_8_13: bool
+    update_8_14: bool
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -176,6 +212,7 @@ class TestSerAPI(unittest.TestCase):
         cls.update_8_11 = OpamVersion.less_than("8.10.2", cls.serapi_version)
         cls.update_8_12 = OpamVersion.less_than("8.11.2", cls.serapi_version)
         cls.update_8_13 = OpamVersion.less_than("8.12.2", cls.serapi_version)
+        cls.update_8_14 = OpamVersion.less_than("8.13.2", cls.serapi_version)
         cls.sentences = {}
         for filename in ['simple', 'nested', 'Alphabet']:
             sentences = HeuristicParser.parse_sentences_from_file(
@@ -585,8 +622,18 @@ class TestSerAPI(unittest.TestCase):
             return Goal(
                 goal.id,
                 goal.type,
-                goal.type_sexp,
-                [h for h in goal.hypotheses])
+                normalize_levels(goal.type_sexp,
+                                 self.update_8_14),
+                [
+                    Hypothesis(
+                        h.idents,
+                        h.term,
+                        h.type,
+                        normalize_levels(h.kernel_sexp,
+                                         self.update_8_14),
+                        h.term_sexp,
+                        h.type_sexp) for h in goal.hypotheses
+                ])
 
         def drop_asts(goals: Goals) -> Goals:
             """
@@ -605,12 +652,14 @@ class TestSerAPI(unittest.TestCase):
 
         nested_kernel = update_binders_and_levels(
             update_kername(
-                '(Prod ((binder_name (Name (Id A))) (binder_relevance Relevant)) '
-                '(Sort (Type ((((hash 14398528522911) '
-                '(data (Level ((DirPath ((Id SerTop))) 1)))) 0)))) '
-                '(Prod ((binder_name Anonymous) (binder_relevance Relevant)) '
-                '(Rel 1) (Ind (((MutInd (MPfile (DirPath ((Id Datatypes) '
-                '(Id Init) (Id Coq)))) (Id unit)) 0) (Instance ())))))',
+                normalize_levels(
+                    '(Prod ((binder_name (Name (Id A))) (binder_relevance Relevant)) '
+                    '(Sort (Type ((((hash 14398528522911) '
+                    '(data (Level ((DirPath ((Id SerTop))) 1)))) 0)))) '
+                    '(Prod ((binder_name Anonymous) (binder_relevance Relevant)) '
+                    '(Rel 1) (Ind (((MutInd (MPfile (DirPath ((Id Datatypes) '
+                    '(Id Init) (Id Coq)))) (Id unit)) 0) (Instance ())))))',
+                    self.update_8_14),
                 self.update_8_9),
             self.update_8_9)
         expected_nested_goals = Goals(
@@ -627,8 +676,10 @@ class TestSerAPI(unittest.TestCase):
                 None,
                 'Type',
                 update_binders_and_levels(
-                    '(Sort (Type ((((hash 14398528522911) '
-                    '(data (Level ((DirPath ((Id SerTop))) 1)))) 0))))',
+                    normalize_levels(
+                        '(Sort (Type ((((hash 14398528522911) '
+                        '(data (Level ((DirPath ((Id SerTop))) 1)))) 0))))',
+                        self.update_8_14),
                     self.update_8_9),
                 None,
                 update_GType(
@@ -659,8 +710,10 @@ class TestSerAPI(unittest.TestCase):
             'idw A',
             'Type',
             update_binders_and_levels(
-                '(Sort (Type ((((hash 14398528588510) '
-                '(data (Level ((DirPath ((Id SerTop))) 2)))) 0))))',
+                normalize_levels(
+                    '(Sort (Type ((((hash 14398528588510) '
+                    '(data (Level ((DirPath ((Id SerTop))) 2)))) 0))))',
+                    self.update_8_14),
                 self.update_8_9),
             update_vernac_control(
                 '(VernacExpr () (VernacCheckMayEval () () '
@@ -690,7 +743,8 @@ class TestSerAPI(unittest.TestCase):
         focused_no_goals = Goals([], [([], [])], [], [])
         expected_add0_base_goal = Goal(
             9 if self.update_8_12 else 10,
-            '@eq nat (Nat.add O O) O',
+            '@eq nat (Nat.add 0 0) 0'
+            if self.update_8_14 else '@eq nat (Nat.add O O) O',
             update_kername(
                 '(App (Ind (((MutInd (MPfile (DirPath ((Id Logic) (Id Init) '
                 '(Id Coq)))) (Id eq)) 0) (Instance ()))) '
@@ -708,7 +762,8 @@ class TestSerAPI(unittest.TestCase):
             [])
         expected_add0_ind_goal = Goal(
             12 if self.update_8_12 else 13,
-            '@eq nat (Nat.add (S a) O) (S a)',
+            '@eq nat (Nat.add (S a) 0) (S a)'
+            if self.update_8_14 else '@eq nat (Nat.add (S a) O) (S a)',
             update_kername(
                 '(App (Ind (((MutInd (MPfile (DirPath ((Id Logic) (Id Init) '
                 '(Id Coq)))) (Id eq)) 0) (Instance ()))) '
@@ -744,7 +799,8 @@ class TestSerAPI(unittest.TestCase):
                 Hypothesis(
                     ['IH'],
                     None,
-                    '@eq nat (Nat.add a O) a',
+                    '@eq nat (Nat.add a 0) a'
+                    if self.update_8_14 else '@eq nat (Nat.add a O) a',
                     update_kername(
                         '(App (Ind (((MutInd (MPfile (DirPath ((Id Logic) (Id Init) '
                         '(Id Coq)))) (Id eq)) 0) (Instance ()))) '
@@ -777,10 +833,14 @@ class TestSerAPI(unittest.TestCase):
                         '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
                         '(bp 23) (ep 24))))) ())) (loc (((fname ToplevelInput) '
                         '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                        '(bp 23) (ep 24))))) ()) (((v (CRef ((v (Ser_Qualid '
-                        '(DirPath ()) (Id O))) (loc (((fname ToplevelInput) '
-                        '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
-                        '(bp 25) (ep 26))))) ())) (loc (((fname ToplevelInput) '
+                        '(bp 23) (ep 24))))) ()) ' + (
+                            '(((v (CPrim (Number (SPlus ((int 0) (frac "") (exp "")))))) '  # noqa: W505, B950
+                            if self.update_8_14 else
+                            '(((v (CRef ((v (Ser_Qualid (DirPath ()) (Id O))) '
+                            '(loc (((fname ToplevelInput) '
+                            '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
+                            '(bp 25) (ep 26))))) ())) ')
+                        + '(loc (((fname ToplevelInput) '
                         '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
                         '(bp 25) (ep 26))))) ())))) (loc (((fname ToplevelInput) '
                         '(line_nb 1) (bol_pos 0) (line_nb_last 1) (bol_pos_last 0) '
@@ -1020,6 +1080,8 @@ class TestSerAPI(unittest.TestCase):
             expected = [
                 "Inductive nat : Set :=  O : nat | S : forall _ : nat, nat"
             ]
+            if self.update_8_14:
+                expected[0] += '.'
             self.assertEqual(actual, expected)
 
     def test_recovery(self):

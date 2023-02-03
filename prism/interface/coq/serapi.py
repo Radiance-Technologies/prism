@@ -755,7 +755,15 @@ class SerAPI:
             elif constant_def_variant == "Def":  # transparent definition
                 opaque = False
                 if sort != "Prop" and sort != "SProp":
-                    term = self.print_constr(str(const_body[1][0][1]))
+                    if OpamVersion.less_than(self.serapi_version, "8.14"):
+                        const_body = const_body[1][0][1]
+                    else:
+                        # NOTE: coq/kernel/declarations.ml was modified
+                        # in coq 8.14 such that the Constr.t in the
+                        # const_body field of a constant_body is no
+                        # longer wrapped in a Mod_subst.substituted
+                        const_body = const_body[1]
+                    term = self.print_constr(str(const_body))
             elif constant_def_variant == "OpaqueDef":  # opaque definition
                 opaque = True
             else:
