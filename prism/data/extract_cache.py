@@ -454,7 +454,6 @@ def _update_ids(
         expanded_ids.pop(ident, None)
     if ids:
         local_ids = local_ids.union(ids)
-        ids = set(ids)
     else:
         all_local_ids = set(serapi.get_local_ids())
         # get new identifiers
