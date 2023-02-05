@@ -460,12 +460,61 @@ def _update_ids(
     return ids, local_ids, pre_proof_id, post_proof_id
 
 
+def _handle_anomalous_proof(
+        proof_id: str,
+        defined_lemmas: Dict[str,
+                             VernacCommandData],
+        proof_sentence: ProofSentence,
+        logger: Optional[logging.Logger] = None) -> bool:
+    """
+    Handle anomalies dealing with inconsistent proof states.
+
+    Sometimes a conjecture may be reported as open
+
+    Parameters
+    ----------
+    proof_id : str
+        The reported open conjecture.
+    defined_lemmas : Dict[str, VernacCommandData]
+        A map from defined conjectures to their extracted command data.
+    proof_sentence : ProofSentence
+        The anomalous proof sentence.
+    logger : Optional[logging.Logger], optional
+        An optional logger with which a warning will be logged, by
+        default None.
+
+    Returns
+    -------
+    bool
+        Whether `proof_id` was indeed already defined.
+    """
+    if OBLIGATION_ID_PATTERN.match(proof_id) is not None:
+        extra = "Is there an extra 'Next Obligation.'?"
+    else:
+        extra = ""
+    message = (
+        f"Anomaly detected. '{proof_id}' is an open "
+        f"conjecture but is also already defined. {extra}")
+    if logger is not None:
+        logger.warning(message)
+    else:
+        warnings.warn(message)
+    if proof_id in defined_lemmas:
+        # add to the existing lemma as a new proof
+        # block
+        lemma = defined_lemmas[proof_id]
+        lemma.proofs.append([proof_sentence])
+        return True
+    return False
+
+
 def _extract_vernac_commands(
         sentences: Iterable[CoqSentence],
         filename: os.PathLike,
         opam_switch: Optional[OpamSwitch] = None,
         serapi_options: str = "",
-        use_goals_diff: bool = True) -> List[VernacCommandData]:
+        use_goals_diff: bool = True,
+        logger: Optional[logging.Logger] = None) -> List[VernacCommandData]:
     """
     Compile Vernacular commands from a sequence of sentences.
 
@@ -579,7 +628,6 @@ def _extract_vernac_commands(
         for sentence in sentences:
             # TODO: Optionally filter queries out of results (and
             # execution)
-            # TODO: Handle control flags
             location = sentence.location
             text = sentence.text
             _, feedback, sexp = serapi.execute(text, return_ast=True)
@@ -664,29 +712,19 @@ def _extract_vernac_commands(
                         continue
                     else:
                         # That's not supposed to happen...
-                        if OBLIGATION_ID_PATTERN.match(
-                                pre_proof_id) is not None:
-                            extra = "Is there an extra 'Next Obligation.'?"
-                        else:
-                            extra = ""
-                        warnings.warn(
-                            f"Anomaly detected. '{pre_proof_id}' is an open "
-                            f"conjecture but is also already defined. {extra}")
-                        if pre_proof_id in defined_lemmas:
-                            # add to the existing lemma as a new proof
-                            # block
-                            lemma = defined_lemmas[pre_proof_id]
-                            lemma.proofs.append(
-                                [
-                                    ProofSentence(
-                                        text,
-                                        sentence.ast,
-                                        sentence.identifiers,
-                                        location,
-                                        command_type,
-                                        pre_goals_or_diff,
-                                        get_identifiers)
-                                ])
+                        already_defined = _handle_anomalous_proof(
+                            pre_proof_id,
+                            defined_lemmas,
+                            ProofSentence(
+                                text,
+                                sentence.ast,
+                                sentence.identifiers,
+                                location,
+                                command_type,
+                                pre_goals_or_diff,
+                                get_identifiers),
+                            logger)
+                        if already_defined:
                             continue
                 if (post_proof_id is not None
                         and post_proof_id not in partial_proof_stacks):
@@ -702,19 +740,39 @@ def _extract_vernac_commands(
                         programs)
                 else:
                     # we are continuing a delayed proof
-                    assert post_proof_id in partial_proof_stacks
+                    assert post_proof_id in partial_proof_stacks, \
+                        f"{post_proof_id} should be in-progress"
                     proof_stack = partial_proof_stacks[post_proof_id]
                     proof_stack.append(
                         (sentence,
                          pre_goals_or_diff,
                          command_type))
-
             elif post_proof_id is not None and (not ids or is_subproof):
                 # we are continuing an open proof
-                assert post_proof_id in partial_proof_stacks
-                post_goals = serapi.query_goals()
-                proof_stack = partial_proof_stacks[post_proof_id]
-                proof_stack.append((sentence, pre_goals_or_diff, command_type))
+                if post_proof_id in partial_proof_stacks:
+                    post_goals = serapi.query_goals()
+                    proof_stack = partial_proof_stacks[post_proof_id]
+                    proof_stack.append(
+                        (sentence,
+                         pre_goals_or_diff,
+                         command_type))
+                else:
+                    assert post_proof_id in defined_lemmas, \
+                        f"{post_proof_id} should be defined"
+                    # That's not supposed to happen...
+                    _handle_anomalous_proof(
+                        post_proof_id,
+                        defined_lemmas,
+                        ProofSentence(
+                            text,
+                            sentence.ast,
+                            sentence.identifiers,
+                            location,
+                            command_type,
+                            pre_goals_or_diff,
+                            get_identifiers),
+                        logger)
+                    continue
             else:
                 # We are either not in a proof
                 # OR we just defined something new as a side-effect.

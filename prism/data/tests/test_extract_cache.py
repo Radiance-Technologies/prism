@@ -288,6 +288,7 @@ class TestExtractCache(unittest.TestCase):
                 "Next Obligation.",
                 "simpl; match goal with |- ?a = _ => now destruct a end.",
                 "Qed.",
+                "Fail Qed.",
                 "Abort.",
             ]
             self.assertEqual(

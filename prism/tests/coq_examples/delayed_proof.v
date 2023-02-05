@@ -36,6 +36,7 @@ Qed.
 (* We accidentally revealed a bug in Coq.
    foo is defined but we are back in its first (proved) obligation.
    The Abort. gets us back to a stable(?) state. *)
+Fail Qed.
 Abort.
 
 Obligation Tactic := try (exact tt); try (simpl; match goal with |- ?a = _ => now destruct a end).
