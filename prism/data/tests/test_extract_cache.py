@@ -34,7 +34,7 @@ from prism.project.base import SEM, Project
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
 from prism.tests import _COQ_EXAMPLES_PATH, _PROJECT_EXAMPLES_PATH
-from prism.util.opam import OpamAPI
+from prism.util.opam import OpamSwitch
 from prism.util.radpytools.os import pushd
 from prism.util.swim import SwitchManager
 
@@ -46,13 +46,14 @@ class TestExtractCache(unittest.TestCase):
 
     TEST_DIR = Path(__file__).parent
     CACHE_DIR = TEST_DIR / "project_build_cache"
+    test_switch: OpamSwitch = OpamSwitch()
 
     @classmethod
     def setUpClass(cls):
         """
         Set up an on-disk cache to share among all unit tests.
         """
-        cls.swim = SwitchManager([OpamAPI.active_switch])
+        cls.swim = SwitchManager([cls.test_switch])
         cls.storage = MetadataStorage.load(
             _PROJECT_EXAMPLES_PATH / "project_metadata.yml")
         cls.dir_list = [
@@ -108,7 +109,7 @@ class TestExtractCache(unittest.TestCase):
                 coq_float.metadata,
                 {},
                 {},
-                ProjectBuildEnvironment(OpamAPI.active_switch.export()),
+                ProjectBuildEnvironment(self.test_switch.export()),
                 ProjectBuildResult(0,
                                    "",
                                    ""))
@@ -172,7 +173,7 @@ class TestExtractCache(unittest.TestCase):
                     "build error")
         return cache_client, cache_server
 
-    @pytest.mark.coq_8_10_2
+    @pytest.mark.coq_all
     def test_extract_cache_limited_runtime(self):
         """
         Test the function to extract cache from a project.
@@ -181,7 +182,7 @@ class TestExtractCache(unittest.TestCase):
         self.tearDownClass()
         self.setUpClass()
 
-    @pytest.mark.coq_8_10_2
+    @pytest.mark.coq_all
     def test_extract_cache_limited_memory(self):
         """
         Test the function to extract cache from a project.
@@ -190,7 +191,7 @@ class TestExtractCache(unittest.TestCase):
         self.tearDownClass()
         self.setUpClass()
 
-    @pytest.mark.coq_8_10_2
+    @pytest.mark.coq_all
     # must run after other cache extractions as it will otherwise mess
     # up their initial state
     @pytest.mark.dependency(
@@ -204,7 +205,7 @@ class TestExtractCache(unittest.TestCase):
         """
         self._extract_cache(build_error_expected=False)
 
-    @pytest.mark.coq_8_10_2
+    @pytest.mark.coq_all
     def test_extract_vernac_commands(self):
         """
         Test the function to extract vernac commands from a project.
@@ -220,7 +221,8 @@ class TestExtractCache(unittest.TestCase):
                     return_locations=True,
                     glom_proofs=False),
                 "Alphabet.v",
-                serapi_options="")
+                serapi_options="",
+                opam_switch=self.test_switch)
         self.assertEqual(len(extracted_commands), 37)
         self.assertEqual(len([c for c in extracted_commands if c.proofs]), 9)
         with self.subTest("delayed_proof"):
@@ -235,7 +237,8 @@ class TestExtractCache(unittest.TestCase):
                         return_locations=True,
                         glom_proofs=False),
                     "delayed_proof.v",
-                    serapi_options="")
+                    serapi_options="",
+                    opam_switch=self.test_switch)
             self.assertEqual(len(extracted_commands), 11)
             expected_ids = [
                 [],
@@ -319,7 +322,9 @@ class TestExtractCache(unittest.TestCase):
                     sentence_extraction_method=SEM.HEURISTIC)
                 actual_vernac_commands = _extract_vernac_commands(
                     sentences,
-                    'fermat4_mwe.v')
+                    'fermat4_mwe.v',
+                    serapi_options="",
+                    opam_switch=self.test_switch)
                 actual_vernac_commands_text = {
                     avc.command.text for avc in actual_vernac_commands
                 }
@@ -386,7 +391,8 @@ class TestExtractCache(unittest.TestCase):
                         return_locations=True,
                         glom_proofs=False),
                     "shadowing.v",
-                    serapi_options="")
+                    serapi_options="",
+                    opam_switch=self.test_switch)
             self.assertEqual(len(extracted_commands), 4)
             expected_ids = [
                 ["nat"],
@@ -544,7 +550,7 @@ class TestExtractCache(unittest.TestCase):
             ]
             self.assertEqual(actual_goal_qualids, expected_qualids)
 
-    @pytest.mark.coq_8_10_2
+    @pytest.mark.coq_all
     def test_extract_aborted_proofs(self):
         """
         Verify that aborted proofs can be extracted.
@@ -560,7 +566,8 @@ class TestExtractCache(unittest.TestCase):
                     return_locations=True,
                     glom_proofs=False),
                 "aborted.v",
-                serapi_options="")
+                serapi_options="",
+                opam_switch=self.test_switch)
         expected_commands_text = [
             "Definition idw (A : Type) := A.",
             "Lemma foobar : unit.",
@@ -573,7 +580,7 @@ class TestExtractCache(unittest.TestCase):
         actual_commands_text = [c.command.text for c in extracted_commands]
         self.assertEqual(expected_commands_text, actual_commands_text)
 
-    @pytest.mark.coq_8_10_2
+    @pytest.mark.coq_all
     def test_goals_reconstruction(self):
         """
         Test the reconstruction of Goals from GoalsDiff.
@@ -622,7 +629,8 @@ class TestExtractCache(unittest.TestCase):
                     glom_proofs=False),
                 "fermat4_mwe.v",
                 serapi_options="",
-                use_goals_diff=False)
+                use_goals_diff=False,
+                opam_switch=self.test_switch)
             extracted_commands_with_diffs = _extract_vernac_commands(
                 Project.extract_sentences(
                     CoqDocument(
@@ -634,7 +642,8 @@ class TestExtractCache(unittest.TestCase):
                     glom_proofs=False),
                 "fermat4_mwe.v",
                 serapi_options="",
-                use_goals_diff=True)
+                use_goals_diff=True,
+                opam_switch=self.test_switch)
             sentences_no_diffs = _sort(extracted_commands_no_diffs)
             sentences_with_diffs = _sort(extracted_commands_with_diffs)
             sentences_reconstructed = _reconstruct_goals(sentences_with_diffs)

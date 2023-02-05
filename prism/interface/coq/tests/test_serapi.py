@@ -8,6 +8,8 @@ import unittest
 from dataclasses import asdict
 from typing import Dict, List, Optional
 
+import pytest
+
 from prism.interface.coq.exception import CoqExn
 from prism.interface.coq.serapi import Goal, Goals, Hypothesis, SerAPI
 from prism.language.gallina.parser import CoqParser
@@ -234,6 +236,7 @@ def update_CApp_CAppExpl(sexp: str, do_update: bool) -> str:
     return sexp
 
 
+@pytest.mark.coq_all
 class TestSerAPI(unittest.TestCase):
     """
     Test suite for the interactive `SerAPI` interface.

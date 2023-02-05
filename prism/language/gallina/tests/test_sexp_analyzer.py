@@ -3,6 +3,8 @@ Tests for prism.language.gallina.analyze.SexpAnalyzer.
 """
 import unittest
 
+import pytest
+
 from prism.language.gallina.analyze import ControlFlag, SexpAnalyzer, SexpInfo
 from prism.language.gallina.exception import SexpAnalyzingException
 from prism.language.gallina.parser import CoqParser
@@ -11,6 +13,7 @@ from prism.tests import _COQ_EXAMPLES_PATH
 from prism.util.opam import OpamSwitch
 
 
+@pytest.mark.coq_all
 class TestSexpAnalyzer(unittest.TestCase):
     """
     Tests for prism.language.gallina.analyze.SexpAnalyzer.
