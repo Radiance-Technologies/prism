@@ -768,6 +768,11 @@ class SexpAnalyzer:
         attributes = []
         try:
             for vernac_flag in sexp:
+                if (len(vernac_flag) == 2 and vernac_flag.head() == "v"
+                        and vernac_flag[1].head() == "loc"
+                        and vernac_flag[1][1].children):
+                    # Coq 8.15 added locations to attributes
+                    vernac_flag = vernac_flag[0][1]
                 attribute = vernac_flag[0].content
                 vernac_flag_value = vernac_flag[1]
                 if vernac_flag_value.is_list():

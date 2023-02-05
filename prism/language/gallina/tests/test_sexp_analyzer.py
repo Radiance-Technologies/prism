@@ -8,12 +8,15 @@ from prism.language.gallina.exception import SexpAnalyzingException
 from prism.language.gallina.parser import CoqParser
 from prism.language.sexp import SexpList, SexpParser, SexpString
 from prism.tests import _COQ_EXAMPLES_PATH
+from prism.util.opam import OpamSwitch
 
 
 class TestSexpAnalyzer(unittest.TestCase):
     """
     Tests for prism.language.gallina.analyze.SexpAnalyzer.
     """
+
+    test_switch: OpamSwitch = OpamSwitch()
 
     def test_analyze_vernac_flags(self):
         """
@@ -84,6 +87,131 @@ class TestSexpAnalyzer(unittest.TestCase):
                 ["local"],
                 example_sexp[0][1])
             self.assertEqual(vernac, expected_vernac)
+        with self.subTest("switch"):
+            simple_file = _COQ_EXAMPLES_PATH / "delayed_proof.v"
+            asts = CoqParser.parse_asts(
+                str(simple_file),
+                opam_switch=self.test_switch)
+            expected_vernac = [
+                ("VernacRequire",
+                 None,
+                 [],
+                 []),
+                ("VernacRequire",
+                 None,
+                 [],
+                 []),
+                ("VernacRequire",
+                 None,
+                 [],
+                 []),
+                ("VernacSetOption",
+                 None,
+                 [],
+                 []),
+                ("VernacBeginSection",
+                 None,
+                 [],
+                 []),
+                ("VernacAssumption",
+                 None,
+                 [],
+                 []),
+                ("VernacExtend",
+                 "Derive",
+                 [],
+                 []),
+                ("VernacExtend",
+                 "VernacSolve",
+                 [],
+                 []),
+                ("VernacExtend",
+                 "VernacSolve",
+                 [],
+                 []),
+                ("VernacExtend",
+                 "VernacSolve",
+                 [],
+                 []),
+                ("VernacEndProof",
+                 None,
+                 [],
+                 []),
+                ("VernacDefinition",
+                 None,
+                 [],
+                 ["program"]),
+                ("VernacExtend",
+                 "Obligations",
+                 [],
+                 []),
+                ("VernacDefinition",
+                 None,
+                 [],
+                 []),
+                ("VernacProof",
+                 None,
+                 [],
+                 []),
+                ("VernacExtend",
+                 "VernacSolve",
+                 [],
+                 []),
+                ("VernacExtend",
+                 "Obligations",
+                 [],
+                 []),
+                ("VernacExtend",
+                 "VernacSolve",
+                 [],
+                 []),
+                ("VernacEndProof",
+                 None,
+                 [],
+                 []),
+                ("VernacEndProof",
+                 None,
+                 [],
+                 []),
+                ("VernacExtend",
+                 "Obligations",
+                 [],
+                 []),
+                ("VernacExtend",
+                 "VernacSolve",
+                 [],
+                 []),
+                ("VernacEndProof",
+                 None,
+                 [],
+                 []),
+                ("VernacEndProof",
+                 None,
+                 [ControlFlag.Fail],
+                 []),
+                ("VernacAbort",
+                 None,
+                 [],
+                 []),
+                ("VernacExtend",
+                 "Set_Solver",
+                 [],
+                 []),
+                ("VernacDefinition",
+                 None,
+                 [],
+                 ["program"]),
+            ]
+            actual_vernac = []
+            for ast in asts:
+                vernac = SexpAnalyzer.analyze_vernac(ast)
+                actual_vernac.append(
+                    (
+                        vernac.vernac_type,
+                        vernac.extend_type,
+                        vernac.control_flags,
+                        vernac.attributes))
+            self.assertEqual(actual_vernac, expected_vernac)
 
     def test_is_ltac(self):
         """
