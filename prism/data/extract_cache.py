@@ -143,7 +143,7 @@ def _process_proof_block(
 
 def _conclude_proof(
     local_ids: Set[str],
-    ids: Set[str],
+    ids: List[str],
     pre_proof_id: str,
     is_proof_aborted: bool,
     conjectures: Dict[str,
@@ -167,7 +167,7 @@ def _conclude_proof(
     ----------
     local_ids : Set[str]
         The set of identifiers introduced in the interactive session.
-    ids : Set[str]
+    ids : List[str]
         The list of identifiers introduced by the final proof command.
     pre_proof_id : str
         The ID of the proved conjecture or obligation.
@@ -202,7 +202,7 @@ def _conclude_proof(
         but more work remains for the overall conjecture).
     """
     new_proofs = []
-    for new_id in (ids.union({pre_proof_id}) if is_proof_aborted else ids):
+    for new_id in set(ids).union({pre_proof_id}):
         # Try to cover edge cases of plugins with unusual
         # behavior that may conclude multiple
         # proofs/obligations at once.
@@ -315,7 +315,7 @@ def _start_proof_block(
 def _start_program(
     sentence: CoqSentence,
     command_type: str,
-    ids: Set[str],
+    ids: List[str],
     pre_goals_or_diff: Optional[Union[Goals,
                                       GoalsDiff]],
     programs: List[SentenceState],
@@ -331,7 +331,7 @@ def _start_program(
         The sentence that instigated the program.
     command_type : str
         The type of the sentence's Vernacular command.
-    ids : Set[str]
+    ids : List[str]
         The list of definitions emitted by the program's declaration, if
         any.
     pre_goals_or_diff : Optional[Union[Goals, GoalsDiff]]
@@ -354,16 +354,20 @@ def _start_program(
     # Try to determine if all of the obligations were
     # immediately resolved.
     program_id = None
+    ids_set = set(ids)
     for new_id in ids:
         match = OBLIGATION_ID_PATTERN.match(new_id)
         if match is not None:
             program_id = match.groupdict()['proof_id']
-            if program_id in ids:
+            if program_id in ids_set:
                 break
+            else:
+                # reset
+                program_id = None
     if program_id is not None:
         # all obligations were resolved
         return VernacCommandData(
-            list(ids),
+            ids,
             None,
             VernacSentence(
                 sentence.text,
@@ -407,7 +411,7 @@ def _update_ids(
     post_proof_id: Optional[str],
     expanded_ids: Dict[str,
                        str]
-) -> Tuple[Set[str],
+) -> Tuple[List[str],
            Set[str],
            Optional[str],
            Optional[str]]:
@@ -432,7 +436,7 @@ def _update_ids(
 
     Returns
     -------
-    ids : Set[str]
+    ids : List[str]
         The set of identifiers introduced by the most recent command.
     local_ids : Set[str]
         The set of locally defined identifiers.
@@ -452,7 +456,7 @@ def _update_ids(
     else:
         all_local_ids = set(serapi.get_local_ids())
         # get new identifiers
-        ids = all_local_ids.difference(local_ids)
+        ids = list(all_local_ids.difference(local_ids))
         # update reference set
         local_ids = all_local_ids
     pre_proof_id = post_proof_id
@@ -779,7 +783,7 @@ def _extract_vernac_commands(
                 # We let the previous goals persist.
                 file_commands.append(
                     VernacCommandData(
-                        list(ids),
+                        ids,
                         None,
                         VernacSentence(
                             text,

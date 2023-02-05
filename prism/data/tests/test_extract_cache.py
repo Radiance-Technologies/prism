@@ -173,7 +173,7 @@ class TestExtractCache(unittest.TestCase):
                     "build error")
         return cache_client, cache_server
 
-    @pytest.mark.coq_all
+    @pytest.mark.coq_8_10_2
     def test_extract_cache_limited_runtime(self):
         """
         Test the function to extract cache from a project.
@@ -182,7 +182,7 @@ class TestExtractCache(unittest.TestCase):
         self.tearDownClass()
         self.setUpClass()
 
-    @pytest.mark.coq_all
+    @pytest.mark.coq_8_10_2
     def test_extract_cache_limited_memory(self):
         """
         Test the function to extract cache from a project.
@@ -191,7 +191,6 @@ class TestExtractCache(unittest.TestCase):
         self.tearDownClass()
         self.setUpClass()
 
-    @pytest.mark.coq_all
     # must run after other cache extractions as it will otherwise mess
     # up their initial state
     @pytest.mark.dependency(
@@ -199,6 +198,7 @@ class TestExtractCache(unittest.TestCase):
             "TestExtractCache::test_extract_cache_limited_runtime",
             "TestExtractCache::test_extract_cache_limited_memory"
         ])
+    @pytest.mark.coq_8_10_2
     def test_extract_cache(self):
         """
         Test the function to extract cache from a project.
