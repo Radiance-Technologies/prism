@@ -13,7 +13,6 @@ from prism.tests import _COQ_EXAMPLES_PATH
 from prism.util.opam import OpamSwitch
 
 
-@pytest.mark.coq_all
 class TestSexpAnalyzer(unittest.TestCase):
     """
     Tests for prism.language.gallina.analyze.SexpAnalyzer.
@@ -39,6 +38,7 @@ class TestSexpAnalyzer(unittest.TestCase):
         actual = SexpAnalyzer.analyze_vernac_flags(example_sexp)
         self.assertEqual(actual, expected)
 
+    @pytest.mark.coq_all
     def test_analyze_vernac(self):
         """
         Verify that control flags and attributes can be extracted.
@@ -91,9 +91,8 @@ class TestSexpAnalyzer(unittest.TestCase):
                 example_sexp[0][1])
             self.assertEqual(vernac, expected_vernac)
         with self.subTest("switch"):
-            simple_file = _COQ_EXAMPLES_PATH / "delayed_proof.v"
             asts = CoqParser.parse_asts(
-                str(simple_file),
+                str(_COQ_EXAMPLES_PATH / "delayed_proof.v"),
                 opam_switch=self.test_switch)
             expected_vernac = [
                 ("VernacRequire",
@@ -216,6 +215,7 @@ class TestSexpAnalyzer(unittest.TestCase):
                         vernac.attributes))
             self.assertEqual(actual_vernac, expected_vernac)
 
+    @pytest.mark.coq_8_10_2
     def test_is_ltac(self):
         """
         Test SexpAnalyzer.is_vernac class method.
