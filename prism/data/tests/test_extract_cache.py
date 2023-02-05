@@ -172,6 +172,7 @@ class TestExtractCache(unittest.TestCase):
                     "build error")
         return cache_client, cache_server
 
+    @pytest.mark.coq_8_10_2
     def test_extract_cache_limited_runtime(self):
         """
         Test the function to extract cache from a project.
@@ -180,6 +181,7 @@ class TestExtractCache(unittest.TestCase):
         self.tearDownClass()
         self.setUpClass()
 
+    @pytest.mark.coq_8_10_2
     def test_extract_cache_limited_memory(self):
         """
         Test the function to extract cache from a project.
@@ -188,6 +190,7 @@ class TestExtractCache(unittest.TestCase):
         self.tearDownClass()
         self.setUpClass()
 
+    @pytest.mark.coq_8_10_2
     # must run after other cache extractions as it will otherwise mess
     # up their initial state
     @pytest.mark.dependency(
@@ -201,6 +204,7 @@ class TestExtractCache(unittest.TestCase):
         """
         self._extract_cache(build_error_expected=False)
 
+    @pytest.mark.coq_8_10_2
     def test_extract_vernac_commands(self):
         """
         Test the function to extract vernac commands from a project.
@@ -539,6 +543,7 @@ class TestExtractCache(unittest.TestCase):
             ]
             self.assertEqual(actual_goal_qualids, expected_qualids)
 
+    @pytest.mark.coq_8_10_2
     def test_extract_aborted_proofs(self):
         """
         Verify that aborted proofs can be extracted.
@@ -567,6 +572,7 @@ class TestExtractCache(unittest.TestCase):
         actual_commands_text = [c.command.text for c in extracted_commands]
         self.assertEqual(expected_commands_text, actual_commands_text)
 
+    @pytest.mark.coq_8_10_2
     def test_goals_reconstruction(self):
         """
         Test the reconstruction of Goals from GoalsDiff.

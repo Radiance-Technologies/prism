@@ -25,8 +25,39 @@ if [ "$1" == "" ] || [ "$1" == "-n" ] || [ "$1" == "-y" ] ; then
     REINSTALL=true
   fi
 else
-  echo "Alternative versions of Coq not yet supported." && return 1
-  export COQ_VERSION=$1
+  case $1 in
+    "8.9.1")
+      export COQ_VERSION=8.9.1
+      export SERAPI_VERSION=8.9.0+0.6.1
+      ;;
+    "8.10.2")
+      export COQ_VERSION=8.10.2
+      export SERAPI_VERSION=8.10.0+0.7.2
+      ;;
+    "8.11.2")
+      export COQ_VERSION=8.11.2
+      export SERAPI_VERSION=8.11.0+0.11.1
+      ;;
+    "8.12.2")
+      export COQ_VERSION=8.12.2
+      export SERAPI_VERSION=8.12.0+0.12.1
+      ;;
+    "8.13.2")
+      export COQ_VERSION=8.13.2
+      export SERAPI_VERSION=8.13.0+0.13.1
+      ;;
+    "8.14.1")
+      export COQ_VERSION=8.14.1
+      export SERAPI_VERSION=8.14.0+0.14.0
+      ;;
+    "8.15.2")
+      export COQ_VERSION=8.15.2
+      export SERAPI_VERSION=8.15.0+0.15.2
+      ;;
+    *)
+      echo "${1} is not a supported version of Coq." && return 1
+  esac
+  echo "Using Coq version ${COQ_VERSION} and SerAPI version ${SERAPI_VERSION}."
 fi
 
 if [ ! -z ${2+x} ] ; then
@@ -76,7 +107,7 @@ if [ "$REINSTALL" == "true" ] || [ "$REINSTALL" = "" ] ; then
   test "$REINSTALL" == "true" && echo "Removing $OPAM_SWITCH" && opam switch remove $OPAM_SWITCH -y
 
   echo "Installing requested version of Coq in switch $OPAM_SWITCH"
-  opam switch create $OPAM_SWITCH 4.07.1 -y
+  opam switch create $OPAM_SWITCH 4.09.1 -y
   opam switch $OPAM_SWITCH
   echo "Updating shell environment"
   eval $(opam env --switch=$OPAM_SWITCH --set-switch)

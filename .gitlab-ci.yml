@@ -65,7 +65,7 @@ precommit:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
-runTests:
+.runTests:
   stage: test
   script:
     - export OPAMROOT=${PWD}/.opam
@@ -74,9 +74,48 @@ runTests:
         opam init --disable-sandboxing --verbose
       fi
     - eval $(opam env)
-    - source setup_coq.sh -n
-    - make test
+    - make test_${COQ_VERSION}
   artifacts:
     expose_as: 'test logs'
     paths: ['test_logs/']
     expire_in: 1 week
+
+runTestsUnmarked:
+  extends: .runTests
+  variables:
+    COQ_VERSION: "none"
+
+runTests_8_9_1:
+  extends: .runTests
+  variables:
+    COQ_VERSION: "8_9_1"
+
+runTests_8_10_2:
+  extends: .runTests
+  variables:
+    COQ_VERSION: "8_10_2"
+
+runTests_8_11_2:
+  extends: .runTests
+  variables:
+    COQ_VERSION: "8_11_2"
+
+runTests_8_12_2:
+  extends: .runTests
+  variables:
+    COQ_VERSION: "8_12_2"
+
+runTests_8_13_2:
+  extends: .runTests
+  variables:
+    COQ_VERSION: "8_13_2"
+
+runTests_8_14_1:
+  extends: .runTests
+  variables:
+    COQ_VERSION: "8_14_1"
+
+runTests_8_15_2:
+  extends: .runTests
+  variables:
+    COQ_VERSION: "8_15_2"

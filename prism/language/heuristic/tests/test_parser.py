@@ -6,6 +6,8 @@ import unittest
 from itertools import chain, repeat
 from pathlib import Path
 
+import pytest
+
 from prism.language.gallina.analyze import SexpInfo
 from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
@@ -437,6 +439,7 @@ class TestHeuristicParser(unittest.TestCase):
             self.assertEqual(sentences[i].location, v)
 
 
+@pytest.mark.coq_all
 class TestSerAPIParser(unittest.TestCase):
     """
     Unit test suite for the heuristic SerAPI parser.
