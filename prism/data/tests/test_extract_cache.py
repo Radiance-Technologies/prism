@@ -50,6 +50,13 @@ class TestExtractCache(unittest.TestCase):
     test_switch: OpamSwitch = OpamSwitch()
     serapi_version: str
     update_8_14: bool
+    """
+    Flag to update tests to Coq 8.14.
+    """
+    update_8_15: bool
+    """
+    Flag to update tests to Coq 8.15.
+    """
 
     @classmethod
     def setUpClass(cls):
@@ -59,6 +66,7 @@ class TestExtractCache(unittest.TestCase):
         cls.serapi_version = cls.test_switch.get_installed_version("coq-serapi")
         assert cls.serapi_version is not None
         cls.update_8_14 = OpamVersion.less_than("8.13.2", cls.serapi_version)
+        cls.update_8_15 = OpamVersion.less_than("8.14.1", cls.serapi_version)
 
     @classmethod
     def setUpCache(cls):
@@ -479,6 +487,19 @@ class TestExtractCache(unittest.TestCase):
             self.assertEqual(
                 [c.command.qualified_identifiers for c in extracted_commands],
                 expected_qualids)
+            expected_O_qualids = (
+                [] if self.update_8_14 else
+                [Identifier(IdentType.CRef,
+                            "Coq.Init.Datatypes.O")])
+            expected_eq_qualids = (
+                [Identifier(IdentType.CRef,
+                            "Coq.Init.Logic.eq")]
+                if self.update_8_15 else [
+                    Identifier(IdentType.Ser_Qualid,
+                               "Coq.Init.Logic.eq"),
+                    Identifier(IdentType.CRef,
+                               "Coq.Init.Datatypes.nat"),
+                ])
             expected_qualids = [
                 GoalIdentifiers(
                     [
@@ -486,17 +507,10 @@ class TestExtractCache(unittest.TestCase):
                                    "Shadowing.n"),
                         Identifier(IdentType.CRef,
                                    "Coq.Init.Datatypes.nat"),
-                        Identifier(IdentType.Ser_Qualid,
-                                   "Coq.Init.Logic.eq"),
-                        Identifier(IdentType.CRef,
-                                   "Coq.Init.Datatypes.nat"),
+                    ] + expected_eq_qualids + [
                         Identifier(IdentType.CRef,
                                    "Shadowing.nat"),
-                    ] + (
-                        [] if self.update_8_14 else
-                        [Identifier(IdentType.CRef,
-                                    "Coq.Init.Datatypes.O")])
-                    + [
+                    ] + expected_O_qualids + [
                         Identifier(IdentType.CRef,
                                    "Shadowing.n"),
                         Identifier(IdentType.CRef,
@@ -506,22 +520,15 @@ class TestExtractCache(unittest.TestCase):
                 GoalIdentifiers([],
                                 []),
                 GoalIdentifiers(
-                    [
-                        Identifier(IdentType.Ser_Qualid,
-                                   "Coq.Init.Logic.eq"),
-                        Identifier(IdentType.CRef,
-                                   "Coq.Init.Datatypes.nat"),
+                    expected_eq_qualids + [
                         Identifier(IdentType.CRef,
                                    "Shadowing.nat"),
-                    ] + (
-                        [] if self.update_8_14 else
-                        [Identifier(IdentType.CRef,
-                                    "Coq.Init.Datatypes.O")]) + [
-                                        Identifier(IdentType.CRef,
-                                                   "m"),
-                                        Identifier(IdentType.CRef,
-                                                   "m"),
-                                    ],  # noqa: E126
+                    ] + expected_O_qualids + [
+                        Identifier(IdentType.CRef,
+                                   "m"),
+                        Identifier(IdentType.CRef,
+                                   "m"),
+                    ],
                     [
                         HypothesisIndentifiers(
                             None,
@@ -532,11 +539,7 @@ class TestExtractCache(unittest.TestCase):
                             ])
                     ]),
                 GoalIdentifiers(
-                    [
-                        Identifier(IdentType.Ser_Qualid,
-                                   "Coq.Init.Logic.eq"),
-                        Identifier(IdentType.CRef,
-                                   "Coq.Init.Datatypes.nat"),
+                    expected_eq_qualids + [
                         Identifier(IdentType.CRef,
                                    "m"),
                         Identifier(IdentType.CRef,

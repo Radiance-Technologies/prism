@@ -57,7 +57,7 @@ from prism.interface.coq.re_patterns import (
     OBLIGATION_ID_PATTERN,
     SUBPROOF_ID_PATTERN,
 )
-from prism.interface.coq.serapi import SerAPI
+from prism.interface.coq.serapi import AbstractSyntaxTree, SerAPI
 from prism.language.gallina.analyze import SexpAnalyzer
 from prism.language.heuristic.parser import CoqSentence
 from prism.project.base import SEM, Project
@@ -69,7 +69,7 @@ from prism.project.repo import (
     ProjectRepo,
 )
 from prism.util.opam.switch import OpamSwitch
-from prism.util.opam.version import Version
+from prism.util.opam.version import OpamVersion, Version
 from prism.util.radpytools import unzip
 from prism.util.radpytools.os import pushd
 from prism.util.swim import SwitchManager
@@ -512,6 +512,57 @@ def _handle_anomalous_proof(
     return False
 
 
+def _execute_cmd(serapi: SerAPI,
+                 cmd: str) -> Tuple[List[str],
+                                    AbstractSyntaxTree]:
+    """
+    Execute a command in the given SerAPI session.
+
+    Parameters
+    ----------
+    serapi : SerAPI
+        An active `sertop` session.
+    cmd : str
+        A command to be executed.
+
+    Returns
+    -------
+    feedback : List[str]
+        Verbose feedback from executing the command.
+    AbstractSyntaxTree
+        The parsed AST of the given command.
+
+    Raises
+    ------
+    CoqExn
+        If an error occurs when attempting to execute the command.
+    """
+    # We cannot Print All in Coq 8.15.2 in certain situations
+    # without getting a "Cannot access delayed opaque proof"
+    # error.
+    # The culprits (so far) appear to be Qed'ed proofs.
+    # We execute them normally first to verify that they are
+    # valid, then we replace the Qed with an Admitted statement,
+    # which does not prevent us from printing the environment.
+    admit_qed = (
+        OpamVersion.less_than("8.14.1",
+                              serapi.serapi_version) and cmd == "Qed.")
+    if admit_qed:
+        serapi.push()
+    _, feedback, sexp = serapi.execute(cmd, return_ast=True, verbose=True)
+    if admit_qed:
+        serapi.pop()
+        if serapi.try_execute("Admitted.",
+                              return_ast=False,
+                              verbose=False) is None:
+            # Admitted is not supported for Derived
+            # https://github.com/coq/coq/issues/16856.
+            # Fall back to Qed in that case (or any other
+            # unanticipated error).
+            serapi.execute(cmd, return_ast=False, verbose=False)
+    return feedback, sexp
+
+
 def _extract_vernac_commands(
         sentences: Iterable[CoqSentence],
         filename: os.PathLike,
@@ -634,7 +685,7 @@ def _extract_vernac_commands(
             # execution)
             location = sentence.location
             text = sentence.text
-            _, feedback, sexp = serapi.execute(text, return_ast=True)
+            feedback, sexp = _execute_cmd(serapi, text)
             sentence.ast = sexp
             # Attach an undocumented extra field to the CoqSentence
             # object containing fully qualified referenced identifiers
