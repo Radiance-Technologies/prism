@@ -34,7 +34,7 @@ from prism.project.base import SEM, Project
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
 from prism.tests import _COQ_EXAMPLES_PATH, _PROJECT_EXAMPLES_PATH
-from prism.util.opam import OpamSwitch
+from prism.util.opam import OpamSwitch, OpamVersion
 from prism.util.radpytools.os import pushd
 from prism.util.swim import SwitchManager
 
@@ -46,10 +46,22 @@ class TestExtractCache(unittest.TestCase):
 
     TEST_DIR = Path(__file__).parent
     CACHE_DIR = TEST_DIR / "project_build_cache"
+    dir_list: List[Path]
     test_switch: OpamSwitch = OpamSwitch()
+    serapi_version: str
+    update_8_14: bool
 
     @classmethod
     def setUpClass(cls):
+        """
+        Set up persistent switch-related variables.
+        """
+        cls.serapi_version = cls.test_switch.get_installed_version("coq-serapi")
+        assert cls.serapi_version is not None
+        cls.update_8_14 = OpamVersion.less_than("8.13.2", cls.serapi_version)
+
+    @classmethod
+    def setUpCache(cls):
         """
         Set up an on-disk cache to share among all unit tests.
         """
@@ -75,14 +87,12 @@ class TestExtractCache(unittest.TestCase):
                 mode="w"))
         cls.float_head = "a4b445bad8b8d0afb725d64472b194d234676ce0"
         cls.lambda_head = "f531eede1b2088eff15b856558ec40f177956b96"
-        # go ahead and build lambda since it is shared between tests
+        # go ahead and checkout lambda
         coq_lambda = cls.dataset.projects['lambda']
         coq_lambda.git.checkout(cls.lambda_head)
-        return
-        coq_lambda.build()
 
     @classmethod
-    def tearDownClass(cls):
+    def tearDownCache(cls):
         """
         Remove on-disk cache and project directories.
         """
@@ -178,32 +188,33 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract cache from a project.
         """
-        self._extract_cache(max_runtime=0, build_error_expected=True)
-        self.tearDownClass()
-        self.setUpClass()
+        try:
+            self.setUpCache()
+            self._extract_cache(max_runtime=0, build_error_expected=True)
+        finally:
+            self.tearDownCache()
 
     @pytest.mark.coq_8_10_2
     def test_extract_cache_limited_memory(self):
         """
         Test the function to extract cache from a project.
         """
-        self._extract_cache(max_memory=20000, build_error_expected=True)
-        self.tearDownClass()
-        self.setUpClass()
+        try:
+            self.setUpCache()
+            self._extract_cache(max_memory=20000, build_error_expected=True)
+        finally:
+            self.tearDownCache()
 
-    # must run after other cache extractions as it will otherwise mess
-    # up their initial state
-    @pytest.mark.dependency(
-        depends=[
-            "TestExtractCache::test_extract_cache_limited_runtime",
-            "TestExtractCache::test_extract_cache_limited_memory"
-        ])
     @pytest.mark.coq_8_10_2
     def test_extract_cache(self):
         """
         Test the function to extract cache from a project.
         """
-        self._extract_cache(build_error_expected=False)
+        try:
+            self.setUpCache()
+            self._extract_cache(build_error_expected=False)
+        finally:
+            self.tearDownCache()
 
     @pytest.mark.coq_all
     def test_extract_vernac_commands(self):
@@ -481,8 +492,11 @@ class TestExtractCache(unittest.TestCase):
                                    "Coq.Init.Datatypes.nat"),
                         Identifier(IdentType.CRef,
                                    "Shadowing.nat"),
-                        Identifier(IdentType.CRef,
-                                   "Coq.Init.Datatypes.O"),
+                    ] + (
+                        [] if self.update_8_14 else
+                        [Identifier(IdentType.CRef,
+                                    "Coq.Init.Datatypes.O")])
+                    + [
                         Identifier(IdentType.CRef,
                                    "Shadowing.n"),
                         Identifier(IdentType.CRef,
@@ -499,13 +513,15 @@ class TestExtractCache(unittest.TestCase):
                                    "Coq.Init.Datatypes.nat"),
                         Identifier(IdentType.CRef,
                                    "Shadowing.nat"),
-                        Identifier(IdentType.CRef,
-                                   "Coq.Init.Datatypes.O"),
-                        Identifier(IdentType.CRef,
-                                   "m"),
-                        Identifier(IdentType.CRef,
-                                   "m"),
-                    ],
+                    ] + (
+                        [] if self.update_8_14 else
+                        [Identifier(IdentType.CRef,
+                                    "Coq.Init.Datatypes.O")]) + [
+                                        Identifier(IdentType.CRef,
+                                                   "m"),
+                                        Identifier(IdentType.CRef,
+                                                   "m"),
+                                    ],  # noqa: E126
                     [
                         HypothesisIndentifiers(
                             None,
