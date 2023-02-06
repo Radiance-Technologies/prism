@@ -567,7 +567,7 @@ class SerAPI:
         popped_states = []
         for _ in range(n):
             popped_frame = self.frame_stack.pop()
-            popped_states.append(popped_frame.pop())
+            popped_states.extend(popped_frame)
         self.cancel(popped_states)
         if not self.frame_stack:
             # re-initialize the stack
@@ -1346,6 +1346,52 @@ class SerAPI:
             pass
         self._proc.wait()
         self._dead = True
+
+    def try_execute(
+        self,
+        cmd: str,
+        return_ast: bool = False,
+        verbose: bool = True
+    ) -> Optional[Union[Tuple[List[SexpNode],
+                              List[str]],
+                        Tuple[List[SexpNode],
+                              List[str],
+                              AbstractSyntaxTree]]]:
+        """
+        Execute a command, returning ``None`` if an exception occurs.
+
+        Parameters
+        ----------
+        cmd : str
+            A command (i.e., a sentence).
+        return_ast : bool, optional
+            Whether to return the AST of the command or not, by default
+            False.
+        verbose : bool, optional
+            Whether to return verbose feedback for the command.
+            For example, verbose feedback may indicate the names of
+            newly introduced constants.
+
+        Returns
+        -------
+        responses : List[SexpNode], optional
+            The response from SerAPI after execution of the command.
+        feedback : List[str], optional
+            Feedback from the Coq Proof Assistant to the executed
+            command.
+        ast : AbstractSyntaxTree, optional
+            If `return_ast` is True, then the AST of `cmd` is also
+            returned.
+        """
+        self.push()
+        try:
+            result = self.execute(cmd, return_ast, verbose)
+        except CoqExn:
+            self.pop()
+            result = None
+        else:
+            self.pull()
+        return result
 
     @classmethod
     def parse_new_identifiers(cls, feedback: List[str]) -> List[str]:
