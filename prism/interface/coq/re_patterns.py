@@ -99,7 +99,7 @@ NEW_IDENT_PATTERN = re.compile(
     rf"{_new_ident_prefixes}(?P<idents>{_new_idents}){_new_ident_canaries}")
 
 NAMED_DEF_ASSUM_PATTERN = re.compile(
-    rf"\*\*\* \[\s*(?P<def_assum>{IDENT_PATTERN.pattern})\s.+\]")
+    rf"\*\*\* \[\s*(?P<def_assum>{IDENT_PATTERN.pattern})\s[^\]]+\]")
 """
 Match a named definition or assumption (e.g., a section variable or
 admitted theorem) in the feedback of a ``Print All.`` command.
