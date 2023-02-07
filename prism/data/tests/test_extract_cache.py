@@ -591,6 +591,7 @@ class TestExtractCache(unittest.TestCase):
         actual_commands_text = [c.command.text for c in extracted_commands]
         self.assertEqual(expected_commands_text, actual_commands_text)
 
+    @pytest.mark.coq_8_10_2
     def test_saved_proofs(self):
         """
         Verify that proofs concluded with Save have the correct ids.
@@ -599,16 +600,46 @@ class TestExtractCache(unittest.TestCase):
             extracted_commands = _extract_vernac_commands(
                 Project.extract_sentences(
                     CoqDocument(
-                        "delayed_proof_save.v",
-                        CoqParser.parse_source("delayed_proof_save.v"),
+                        "save.v",
+                        CoqParser.parse_source("save.v"),
                         _COQ_EXAMPLES_PATH),
                     sentence_extraction_method=SEM.HEURISTIC,
                     return_locations=True,
                     glom_proofs=False),
-                "delayed_proof_save.v",
-                serapi_options="")
+                "save.v",
+                serapi_options="",
+                opam_switch=self.test_switch)
             self.assertTrue(
                 any("foobaz" in ec.identifier for ec in extracted_commands))
+            self.assertTrue(
+                any("foobat" in ec.identifier for ec in extracted_commands))
+
+    @pytest.mark.coq_8_14_1
+    @pytest.mark.coq_8_13_2
+    @pytest.mark.coq_8_12_2
+    def test_saved_proofs_named(self):
+        """
+        Verify that named proofs concluded with Save have correct ids.
+
+        This test is expected to work only with Coq 8.12 and later.
+        """
+        with pushd(_COQ_EXAMPLES_PATH):
+            extracted_commands = _extract_vernac_commands(
+                Project.extract_sentences(
+                    CoqDocument(
+                        "save_named_theorem.v",
+                        CoqParser.parse_source("save_named_theorem.v"),
+                        _COQ_EXAMPLES_PATH),
+                    sentence_extraction_method=SEM.HEURISTIC,
+                    return_locations=True,
+                    glom_proofs=False),
+                "save_named_theorem.v",
+                serapi_options="",
+                opam_switch=self.test_switch)
+            self.assertTrue(
+                any("foobaz" in ec.identifier for ec in extracted_commands))
+            self.assertTrue(
+                any("foobat" in ec.identifier for ec in extracted_commands))
 
     @pytest.mark.coq_all
     def test_goals_reconstruction(self):
