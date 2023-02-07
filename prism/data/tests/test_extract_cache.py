@@ -53,10 +53,6 @@ class TestExtractCache(unittest.TestCase):
     """
     Flag to update tests to Coq 8.14.
     """
-    update_8_15: bool
-    """
-    Flag to update tests to Coq 8.15.
-    """
 
     @classmethod
     def setUpClass(cls):
@@ -66,7 +62,6 @@ class TestExtractCache(unittest.TestCase):
         cls.serapi_version = cls.test_switch.get_installed_version("coq-serapi")
         assert cls.serapi_version is not None
         cls.update_8_14 = OpamVersion.less_than("8.13.2", cls.serapi_version)
-        cls.update_8_15 = OpamVersion.less_than("8.14.1", cls.serapi_version)
 
     @classmethod
     def setUpCache(cls):
@@ -491,15 +486,12 @@ class TestExtractCache(unittest.TestCase):
                 [] if self.update_8_14 else
                 [Identifier(IdentType.CRef,
                             "Coq.Init.Datatypes.O")])
-            expected_eq_qualids = (
-                [Identifier(IdentType.CRef,
-                            "Coq.Init.Logic.eq")]
-                if self.update_8_15 else [
-                    Identifier(IdentType.Ser_Qualid,
-                               "Coq.Init.Logic.eq"),
-                    Identifier(IdentType.CRef,
-                               "Coq.Init.Datatypes.nat"),
-                ])
+            expected_eq_qualids = [
+                Identifier(IdentType.Ser_Qualid,
+                           "Coq.Init.Logic.eq"),
+                Identifier(IdentType.CRef,
+                           "Coq.Init.Datatypes.nat"),
+            ]
             expected_qualids = [
                 GoalIdentifiers(
                     [
