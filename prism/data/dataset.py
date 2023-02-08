@@ -4,55 +4,47 @@ Module providing the base dataset object for Coq projects.
 import json
 import os
 import random
-from typing import (
-    Dict,
-    Generator,
-    Iterable,
-    List,
-    Optional,
-    Type,
-    TypeVar,
-    Union,
-)
+import typing
+from typing import Dict, Generator, Iterable, Optional, Tuple, Type
 
 from git import InvalidGitRepositoryError
 
 from prism.data.document import CoqDocument
 from prism.language.heuristic.parser import CoqSentence
-from prism.project import DirHasNoCoqFiles, Project, ProjectDir, ProjectRepo
+from prism.project import DirHasNoCoqFiles, Project, ProjectRepo
 from prism.project.metadata.storage import MetadataStorage
 
-ProjectDict = Dict[str, Union[ProjectRepo, ProjectDir]]
-MetadataDict = TypeVar("MetadataDict")
+ProjectDict = Dict[str, Project]
+MetadataDict = dict
 
 
 class DatasetMetadata:
     """
     Helper class to load a dataset metadata.
 
-    Attributes
+    Parameters
     ----------
-    filetype : str
-        File format the metadata file is saved in (e.g. json).
-    path : str
-        Path to metadata file
-    data : MetadataDict
-        Dictionary format of metadata file.
+    path: Optional[str]
+        File location of metadata file.
     """
 
-    def __init__(self, path: Optional[str] = None):
+    def __init__(self, path: str = ""):
         """
         Initialize Metadata instance.
-
-        Parameters
-        ----------
-        path: Optional[str]
-            File location of metadata file.
         """
         filetype = os.path.splitext(path)[-1][1 :]
         self.filetype = filetype
+        """
+        File format the metadata file is saved in (e.g. json).
+        """
         self.path = path
+        """
+        Path to metadata file.
+        """
         self.data = self._load() if path is not None else None
+        """
+        Dictionary representation of metadata file.
+        """
 
     def _load(self) -> MetadataDict:
         """
@@ -64,7 +56,7 @@ class DatasetMetadata:
             raise ValueError(f"Unknown filetype: {self.filetype}")
         return data
 
-    def get_project_split(self) -> Dict[str, str]:
+    def get_project_split(self) -> Optional[Dict[str, str]]:
         """
         Return dictionary map of split names to project names.
 
@@ -166,7 +158,7 @@ class CoqProjectBaseDataset:
         """
 
         def _three_way_xor(a: bool, b: bool, c: bool) -> bool:
-            return (a ^ b ^ c) & ~(a & b & c)
+            return bool((a ^ b ^ c) & ~(a & b & c))
 
         projects_not_none = projects is not None
         base_dir_not_none = base_dir is not None
@@ -178,7 +170,7 @@ class CoqProjectBaseDataset:
                 "Provide exactly one of the input arguments"
                 " `projects`, `base_dir`, or `dir_list`.")
         if projects_not_none:
-            self.projects = projects
+            self.projects = typing.cast(ProjectDict, projects)
         elif base_dir_not_none:
             self._init_projects_base_dir(
                 project_class,
@@ -303,9 +295,15 @@ class CoqProjectBaseDataset:
         if commit_names is None:
             commit_names = {}
         for project_name, project in self.projects.items():
-            file_list = project.get_file_list(
-                commit_name=commit_names.get(project_name,
-                                             None))
+            commit_name = commit_names.get(project_name, None)
+            kwargs = {}
+            if commit_name is not None:
+                if isinstance(project, ProjectRepo):
+                    raise ValueError(
+                        f"Cannot checkout commit from non-Git project {project_name}"
+                    )
+                kwargs['commit_name'] = commit_name
+            file_list = project.get_file_list(**kwargs)
             for file in file_list:
                 yield project.get_file(file)
 
@@ -360,9 +358,15 @@ class CoqProjectBaseDataset:
         CoqDocument
             A CoqDocument corresponding to the selected Coq source file
         """
-        return self.projects[project_name].get_file(
-            filename,
-            commit_name=commit_name)
+        project = self.projects[project_name]
+        kwargs = {}
+        if commit_name is not None:
+            if isinstance(project, ProjectRepo):
+                raise ValueError(
+                    f"Cannot checkout commit from non-Git project {project_name}"
+                )
+            kwargs['commit_name'] = commit_name
+        return project.get_file(filename, **kwargs)
 
     def get_random_sentence(
             self,
@@ -406,7 +410,8 @@ class CoqProjectBaseDataset:
             filename: Optional[str] = None,
             project_name: Optional[str] = None,
             glom_proofs: bool = True,
-            commit_name: Optional[str] = None) -> List[str]:
+            commit_name: Optional[str] = None) -> Tuple[str,
+                                                        str]:
         """
         Return a random adjacent sentence pair from the projects.
 
