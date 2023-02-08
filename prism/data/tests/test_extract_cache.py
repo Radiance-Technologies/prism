@@ -47,7 +47,7 @@ class TestExtractCache(unittest.TestCase):
     TEST_DIR = Path(__file__).parent
     CACHE_DIR = TEST_DIR / "project_build_cache"
     dir_list: List[Path]
-    test_switch: OpamSwitch = OpamSwitch("prism-8.15.2")
+    test_switch: OpamSwitch = OpamSwitch()
     serapi_version: str
     update_8_14: bool
     """
