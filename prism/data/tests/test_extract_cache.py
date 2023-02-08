@@ -410,7 +410,7 @@ class TestExtractCache(unittest.TestCase):
             self.assertEqual(len(extracted_commands), 4)
             expected_ids = [
                 ["nat"],
-                [],
+                ["nat"],
                 ["plus_0_n"],
                 [],
             ]

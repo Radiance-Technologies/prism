@@ -24,6 +24,7 @@ from typing import (
     Iterator,
     List,
     Optional,
+    Sequence,
     Set,
     Tuple,
     Union,
@@ -68,6 +69,7 @@ from prism.project.repo import (
     CommitTraversalStrategy,
     ProjectRepo,
 )
+from prism.util.alignment import Alignment, align_factory
 from prism.util.opam.switch import OpamSwitch
 from prism.util.opam.version import OpamVersion, Version
 from prism.util.radpytools import unzip
@@ -99,6 +101,36 @@ class ExtractVernacCommandsError(RuntimeError):
         self.filename = filename
         self.parent = parent_exception
         self.parent_stacktrace = parent_stacktrace
+
+
+serapi_id_align_ = align_factory(
+    lambda x,
+    y: 0. if x == y else 1.,
+    # Skip cost is less than half the cost of misalignment to encourage
+    # skipping.
+    lambda x: 0.25,
+    True)
+
+
+def serapi_id_align(x: Sequence[str], y: Sequence[str]) -> Alignment:
+    """
+    Align two sequences of IDs produced by `SerAPI.get_local_ids`.
+
+    Parameters
+    ----------
+    x : Sequence[str]
+        Previous ID sequence
+    y : Sequence[str]
+        Current ID sequence
+
+    Returns
+    -------
+    Alignment
+        Aligned ID sequence
+    """
+    x = [xi.split(".")[-1] for xi in x]
+    y = [yi.split(".")[-1] for yi in y]
+    return serapi_id_align_(x, y, False)
 
 
 def _process_proof_block(
@@ -142,7 +174,7 @@ def _process_proof_block(
 
 
 def _conclude_proof(
-    local_ids: Set[str],
+    local_ids: List[str],
     ids: List[str],
     pre_proof_id: str,
     is_proof_aborted: bool,
@@ -165,7 +197,7 @@ def _conclude_proof(
 
     Parameters
     ----------
-    local_ids : Set[str]
+    local_ids : List[str]
         The set of identifiers introduced in the interactive session.
     ids : List[str]
         The list of identifiers introduced by the final proof command.
@@ -408,7 +440,7 @@ def is_subproof_of(proof_id: str, id_under_test: str) -> bool:
 def _update_ids(
     serapi: SerAPI,
     feedback: List[str],
-    local_ids: Set[str],
+    local_ids: List[str],
     post_proof_id: Optional[str],
     expanded_ids: Dict[str,
                        str]
@@ -426,7 +458,7 @@ def _update_ids(
     feedback : List[str]
         Feedback received from a command executed in the `serapi`
         session.
-    local_ids : Set[str]
+    local_ids : List[str]
         The set of locally defined identifiers.
     post_proof_id : Optional[str]
         The ID of the active conjecture prior to the most recently
@@ -439,8 +471,8 @@ def _update_ids(
     -------
     ids : List[str]
         The set of identifiers introduced by the most recent command.
-    local_ids : Set[str]
-        The set of locally defined identifiers.
+    local_ids : List[str]
+        The list of locally defined identifiers.
     pre_proof_id : Optional[str]
         The ID of the active conjecture prior to the most recently
         executed command.
@@ -448,18 +480,21 @@ def _update_ids(
         The ID of the active conjecture immediately after the most
         recent command's execution.
     """
-    ids = serapi.parse_new_identifiers(feedback)
+    # ids = serapi.parse_new_identifiers(feedback)
+    all_local_ids = serapi.get_local_ids()
+    # get new identifiers
+    alignment = serapi_id_align(local_ids, all_local_ids)
+    new_ids = []
+    for element_a, element_b in reversed(alignment):
+        if element_a is not None:
+            break
+        new_ids.append(element_b)
+    ids = new_ids[::-1]
+    # update reference set
+    local_ids = all_local_ids
     for ident in ids:
         # shadow old ids
         expanded_ids.pop(ident, None)
-    if ids:
-        local_ids = local_ids.union(ids)
-    else:
-        all_local_ids = set(serapi.get_local_ids())
-        # get new identifiers
-        ids = list(all_local_ids.difference(local_ids))
-        # update reference set
-        local_ids = all_local_ids
     pre_proof_id = post_proof_id
     post_proof_id = serapi.get_conjecture_id()
     return ids, local_ids, pre_proof_id, post_proof_id
@@ -640,6 +675,8 @@ def _extract_vernac_commands(
       identifiers in the cache will erroneously interpret the shadowed
       ID as its shadower (i.e., as the recursive function in the example
       above).
+    * A change in the current conjecture implies that either a new proof
+      has begun or the current proof has ended (but not both).
     """
     modpath = Project.get_local_modpath(filename, serapi_options)
     file_commands: List[VernacCommandData] = []
@@ -669,7 +706,7 @@ def _extract_vernac_commands(
                        str] = {}
     defined_lemmas: Dict[str,
                          VernacCommandData] = {}
-    local_ids = {'SerTop'}
+    local_ids = ['SerTop']
     pre_proof_id = None
     pre_goals = None
     post_proof_id = None

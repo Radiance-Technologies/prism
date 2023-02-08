@@ -62,6 +62,14 @@ https://github.com/coq/coq/blob/master/clib/unicode.ml for more
 information.
 """
 IDENT_PATTERN = re.compile(f"{_ident_init_pattern}{_ident_trailing_pattern}*")
+"""
+An unqualified identifier.
+"""
+QUALIFIED_IDENT_PATTERN = re.compile(
+    rf"{IDENT_PATTERN.pattern}(?:\.{IDENT_PATTERN.pattern})*")
+"""
+A potentially qualified identifier (may include ".").
+"""
 
 _new_ident_prefixes = ["Module", "Module Type", "Interactive Module"]
 _new_ident_prefixes = "|".join(_new_ident_prefixes)
@@ -99,12 +107,12 @@ NEW_IDENT_PATTERN = re.compile(
     rf"{_new_ident_prefixes}(?P<idents>{_new_idents}){_new_ident_canaries}")
 
 NAMED_DEF_ASSUM_PATTERN = re.compile(
-    rf"\*\*\* \[\s*(?P<def_assum>{IDENT_PATTERN.pattern})\s[^\]]+\]")
+    rf"\*\*\* \[\s*(?P<def_assum>{QUALIFIED_IDENT_PATTERN.pattern})\s[^\]]+\]")
 """
 Match a named definition or assumption (e.g., a section variable or
 admitted theorem) in the feedback of a ``Print All.`` command.
 """
-_inductive = rf"[A-Z]\w*\s(?P<ind>{IDENT_PATTERN.pattern})\s+:"
+_inductive = rf"[A-Z]\w*\s(?P<ind>{QUALIFIED_IDENT_PATTERN.pattern})\s+:"
 """
 Match a defined type (e.g., an inductive type) structured as a
 Vernacular statement.
@@ -112,15 +120,15 @@ Vernacular statement.
 NOTE: This may fail to detect exotic Vernacular extended types if
 Unicode characters are allowed similar to idents.
 """
-_mutual_inductive = rf"\s+with\s(?P<mind>{IDENT_PATTERN.pattern})\s+:"
+_mutual_inductive = rf"\s+with\s(?P<mind>{QUALIFIED_IDENT_PATTERN.pattern})\s+:"
 """
 Match additional types in a mutually inductive body.
 """
-_constant = rf"(?P<constant>{IDENT_PATTERN.pattern})\s+:\s"
+_constant = rf"(?P<constant>{QUALIFIED_IDENT_PATTERN.pattern})\s+:\s"
 """
 Match a constant.
 """
-_libmodsec = rf" >>>>>>> \w+ (?P<libmodsec>{IDENT_PATTERN.pattern})"
+_libmodsec = rf" >>>>>>> \w+ (?P<libmodsec>{QUALIFIED_IDENT_PATTERN.pattern})"
 """
 Match a library, module, or section.
 """
