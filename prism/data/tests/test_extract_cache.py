@@ -47,7 +47,7 @@ class TestExtractCache(unittest.TestCase):
     TEST_DIR = Path(__file__).parent
     CACHE_DIR = TEST_DIR / "project_build_cache"
     dir_list: List[Path]
-    test_switch: OpamSwitch = OpamSwitch()
+    test_switch: OpamSwitch = OpamSwitch("prism-8.15.2")
     serapi_version: str
     update_8_14: bool
     """
@@ -591,7 +591,12 @@ class TestExtractCache(unittest.TestCase):
         actual_commands_text = [c.command.text for c in extracted_commands]
         self.assertEqual(expected_commands_text, actual_commands_text)
 
+    @pytest.mark.coq_8_14_1
+    @pytest.mark.coq_8_13_2
+    @pytest.mark.coq_8_12_2
+    @pytest.mark.coq_8_11_2
     @pytest.mark.coq_8_10_2
+    @pytest.mark.coq_8_9_1
     def test_saved_proofs(self):
         """
         Verify that proofs concluded with Save have the correct ids.

@@ -1,3 +1,6 @@
+(* Verify named proofs (Lemmas and Theorems) can be saved and identified
+   afterward with Save. *)
+
 Variables A B C D E : Prop.
 
 Lemma foofoo: (A -> B -> C) -> (A -> B) -> A -> C.

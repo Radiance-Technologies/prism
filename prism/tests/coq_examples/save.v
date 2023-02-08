@@ -1,3 +1,6 @@
+(* Verify unnamed proofs (Goals) can be saved and identified afterward
+   with Save. *)
+
 Variables A B C D E : Prop.
 
 Goal (A -> B -> C) -> (A -> B) -> A -> C.
