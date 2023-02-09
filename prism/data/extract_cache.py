@@ -7,6 +7,7 @@ import multiprocessing as mp
 import os
 import re
 import traceback
+import typing
 import warnings
 from datetime import datetime
 from functools import partial
@@ -55,6 +56,7 @@ from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.interface.coq.ident import Identifier, get_all_qualified_idents
 from prism.interface.coq.re_patterns import (
     ABORT_COMMAND_PATTERN,
+    IDENT_PATTERN,
     OBLIGATION_ID_PATTERN,
     SUBPROOF_ID_PATTERN,
 )
@@ -84,6 +86,8 @@ ProofSentenceState = Tuple[CoqSentence, Union[Goals, GoalsDiff], CommandType]
 ProofBlock = List[ProofSentenceState]
 
 _program_regex = re.compile("[Pp]rogram")
+
+_save_pattern = re.compile(rf"Save\s+(?P<ident>{IDENT_PATTERN.pattern})\s*.")
 
 
 class ExtractVernacCommandsError(RuntimeError):
@@ -130,7 +134,8 @@ def serapi_id_align(x: Sequence[str], y: Sequence[str]) -> Alignment:
     """
     x = [xi.split(".")[-1] for xi in x]
     y = [yi.split(".")[-1] for yi in y]
-    return serapi_id_align_(x, y, False)
+    alignment = serapi_id_align_(x, y, False)
+    return typing.cast(Alignment, alignment)
 
 
 def _process_proof_block(
@@ -576,14 +581,19 @@ def _execute_cmd(serapi: SerAPI,
     # We cannot Print All in Coq 8.15.2 in certain situations
     # without getting a "Cannot access delayed opaque proof"
     # error.
-    # The culprits (so far) appear to be Qed'ed proofs.
+    # The culprits (so far) appear to be opaque proofs (Qed or Save).
     # We execute them normally first to verify that they are
     # valid, then we replace the Qed with an Admitted statement,
     # which does not prevent us from printing the environment.
     admit_qed = (
         OpamVersion.less_than("8.14.1",
                               serapi.serapi_version) and cmd == "Qed.")
-    if admit_qed:
+    saved_ident_match = _save_pattern.match(cmd)
+    define_saved = (
+        OpamVersion.less_than("8.14.1",
+                              serapi.serapi_version)
+        and saved_ident_match is not None)
+    if admit_qed or define_saved:
         serapi.push()
     _, feedback, sexp = serapi.execute(cmd, return_ast=True, verbose=True)
     if admit_qed:
@@ -596,6 +606,21 @@ def _execute_cmd(serapi: SerAPI,
             # Fall back to Qed in that case (or any other
             # unanticipated error).
             serapi.execute(cmd, return_ast=False, verbose=False)
+    elif define_saved:
+        serapi.pop()
+        assert saved_ident_match is not None
+        saved_ident = saved_ident_match['ident']
+        serapi.push()
+        if (serapi.try_execute(f"Defined {saved_ident}.",
+                               return_ast=False,
+                               verbose=False) is None
+                or serapi.try_execute(f"Opaque {saved_ident}.",
+                                      return_ast=False,
+                                      verbose=False) is None):
+            serapi.pop()
+            serapi.execute(cmd, return_ast=False, verbose=False)
+        else:
+            serapi.pull()
     return feedback, sexp
 
 
@@ -677,6 +702,9 @@ def _extract_vernac_commands(
       above).
     * A change in the current conjecture implies that either a new proof
       has begun or the current proof has ended (but not both).
+    * No plugin defines its own `Qed` or `Save` equivalents (i.e., no
+      plugin defines its own opaque proof environments) or no file to be
+      extracted uses such equivalent commands to end a nested proof.
     """
     modpath = Project.get_local_modpath(filename, serapi_options)
     file_commands: List[VernacCommandData] = []

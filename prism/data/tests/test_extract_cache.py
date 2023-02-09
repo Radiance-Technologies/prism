@@ -591,12 +591,7 @@ class TestExtractCache(unittest.TestCase):
         actual_commands_text = [c.command.text for c in extracted_commands]
         self.assertEqual(expected_commands_text, actual_commands_text)
 
-    @pytest.mark.coq_8_14_1
-    @pytest.mark.coq_8_13_2
-    @pytest.mark.coq_8_12_2
-    @pytest.mark.coq_8_11_2
-    @pytest.mark.coq_8_10_2
-    @pytest.mark.coq_8_9_1
+    @pytest.mark.coq_all
     def test_saved_proofs(self):
         """
         Verify that proofs concluded with Save have the correct ids.
@@ -619,6 +614,7 @@ class TestExtractCache(unittest.TestCase):
             self.assertTrue(
                 any("foobat" in ec.identifier for ec in extracted_commands))
 
+    @pytest.mark.coq_8_15_2
     @pytest.mark.coq_8_14_1
     @pytest.mark.coq_8_13_2
     @pytest.mark.coq_8_12_2
