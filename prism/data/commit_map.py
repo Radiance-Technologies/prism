@@ -6,6 +6,7 @@ import logging
 import os
 import signal
 import traceback
+import typing
 import warnings
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -14,7 +15,6 @@ from typing import (
     Dict,
     Generic,
     Iterable,
-    Iterator,
     Optional,
     Tuple,
     TypeVar,
@@ -23,10 +23,9 @@ from typing import (
 
 import tqdm
 
+from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
 from prism.util.logging import default_log_level
-
-from ..project.metadata.storage import MetadataStorage
 
 __all__ = ['Except', 'ProjectCommitMapper', 'ProjectCommitUpdateMapper']
 
@@ -63,7 +62,7 @@ class Except(Generic[T]):
 def _project_commit_fmap(
         project: ProjectRepo,
         get_commit_iterator: Callable[[ProjectRepo],
-                                      Iterator[str]],
+                                      Iterable[str]],
         commit_fmap: Callable[[ProjectRepo,
                                str,
                                Optional[T]],
@@ -77,12 +76,20 @@ def _project_commit_fmap(
     ----------
     project : ProjectRepo
         Project to be operated on.
-    get_commit_iterator : Callable[[ProjectRepo], Iterator[str]]
+    get_commit_iterator : Callable[[ProjectRepo], Iterable[str]]
         Function for obtaining an iterator of commits for
         the given project.
     commit_fmap : Callable[[ProjectRepo, str, Optional[T]], T]
         Function for performing some action on or
         with the project at a given commit.
+        Results from prior commits are provided for optional
+        accumulation.
+
+    Returns
+    -------
+    Union[Optional[T], Except[T]]
+        The accumulated result of applying `commit_fmap` to the commits
+        or a captured exception with partially accumulated results.
     """
     is_terminated = False
 
@@ -94,19 +101,27 @@ def _project_commit_fmap(
     signal.signal(signal.SIGINT, sigint_sigterm_handler)
     os.chdir(project.path)
     iterator = get_commit_iterator(project)
-    result = None
+    result: Union[Optional[T], Except[T]] = None
     pbar = tqdm.tqdm(iterator, total=None, desc=f"Commits ({project.name})")
     for commit in pbar:
         if is_terminated:
             break
         pbar.set_description(f"Commit {project.short_sha} of {project.name}")
         try:
-            result = commit_fmap(project, commit, result)
+            result = commit_fmap(
+                project,
+                commit,
+                typing.cast(Optional[T],
+                            result))
         except Exception as e:
             if force_serial:
                 raise e
             is_terminated = True
-            result = Except(result, e, traceback.format_exc())
+            result = Except(
+                typing.cast(Optional[T],
+                            result),
+                e,
+                traceback.format_exc())
     return result
 
 
@@ -126,7 +141,7 @@ class ProjectCommitMapper(Generic[T]):
             self,
             projects: Iterable[ProjectRepo],
             get_commit_iterator: Callable[[ProjectRepo],
-                                          Iterator[str]],
+                                          Iterable[str]],
             commit_fmap: Callable[[ProjectRepo,
                                    str,
                                    Optional[T]],
@@ -141,7 +156,7 @@ class ProjectCommitMapper(Generic[T]):
         ----------
         projects : Set[ProjectRepo]
             A set of projects over which to map a function.
-        get_commit_iterator : Callable[[ProjectRepo], Iterator[str]]
+        get_commit_iterator : Callable[[ProjectRepo], Iterable[str]]
             Function for deriving an iterable of commit SHAs
             from a ProjectRepo.
             Must be declared at the top-level of a module, and cannot be
@@ -174,11 +189,12 @@ class ProjectCommitMapper(Generic[T]):
         # By default True so that an arbitrary commit_fmap is allowed
         # to clean up any artifacts or state prior to termination
 
-    def __call__(self,
-                 max_workers: int = 1,
-                 force_serial: bool = False) -> Dict[str,
-                                                     Union[T,
-                                                           Except[T]]]:
+    def __call__(
+            self,
+            max_workers: int = 1,
+            force_serial: bool = False) -> Dict[str,
+                                                Union[Optional[T],
+                                                      Except[T]]]:
         """
         Map over project commits.
 
@@ -201,12 +217,15 @@ class ProjectCommitMapper(Generic[T]):
         original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
         original_sigterm_handler = signal.signal(signal.SIGTERM, signal.SIG_IGN)
         logger.debug(f"Initializing pool of {max_workers} workers")
-        results = {p.name: None for p in self.projects}
+        results: Dict[str,
+                      Union[Optional[T],
+                            Except[T]]] = {p.name: None for p in self.projects}
         if force_serial:
             for job in tqdm.tqdm(job_list,
                                  total=len(job_list),
                                  desc=self.task_description):
-                result = _project_commit_fmap_(job)
+                result: Union[Optional[T],
+                              Except[T]] = _project_commit_fmap_(job)
                 project_name = job[0].name
                 results[project_name] = result
                 if isinstance(result, Except) and self._terminate:
@@ -230,7 +249,10 @@ class ProjectCommitMapper(Generic[T]):
                     try:
                         for future in as_completed(futures):
                             project_name = futures[future]
-                            result = future.result()
+                            result = typing.cast(
+                                Union[Optional[T],
+                                      Except[T]],
+                                future.result())
                             logger.debug(f"Job {project_name} completed.")
                             results[project_name] = result
                             if isinstance(result, Except) and self._terminate:
@@ -266,7 +288,7 @@ class ProjectCommitMapper(Generic[T]):
     def map(self,
             max_workers: int = 1,
             force_serial: bool = False) -> Dict[str,
-                                                Union[T,
+                                                Union[Optional[T],
                                                       Except[T]]]:
         """
         Map over the project commits.
@@ -319,10 +341,11 @@ def _commit_fmap_and_update(
     """
     Return an updated `MetadataStorage` alongside a map result.
     """
+    original_result = None
     if result is not None:
-        result = result[0]
-    result = commit_fmap(project, commit_sha, result)
-    return result, project.metadata_storage
+        original_result = result[0]
+    original_result = commit_fmap(project, commit_sha, original_result)
+    return original_result, project.metadata_storage
 
 
 class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
@@ -340,7 +363,7 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
             self,
             projects: Iterable[ProjectRepo],
             get_commit_iterator: Callable[[ProjectRepo],
-                                          Iterator[str]],
+                                          Iterable[str]],
             commit_fmap: Callable[[ProjectRepo,
                                    str,
                                    Optional[T]],
@@ -352,7 +375,7 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
             projects,
             get_commit_iterator,
             functools.partial(_commit_fmap_and_update,
-                              commit_fmap),
+                              commit_fmap),  # type: ignore
             task_description,
             wait_on_interrupt,
             terminate_on_except)
@@ -360,29 +383,36 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
     def __call__(self,  # noqa: D102
                  max_workers: int = 1,
                  force_serial: bool = False) -> Dict[str,
-                                                     Union[T, Except[T]]]:
+                                                     Union[Optional[T], Except[T]]]:
         results = super().__call__(max_workers, force_serial)
         # get all project's metadata with the understanding that each
         # project only affected at most its own records
         storage = MetadataStorage()
         updated_projects = {p.name for p in self.projects}
         for p in self.projects:
-            result = results[p.name]
+            result = typing.cast(
+                Union[Optional[Tuple[T,
+                                     MetadataStorage]],
+                      Except[Tuple[T,
+                                   MetadataStorage]]],
+                results[p.name])
             exception = None
+            value = result
             if isinstance(result, Except):
-                exception = result
-                result = result.value
-            if result is None:
+                exception = typing.cast(Except[T], result)
+                value = result.value
+            if value is None:
                 warnings.warn(f"No results found for {p.name}")
                 p_storage = p.metadata_storage
             else:
+                value = typing.cast(Tuple[T, MetadataStorage], value)
                 # strip storage from results
                 if exception is not None:
                     # change mapped result value in place
-                    exception.value = result[0]
+                    exception.value = value[0]
                 else:
-                    results[p.name] = result[0]
-                p_storage = result[1]
+                    results[p.name] = value[0]
+                p_storage = value[1]
             for metadata in p_storage.get_all(p.name):
                 storage.insert(metadata)
             # capture non-updated metadata
@@ -399,7 +429,7 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
         max_workers: int = 1,
         force_serial: bool = False
     ) -> Tuple[Dict[str,
-                    Union[T,
+                    Union[Optional[T],
                           Except[T]]],
                MetadataStorage]:
         """
