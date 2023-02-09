@@ -353,7 +353,9 @@ class Project(ABC):
         Verify two conditions are met for post-build iqr flags.
 
         1. iqr physical paths contain vo files
-        2. all vo files correspond
+        2. all vo files are either directly in the root project
+           directory or their paths start with a physical path in the
+           iqr flags
         """
         iqr = IQR.extract_iqr(self.serapi_options)
         physical_paths = list(
