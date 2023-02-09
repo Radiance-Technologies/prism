@@ -2,6 +2,7 @@
 Module providing Coq project class representations.
 """
 
+import glob
 import logging
 import os
 import pathlib
@@ -11,6 +12,7 @@ from abc import ABC, abstractmethod
 from dataclasses import fields
 from enum import Enum, auto
 from functools import partialmethod, reduce
+from itertools import chain
 from subprocess import CalledProcessError
 from typing import (
     Any,
@@ -329,6 +331,52 @@ class Project(ABC):
                 for f in pathlib.Path(self.path).glob('**/.git/**/*')
                 if f.is_file())
 
+    def _check_serapi_option_health_pre_build(self) -> bool:
+        """
+        Verify serpai_options exist and correspond to existing paths.
+        """
+        if self.serapi_options is None:
+            return False
+        # Check if current IQR flags map to current directories.
+        iqr = IQR.extract_iqr(self.serapi_options)
+        for physical_path in chain(iqr.I,
+                                   (p for p,
+                                    _ in iqr.Q),
+                                   (p for p,
+                                    _ in iqr.R)):
+            if not (pathlib.Path(self.path) / physical_path).exists():
+                return False
+        return True
+
+    def _check_serapi_option_health_post_build(self) -> bool:
+        """
+        Verify two conditions are met for post-build iqr flags.
+
+        1. iqr physical paths contain vo files
+        2. all vo files correspond
+        """
+        iqr = IQR.extract_iqr(self.serapi_options)
+        physical_paths = list(
+            (iqr.I,
+             (p for p,
+              _ in iqr.Q),
+             (p for p,
+              _ in iqr.R)))
+        full_paths = [
+            pathlib.Path(self.path) / physical_path
+            for physical_path in physical_paths
+        ]
+        for full_path in full_paths:
+            if not glob.glob(f"{full_path}/**/*.vo", recursive=True):
+                return False
+        for vo_file in glob.glob(f"{self.path}/**/*.vo", recursive=True):
+            vo_file_path = pathlib.Path(vo_file)
+            if not (vo_file_path.parent == pathlib.Path(self.path)
+                    or any(str(vo_file_path.parent).startswith(str(full_path))
+                           for full_path in full_paths)):
+                return False
+        return True
+
     def _clean(self) -> None:
         """
         Remove all compiled Coq library (object) files.
@@ -472,12 +520,27 @@ class Project(ABC):
     def build(self, **kwargs) -> Tuple[int, str, str]:
         """
         Build the project.
+
+        If serapi_options is not present or if it is incorrect before
+        the build, build while inferring serapi_options; otherwise,
+        build normally.
+
+        If serapi_options is incorrect after building, infer
+        serapi_options after building and concatenate the results of the
+        builds.
         """
-        if self.serapi_options is None:
+        if not self._check_serapi_option_health_pre_build():
             _, rcode, stdout, stderr = self.infer_serapi_options(**kwargs)
             return rcode, stdout, stderr
         else:
-            return self._make("build", "Compilation", **kwargs)
+            rcode, stdout, stderr = self._make("build", "Compilation", **kwargs)
+        if not self._check_serapi_option_health_post_build():
+            separator = "\n@@\nInferring SerAPI Options...\n@@\n"
+            _, rcode, stdout_post, stderr_post = self.infer_serapi_options(
+                **kwargs)
+            stdout = stdout + separator + stdout_post
+            stderr = stderr + separator + stderr_post
+        return rcode, stdout, stderr
 
     def clean(self, **kwargs) -> Tuple[int, str, str]:
         """
