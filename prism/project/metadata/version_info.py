@@ -1,6 +1,7 @@
 """
 Provides metadata regarding Coq-related versions.
 """
+import typing
 from dataclasses import InitVar, dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple, Union
@@ -21,9 +22,11 @@ class VersionInfo:
     Encapsulates version/dependency metadata.
     """
 
-    coq_versions: InitVar[Union[VersionFormula, Set[Version]]] = None
-    serapi_versions: InitVar[Union[VersionFormula, Set[Version]]] = None
-    ocaml_versions: InitVar[Union[VersionFormula, Set[Version]]] = None
+    coq_versions: InitVar[Optional[Union[VersionFormula, Set[Version]]]] = None
+    serapi_versions: InitVar[Optional[Union[VersionFormula,
+                                            Set[Version]]]] = None
+    ocaml_versions: InitVar[Optional[Union[VersionFormula,
+                                           Set[Version]]]] = None
     available_coq_versions: Set[str] = default_field(set())
     available_serapi_versions: Set[str] = default_field(set())
     available_ocaml_versions: Set[str] = default_field(set())
@@ -49,14 +52,15 @@ class VersionInfo:
                 available_versions = OpamAPI.active_switch.get_available_versions(
                     pkg)
                 if versions is None:
-                    versions = available_versions
+                    versions = set(available_versions)
                 else:
-                    versions = [v for v in available_versions if v in versions]
-            versions = {str(v) for v in versions}
-            versions = versions.difference(attr)
-            attr.update(versions)
+                    versions = {v for v in available_versions if v in versions}
+            versions = typing.cast(Set[Version], versions)
+            version_strs = {str(v) for v in versions}
+            version_strs = version_strs.difference(attr)
+            attr.update(version_strs)
             return (
-                sorted([str(v) for v in versions]),
+                sorted(version_strs),
                 sorted([Version.parse(v) for v in attr]))
 
         new_coq_versions, sorted_coq_versions = _init_versions(
@@ -104,6 +108,7 @@ class VersionInfo:
             assert isinstance(dependencies, LogicalPF)
             dependencies = dependencies.to_conjunctive_list()
             coq_constraint = None
+            ocaml_constraint = None
             for dependency in dependencies:
                 if (isinstance(dependency,
                                PackageConstraint)
@@ -188,7 +193,11 @@ class VersionInfo:
 
 # precompute version information to avoid lengthy startup times
 try:
-    version_info = io.load(DATA_FILE, io.Fmt.yaml, clz=VersionInfo)
+    version_info = typing.cast(
+        VersionInfo,
+        io.load(DATA_FILE,
+                io.Fmt.yaml,
+                clz=VersionInfo))
 except FileNotFoundError:
     version_info = VersionInfo()
 io.dump(DATA_FILE, version_info, io.Fmt.yaml)
