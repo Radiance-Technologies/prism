@@ -2,12 +2,13 @@
 Setup utilities, especially for repair mining.
 """
 import os
+import typing
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple, Union
 
 from tqdm.contrib.concurrent import process_map
 
-from prism.project.base import Project, SentenceExtractionMethod
+from prism.project.base import SentenceExtractionMethod
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.metadata.version_info import version_info
 from prism.project.repo import ProjectRepo
@@ -69,8 +70,8 @@ def initialize_switch(
 def create_switches(
         input_coq_versions: List[str],
         input_compilers: List[str],
-        opam_roots: Optional[Union[os.PathLike,
-                                   List[os.PathLike]]] = None,
+        opam_root: Union[Optional[os.PathLike],
+                         List[Optional[os.PathLike]]] = None,
         n_procs: int = 1) -> List[OpamSwitch]:
     """
     Create a list of OPAM switches based on designated Coq versions.
@@ -83,11 +84,11 @@ def create_switches(
         List of desired Coq versions for switches.
     input_compilers : List[str]
         List of desired compilers for switches.
-    n_procs : int, optional
-        Number of processors to use, defaults to 1.
-    opam_roots : Union[os.PathLike, List[os.PathLike]] | None, optional
+    opam_root : os.PathLike | List[os.PathLike | None]] | None, optional
         The OPAM roots of the desired switches, by default the current
         globally set root.
+    n_procs : int, optional
+        Number of processors to use, defaults to 1.
 
     Returns
     -------
@@ -99,8 +100,10 @@ def create_switches(
     ValueError
         If the lengths of the provided argument lists do not match.
     """
-    if not isinstance(opam_roots, list):
-        opam_roots = [opam_roots for _ in input_coq_versions]
+    if not isinstance(opam_root, Iterable):
+        opam_roots = [opam_root for _ in input_coq_versions]
+    else:
+        opam_roots = typing.cast(List[Optional[os.PathLike]], opam_root)
 
     if len(input_coq_versions) != len(input_compilers):
         raise ValueError(
@@ -175,7 +178,7 @@ def initialize_project(
     sentence_extraction_method: Optional[SentenceExtractionMethod] = None,
     n_build_workers: Optional[int] = None,
 ) -> ProjectRepo:
-    """
+    r"""
     Initialize project from parent directory and project name.
 
     Initializes project using current commit.
@@ -189,10 +192,11 @@ def initialize_project(
         Name of project to be initialized.
     metadata_storage: MetadataStorage
         A metadata storage instance.
-    sentence_extraction_method: SentenceExtractionMethod | None
+    sentence_extraction_method: SentenceExtractionMethod | None, \
+            optional
         Project sentence extraction method. If None, the default
         SentenceExtractionMethod will be used.
-    n_build_workers: int | None
+    n_build_workers: int | None, optional
         Number of process to build with. If None, the default
         number of processes will be used.
 
@@ -217,30 +221,33 @@ def initialize_projects(
         metadata_storage: Union[os.PathLike,
                                 MetadataStorage],
         projects: Optional[List[str]] = None,
-        sentence_extraction_methods: Optional[Union[
-            SentenceExtractionMethod,
-            List[SentenceExtractionMethod]]] = None,
-        n_build_workers: Optional[Union[int,
-                                        List[int]]] = None,
-        n_procs: int = 1) -> List[Project]:
-    """
+        sentence_extraction_method: Union[
+            Optional[SentenceExtractionMethod],
+            List[Optional[SentenceExtractionMethod]]] = None,
+        n_build_workers: Union[Optional[int],
+                               List[Optional[int]]] = None,
+        n_procs: int = 1) -> List[ProjectRepo]:
+    r"""
     Initialize projects that are subdirectories of `root_path`.
 
     Parameters
     ----------
-    root_path: str
+    root_path : str
         Root path containing project root directories
         with names matching project names.
-    metadata_storage: Union[PathLike, MetadataStorage]
+    metadata_storage : Union[PathLike, MetadataStorage]
         A metadata storage instance or a path to a serialized
         metadata storage file.
-    projects: Optional[List[str]]
+    projects : Optional[List[str]], optional
         Projects to be initialized. If None, then all projects
         in metadata storage will be initialized.
-    sentence_extraction_methods: Optional[SentenceExtractionMethod],
+    sentence_extraction_method : Union[ \
+            Optional[SentenceExtractionMethod], \
+            List[Optional[SentenceExtractionMethod]]], optional
         Project sentence extraction method. If None, the default
         SentenceExtractionMethod will be used.
-    n_build_workers: Optional[int] = None,
+    n_build_workers : Union[Optional[int], \
+                            List[Optional[int]]], optional
         Number of process to build with. If None, the default
         number of processes will be used.
     n_procs : int, optional
@@ -248,7 +255,7 @@ def initialize_projects(
 
     Returns
     -------
-    List[Project]
+    List[ProjectRepo]
         List of initialized projects.
 
     Raises
@@ -258,17 +265,23 @@ def initialize_projects(
     """
     if isinstance(metadata_storage, (str, Path)):
         metadata_storage = MetadataStorage.load(metadata_storage)
+    metadata_storage = typing.cast(MetadataStorage, metadata_storage)
     if projects is None:
-        projects = metadata_storage.projects
+        projects = list(metadata_storage.projects)
+    assert projects is not None
     nproj = len(projects)
     # Make sure all arguments can be zipped together
     root_paths = nproj * (root_path,)
     metadata_storages = nproj * (metadata_storage,)
-    if not isinstance(sentence_extraction_methods, Iterable):
-        sentence_extraction_methods = nproj * (sentence_extraction_methods,)
+    if not isinstance(sentence_extraction_method, Iterable):
+        sentence_extraction_methods = nproj * (sentence_extraction_method,)
+    else:
+        sentence_extraction_methods = tuple(sentence_extraction_method)
     if not isinstance(n_build_workers, Iterable):
-        n_build_workers = nproj * (n_build_workers,)
-    if len(n_build_workers) != nproj:
+        n_build_workers_ = nproj * (n_build_workers,)
+    else:
+        n_build_workers_ = tuple(n_build_workers)
+    if len(n_build_workers_) != nproj:
         raise ValueError(
             "Number of build workers should be specified"
             "once (int), for each project (Tuple[int]), or not at all (None)")
@@ -282,12 +295,12 @@ def initialize_projects(
         projects,
         metadata_storages,
         sentence_extraction_methods,
-        n_build_workers)
+        n_build_workers_)
 
     if n_procs != 1:
         # BUG: This may cause an OSError on program exit in Python 3.8
         # or earlier.
-        projects = process_map(
+        initialized_projects: List[ProjectRepo] = process_map(
             _initialize_project,
             job_list,
             max_workers=n_procs,
@@ -295,5 +308,5 @@ def initialize_projects(
             total=nproj)
     else:
         # do not make a subprocess if no concurrency
-        projects = [_initialize_project(job) for job in job_list]
-    return projects
+        initialized_projects = [_initialize_project(job) for job in job_list]
+    return initialized_projects
