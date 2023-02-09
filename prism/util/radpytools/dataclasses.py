@@ -2,10 +2,18 @@
 Utilities for working with dataclasses.
 """
 from copy import deepcopy
-from dataclasses import Field, dataclass, field
-from typing import Any, Dict, Protocol, Type, TypeVar, runtime_checkable
+from dataclasses import dataclass, field
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Protocol,
+    Type,
+    TypeVar,
+    runtime_checkable,
+)
 
-T = TypeVar('T')
+_T = TypeVar('_T')
 
 
 @runtime_checkable
@@ -17,7 +25,7 @@ class Dataclass(Protocol):
     __dataclass_fields__: Dict[str, Any]
 
 
-def default_field(obj: T) -> Field:
+def default_field(obj: _T) -> _T:
     r"""
     Specify the default value of a dataclass field.
 
@@ -56,7 +64,9 @@ def default_field(obj: T) -> Field:
     return field(default_factory=lambda: deepcopy(obj))
 
 
-def immutable_dataclass(*args, **kwargs) -> Type[Dataclass]:
+def immutable_dataclass(*args,
+                        **kwargs) -> Callable[[Type[Dataclass]],
+                                              Type[Dataclass]]:
     """
     Make an immutable, hashable dataclass.
 
