@@ -30,6 +30,7 @@ from typing import (
     Union,
 )
 
+import numba.typed
 import tqdm
 from seutil import io
 from tqdm.contrib.concurrent import process_map
@@ -131,8 +132,8 @@ def serapi_id_align(x: Sequence[str], y: Sequence[str]) -> Alignment:
     Alignment
         Aligned ID sequence
     """
-    x = [xi.split(".")[-1] for xi in x]
-    y = [yi.split(".")[-1] for yi in y]
+    x = numba.typed.List(xi.split(".")[-1] for xi in x)
+    y = numba.typed.List(yi.split(".")[-1] for yi in y)
     alignment = serapi_id_align_(x, y, False)
     return typing.cast(Alignment, alignment)
 
