@@ -26,7 +26,6 @@ from typing import (
     List,
     Optional,
     Sequence,
-    Set,
     Tuple,
     Union,
 )
@@ -450,7 +449,7 @@ def _update_ids(
     expanded_ids: Dict[str,
                        str]
 ) -> Tuple[List[str],
-           Set[str],
+           List[str],
            Optional[str],
            Optional[str]]:
     """
