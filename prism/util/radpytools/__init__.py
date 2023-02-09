@@ -8,18 +8,193 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Generic,
     Iterable,
     Optional,
+    Protocol,
+    Set,
     Tuple,
     Type,
     TypeVar,
     Union,
+    runtime_checkable,
 )
 
-T = TypeVar('T')
+_T = TypeVar('_T')
+_S = TypeVar('_S', contravariant=True)
 
 
-class descriptor:
+@runtime_checkable
+class _Named(Protocol[_S]):
+    """
+    Part of the descriptor protocol.
+
+    See https://docs.python.org/3/howto/descriptor.html#automatic-name-notification
+    """  # noqa: W505
+
+    def __set_name__(self, _owner: Type[_S], name: str) -> None:  # noqa: D105
+        ...
+
+
+@runtime_checkable
+class _NonDataDescriptor(Protocol[_S]):
+    """
+    Part of the descriptor protocol.
+
+    See https://docs.python.org/3/howto/descriptor.html#descriptor-protocol.
+    """  # noqa: W505
+
+    def __get__(  # noqa: D105
+            self,
+            _instance: _S,
+            _owner: Optional[Type[_S]] = None) -> Any:
+        ...
+
+
+@runtime_checkable
+class _NamedNonDataDescriptor(_NonDataDescriptor[_S], _Named[_S], Protocol[_S]):
+    """
+    Part of the descriptor protocol.
+
+    See https://docs.python.org/3/howto/descriptor.html#automatic-name-notification
+    """  # noqa: W505
+
+    pass
+
+
+@runtime_checkable
+class _MutationDescriptor(Protocol[_S]):
+    """
+    TPart of the descriptor protocol.
+
+    See https://docs.python.org/3/howto/descriptor.html#descriptor-protocol.
+    """  # noqa: W505
+
+    def __set__(self, _instance: _S, _value: Any) -> None:  # noqa: D105
+        ...
+
+
+@runtime_checkable
+class _NamedMutationDescriptor(_MutationDescriptor[_S],
+                               _Named[_S],
+                               Protocol[_S]):
+    """
+    Part of the descriptor protocol.
+
+    See https://docs.python.org/3/howto/descriptor.html#automatic-name-notification
+    """  # noqa: W505
+
+    pass
+
+
+@runtime_checkable
+class _DestructiveDescriptor(Protocol[_S]):
+    """
+    Part of the descriptor protocol.
+
+    See https://docs.python.org/3/howto/descriptor.html#descriptor-protocol.
+    """  # noqa: W505
+
+    def __delete__(self, _instance: _S) -> None:  # noqa: D105
+        ...
+
+
+@runtime_checkable
+class _NamedDestructiveDescriptor(_DestructiveDescriptor[_S],
+                                  _Named[_S],
+                                  Protocol[_S]):
+    """
+    Part of the descriptor protocol.
+
+    See https://docs.python.org/3/howto/descriptor.html#automatic-name-notification
+    """  # noqa: W505
+
+    pass
+
+
+@runtime_checkable
+class _DataDescriptor(_DestructiveDescriptor[_S],
+                      _MutationDescriptor[_S],
+                      Protocol[_S]):
+    """
+    Part of the descriptor protocol.
+
+    See https://docs.python.org/3/howto/descriptor.html#automatic-name-notification
+    """  # noqa: W505
+
+    pass
+
+
+@runtime_checkable
+class _NamedDataDescriptor(_DestructiveDescriptor[_S],
+                           _MutationDescriptor[_S],
+                           _Named[_S],
+                           Protocol[_S]):
+    """
+    Part of the descriptor protocol.
+
+    See https://docs.python.org/3/howto/descriptor.html#automatic-name-notification
+    """  # noqa: W505
+
+    pass
+
+
+MutationDescriptor = Union[_MutationDescriptor, _NamedMutationDescriptor]
+DestructiveDescriptor = Union[_DestructiveDescriptor,
+                              _NamedDestructiveDescriptor]
+NonDataDescriptor = Union[_NonDataDescriptor, _NamedNonDataDescriptor]
+DataDescriptor = Union[MutationDescriptor,
+                       DestructiveDescriptor,
+                       _DataDescriptor,
+                       _NamedDataDescriptor]
+"""
+Part of the descriptor protocol.
+
+See https://docs.python.org/3/howto/descriptor.html#descriptor-protocol.
+"""
+
+
+@runtime_checkable
+class _Descriptor(_NonDataDescriptor[_S],
+                  _MutationDescriptor[_S],
+                  _DestructiveDescriptor[_S],
+                  Protocol[_S]):
+    """
+    The descriptor protocol.
+
+    See https://docs.python.org/3/howto/descriptor.html#descriptor-protocol.
+    """  # noqa: W505
+
+    pass
+
+
+@runtime_checkable
+class _NamedDescriptor(_NonDataDescriptor[_S],
+                       _MutationDescriptor[_S],
+                       _DestructiveDescriptor[_S],
+                       _Named[_S],
+                       Protocol[_S]):
+    """
+    The descriptor protocol.
+
+    See https://docs.python.org/3/howto/descriptor.html#descriptor-protocol.
+    """  # noqa: W505
+
+    pass
+
+
+Descriptor = Union[DataDescriptor,
+                   NonDataDescriptor,
+                   _Descriptor,
+                   _NamedDescriptor]
+"""
+The descriptor protocol.
+
+See https://docs.python.org/3/howto/descriptor.html#descriptor-protocol.
+"""
+
+
+class descriptor(Generic[_T]):
     """
     A base class for custom descriptors.
 
@@ -29,8 +204,9 @@ class descriptor:
 
     def __init__(
             self,
-            func: Callable[...,
-                           Any],
+            func: Union[Callable[...,
+                                 Any],
+                        Descriptor],
             require_read: bool = False,
             require_write: bool = False,
             require_delete: bool = False) -> None:
@@ -44,15 +220,17 @@ class descriptor:
             raise TypeError(
                 f"{repr(func)} is not callable or a valid descriptor")
         self._f = func
+        self._isclassmethod: bool
         if isinstance(func, descriptor):
             self._isclassmethod = func._isclassmethod
         else:
             self._isclassmethod = isinstance(func, (classmethod, staticmethod))
         self._isproperty = isinstance(func, (property, cached_property))
+        self._f_name: Optional[str]
         self._f_name = None
         self.__doc__ = func.__doc__
 
-    def __set_name__(self, owner: Type[T], name: str):
+    def __set_name__(self, owner: Type[_T], name: str):
         """
         Set the name of the descriptor.
 
@@ -69,11 +247,9 @@ class descriptor:
         TypeError
             If one attempts to alter the name of the descriptor.
         """
-        try:
-            self._f.__set_name__(owner, name)
-        except AttributeError:
-            # _f does not implement this part of descriptor protocol
-            pass
+        if hasattr(self._f, '__set_name__'):
+            self._f.__set_name__(owner, name)  # type: ignore
+        # else: _f does not implement this part of descriptor protocol
         if self._f_name is None:
             self._f_name = name
             self._owner = owner
@@ -88,26 +264,26 @@ class descriptor:
                 "Cannot assign the same descriptor to two different types "
                 f"({self._owner!r} and {owner!r}).")
 
-    def __get__(self, _instance: T, _owner: Type[T] = None) -> Any:
+    def __get__(self, _instance: _T, _owner: Optional[Type[_T]] = None) -> Any:
         """
         Reject attempts to get the descriptor.
         """
         raise AttributeError(f"unreadable attribute {self._f_name}")
 
-    def __set__(self, _instance: T, _value: Any) -> None:
+    def __set__(self, _instance: _T, _value: Any) -> None:
         """
         Reject attempts to overwrite the descriptor.
         """
         raise AttributeError(f"can't set attribute {self._f_name}")
 
-    def __delete__(self, _instance: T) -> None:
+    def __delete__(self, _instance: _T) -> None:
         """
         Reject attempts to delete the descriptor.
         """
-        raise AttributeError(f"can't delete attribute {self._name}")
+        raise AttributeError(f"can't delete attribute {self._f_name}")
 
 
-class _cachedmethod(descriptor):
+class _cachedmethod(descriptor[_T]):
     """
     Internal implementation of cached methods.
 
@@ -130,15 +306,14 @@ class _cachedmethod(descriptor):
                            Any],
             *,
             maxsize: Optional[int] = None,
-            **kwargs: Dict[str,
-                           Any]) -> None:
+            **kwargs) -> None:
         super().__init__(func, require_read=True)
-        self.cache_name = None
+        self.cache_name: str
         kwargs.update({'maxsize': maxsize})
         self.cache_kwargs = kwargs
         self.lock = RLock()
 
-    def __set_name__(self, owner: Type[T], name: str):
+    def __set_name__(self, owner: Type[_T], name: str):
         """
         Set the name of the descriptor and cache.
 
@@ -174,7 +349,7 @@ class _cachedmethod(descriptor):
             try:
                 registry = registry[owner]
             except KeyError:
-                temp = set()
+                temp: Set[str] = set()
                 registry[owner] = temp
                 registry = temp
             # is this method registered?
@@ -182,7 +357,7 @@ class _cachedmethod(descriptor):
                 # register it
                 registry.add(name)
 
-    def __get__(self, instance: T, owner: Type[T] = None):
+    def __get__(self, instance: _T, owner: Optional[Type[_T]] = None) -> Any:
         """
         Retrieve the cached method wrapper.
 
@@ -208,11 +383,13 @@ class _cachedmethod(descriptor):
         """
         if instance is None and owner is None:
             return self
+        obj: Union[_T, Optional[Type[_T]]]
         if self._isclassmethod:
             obj = owner
         else:
             obj = instance
         if owner is None:
+            assert instance is not None
             owner = type(instance)
         if obj is not None:
             try:
@@ -225,8 +402,10 @@ class _cachedmethod(descriptor):
                         return getattr(obj, self.cache_name)
                     except AttributeError:
                         cache_fun = lru_cache(**self.cache_kwargs)
+                        assert isinstance(self._f, _NonDataDescriptor)
                         cache_fun = cache_fun(self._f.__get__(instance, owner))
                         if self._isclassmethod:
+                            assert isinstance(obj, type)
                             type.__setattr__(obj, self.cache_name, cache_fun)
                         else:
                             object.__setattr__(obj, self.cache_name, cache_fun)
@@ -234,9 +413,10 @@ class _cachedmethod(descriptor):
         else:
             # obj can only be None if a class tried to call an instance
             # method
+            assert isinstance(self._f, _NonDataDescriptor)
             return self._f.__get__(instance, owner)
 
-    def __set__(self, _instance: T, _value: Any):
+    def __set__(self, _instance: _T, _value: Any) -> None:
         """
         Reject attempts to overwrite the method.
         """
@@ -245,7 +425,7 @@ class _cachedmethod(descriptor):
     @staticmethod
     def clear_cachedmethod_cache(
             registry_name: str,
-            self: T,
+            self: _T,
             methods: Optional[Union[str,
                                     Iterable[str]]] = None) -> None:
         """
@@ -288,7 +468,7 @@ class _cachedmethod(descriptor):
                     getattr(self, cache_name).cache_clear()
 
     @staticmethod
-    def get_cache_name(method_name: str, owner: Type[T]) -> str:
+    def get_cache_name(method_name: str, owner: Type[_T]) -> str:
         """
         Return the canonical name of a method's cache.
 
@@ -310,12 +490,16 @@ class _cachedmethod(descriptor):
 # once yapf and other tools support positional-only parameters, alter
 # the definition to ``def cachedmethod(f, /, *, ...)``
 def cachedmethod(
-        _func: Callable[...,
-                        Any] = None,
-        *,
-        maxsize: Optional[int] = None,
-        **kwargs: Dict[str,
-                       Any]) -> _cachedmethod:
+    _func: Optional[Callable[...,
+                             Any]] = None,
+    *,
+    maxsize: Optional[int] = None,
+    **kwargs: Dict[str,
+                   Any]
+) -> Union[_cachedmethod,
+           Callable[[Callable[...,
+                              Any]],
+                    _cachedmethod]]:
     """
     Make a cached method decorator.
 
