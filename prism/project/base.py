@@ -18,6 +18,7 @@ from typing import (
     Any,
     Dict,
     Iterable,
+    Iterator,
     List,
     NamedTuple,
     Optional,
@@ -338,12 +339,7 @@ class Project(ABC):
         if self.serapi_options is None:
             return False
         # Check if current IQR flags map to current directories.
-        iqr = IQR.extract_iqr(self.serapi_options)
-        for physical_path in chain(iqr.I,
-                                   (p for p,
-                                    _ in iqr.Q),
-                                   (p for p,
-                                    _ in iqr.R)):
+        for physical_path in self._iqr_bound_directories(True):
             if not (pathlib.Path(self.path) / physical_path).exists():
                 return False
         return True
@@ -357,25 +353,14 @@ class Project(ABC):
            directory or their paths start with a physical path in the
            iqr flags
         """
-        iqr = IQR.extract_iqr(self.serapi_options)
-        physical_paths = list(
-            (iqr.I,
-             (p for p,
-              _ in iqr.Q),
-             (p for p,
-              _ in iqr.R)))
-        full_paths = [
-            pathlib.Path(self.path) / physical_path
-            for physical_path in physical_paths
-        ]
+        full_paths = list(self._iqr_bound_directories(False))
         for full_path in full_paths:
             if not glob.glob(f"{full_path}/**/*.vo", recursive=True):
                 return False
         for vo_file in glob.glob(f"{self.path}/**/*.vo", recursive=True):
             vo_file_path = pathlib.Path(vo_file)
-            if not (vo_file_path.parent == pathlib.Path(self.path)
-                    or any(str(vo_file_path.parent).startswith(str(full_path))
-                           for full_path in full_paths)):
+            if not any(pathlib.Path(full_path) in vo_file_path.parents
+                       for full_path in full_paths):
                 return False
         return True
 
@@ -412,6 +397,37 @@ class Project(ABC):
             serapi_options=self.serapi_options,
             opam_switch=self.opam_switch)
         return sentences
+
+    def _iqr_bound_directories(self, relative: bool) -> Iterator[str]:
+        """
+        Produce an iterator over all physical paths in serapi_options.
+
+        Parameters
+        ----------
+        relative : bool
+            Flag to control whether iterator is over paths relative to
+            project root or absolute paths
+
+        Yields
+        ------
+        str
+            Physical paths from serapi_options
+        """
+        if self.serapi_options is None:
+            return iter([])
+        iqr = IQR.extract_iqr(self.serapi_options)
+        if relative:
+            return chain(iqr.I, (p for p, _ in iqr.Q), (p for p, _ in iqr.R))
+        else:
+            return chain(
+                (os.sep.join((str(self.path),
+                              p)) for p in iqr.I),
+                (os.sep.join((str(self.path),
+                              p)) for p,
+                 _ in iqr.Q),
+                (os.sep.join((str(self.path),
+                              p)) for p,
+                 _ in iqr.R))
 
     def _prepare_command(self, target: str) -> str:
         commands = [f"({cmd})" for cmd in getattr(self, f"{target}_cmd")]
@@ -540,8 +556,8 @@ class Project(ABC):
             separator = "\n@@\nInferring SerAPI Options...\n@@\n"
             _, rcode, stdout_post, stderr_post = self.infer_serapi_options(
                 **kwargs)
-            stdout = stdout + separator + stdout_post
-            stderr = stderr + separator + stderr_post
+            stdout = "".join((stdout, separator, stdout_post))
+            stderr = "".join((stderr, separator, stderr_post))
         return rcode, stdout, stderr
 
     def clean(self, **kwargs) -> Tuple[int, str, str]:
