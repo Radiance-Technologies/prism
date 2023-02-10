@@ -36,6 +36,7 @@ dot-iris
 event-struct
 fcsl-pcm
 finmap
+float
 generic-environments
 goedel
 graph-theory
@@ -44,6 +45,7 @@ htt
 huffman
 infotheo
 katamaran
+lambda
 lemma-overloading
 math-classes
 math-comp
