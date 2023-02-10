@@ -43,7 +43,7 @@ class ProjectSource:
     """
 
     project_name: str
-    repo_url_: InitVar[Optional[Union[str, GitURL]]]
+    repo_url_: InitVar[Optional[Union[str, GitURL]]] = None
     repo_url: Optional[GitURL] = field(init=False)
 
     def __post_init__(self, repo_url_: Optional[Union[str, GitURL]]):
@@ -90,8 +90,8 @@ class Context:
     """
 
     revision: Revision
-    coq_version_: InitVar[Optional[Union[str, Version]]]
-    ocaml_version_: InitVar[Optional[Union[str, Version]]]
+    coq_version_: InitVar[Optional[Union[str, Version]]] = None
+    ocaml_version_: InitVar[Optional[Union[str, Version]]] = None
     coq_version: Optional[Version] = field(init=False)
     ocaml_version: Optional[Version] = field(init=False)
 
@@ -618,8 +618,10 @@ class MetadataStorage:
     ) -> Tuple[str,
                Optional[str],
                Optional[str],
-               Optional[str],
-               Optional[str]]:
+               Optional[Union[str,
+                              Version]],
+               Optional[Union[str,
+                              Version]]]:
         """
         Process record-identifying arguments.
 
@@ -653,8 +655,8 @@ class MetadataStorage:
             project_name,
             project_url,
             commit_sha,
-            str(coq_version),
-            str(ocaml_version))
+            coq_version,
+            ocaml_version)
 
     def _remove_field(self, context_id: int, field_name: str) -> None:
         """

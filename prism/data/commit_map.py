@@ -221,7 +221,7 @@ class ProjectCommitMapper(Generic[T]):
                       Union[Optional[T],
                             Except[T]]] = {
                                 p.name: None for p in self.projects
-                            }
+                            }  # noqa: E126
         if force_serial:
             for job in tqdm.tqdm(job_list,
                                  total=len(job_list),
