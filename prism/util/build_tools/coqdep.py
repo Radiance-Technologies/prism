@@ -3,7 +3,6 @@ Provides a limited Python interface to the `coqdep` executable.
 """
 import os
 import re
-from os import PathLike
 from typing import Hashable, List, Optional
 
 import networkx as nx
@@ -11,6 +10,7 @@ import networkx as nx
 from prism.util.opam.api import OpamAPI
 from prism.util.opam.switch import OpamSwitch
 from prism.util.path import get_relative_path
+from prism.util.radpytools import PathLike
 
 _coq_file_regex = re.compile(r"(.*\.v)o{0,1}")
 
@@ -45,8 +45,10 @@ def is_valid_topological_sort(
     # Memoize sorted indices for constant-time verification of edge
     # order instead of linear in the number of vertices.
     # Final algorithmic complexity is O(V + E)
-    node_indices = {v: i for (i,
-                              v) in enumerate(dep_list)}
+    node_indices = {
+        v: i for (i,
+                  v) in enumerate(dep_list)
+    }
     for u, v in G.edges():
         if (reverse and node_indices[v] > node_indices[u]) or (
                 not reverse and node_indices[v] < node_indices[u]):

@@ -120,8 +120,7 @@ def _dict_of_list(el: Sequence[str], split: str = '=') -> Dict[str, str]:
 
 def _record_context(line: str,
                     parser: lark.Lark,
-                    regex: str,
-                    source='') -> List[CoqContext]:
+                    regex: str) -> List[CoqContext]:
     """
     Write a CoqContext record for each executable arg matching regex.
 
@@ -224,8 +223,10 @@ def _dehex(
     elif isinstance(d, list):
         return [_dehex(e) for e in d]
     elif isinstance(d, dict):
-        return {k: _dehex(v) for k,
-                v in d.items()}
+        return {
+            k: _dehex(v) for k,
+            v in d.items()
+        }
 
 
 def _parse_strace_line(parser: lark.Lark, line: str) -> str:
@@ -279,7 +280,7 @@ def _parse_strace_logdir(logdir: str,
             for line in iter(log_file.readline, ''):
                 if line.find(_hex_rep(executable)) != -1:
                     logging.info(f"from {logdir} from {log_file} parsing..")
-                    res += _record_context(line, parser, regex, log_file)
+                    res += _record_context(line, parser, regex)
     return res
 
 
@@ -334,7 +335,7 @@ def strace_build(
     def _strace_build(
             executable: str,
             regex: str,
-            workdir: str,
+            workdir: Optional[str],
             command: str,
             logdir: str) -> Tuple[List[CoqContext],
                                   int,

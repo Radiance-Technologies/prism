@@ -1,11 +1,12 @@
 """
 Module providing Coq project directory class representations.
 """
-import os
+
 import pathlib
 
 from prism.project.base import MetadataArgs, Project
 from prism.project.exception import DirHasNoCoqFiles
+from prism.util.radpytools import PathLike
 
 
 class ProjectDir(Project):
@@ -16,7 +17,7 @@ class ProjectDir(Project):
     is a git repository or not.
     """
 
-    def __init__(self, dir_abspath: os.PathLike, *args, **kwargs):
+    def __init__(self, dir_abspath: PathLike, *args, **kwargs):
         """
         Initialize Project object.
         """

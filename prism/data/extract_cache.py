@@ -74,7 +74,7 @@ from prism.project.repo import (
 from prism.util.alignment import Alignment, align_factory
 from prism.util.opam.switch import OpamSwitch
 from prism.util.opam.version import OpamVersion, Version
-from prism.util.radpytools import unzip
+from prism.util.radpytools import PathLike, unzip
 from prism.util.radpytools.os import pushd
 from prism.util.swim import SwitchManager
 
@@ -626,7 +626,7 @@ def _execute_cmd(serapi: SerAPI,
 
 def _extract_vernac_commands(
         sentences: Iterable[CoqSentence],
-        filename: os.PathLike,
+        filename: PathLike,
         opam_switch: Optional[OpamSwitch] = None,
         serapi_options: str = "",
         use_goals_diff: bool = True,
@@ -638,7 +638,7 @@ def _extract_vernac_commands(
     ----------
     sentences : Iterable[CoqSentence]
         A sequence of sentences derived from a document.
-    filename : os.PathLike
+    filename : PathLike
         The name of the document from which the `sentences` are taken,
         relative to the root of the project.
     opam_switch : Optional[OpamSwitch], optional
@@ -1159,7 +1159,7 @@ def extract_cache_new(
     commit_sha: str,
     process_project_fallback: Callable[[Project],
                                        VernacDict],
-    coq_version: str,
+    coq_version: Optional[str],
     block: bool,
     files_to_use: Optional[Iterable[str]],
     force_serial: bool,
@@ -1184,7 +1184,7 @@ def extract_cache_new(
     process_project_fallback : Callable[[Project], VernacDict]
         Function that provides fallback vernacular command extraction
         for projects that do not build.
-    coq_version : str or None, optional
+    coq_version : str or None
         The version of Coq in which to build the project, by default
         None.
     block : bool
@@ -1418,9 +1418,12 @@ class CacheExtractor:
         Path to a file containing default commits for each project.
         """
         self.default_commits: Dict[str,
-                                   List[str]] = io.load(
-                                       self.default_commits_path,
-                                       clz=dict)
+                                   List[str]] = typing.cast(
+                                       Dict[str,
+                                            List[str]],
+                                       io.load(
+                                           str(self.default_commits_path),
+                                           clz=dict))
         """
         The default commits for each project.
         """
@@ -1522,9 +1525,9 @@ class CacheExtractor:
 
     def run(
         self,
-        root_path: os.PathLike,
-        log_dir: Optional[os.PathLike] = None,
-        updated_md_storage_file: Optional[os.PathLike] = None,
+        root_path: PathLike,
+        log_dir: Optional[PathLike] = None,
+        updated_md_storage_file: Optional[PathLike] = None,
         extract_nprocs: int = 8,
         force_serial: bool = False,
         n_build_workers: int = 1,
@@ -1542,10 +1545,10 @@ class CacheExtractor:
         root_path : PathLike
             The root directory containing each project's directory.
             The project directories do not need to already exist.
-        log_dir : os.PathLike or None, optional
+        log_dir : PathLike or None, optional
             Directory to store log file(s) in, by default the directory
             that the metadata storage file is loaded from
-        updated_md_storage_file : os.PathLike or None, optional
+        updated_md_storage_file : PathLike or None, optional
             File to save the updated metadata storage file to, by
             default the original file's parent directory /
             "updated_metadata.yml"

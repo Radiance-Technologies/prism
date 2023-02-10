@@ -2,6 +2,7 @@
 Utility functions related to OPAM.
 """
 
+import typing
 from typing import Union
 
 from .formula import PackageFormula
@@ -45,4 +46,4 @@ def major_minor_version_bound(
     else:
         # "major" version not defined
         formula = PackageFormula.parse(f'"{package}.{version}"')
-    return formula
+    return typing.cast(PackageFormula, formula)

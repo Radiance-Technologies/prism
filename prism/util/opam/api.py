@@ -7,8 +7,9 @@ import subprocess
 import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass
-from os import PathLike
 from typing import ClassVar, Generator, Optional, Union
+
+from prism.util.radpytools import PathLike
 
 from .switch import OpamSwitch
 from .version import OCamlVersion, Version
@@ -240,7 +241,7 @@ class OpamAPI:
     def set_switch(
             cls,
             switch_name: Optional[str],
-            opam_root: Optional[PathLike] = None) -> OpamSwitch:
+            opam_root: Optional[PathLike] = None) -> None:
         """
         Set the currently active switch to the given one.
 

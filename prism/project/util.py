@@ -2,11 +2,12 @@
 Common project-related utilities.
 """
 
-import os
 import urllib.parse
 from pathlib import Path
 from re import sub
 from typing import Set, Union
+
+from prism.util.radpytools import PathLike
 
 URL = str
 
@@ -68,13 +69,13 @@ def camel_case_names(name: str) -> Set[str]:
     return names
 
 
-def extract_name(url: Union[URL, os.PathLike]) -> str:
+def extract_name(url: Union[URL, PathLike]) -> str:
     """
     Get project name from url or path.
 
     Parameters
     ----------
-    url :  Union[URL, os.PathLike]
+    url :  Union[URL, PathLike]
         A URL or path to an existing project or repository.
 
     Returns

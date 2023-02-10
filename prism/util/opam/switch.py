@@ -6,17 +6,18 @@ import os
 import re
 import resource
 import tempfile
+import typing
 import warnings
 from dataclasses import InitVar, dataclass, field, fields
 from functools import cached_property, reduce
-from os import PathLike
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess
-from typing import ClassVar, Dict, List, Optional, Tuple, Union
+from typing import Any, ClassVar, Dict, List, Optional, Tuple, Union
 
 from seutil import bash
 
 from prism.util.bash import escape
+from prism.util.radpytools import PathLike
 from prism.util.radpytools.dataclasses import default_field
 
 from .file import OpamFile
@@ -28,7 +29,7 @@ __all__ = ['OpamSwitch']
 logger = logging.getLogger(__file__)
 logger.setLevel(logging.DEBUG)
 
-_allow_unsafe_clone = []
+_allow_unsafe_clone: List[Any] = []
 # Private module variable to allow fallback in OpamSwitch.run for clones
 # that cannot invoke bwrap in an unprivileged container (e.g., a docker
 # container runner within Gitlab CI)
@@ -92,6 +93,7 @@ class OpamSwitch:
         if switch_root is None:
             # get the name of the current default root
             switch_root = bash.run("opam var root").stdout.strip()
+        assert isinstance(switch_name, str)
         if self.is_external(switch_name):
             # ensure local switch name is unambiguous
             switch_name = str(Path(switch_name).resolve())
@@ -163,9 +165,11 @@ class OpamSwitch:
             self.env.update({'PATH': new_path})
             environ['PATH'] = os.pathsep.join([new_path, environ['PATH']])
 
-        environ['OPAMROOT'] = self.root
+        environ['OPAMROOT'] = str(self.root)
 
-        environ['OPAMSWITCH'] = self.name if not self.is_clone else self.origin
+        environ['OPAMSWITCH'] = self.name if not self.is_clone else typing.cast(
+            str,
+            self.origin)
 
         return environ
 
@@ -192,7 +196,7 @@ class OpamSwitch:
         # get the original switch name from the copied and unaltered
         # environment file
         original_prefix = Path(self.env['OPAM_SWITCH_PREFIX'])
-        origin = original_prefix.name
+        origin: Optional[str] = original_prefix.name
         if origin == self._external_dirname:
             origin = str(original_prefix.parent)
         if origin == self.name:
@@ -426,10 +430,10 @@ class OpamSwitch:
             formula, pos = PackageFormula.parse(dep_text, exhaustive=False, pos=pos)
             formulas.append(formula)
         formula = reduce(
-            lambda l,
-            r: LogicalPF(l,
-                         LogOp.AND,
-                         r),
+            lambda left,
+            right: LogicalPF(left,
+                             LogOp.AND,
+                             right),
             formulas[1 :],
             formulas[0])
         return formula
@@ -587,6 +591,8 @@ class OpamSwitch:
         """
         if env is None:
             env = self.environ
+        src = None
+        dest = None
         if self.is_clone:
             command, src, dest = self.as_clone_command(command)
 
@@ -628,6 +634,8 @@ class OpamSwitch:
                         "Are you running in an unprivileged Docker container? "
                         "Falling back to terrible alternative. ")
                     # temporarily switch clone and origin directories
+                    assert isinstance(dest, Path)
+                    assert isinstance(src, Path)
                     tmp = str(dest) + "-temp"
                     os.rename(dest, tmp)
                     os.rename(src, dest)

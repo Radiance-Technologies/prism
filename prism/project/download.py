@@ -3,14 +3,16 @@ Module for downloading projects.
 """
 import os
 from multiprocessing import Pool
-from typing import List, Union
+from typing import Iterable, List, Union
 
-from git import Repo
+from git.repo import Repo
+
+from prism.util.radpytools import PathLike
 
 from .util import URL, extract_name
 
 
-def clone(project_url: URL, root: os.PathLike) -> None:
+def clone(project_url: URL, root: PathLike) -> None:
     """
     Download project to directory in a root directory.
 
@@ -39,8 +41,8 @@ def clone(project_url: URL, root: os.PathLike) -> None:
 
 def multiprocess_clone(
         project_list: List[URL],
-        targets: Union[os.PathLike,
-                       List[os.PathLike]],
+        target: Union[PathLike,
+                      Iterable[PathLike]],
         num_processes: int) -> None:
     """
     Download project in parallel.
@@ -49,19 +51,24 @@ def multiprocess_clone(
     ----------
     project_list : List[ProjectUrl]
         List of projects.
-    targets : Union[os.PathLike, List[os.PathLike]]
+    target : Union[os.PathLike, List[os.PathLike]]
         Either a common directory into which each project will be cloned
         or a per-project list of destination directories.
     num_processes : int
         Number of processes.
     """
     nprojects: int = len(project_list)
-    ntargets: int = len(targets) if isinstance(targets, list) else 1
+    if isinstance(target, Iterable):
+        targets = list(target)
+    else:
+        targets = [target]
+    ntargets = len(targets)
     if ntargets > 1 and len(targets) != len(project_list):
         raise ValueError(
             f"{nprojects} or 1 target expected but {ntargets} given.")
     elif ntargets == 1:
-        targets = [targets for _ in project_list]
+        assert not isinstance(target, Iterable)
+        targets = [target for _ in project_list]
 
     args = ((project, target) for project, target in zip(project_list, targets))
 

@@ -2,12 +2,12 @@
 Defines an adaptive switch manager that initializes itself.
 """
 
-from os import PathLike
 from pathlib import Path
 from typing import Iterable, List, Optional
 
 from prism.util.opam import AssignedVariables, OpamSwitch
 from prism.util.opam.api import OpamAPI
+from prism.util.radpytools import PathLike
 
 from .adaptive import AdaptiveSwitchManager
 

@@ -6,10 +6,12 @@ import argparse
 import os
 import pathlib
 import re
+import typing
 from dataclasses import dataclass
 from typing import ClassVar, List, Set, Tuple, Union
 
 from prism.util.path import get_relative_path
+from prism.util.radpytools import PathLike
 
 
 @dataclass
@@ -24,7 +26,7 @@ class IQR:
     I: Set[str]  # noqa: E741
     Q: Set[Tuple[str, str]]  # set of pairs of str
     R: Set[Tuple[str, str]]  # set of pairs of str
-    pwd: os.PathLike = ""
+    pwd: PathLike = ""
     """
     The working directory to which all of the options are assumed to be
     relative.
@@ -76,13 +78,13 @@ class IQR:
         """
         return self | other
 
-    def relocate(self, pwd: os.PathLike) -> 'IQR':
+    def relocate(self, pwd: PathLike) -> 'IQR':
         """
         Reinterpret the IQR arguments relative to another path.
 
         Parameters
         ----------
-        pwd : os.PathLike, optional
+        pwd : PathLike, optional
             The path relative to which the IQR options should be
             reinterpreted, by default "".
 
@@ -108,7 +110,7 @@ class IQR:
             cls,
             args: Union[str,
                         List[str]],
-            pwd: os.PathLike = "") -> 'IQR':
+            pwd: PathLike = "") -> 'IQR':
         """
         Extract IQR args from command args; return as IQR dataclass.
 
@@ -118,7 +120,7 @@ class IQR:
             A list of string arguments associated with a command or an
             unsplit string of arguments (e.g., options for SerAPI
             commands)
-        pwd : os.PathLike, optional
+        pwd : PathLike, optional
             The directory in which the command was executed, by default
             an empty string.
 
@@ -156,10 +158,17 @@ class IQR:
                 default=[],
                 help='recursively append filesystem dir mapped '
                 'to coqdir to coq load path')
-            args, _ = parser.parse_known_args(args)
-            I_ = set(args.I)
-            Q = {tuple(i) for i in args.Q}
-            R = {tuple(i) for i in args.R}
+            parsed_args, _ = parser.parse_known_args(args)
+            I_ = set(parsed_args.I)
+            Q = typing.cast(
+                Set[Tuple[str,
+                          str]],
+                {tuple(i) for i in parsed_args.Q})
+            R = typing.cast(
+                Set[Tuple[str,
+                          str]],
+                {tuple(i) for i in parsed_args.R})
+
         else:
             # these could be serapi options with embedded commas
             I_ = {m.group('phy') for m in cls._i_regex.finditer(args)}
@@ -171,5 +180,4 @@ class IQR:
                 (m.group('phy'),
                  m.group('log')) for m in cls._r_regex.finditer(args)
             }
-
         return cls(I_, Q, R, pwd=pwd)

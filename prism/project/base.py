@@ -54,6 +54,7 @@ from prism.util.opam import (
 )
 from prism.util.opam.formula import LogicalPF, LogOp
 from prism.util.path import get_relative_path
+from prism.util.radpytools import PathLike
 from prism.util.radpytools.os import pushd
 from prism.util.re import regex_from_options
 
@@ -76,7 +77,7 @@ class SentenceExtractionMethod(Enum):
     SERAPI = auto()
     HEURISTIC = auto()
 
-    def parser(self) -> Union[HeuristicParser, SerAPIParser]:
+    def parser(self) -> Union[Type[HeuristicParser], Type[SerAPIParser]]:
         """
         Return the appropriate parser for the SEM.
         """
@@ -139,7 +140,7 @@ class Project(ABC):
 
     def __init__(
             self,
-            dir_abspath: os.PathLike,
+            dir_abspath: PathLike,
             metadata_storage: MetadataStorage,
             opam_switch: Optional[OpamSwitch] = None,
             sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI,
@@ -155,8 +156,8 @@ class Project(ABC):
         else:
             self.opam_switch = OpamSwitch()
         self.num_cores = num_cores
-        self._last_metadata_args: MetadataArgs = None
-        self._metadata: ProjectMetadata = None
+        self._last_metadata_args: Optional[MetadataArgs] = None
+        self._metadata: Optional[ProjectMetadata] = None
 
     @property
     def build_cmd(self) -> List[str]:
@@ -234,6 +235,7 @@ class Project(ABC):
         """
         if self.is_metadata_stale:
             self._metadata = self._get_fresh_metadata()
+        assert self._metadata is not None
         return self._metadata
 
     @property
@@ -404,7 +406,7 @@ class Project(ABC):
 
     def _get_random_sentence_internal(
             self,
-            filename: Optional[str],
+            filename: Optional[PathLike],
             glom_proofs: bool,
             **kwargs) -> List[CoqSentence]:
         if filename is None:
@@ -605,7 +607,7 @@ class Project(ABC):
 
     def filter_files(
             self,
-            files: Iterable[os.PathLike],
+            files: Iterable[PathLike],
             relative: bool = False,
             dependency_order: bool = False) -> List[str]:
         """
@@ -613,7 +615,7 @@ class Project(ABC):
 
         Parameters
         ----------
-        files : Iterable[os.PathLike]
+        files : Iterable[PathLike]
             A collection of files, presumed to belong to this project.
         relative : bool, optional
             Whether to return absolute file paths or paths relative to
@@ -699,21 +701,21 @@ class Project(ABC):
         for dependency in self.opam_dependencies:
             formula.append(PackageFormula.parse(dependency))
         formula = reduce(
-            lambda l,
-            r: LogicalPF(l,
-                         LogOp.AND,
-                         r),
+            lambda left,
+            right: LogicalPF(left,
+                             LogOp.AND,
+                             right),
             formula[1 :],
             formula[0])
         return formula
 
-    def get_file(self, filename: os.PathLike) -> CoqDocument:
+    def get_file(self, filename: PathLike) -> CoqDocument:
         """
         Return a specific Coq source file.
 
         Parameters
         ----------
-        filename : os.PathLike
+        filename : PathLike
             The path to a file within the project.
 
         Returns
@@ -756,8 +758,10 @@ class Project(ABC):
             self.coq_options,
             self.opam_switch,
             self.path)
-        return {u: sorted(N.keys()) for u,
-                N in G.adjacency()}
+        return {
+            u: sorted(N.keys()) for u,
+            N in G.adjacency()
+        }
 
     def get_file_list(
             self,
@@ -821,7 +825,7 @@ class Project(ABC):
 
     def get_random_sentence_pair_adjacent(
             self,
-            filename: Optional[str] = None,
+            filename: Optional[PathLike] = None,
             glom_proofs: bool = True,
             **kwargs) -> Tuple[str,
                                str]:
@@ -832,7 +836,7 @@ class Project(ABC):
 
         Parameters
         ----------
-        filename : Optional[str], optional
+        filename : Optional[PathLike], optional
             Absolute path to file to load sentences from, by default
             None
         glom_proofs : bool, optional
@@ -865,7 +869,7 @@ class Project(ABC):
 
     def get_sentences(
             self,
-            filename: os.PathLike,
+            filename: PathLike,
             sentence_extraction_method: Optional[
                 SentenceExtractionMethod] = None,
             **kwargs) -> List[CoqSentence]:
@@ -877,7 +881,7 @@ class Project(ABC):
 
         Parameters
         ----------
-        filename : os.PathLike
+        filename : PathLike
             The path to a file in the project.
         sentence_extraction_method : Optional[\
                                          SentenceExtractionMethod],\
@@ -1130,13 +1134,13 @@ class Project(ABC):
             **kwargs)
 
     @staticmethod
-    def get_local_modpath(filename: os.PathLike, serapi_options: str) -> str:
+    def get_local_modpath(filename: PathLike, serapi_options: str) -> str:
         """
         Infer the module path for the given file.
 
         Parameters
         ----------
-        filename : os.PathLike
+        filename : PathLike
             The physical path to a project file relative to the project
             root.
         serapi_options : str

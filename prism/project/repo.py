@@ -3,13 +3,12 @@ Module providing Coq project repository class representations.
 """
 from __future__ import annotations
 
-import os
 import pathlib
 import random
 import warnings
 from collections import deque
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import git
 from git import Commit, Repo
@@ -17,6 +16,7 @@ from git import Commit, Repo
 from prism.data.document import CoqDocument
 from prism.project.base import MetadataArgs, Project
 from prism.project.metadata.storage import MetadataStorage
+from prism.util.radpytools import PathLike
 
 
 class CommitTraversalStrategy(Enum):
@@ -215,7 +215,7 @@ class ProjectRepo(Repo, Project):
 
     def __init__(
             self,
-            dir_abspath: os.PathLike,
+            dir_abspath: PathLike,
             *args,
             commit_sha: Optional[str] = None,
             **kwargs):
@@ -297,6 +297,8 @@ class ProjectRepo(Repo, Project):
 
     @property
     def path(self) -> pathlib.Path:  # noqa: D102
+        if self.working_dir is None:
+            raise RuntimeError("Bare repos are not currently supported.")
         return pathlib.Path(self.working_dir)
 
     @property
@@ -340,7 +342,7 @@ class ProjectRepo(Repo, Project):
 
     def get_file(
             self,
-            filename: os.PathLike,
+            filename: PathLike,
             commit_name: Optional[str] = None) -> CoqDocument:
         """
         Return a specific Coq source file from a specific commit.
@@ -349,7 +351,7 @@ class ProjectRepo(Repo, Project):
 
         Parameters
         ----------
-        filename : os.PathLike
+        filename : PathLike
             The path to a file within the project.
         commit_name : str or None, optional
             A commit hash, branch name, or tag name from which to fetch
@@ -485,9 +487,10 @@ class ProjectRepo(Repo, Project):
 
     def get_random_sentence_pair_adjacent(
             self,
-            filename: Optional[str] = None,
+            filename: Optional[PathLike] = None,
             glom_proofs: bool = True,
-            commit_name: Optional[str] = None) -> List[str]:
+            commit_name: Optional[str] = None) -> Tuple[str,
+                                                        str]:
         """
         Return a random adjacent sentence pair from the project.
 
@@ -495,7 +498,7 @@ class ProjectRepo(Repo, Project):
 
         Parameters
         ----------
-        filename : Optional[str], optional
+        filename : Optional[PathLike], optional
             Absolute path to file to load sentences from, by default
             None
         glom_proofs : bool, optional

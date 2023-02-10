@@ -6,9 +6,11 @@ import os
 from contextlib import contextmanager
 from typing import Generator
 
+from prism.util.radpytools import PathLike
+
 
 @contextmanager
-def pushd(dir: os.PathLike) -> Generator[None, None, None]:
+def pushd(dir: PathLike) -> Generator[None, None, None]:
     """
     Temporarily change directories for the duration of the context.
 

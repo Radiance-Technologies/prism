@@ -1,7 +1,7 @@
 """
 Setup utilities, especially for repair mining.
 """
-import os
+
 import typing
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple, Union
@@ -14,12 +14,10 @@ from prism.project.metadata.version_info import version_info
 from prism.project.repo import ProjectRepo
 from prism.util.opam.api import OpamAPI
 from prism.util.opam.switch import OpamSwitch
+from prism.util.radpytools import PathLike
 
 
-def _initialize_switch(
-        args: Tuple[str,
-                    str,
-                    Optional[os.PathLike]]) -> OpamSwitch:
+def _initialize_switch(args: Tuple[str, str, Optional[PathLike]]) -> OpamSwitch:
     """
     Unpack arguments for `initialize_switch`.
     """
@@ -29,7 +27,7 @@ def _initialize_switch(
 def initialize_switch(
         coq_version: str,
         compiler: str,
-        opam_root: Optional[os.PathLike] = None) -> OpamSwitch:
+        opam_root: Optional[PathLike] = None) -> OpamSwitch:
     """
     Create a single OPAM switch based on designated Coq versions.
 
@@ -41,7 +39,7 @@ def initialize_switch(
         Desired Coq versions for switch.
     compiler : str
         Desired compiler for switch.
-    opam_root : os.PathLike | None, optional
+    opam_root : PathLike | None, optional
         The OPAM root of the desired switch, by default the current
         globally set root.
 
@@ -70,8 +68,8 @@ def initialize_switch(
 def create_switches(
         input_coq_versions: List[str],
         input_compilers: List[str],
-        opam_root: Union[Optional[os.PathLike],
-                         List[Optional[os.PathLike]]] = None,
+        opam_root: Union[Optional[PathLike],
+                         List[Optional[PathLike]]] = None,
         n_procs: int = 1) -> List[OpamSwitch]:
     """
     Create a list of OPAM switches based on designated Coq versions.
@@ -84,7 +82,7 @@ def create_switches(
         List of desired Coq versions for switches.
     input_compilers : List[str]
         List of desired compilers for switches.
-    opam_root : os.PathLike | List[os.PathLike | None]] | None, optional
+    opam_root : PathLike | List[PathLike | None]] | None, optional
         The OPAM roots of the desired switches, by default the current
         globally set root.
     n_procs : int, optional
@@ -103,7 +101,7 @@ def create_switches(
     if not isinstance(opam_root, Iterable):
         opam_roots = [opam_root for _ in input_coq_versions]
     else:
-        opam_roots = typing.cast(List[Optional[os.PathLike]], opam_root)
+        opam_roots = typing.cast(List[Optional[PathLike]], opam_root)
 
     if len(input_coq_versions) != len(input_compilers):
         raise ValueError(
@@ -218,7 +216,7 @@ def initialize_project(
 
 def initialize_projects(
         root_path: str,
-        metadata_storage: Union[os.PathLike,
+        metadata_storage: Union[PathLike,
                                 MetadataStorage],
         projects: Optional[List[str]] = None,
         sentence_extraction_method: Union[

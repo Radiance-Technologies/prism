@@ -2,8 +2,8 @@
 Defines central storage/retrieval mechanisms for project metadata.
 """
 
-import os
-from dataclasses import dataclass, fields
+import typing
+from dataclasses import InitVar, dataclass, field, fields
 from functools import partialmethod
 from itertools import chain
 from typing import (
@@ -28,6 +28,7 @@ from bidict import bidict
 from prism.project.metadata.dataclass import ProjectMetadata
 from prism.project.util import GitURL
 from prism.util.opam import OCamlVersion, Version
+from prism.util.radpytools import PathLike
 from prism.util.radpytools.dataclasses import default_field
 
 from .version_info import version_info
@@ -42,16 +43,18 @@ class ProjectSource:
     """
 
     project_name: str
-    repo_url: Optional[GitURL]
+    repo_url_: InitVar[Optional[Union[str, GitURL]]]
+    repo_url: Optional[GitURL] = field(init=False)
 
-    def __post_init__(self):
+    def __post_init__(self, repo_url_: Optional[Union[str, GitURL]]):
         """
         Standardize URLs.
         """
-        if self.repo_url is not None:
-            object.__setattr__(self, 'repo_url', GitURL(self.repo_url))
+        if repo_url_ is not None:
+            repo_url_ = GitURL(repo_url_)
+        object.__setattr__(self, 'repo_url', repo_url_)
 
-    def serialize(self) -> Dict[str, str]:  # noqa: D102
+    def serialize(self) -> Dict[str, Optional[str]]:  # noqa: D102
         # workaround for bug in seutil that skips custom serialization
         # for subclasses of primitive types like str
         return {
@@ -87,26 +90,29 @@ class Context:
     """
 
     revision: Revision
-    coq_version: Optional[Version]
-    ocaml_version: Optional[Version]
+    coq_version_: InitVar[Optional[Union[str, Version]]]
+    ocaml_version_: InitVar[Optional[Union[str, Version]]]
+    coq_version: Optional[Version] = field(init=False)
+    ocaml_version: Optional[Version] = field(init=False)
 
-    def __post_init__(self):
+    def __post_init__(
+            self,
+            coq_version_: Optional[Union[str,
+                                         Version]],
+            ocaml_version_: Optional[Union[str,
+                                           Version]]):
         """
         Ensure that an OCaml version requires a Coq version.
         """
-        if self.ocaml_version is not None and self.coq_version is None:
+        if ocaml_version_ is not None and coq_version_ is None:
             raise ValueError(
                 "A Coq version must be specified if an OCaml version is given.")
-        if isinstance(self.coq_version, str):
-            object.__setattr__(
-                self,
-                'coq_version',
-                OCamlVersion.parse(self.coq_version))
-        if isinstance(self.ocaml_version, str):
-            object.__setattr__(
-                self,
-                'ocaml_version',
-                OCamlVersion.parse(self.ocaml_version))
+        if isinstance(coq_version_, str):
+            coq_version_ = OCamlVersion.parse(coq_version_)
+        object.__setattr__(self, 'coq_version', coq_version_)
+        if isinstance(ocaml_version_, str):
+            ocaml_version_ = OCamlVersion.parse(ocaml_version_)
+        object.__setattr__(self, 'ocaml_version', ocaml_version_)
         if not version_info.are_coq_ocaml_compatible(self.coq_version,
                                                      self.ocaml_version):
             raise RuntimeError(
@@ -114,7 +120,7 @@ class Context:
                 f"ocaml={self.ocaml_version}")
 
     @property
-    def commit_sha(self) -> str:  # noqa: D102
+    def commit_sha(self) -> Optional[str]:  # noqa: D102
         return self.revision.commit_sha
 
     @property
@@ -268,8 +274,10 @@ class MetadataStorage:
     """
     The inverse map of `_bidict_attrs`.
     """
-    _attr_bidicts = {v: k for k,
-                     vs in _bidict_attrs.items() for v in vs}
+    _attr_bidicts = {
+        v: k for k,
+        vs in _bidict_attrs.items() for v in vs
+    }
 
     def __post_init__(self) -> None:
         """
@@ -358,12 +366,12 @@ class MetadataStorage:
             If `unique` is True and the key is already present in the
             index.
         """
-        key = key_maker(key)
+        key_hash = key_maker(key)
         try:
-            sequence_id = getattr(self, index)[key]
+            sequence_id = getattr(self, index)[key_hash]
         except KeyError:
             sequence_id = self.indices[index]
-            getattr(self, index)[key] = sequence_id
+            getattr(self, index)[key_hash] = sequence_id
             self.indices[index] += 1
         else:
             if unique:
@@ -578,6 +586,7 @@ class MetadataStorage:
             # Is this a new value?
             if (field_value is not None and field_value != default_value):
                 if field_name in self._attr_bidicts:
+                    assert isinstance(field_value, list)
                     index = self._attr_bidicts[field_name]
                     if index == 'command_sequences':
                         val = self._add_to_index(
@@ -590,8 +599,10 @@ class MetadataStorage:
                                                val) for val in field_value)
                     getattr(self, field_name)[context_id] = val
                 elif field_name in ['ignore_path_regex']:
+                    assert isinstance(field_value, Iterable)
                     getattr(self, field_name)[context_id] = set(field_value)
                 elif field_name == "serapi_options":
+                    assert isinstance(field_value, str)
                     self.serapi_options[context_id] = field_value
 
     def _process_record_args(
@@ -605,10 +616,10 @@ class MetadataStorage:
         ocaml_version: Optional[Union[str,
                                       Version]] = None
     ) -> Tuple[str,
-               str,
-               str,
-               str,
-               str]:
+               Optional[str],
+               Optional[str],
+               Optional[str],
+               Optional[str]]:
         """
         Process record-identifying arguments.
 
@@ -638,7 +649,12 @@ class MetadataStorage:
             coq_version = project_name.coq_version
             ocaml_version = project_name.ocaml_version
             project_name = project_name.project_name
-        return project_name, project_url, commit_sha, coq_version, ocaml_version
+        return (
+            project_name,
+            project_url,
+            commit_sha,
+            str(coq_version),
+            str(ocaml_version))
 
     def _remove_field(self, context_id: int, field_name: str) -> None:
         """
@@ -990,8 +1006,8 @@ class MetadataStorage:
         # only store new data if it overrides all values with lower
         # precedence
         default = self._get_default(metadata)
-        for field in fields(ProjectMetadata):
-            field_name = field.name
+        for f in fields(ProjectMetadata):
+            field_name = f.name
             self._insert_field(
                 context_id,
                 field_name,
@@ -1108,20 +1124,16 @@ class MetadataStorage:
             'opam_repositories'
         }
         result = {
-            f.name: io.serialize(getattr(self,
-                                         f.name),
-                                 fmt)
-            for f in fields(self)
-            if f.name not in special_fields
+            f.name: io.serialize(
+                getattr(self,
+                        f.name),
+                fmt) for f in fields(self) if f.name not in special_fields
         }
         for f in special_fields:
             result[f] = io.serialize(list(getattr(self, f).items()))
         return result
 
-    def union(
-            self,
-            *others: Tuple['MetadataStorage',
-                           ...]) -> 'MetadataStorage':
+    def union(self, *others: 'MetadataStorage') -> 'MetadataStorage':
         """
         Get the union of this and one or more other repositories.
 
@@ -1301,7 +1313,7 @@ class MetadataStorage:
     def dump(
             cls,
             storage: 'MetadataStorage',
-            output_filepath: os.PathLike,
+            output_filepath: PathLike,
             fmt: io.Fmt = io.Fmt.yaml) -> None:
         """
         Serialize metadata and writes to .yml file.
@@ -1310,25 +1322,25 @@ class MetadataStorage:
         ----------
         storage : MetadataStorage
             A metadata storage instance.
-        output_filepath : os.PathLike
+        output_filepath : PathLike
             Filepath to which metadata should be dumped.
         fmt : su.io.Fmt, optional
             Designated format of the output file, by default
             `io.Fmt.yaml`.
         """
-        io.dump(output_filepath, storage, fmt=fmt)
+        io.dump(str(output_filepath), storage, fmt=fmt)
 
     @classmethod
     def load(
             cls,
-            filepath: os.PathLike,
+            filepath: PathLike,
             fmt: io.Fmt = io.Fmt.yaml) -> 'MetadataStorage':
         """
         Create list of `ProjectMetadata` objects from input file.
 
         Parameters
         ----------
-        filepath : os.PathLike
+        filepath : PathLike
             Filepath containing dumped metadata storage.
         fmt : su.io.Fmt, optional
             Designated format of the input file, by default
@@ -1339,10 +1351,16 @@ class MetadataStorage:
         MetadataStorage
             A metadata storage instance.
         """
-        return io.load(filepath, fmt, serialization=True, clz=MetadataStorage)
+        return typing.cast(
+            MetadataStorage,
+            io.load(
+                str(filepath),
+                fmt,
+                serialization=True,
+                clz=MetadataStorage))
 
     @classmethod
-    def unions(cls, *repos: Tuple['MetadataStorage', ...]) -> 'MetadataStorage':
+    def unions(cls, *repos: 'MetadataStorage') -> 'MetadataStorage':
         """
         Get the union of the given metadata repositories.
 

@@ -1,11 +1,12 @@
 """
 System path utilities.
 """
-import os
 from pathlib import Path
 
+from prism.util.radpytools import PathLike
 
-def get_relative_path(path: os.PathLike, other: os.PathLike) -> Path:
+
+def get_relative_path(path: PathLike, other: PathLike) -> Path:
     """
     Return the relative path of one path to another.
     """
