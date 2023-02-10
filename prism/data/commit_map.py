@@ -219,7 +219,9 @@ class ProjectCommitMapper(Generic[T]):
         logger.debug(f"Initializing pool of {max_workers} workers")
         results: Dict[str,
                       Union[Optional[T],
-                            Except[T]]] = {p.name: None for p in self.projects}
+                            Except[T]]] = {
+                                p.name: None for p in self.projects
+                            }
         if force_serial:
             for job in tqdm.tqdm(job_list,
                                  total=len(job_list),
