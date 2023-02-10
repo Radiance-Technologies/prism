@@ -157,7 +157,7 @@ def create_default_switches(n_procs: int = 1) -> List[OpamSwitch]:
 
 
 def _initialize_project(
-    args: Tuple[str,
+    args: Tuple[PathLike,
                 str,
                 MetadataStorage,
                 Optional[SentenceExtractionMethod],
@@ -170,7 +170,7 @@ def _initialize_project(
 
 
 def initialize_project(
-    root_path: str,
+    root_path: PathLike,
     project_name: str,
     metadata_storage: MetadataStorage,
     sentence_extraction_method: Optional[SentenceExtractionMethod] = None,
@@ -215,7 +215,7 @@ def initialize_project(
 
 
 def initialize_projects(
-        root_path: str,
+        root_path: PathLike,
         metadata_storage: Union[PathLike,
                                 MetadataStorage],
         projects: Optional[List[str]] = None,
@@ -230,7 +230,7 @@ def initialize_projects(
 
     Parameters
     ----------
-    root_path : str
+    root_path : PathLike
         Root path containing project root directories
         with names matching project names.
     metadata_storage : Union[PathLike, MetadataStorage]
