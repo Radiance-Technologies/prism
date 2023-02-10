@@ -425,10 +425,10 @@ class Project(ABC):
                  _ in iqr.R))
         else:
             return chain(
-                (Path(self.path) / p for p in iqr.I),
-                (Path(self.path) / p for p,
+                (self.path / p for p in iqr.I),
+                (self.path / p for p,
                  _ in iqr.Q),
-                (Path(self.path) / p for p,
+                (self.path / p for p,
                  _ in iqr.R))
 
     def _prepare_command(self, target: str) -> str:
