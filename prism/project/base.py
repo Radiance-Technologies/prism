@@ -293,7 +293,7 @@ class Project(ABC):
 
     @property
     @abstractmethod
-    def path(self) -> os.PathLike:
+    def path(self) -> Path:
         """
         Get the path to the project's root directory.
         """

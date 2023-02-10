@@ -34,8 +34,8 @@ class ProjectDir(Project):
         return pathlib.Path(self.working_dir).stem
 
     @property
-    def path(self) -> os.PathLike:  # noqa: D102
-        return self.working_dir
+    def path(self) -> pathlib.Path:  # noqa: D102
+        return pathlib.Path(self.working_dir)
 
     def _pre_get_file(self, **kwargs):
         """

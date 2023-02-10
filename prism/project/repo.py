@@ -296,8 +296,8 @@ class ProjectRepo(Repo, Project):
         return pathlib.Path(self.remote_url).stem
 
     @property
-    def path(self) -> os.PathLike:  # noqa: D102
-        return self.working_dir
+    def path(self) -> pathlib.Path:  # noqa: D102
+        return pathlib.Path(self.working_dir)
 
     @property
     def remote_url(self) -> str:  # noqa: D102
