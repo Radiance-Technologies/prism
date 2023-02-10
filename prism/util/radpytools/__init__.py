@@ -20,39 +20,38 @@ from typing import (
     runtime_checkable,
 )
 
+from .path import PathLike  # noqa: F401
+
 _T = TypeVar('_T')
 _S = TypeVar('_S', contravariant=True)
 
 
 @runtime_checkable
-class _Named(Protocol[_S]):
+class _Named(Protocol):
     """
     Part of the descriptor protocol.
 
     See https://docs.python.org/3/howto/descriptor.html#automatic-name-notification
     """  # noqa: W505
 
-    def __set_name__(self, _owner: Type[_S], name: str) -> None:  # noqa: D105
+    def __set_name__(self, _owner: type, name: str) -> None:  # noqa: D105
         ...
 
 
 @runtime_checkable
-class _NonDataDescriptor(Protocol[_S]):
+class _NonDataDescriptor(Protocol):
     """
     Part of the descriptor protocol.
 
     See https://docs.python.org/3/howto/descriptor.html#descriptor-protocol.
     """  # noqa: W505
 
-    def __get__(  # noqa: D105
-            self,
-            _instance: _S,
-            _owner: Optional[Type[_S]] = None) -> Any:
+    def __get__(self, _instance: Any, _owner: Optional[type] = ...) -> Any:
         ...
 
 
 @runtime_checkable
-class _NamedNonDataDescriptor(_NonDataDescriptor[_S], _Named[_S], Protocol[_S]):
+class _NamedNonDataDescriptor(_NonDataDescriptor, _Named, Protocol):
     """
     Part of the descriptor protocol.
 
@@ -63,21 +62,19 @@ class _NamedNonDataDescriptor(_NonDataDescriptor[_S], _Named[_S], Protocol[_S]):
 
 
 @runtime_checkable
-class _MutationDescriptor(Protocol[_S]):
+class _MutationDescriptor(Protocol):
     """
     TPart of the descriptor protocol.
 
     See https://docs.python.org/3/howto/descriptor.html#descriptor-protocol.
     """  # noqa: W505
 
-    def __set__(self, _instance: _S, _value: Any) -> None:  # noqa: D105
+    def __set__(self, _instance: Any, _value: Any) -> None:  # noqa: D105
         ...
 
 
 @runtime_checkable
-class _NamedMutationDescriptor(_MutationDescriptor[_S],
-                               _Named[_S],
-                               Protocol[_S]):
+class _NamedMutationDescriptor(_MutationDescriptor, _Named, Protocol):
     """
     Part of the descriptor protocol.
 
@@ -88,21 +85,19 @@ class _NamedMutationDescriptor(_MutationDescriptor[_S],
 
 
 @runtime_checkable
-class _DestructiveDescriptor(Protocol[_S]):
+class _DestructiveDescriptor(Protocol):
     """
     Part of the descriptor protocol.
 
     See https://docs.python.org/3/howto/descriptor.html#descriptor-protocol.
     """  # noqa: W505
 
-    def __delete__(self, _instance: _S) -> None:  # noqa: D105
+    def __delete__(self, _instance: Any) -> None:  # noqa: D105
         ...
 
 
 @runtime_checkable
-class _NamedDestructiveDescriptor(_DestructiveDescriptor[_S],
-                                  _Named[_S],
-                                  Protocol[_S]):
+class _NamedDestructiveDescriptor(_DestructiveDescriptor, _Named, Protocol):
     """
     Part of the descriptor protocol.
 
@@ -113,9 +108,7 @@ class _NamedDestructiveDescriptor(_DestructiveDescriptor[_S],
 
 
 @runtime_checkable
-class _DataDescriptor(_DestructiveDescriptor[_S],
-                      _MutationDescriptor[_S],
-                      Protocol[_S]):
+class _DataDescriptor(_DestructiveDescriptor, _MutationDescriptor, Protocol):
     """
     Part of the descriptor protocol.
 
@@ -126,10 +119,10 @@ class _DataDescriptor(_DestructiveDescriptor[_S],
 
 
 @runtime_checkable
-class _NamedDataDescriptor(_DestructiveDescriptor[_S],
-                           _MutationDescriptor[_S],
-                           _Named[_S],
-                           Protocol[_S]):
+class _NamedDataDescriptor(_DestructiveDescriptor,
+                           _MutationDescriptor,
+                           _Named,
+                           Protocol):
     """
     Part of the descriptor protocol.
 
@@ -155,10 +148,10 @@ See https://docs.python.org/3/howto/descriptor.html#descriptor-protocol.
 
 
 @runtime_checkable
-class _Descriptor(_NonDataDescriptor[_S],
-                  _MutationDescriptor[_S],
-                  _DestructiveDescriptor[_S],
-                  Protocol[_S]):
+class _Descriptor(_NonDataDescriptor,
+                  _MutationDescriptor,
+                  _DestructiveDescriptor,
+                  Protocol):
     """
     The descriptor protocol.
 
@@ -169,11 +162,11 @@ class _Descriptor(_NonDataDescriptor[_S],
 
 
 @runtime_checkable
-class _NamedDescriptor(_NonDataDescriptor[_S],
-                       _MutationDescriptor[_S],
-                       _DestructiveDescriptor[_S],
-                       _Named[_S],
-                       Protocol[_S]):
+class _NamedDescriptor(_NonDataDescriptor,
+                       _MutationDescriptor,
+                       _DestructiveDescriptor,
+                       _Named,
+                       Protocol):
     """
     The descriptor protocol.
 

@@ -2,26 +2,27 @@
 Synchronization helpers for multiprocessing.
 """
 
+import typing
 from multiprocessing import RLock
 from multiprocessing.synchronize import SemLock
 from typing import Any, Callable, Dict, Optional, Type, TypeVar, Union
 
-from prism.util.radpytools import descriptor
+from prism.util.radpytools import Descriptor, _NonDataDescriptor, descriptor
 
-S = TypeVar('S')
-T = TypeVar('T')
+_S = TypeVar('_S')
+_T = TypeVar('_T')
 
 
 def critical(
-    f: Callable[[T],
-                S] = None,
+    f: Optional[Callable[...,
+                         _S]] = None,
     lock: Optional[SemLock] = None
-) -> Union[Callable[[Callable[[T],
-                              S]],
-                    Callable[[T],
-                             S]],
-           Callable[[T],
-                    S]]:
+) -> Union[Callable[[Callable[...,
+                              _S]],
+                    Callable[...,
+                             _S]],
+           Callable[...,
+                    _S]]:
     """
     Wrap a function in a semaphore/lock for thread-safe synchronization.
 
@@ -62,7 +63,7 @@ def critical(
     return inner
 
 
-class _synchronizedmethod(descriptor):
+class _synchronizedmethod(descriptor[_T]):
     """
     Internal implementation of synchronized methods.
 
@@ -93,12 +94,12 @@ class _synchronizedmethod(descriptor):
                            Any]) -> None:
         super().__init__(func, require_read=True)
         self.semlock_name = semlock_name
-        self.sync_name = None
+        self.sync_name: str
         self.lock = RLock()
         self._semlock_cls = semlock_cls
         self._semlock_kwargs = kwargs
 
-    def __set_name__(self, owner: Type[T], name: str):
+    def __set_name__(self, owner: Type[_T], name: str) -> None:
         """
         Set the name of the descriptor and synchronization wrapper.
 
@@ -121,9 +122,8 @@ class _synchronizedmethod(descriptor):
         self.sync_name = self.get_sync_name(name, owner)
 
     def __get__(self,  # noqa: C901
-                instance: T,
-                owner: Type[T] = None) -> Callable[...,
-                                                   Any]:
+                instance: _T,
+                owner: Optional[Type[_T]] = None) -> Any:
         """
         Retrieve the synchronized method wrapper.
 
@@ -150,11 +150,13 @@ class _synchronizedmethod(descriptor):
         """
         if instance is None and owner is None:
             return self
+        obj: Union[_T, Optional[Type[_T]]]
         if self._isclassmethod:
             obj = owner
         else:
             obj = instance
         if owner is None:
+            assert instance is not None
             owner = type(instance)
         if obj is not None:
             try:
@@ -166,6 +168,7 @@ class _synchronizedmethod(descriptor):
                     try:
                         result = getattr(obj, self.sync_name)
                     except AttributeError:
+                        assert self.semlock_name is not None
                         # Create the synchronization wrapper.
                         # Get semlock used for synchronization
                         try:
@@ -182,6 +185,7 @@ class _synchronizedmethod(descriptor):
                                     semlock = self._semlock_cls(
                                         **self._semlock_kwargs)
                                     if self._isclassmethod:
+                                        assert isinstance(obj, type)
                                         type.__setattr__(
                                             obj,
                                             self.semlock_name,
@@ -195,18 +199,31 @@ class _synchronizedmethod(descriptor):
                             raise TypeError(
                                 f"{self.semlock_name} is not a supported"
                                 f"synchronization primitive (got {semlock!r})")
+
+                        assert isinstance(self._f, _NonDataDescriptor)
                         # create and store synchronization wrapper
                         if self._isproperty:
-                            wrapper = critical(
-                                lambda: self._f.__get__(instance,
-                                                        owner),
-                                semlock)
+                            wrapper: Callable[
+                                [],
+                                Any] = typing.cast(
+                                    Callable[[],
+                                             Any],
+                                    critical(
+                                        lambda: typing.cast(
+                                            _NonDataDescriptor,
+                                            self._f).__get__(instance,
+                                                             owner),
+                                        semlock))
                         else:
-                            wrapper = critical(
-                                self._f.__get__(instance,
-                                                owner),
-                                semlock)
+                            wrapper = typing.cast(
+                                Callable[[],
+                                         Any],
+                                critical(
+                                    self._f.__get__(instance,
+                                                    owner),
+                                    semlock))
                         if self._isclassmethod:
+                            assert isinstance(obj, type)
                             type.__setattr__(obj, self.sync_name, wrapper)
                         else:
                             object.__setattr__(obj, self.sync_name, wrapper)
@@ -217,16 +234,17 @@ class _synchronizedmethod(descriptor):
         else:
             # obj can only be None if a class tried to call an instance
             # method
+            assert isinstance(self._f, _NonDataDescriptor)
             return self._f.__get__(instance, owner)
 
-    def __set__(self, _instance: T, _value: Any):
+    def __set__(self, _instance: _T, _value: Any) -> None:
         """
         Reject attempts to overwrite the method.
         """
         raise AttributeError(f"Cannot set synchronized method {self._f_name}")
 
     @staticmethod
-    def get_semlock_name(method_name: str, owner: Type[T]) -> str:
+    def get_semlock_name(method_name: str, owner: Type[_T]) -> str:
         """
         Return the canonical name of a method's semaphore/lock.
 
@@ -245,7 +263,7 @@ class _synchronizedmethod(descriptor):
         return f'_{method_name}_{owner.__module__}_{owner.__name__}_semlock'
 
     @staticmethod
-    def get_sync_name(method_name: str, owner: Type[T]) -> str:
+    def get_sync_name(method_name: str, owner: Type[_T]) -> str:
         """
         Return the canonical name of a method's synchronization wrapper.
 
@@ -267,14 +285,19 @@ class _synchronizedmethod(descriptor):
 # once yapf and other tools support positional-only parameters, alter
 # the definition to ``def synchronizedmethod(f, /, *, ...)``
 def synchronizedmethod(
-        _func: Callable[...,
-                        Any] = None,
-        *,
-        semlock_name: Optional[str] = None,
-        semlock_cls: Callable[...,
-                              SemLock] = RLock,
-        **kwargs: Dict[str,
-                       Any]) -> _synchronizedmethod:
+    _func: Optional[Union[Callable[...,
+                                   Any],
+                          Descriptor]] = None,
+    *,
+    semlock_name: Optional[str] = None,
+    semlock_cls: Callable[...,
+                          SemLock] = RLock,
+    **kwargs: Dict[str,
+                   Any]
+) -> Union[_synchronizedmethod[_T],
+           Callable[[Callable[...,
+                              Any]],
+                    _synchronizedmethod[_T]]]:
     """
     Make a synchronized method decorator.
 
@@ -350,14 +373,18 @@ def synchronizedmethod(
 
 
 def synchronizedproperty(
-        _func: Callable[...,
-                        Any] = None,
-        *,
-        semlock_name: Optional[str] = None,
-        semlock_cls: Callable[...,
-                              SemLock] = RLock,
-        **kwargs: Dict[str,
-                       Any]) -> _synchronizedmethod:
+    _func: Optional[Callable[...,
+                             Any]] = None,
+    *,
+    semlock_name: Optional[str] = None,
+    semlock_cls: Callable[...,
+                          SemLock] = RLock,
+    **kwargs: Dict[str,
+                   Any]
+) -> Union[_synchronizedmethod,
+           Callable[[Callable[...,
+                              Any]],
+                    _synchronizedmethod]]:
     """
     Make a synchronized property decorator.
 
@@ -414,12 +441,14 @@ def synchronizedproperty(
     [[0, 1, 2, 3, 4], [0, 1, 2, 3, 4, 0, 1, 2, 3, 4]]
     """
 
-    def wrap(func):
-        return synchronizedmethod(
-            property(func),
-            semlock_name=semlock_name,
-            semlock_cls=semlock_cls,
-            **kwargs)
+    def wrap(func: Callable[..., Any]) -> _synchronizedmethod:
+        return typing.cast(
+            _synchronizedmethod,
+            synchronizedmethod(
+                property(func),
+                semlock_name=semlock_name,
+                semlock_cls=semlock_cls,
+                **kwargs))
 
     # See if we're called as @synchronizedproperty or
     # @synchronizedmethod()
