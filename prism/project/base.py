@@ -13,6 +13,7 @@ from dataclasses import fields
 from enum import Enum, auto
 from functools import partialmethod, reduce
 from itertools import chain
+from pathlib import Path
 from subprocess import CalledProcessError
 from typing import (
     Any,
@@ -334,32 +335,31 @@ class Project(ABC):
 
     def _check_serapi_option_health_pre_build(self) -> bool:
         """
-        Verify serpai_options exist and correspond to existing paths.
+        Verify serapi_options exists and corresponds to existing paths.
         """
         if self.serapi_options is None:
             return False
         # Check if current IQR flags map to current directories.
-        for physical_path in self._iqr_bound_directories(True):
-            if not (pathlib.Path(self.path) / physical_path).exists():
+        for physical_path in self._iqr_bound_directories(False):
+            if not physical_path.exists():
                 return False
         return True
 
     def _check_serapi_option_health_post_build(self) -> bool:
         """
-        Verify two conditions are met for post-build iqr flags.
+        Verify two conditions are met for post-build serapi_options.
 
-        1. iqr physical paths contain vo files
-        2. all vo files are either directly in the root project
-           directory or their paths start with a physical path in the
-           iqr flags
+        1. iqr physical paths contain *.vo files
+        2. all *.vo files' paths start with a physical path in
+           serapi_options
         """
         full_paths = list(self._iqr_bound_directories(False))
         for full_path in full_paths:
             if not glob.glob(f"{full_path}/**/*.vo", recursive=True):
                 return False
         for vo_file in glob.glob(f"{self.path}/**/*.vo", recursive=True):
-            vo_file_path = pathlib.Path(vo_file)
-            if not any(pathlib.Path(full_path) in vo_file_path.parents
+            vo_file_path = Path(vo_file)
+            if not any(full_path in vo_file_path.parents
                        for full_path in full_paths):
                 return False
         return True
@@ -398,7 +398,7 @@ class Project(ABC):
             opam_switch=self.opam_switch)
         return sentences
 
-    def _iqr_bound_directories(self, relative: bool) -> Iterator[str]:
+    def _iqr_bound_directories(self, relative: bool) -> Iterator[Path]:
         """
         Produce an iterator over all physical paths in serapi_options.
 
@@ -410,23 +410,25 @@ class Project(ABC):
 
         Yields
         ------
-        str
+        Path
             Physical paths from serapi_options
         """
         if self.serapi_options is None:
             return iter([])
         iqr = IQR.extract_iqr(self.serapi_options)
         if relative:
-            return chain(iqr.I, (p for p, _ in iqr.Q), (p for p, _ in iqr.R))
+            return chain(
+                Path(iqr.I),
+                (Path(p) for p,
+                 _ in iqr.Q),
+                (Path(p) for p,
+                 _ in iqr.R))
         else:
             return chain(
-                (os.sep.join((str(self.path),
-                              p)) for p in iqr.I),
-                (os.sep.join((str(self.path),
-                              p)) for p,
+                (Path(self.path) / p for p in iqr.I),
+                (Path(self.path) / p for p,
                  _ in iqr.Q),
-                (os.sep.join((str(self.path),
-                              p)) for p,
+                (Path(self.path) / p for p,
                  _ in iqr.R))
 
     def _prepare_command(self, target: str) -> str:
