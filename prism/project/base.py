@@ -353,14 +353,31 @@ class Project(ABC):
         2. all *.vo files' paths start with a physical path in
            serapi_options
         """
-        full_paths = list(self._iqr_bound_directories(False))
-        for full_path in full_paths:
+        full_q_paths = list(
+            self._iqr_bound_directories(
+                False,
+                return_i=False,
+                return_q=True,
+                return_r=False))
+        full_r_paths = list(
+            self._iqr_bound_directories(
+                False,
+                return_i=False,
+                return_q=False,
+                return_r=True))
+        for full_path in full_q_paths:
+            if not glob.glob(f"{full_path}/*.vo", recursive=False):
+                return False
+        for full_path in full_r_paths:
             if not glob.glob(f"{full_path}/**/*.vo", recursive=True):
                 return False
         for vo_file in glob.glob(f"{self.path}/**/*.vo", recursive=True):
             vo_file_path = Path(vo_file)
-            if not any(full_path in vo_file_path.parents
-                       for full_path in full_paths):
+            if full_r_paths and not any(full_path in vo_file_path.parents
+                                        for full_path in full_r_paths):
+                return False
+            if full_q_paths and not any(full_path == vo_file_path.parent
+                                        for full_path in full_q_paths):
                 return False
         return True
 
@@ -398,7 +415,12 @@ class Project(ABC):
             opam_switch=self.opam_switch)
         return sentences
 
-    def _iqr_bound_directories(self, relative: bool) -> Iterator[Path]:
+    def _iqr_bound_directories(
+            self,
+            relative: bool,
+            return_i: bool = True,
+            return_q: bool = True,
+            return_r: bool = True) -> Iterator[Path]:
         """
         Produce an iterator over all physical paths in serapi_options.
 
@@ -407,6 +429,15 @@ class Project(ABC):
         relative : bool
             Flag to control whether iterator is over paths relative to
             project root or absolute paths
+        return_i : bool, optional
+            Flag controlling whether -I flag paths are returned, by
+            default True
+        return_q : bool, optional
+            Flag controlling whether -Q flag paths are returned, by
+            default True
+        return_r : bool, optional
+            Flag controlling whether -R flag paths are returned, by
+            default True
 
         Yields
         ------
@@ -418,18 +449,18 @@ class Project(ABC):
         iqr = IQR.extract_iqr(self.serapi_options)
         if relative:
             return chain(
-                Path(iqr.I),
+                (Path(p) for p in iqr.I) if return_i else (),
                 (Path(p) for p,
-                 _ in iqr.Q),
+                 _ in iqr.Q) if return_q else (),
                 (Path(p) for p,
-                 _ in iqr.R))
+                 _ in iqr.R) if return_r else ())
         else:
             return chain(
-                (self.path / p for p in iqr.I),
+                (self.path / p for p in iqr.I) if return_i else (),
                 (self.path / p for p,
-                 _ in iqr.Q),
+                 _ in iqr.Q) if return_q else (),
                 (self.path / p for p,
-                 _ in iqr.R))
+                 _ in iqr.R) if return_r else ())
 
     def _prepare_command(self, target: str) -> str:
         commands = [f"({cmd})" for cmd in getattr(self, f"{target}_cmd")]
