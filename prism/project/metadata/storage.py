@@ -313,7 +313,9 @@ class MetadataStorage:
         if isinstance(context, ProjectMetadata):
             context = Context.from_metadata(context)
         elif not isinstance(context, Context):
-            return NotImplemented
+            raise TypeError(
+                "MetadataStorage.__contains__ only supports ProjectMetadata or "
+                f"Context, but you passed in a {type(context)}.")
         return context in self.contexts
 
     def __iter__(self) -> Iterator[ProjectMetadata]:
@@ -586,7 +588,7 @@ class MetadataStorage:
             # Is this a new value?
             if (field_value is not None and field_value != default_value):
                 if field_name in self._attr_bidicts:
-                    assert isinstance(field_value, list)
+                    assert isinstance(field_value, (list, set))
                     index = self._attr_bidicts[field_name]
                     if index == 'command_sequences':
                         val = self._add_to_index(

@@ -46,7 +46,7 @@ class TestMetadataStorage(unittest.TestCase):
         self.assertIn(self.metadata[0], storage)
         self.assertNotIn(self.metadata[1], storage)
         with self.assertRaises(TypeError):
-            self.assertIn('gstew5_games' in storage)
+            self.assertIn('gstew5_games', storage)
 
     def test_get_project_revisions(self):
         """
@@ -70,6 +70,7 @@ class TestMetadataStorage(unittest.TestCase):
         Verify that the storage is invariant to URL ``.git`` extensions.
         """
         storage = MetadataStorage()
+        metadata = self.metadata[0]
         for metadata in sorted(self.metadata):
             storage.insert(metadata)
         self.assertEqual(
@@ -80,6 +81,7 @@ class TestMetadataStorage(unittest.TestCase):
                 metadata.commit_sha,
                 metadata.coq_version,
                 metadata.ocaml_version))
+        assert metadata.project_url is not None
         self.assertEqual(
             metadata,
             storage.get(

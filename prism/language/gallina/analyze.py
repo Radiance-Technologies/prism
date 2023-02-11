@@ -284,7 +284,9 @@ class SexpInfo:
             elif isinstance(other, (int, float)):
                 return self.beg_charno <= other and self.end_charno >= other
             else:
-                return NotImplemented
+                raise TypeError(
+                    "Loc.__contains__ supports only Loc, int, or float, "
+                    f", but you passed {type(other)}")
 
         def __lt__(self, other: Union['SexpInfo.Loc', int, float]) -> bool:
             """
