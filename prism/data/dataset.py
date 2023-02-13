@@ -300,7 +300,7 @@ class CoqProjectBaseDataset:
             commit_name = commit_names.get(project_name, None)
             kwargs = {}
             if commit_name is not None:
-                if isinstance(project, ProjectRepo):
+                if not isinstance(project, ProjectRepo):
                     raise ValueError(
                         f"Cannot checkout commit from non-Git project {project_name}"
                     )
