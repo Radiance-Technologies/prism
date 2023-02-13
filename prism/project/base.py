@@ -335,7 +335,10 @@ class Project(ABC):
 
     def _check_serapi_option_health_pre_build(self) -> bool:
         """
-        Verify serapi_options exists and corresponds to existing paths.
+        Check the integrity of SerAPI options before building.
+
+        Verify `serapi_options` exists and corresponds to existing
+        paths.
         """
         if self.serapi_options is None:
             return False
@@ -347,24 +350,26 @@ class Project(ABC):
 
     def _check_serapi_option_health_post_build(self) -> bool:
         """
-        Verify two conditions are met for post-build serapi_options.
+        Check the integrity of SerAPI options after building.
 
-        1. iqr physical paths contain *.vo files
-        2. all *.vo files' paths start with a physical path in
-           serapi_options
+        Verify two conditions are met for post-build `serapi_options`:
+
+        1. QR physical paths contain *.vo files;
+        2. All *.vo files' paths start with a physical path in
+           serapi_options.
         """
         full_q_paths = list(
             self._iqr_bound_directories(
                 False,
-                return_i=False,
-                return_q=True,
-                return_r=False))
+                return_I=False,
+                return_Q=True,
+                return_R=False))
         full_r_paths = list(
             self._iqr_bound_directories(
                 False,
-                return_i=False,
-                return_q=False,
-                return_r=True))
+                return_I=False,
+                return_Q=False,
+                return_R=True))
         for full_path in full_q_paths:
             if not glob.glob(f"{full_path}/*.vo", recursive=False):
                 return False
@@ -418,49 +423,45 @@ class Project(ABC):
     def _iqr_bound_directories(
             self,
             relative: bool,
-            return_i: bool = True,
-            return_q: bool = True,
-            return_r: bool = True) -> Iterator[Path]:
+            return_I: bool = True,
+            return_Q: bool = True,
+            return_R: bool = True) -> Iterator[Path]:
         """
-        Produce an iterator over all physical paths in serapi_options.
+        Iterate over all physical paths in `serapi_options`.
 
         Parameters
         ----------
         relative : bool
             Flag to control whether iterator is over paths relative to
             project root or absolute paths
-        return_i : bool, optional
-            Flag controlling whether -I flag paths are returned, by
+        return_I : bool, optional
+            Flag controlling whether ``-I`` flag paths are returned, by
             default True
-        return_q : bool, optional
-            Flag controlling whether -Q flag paths are returned, by
+        return_Q : bool, optional
+            Flag controlling whether ``-Q`` flag paths are returned, by
             default True
-        return_r : bool, optional
-            Flag controlling whether -R flag paths are returned, by
+        return_R : bool, optional
+            Flag controlling whether ``-R`` flag paths are returned, by
             default True
 
         Yields
         ------
         Path
-            Physical paths from serapi_options
+            Physical paths from `serapi_options`.
         """
         if self.serapi_options is None:
-            return iter([])
-        iqr = IQR.extract_iqr(self.serapi_options)
-        if relative:
-            return chain(
-                (Path(p) for p in iqr.I) if return_i else (),
-                (Path(p) for p,
-                 _ in iqr.Q) if return_q else (),
-                (Path(p) for p,
-                 _ in iqr.R) if return_r else ())
+            yield from []
         else:
-            return chain(
-                (self.path / p for p in iqr.I) if return_i else (),
-                (self.path / p for p,
-                 _ in iqr.Q) if return_q else (),
-                (self.path / p for p,
-                 _ in iqr.R) if return_r else ())
+            iqr = IQR.extract_iqr(self.serapi_options)
+            for p in chain(iqr.I if return_I else (),
+                           (p for p,
+                            _ in iqr.Q) if return_Q else (),
+                           (p for p,
+                            _ in iqr.R) if return_R else ()):
+                if relative:
+                    yield Path(p)
+                else:
+                    yield self.path / p
 
     def _prepare_command(self, target: str) -> str:
         commands = [f"({cmd})" for cmd in getattr(self, f"{target}_cmd")]
