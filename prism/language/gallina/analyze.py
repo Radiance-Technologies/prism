@@ -22,7 +22,7 @@ from prism.language.sexp.list import SexpList
 from prism.language.sexp.string import SexpString
 from prism.language.token import TokenConsts
 from prism.util.opam import Version
-from prism.util.radpytools.dataclasses import default_field, immutable_dataclass
+from prism.util.radpytools.dataclasses import default_field
 from prism.util.re import regex_from_options
 
 from .exception import SexpAnalyzingException
@@ -244,7 +244,7 @@ class SexpInfo:
 
         extend_type_obligations = "Obligations"
 
-    @immutable_dataclass
+    @dataclass(frozen=True)
     class Loc:
         """
         A location within a file.

@@ -64,9 +64,7 @@ def default_field(obj: _T) -> _T:
     return field(default_factory=lambda: deepcopy(obj))
 
 
-def immutable_dataclass(*args,
-                        **kwargs) -> Callable[[Type[Dataclass]],
-                                              Type[Dataclass]]:
+def immutable_dataclass(*args, **kwargs) -> Callable[[Type[_T]], Type[_T]]:
     """
     Make an immutable, hashable dataclass.
 
