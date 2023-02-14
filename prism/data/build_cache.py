@@ -543,12 +543,78 @@ class VernacCommandDataList:
     def copy(self) -> 'VernacCommandDataList':  # noqa: D102
         return self.__class__(self.commands.copy())
 
+    def diff_goals(self) -> None:
+        """
+        Diff goals in-place, removing consecutive `Goals` of sentences.
+        """
+        previous_goals = None
+        for sentence in self.sorted_sentences():
+            current_goals = sentence.goals
+            current_goal_identifiers = sentence.goals_qualified_identifiers
+            if isinstance(current_goals, Goals):
+                if isinstance(previous_goals, Goals):
+                    goals_or_goals_diff = GoalsDiff.compute_diff(
+                        previous_goals,
+                        current_goals)
+                    current_goal_identifiers = {
+                        gidx: current_goal_identifiers[gidx] for _goal,
+                        added_goal_locations in goals_or_goals_diff.added_goals
+                        for gidx in added_goal_locations
+                    }
+                else:
+                    if isinstance(previous_goals, GoalsDiff):
+                        warnings.warn(
+                            "Unable to compute diff with respect to existing diff. "
+                            "Try patch_goals first and then try again.")
+                    goals_or_goals_diff = current_goals
+            else:
+                goals_or_goals_diff = current_goals
+            sentence.goals = goals_or_goals_diff
+            sentence.goals_qualified_identifiers = current_goal_identifiers
+            previous_goals = current_goals
+
     def extend(self, items: Iterable[Any]) -> None:  # noqa: D102
         items = list(items)
         if any(not isinstance(item, VernacCommandData) for item in items):
             raise TypeError(
                 'CoqDocumentData may only contain VernacCommandData')
         self.commands.extend(items)
+
+    def patch_goals(self) -> None:
+        """
+        Patch all goals in-place, removing `GoalsDiff`s from sentences.
+        """
+        previous_goals = None
+        previous_goal_identifiers: Dict[GoalLocation,
+                                        GoalIdentifiers] = {}
+        for sentence in self.sorted_sentences():
+            current_goals = sentence.goals
+            current_goal_identifiers = sentence.goals_qualified_identifiers
+            if isinstance(current_goals, GoalsDiff):
+                assert previous_goals is not None, \
+                    "previous_goals must be non-null for a diff to exist"
+                # Patch goal identifiers
+                # Silently fail if goal identifiers are missing
+                added_goal_identifiers = current_goal_identifiers
+                # make a copy to avoid modifying previous sentence's
+                # goals
+                current_goal_identifiers = dict(previous_goal_identifiers)
+                # handle removed goals
+                for removed_goal_location in current_goals.removed_goals:
+                    current_goal_identifiers.pop(removed_goal_location, None)
+                # handle moved goals
+                for origin, destination in current_goals.moved_goals:
+                    moved_goal = current_goal_identifiers.pop(origin, None)
+                    if moved_goal is not None:
+                        current_goal_identifiers[destination] = moved_goal
+                # handle added goals
+                current_goal_identifiers.update(added_goal_identifiers)
+                # Patch goals
+                current_goals = current_goals.patch(previous_goals)
+            sentence.goals = current_goals
+            sentence.goals_qualified_identifiers = current_goal_identifiers
+            previous_goals = current_goals
+            previous_goal_identifiers = current_goal_identifiers
 
     def sorted_sentences(self) -> List[VernacSentence]:
         """
@@ -786,6 +852,20 @@ class ProjectCommitData(Serializable):
         """
         return {k: len(v) for k,
                 v in self.command_data.items()}
+
+    def diff_goals(self) -> None:
+        """
+        Diff goals in-place, removing consecutive `Goals` of sentences.
+        """
+        for _, commands in self.command_data.items():
+            commands.diff_goals()
+
+    def patch_goals(self) -> None:
+        """
+        Patch all goals in-place, removing `GoalsDiff`s from sentences.
+        """
+        for _, commands in self.command_data.items():
+            commands.patch_goals()
 
     def sorted_sentences(self) -> Dict[str, List[VernacSentence]]:
         """
