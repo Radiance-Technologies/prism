@@ -207,6 +207,8 @@ class ProjectCommitDataDiff:
             The patched commit data.
         """
         result = copy.deepcopy(data)
+        # ensure goals are uncompressed
+        result.patch_goals()
         result_command_data = result.command_data
         # decompose moves and changes into drops and adds
         dropped_commands: Dict[str,
@@ -289,6 +291,7 @@ class ProjectCommitDataDiff:
                 assert not added, "file cannot be empty if commands were added"
                 # the resulting file would be empty; remove it
                 result_command_data.pop(filename, None)
+        result.diff_goals()
         return result
 
     @classmethod
@@ -331,7 +334,7 @@ class ProjectCommitDataDiff:
                 file_diff = changes.setdefault(
                     filename,
                     VernacCommandDataListDiff())
-                file_diff.added_commands.append(cmd)
+                file_diff.added_commands.append(copy.deepcopy(cmd))
             elif b is None:
                 # dropped command
                 assert a is not None, "cannot skip both sequences in alignment"
@@ -351,7 +354,8 @@ class ProjectCommitDataDiff:
                     VernacCommandDataListDiff())
                 if acmd.all_text() != bcmd.all_text():
                     # changed command
-                    file_diff.changed_commands[aidx - offset] = bcmd
+                    file_diff.changed_commands[aidx
+                                               - offset] = copy.deepcopy(bcmd)
                 elif acmd.spanning_location() != bcmd.spanning_location():
                     # the command was moved but otherwise unchanged
                     file_diff.moved_commands[aidx - offset] = [
@@ -388,7 +392,12 @@ class ProjectCommitDataDiff:
             The diff between `a` and `b` such that
             ``diff.patch(a).command_data == b.command_data``.
         """
-        return cls.from_aligned_commands(get_aligned_commands(a, b, alignment))
+        a.patch_goals()
+        b.patch_goals()
+        diff = cls.from_aligned_commands(get_aligned_commands(a, b, alignment))
+        a.diff_goals()
+        b.diff_goals()
+        return diff
 
     @classmethod
     def from_commit_data(
