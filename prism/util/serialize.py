@@ -4,10 +4,11 @@ Supply a protocol for serializable data.
 
 import os
 import typing
-from dataclasses import fields, is_dataclass
+from dataclasses import dataclass, fields, is_dataclass
 from typing import (
     Any,
     Dict,
+    Generic,
     Optional,
     Protocol,
     Tuple,
@@ -19,8 +20,12 @@ from typing import (
 
 import seutil as su
 import typing_inspect
+import yaml
+from diff_match_patch import diff_match_patch
 
 from prism.util.radpytools.dataclasses import Dataclass
+
+_dmp = diff_match_patch()
 
 
 @runtime_checkable
@@ -68,6 +73,68 @@ class Serializable(Protocol):
             The deserialized object.
         """
         return su.io.load(filepath, fmt, clz=cls)
+
+
+_S = TypeVar('_S')
+
+
+@dataclass
+class SerializableDiff(Generic[_S]):
+    """
+    A diff between two serializable objects.
+    """
+
+    diff: str
+
+    def patch(self, a: _S) -> _S:
+        """
+        Apply the diff to a given object to obtain a changed one.
+
+        Parameters
+        ----------
+        a : object
+            An object that can be serialized and deserialized.
+
+        Returns
+        -------
+        object
+            The object resulting from applying this diff to `a`.
+            If there exists some `b` such that `self` equals
+            ``SerializableDiff.compute_diff(a,b)``, then
+            ``self.patch(a) == b``.
+        """
+        clz = type(a)
+        a = su.io.serialize(a, fmt=su.io.Fmt.yaml)
+        a_str = typing.cast(str, yaml.safe_dump(a))
+        patches = _dmp.patch_fromText(self.diff)
+        patched_a_str, _ = _dmp.patch_apply(patches, a_str)
+        patched_a = yaml.safe_load(patched_a_str)
+        patched_a = su.io.deserialize(patched_a, clz=clz, error="raise")
+        return patched_a
+
+    @classmethod
+    def compute_diff(cls, a: _S, b: _S) -> 'SerializableDiff':
+        """
+        Get a diff between two serializable objects of the same type.
+
+        Parameters
+        ----------
+        a, b : object
+            Objects that can be serialized.
+
+        Returns
+        -------
+        SerializableDiff
+            A text representation of the diff between `a` and `b`.
+        """
+        fmt = su.io.Fmt.yaml
+        a = su.io.serialize(a, fmt=fmt)
+        b = su.io.serialize(b, fmt=fmt)
+        a_str = typing.cast(str, yaml.safe_dump(a))
+        b_str = typing.cast(str, yaml.safe_dump(b))
+        patches = _dmp.patch_make(a_str, b_str)
+        diff = _dmp.patch_toText(patches)
+        return SerializableDiff(diff)
 
 
 _Generic = Any
