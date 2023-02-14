@@ -5,7 +5,7 @@ import enum
 import re
 from dataclasses import dataclass
 from itertools import chain
-from typing import Dict, List, NamedTuple, Optional, Set, Tuple, Union
+from typing import Dict, Iterator, List, NamedTuple, Optional, Set, Tuple, Union
 
 from prism.util.radpytools.dataclasses import default_field
 
@@ -153,6 +153,79 @@ and whether it is in the left or right list at the given depth.
 The middle index gives the index of a goal in an actual list of goals.
 """
 
+
+def background_goal_index(
+        depth: int,
+        list_index: int,
+        is_left: bool) -> GoalIndex:
+    """
+    Create a background goal index.
+
+    Parameters
+    ----------
+    depth : int
+        The depth of the goal in the background goals stack.
+    list_index : int
+        The index of the goal in an actual list of goals.
+    is_left : bool
+        Whether the goal is in the left or right list of goals at the
+        indicated `depth`.
+
+    Returns
+    -------
+    GoalIndex
+        The canonical index of the goal.
+    """
+    return (depth, list_index, is_left)
+
+
+def _non_background_goal_index(list_index: int) -> GoalIndex:
+    return (0, list_index, True)
+
+
+foreground_goal_index = _non_background_goal_index
+"""
+Create a foreground goal index.
+
+Parameters
+----------
+list_index : int
+    The index of the goal in the list of foreground goals.
+
+Returns
+-------
+GoalIndex
+    The canonical index of the goal.
+"""
+shelved_goal_index = _non_background_goal_index
+"""
+Create a shelved goal index.
+
+Parameters
+----------
+list_index : int
+    The index of the goal in the list of shelved goals.
+
+Returns
+-------
+GoalIndex
+    The canonical index of the goal.
+"""
+abandoned_goal_index = _non_background_goal_index
+"""
+Create an abandoned goal index.
+
+Parameters
+----------
+list_index : int
+    The index of the goal in the list of abandoned goals.
+
+Returns
+-------
+GoalIndex
+    The canonical index of the goal.
+"""
+
 _goal_locator_deserialize_regex = re.compile(
     r"\((?P<type>\w+),\s*"
     r"\((?P<index_0>\d+),\s*(?P<index_1>\d+),\s*(?P<index_2>False|True)\)\)")
@@ -180,6 +253,55 @@ class GoalLocation(NamedTuple):
         return f"({self.goal_type.name},{self.goal_index})"
 
     @classmethod
+    def abandoned(cls, list_index: int) -> 'GoalLocation':
+        """
+        Get a location for an abandoned goal.
+
+        Parameters
+        ----------
+        list_index : int
+            The index of the goal in the list of abandoned goals.
+
+        Returns
+        -------
+        GoalLocation
+            The canonical location of the goal.
+        """
+        return GoalLocation(
+            GoalType.ABANDONED,
+            abandoned_goal_index(list_index))
+
+    @classmethod
+    def background(
+            cls,
+            depth: int,
+            list_index: int,
+            is_left: bool) -> 'GoalLocation':
+        """
+        Get a location for a background goal.
+
+        Parameters
+        ----------
+        depth : int
+            The depth of the goal in the background goals stack.
+        list_index : int
+            The index of the goal in an actual list of goals.
+        is_left : bool
+            Whether the goal is in the left or right list of goals at
+            the indicated `depth`.
+
+        Returns
+        -------
+        GoalLocation
+            The canonical location of the goal.
+        """
+        return GoalLocation(
+            GoalType.BACKGROUND,
+            background_goal_index(depth,
+                                  list_index,
+                                  is_left))
+
+    @classmethod
     def deserialize(cls, data: str) -> 'GoalLocation':
         """
         Deserialize from a string.
@@ -194,6 +316,42 @@ class GoalLocation(NamedTuple):
                 int(match["index_0"]),
                 int(match["index_1"]),
                 match["index_2"] == "True"))
+
+    @classmethod
+    def foreground(cls, list_index: int) -> 'GoalLocation':
+        """
+        Get a location for a foreground goal.
+
+        Parameters
+        ----------
+        list_index : int
+            The index of the goal in the list of foreground goals.
+
+        Returns
+        -------
+        GoalLocation
+            The canonical location of the goal.
+        """
+        return GoalLocation(
+            GoalType.FOREGROUND,
+            foreground_goal_index(list_index))
+
+    @classmethod
+    def shelved(cls, list_index: int) -> 'GoalLocation':
+        """
+        Get a location for a shelved goal.
+
+        Parameters
+        ----------
+        list_index : int
+            The index of the goal in the list of shelved goals.
+
+        Returns
+        -------
+        GoalLocation
+            The canonical location of the goal.
+        """
+        return GoalLocation(GoalType.SHELVED, shelved_goal_index(list_index))
 
 
 @dataclass
@@ -212,6 +370,40 @@ class Goals:
     background_goals: List[Tuple[List[Goal], List[Goal]]] = default_field([])
     shelved_goals: List[Goal] = default_field([])
     abandoned_goals: List[Goal] = default_field([])
+
+    def __iter__(self) -> Iterator[Tuple[GoalLocation, Goal]]:
+        """
+        Enumerate the goals.
+        """
+        yield from (
+            (GoalLocation.foreground(i),
+             g) for i,
+            g in enumerate(self.foreground_goals))
+        yield from chain(
+            *(
+                chain(
+                    (
+                        (GoalLocation.background(i,
+                                                 j,
+                                                 True),
+                         lg) for j,
+                        lg in enumerate(lgs)),
+                    (
+                        (GoalLocation.background(i,
+                                                 j,
+                                                 False),
+                         rg) for j,
+                        rg in enumerate(rgs))) for i,
+                (lgs,
+                 rgs) in enumerate(self.background_goals)))
+        yield from (
+            (GoalLocation.shelved(i),
+             g) for i,
+            g in enumerate(self.shelved_goals))
+        yield from (
+            (GoalLocation.abandoned(i),
+             g) for i,
+            g in enumerate(self.abandoned_goals))
 
     @property
     def counts(self) -> Dict[str, int]:
@@ -458,6 +650,14 @@ class GoalsDiff:
     """
     The change in background goals depth.
     """
+
+    def __iter__(self) -> Iterator[Union[AddedGoal, RemovedGoal, MovedGoal]]:
+        """
+        Iterate over goal changes.
+        """
+        yield from self.added_goals
+        yield from self.removed_goals
+        yield from self.moved_goals
 
     @property
     def counts(self) -> Dict[str, int]:
