@@ -4,4 +4,5 @@ flake8-bugbear
 flake8-docstrings
 isort
 pre-commit
+types-PyYAML
 yapf

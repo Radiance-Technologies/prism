@@ -1,4 +1,5 @@
 bidict
+diff_match_patch
 GitPython
 gprof2dot
 graphviz
@@ -15,6 +16,7 @@ pytest-cov
 pytest-dependency
 pytest-doctestplus
 pytest-subtests
+PyYAML
 recordclass <= 0.18.0.1
 scipy
 setuptools_scm
