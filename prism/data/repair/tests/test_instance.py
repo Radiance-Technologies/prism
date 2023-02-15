@@ -72,9 +72,10 @@ class TestRepairInstance(unittest.TestCase):
             self.repaired_state,
             default_align)
         with self.subTest("patch"):
-            self._assert_commit_data_equal(
-                diff.patch(self.initial_state),
-                self.repaired_state)
+            patched_state = diff.patch(self.initial_state)
+            patched_state.diff_goals()
+            self.repaired_state.diff_goals()
+            self._assert_commit_data_equal(patched_state, self.repaired_state)
 
     @classmethod
     def setUpClass(cls) -> None:

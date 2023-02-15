@@ -5,7 +5,7 @@ Defines representations of repair instances (or examples).
 import copy
 import typing
 from dataclasses import dataclass, fields
-from typing import Dict, Generic, List, Optional, Set, Type, TypeVar, Union
+from typing import Dict, Generic, Optional, Set, Type, TypeVar, Union
 
 import numpy as np
 
@@ -25,7 +25,10 @@ from prism.language.gallina.analyze import SexpInfo
 from prism.util.diff import GitDiff
 from prism.util.opam import OpamSwitch
 from prism.util.radpytools.dataclasses import Dataclass, default_field
-from prism.util.serialize import deserialize_generic_dataclass
+from prism.util.serialize import (
+    SerializableDataDiff,
+    deserialize_generic_dataclass,
+)
 
 
 @dataclass
@@ -128,19 +131,9 @@ class VernacCommandDataListDiff:
     These new commands are presumed to be completely novel and not arise
     from relocating commands from other files.
     """
-    moved_commands: Dict[int,
-                         List[LocDiff]] = default_field({})
-    """
-    A map from command indices in the original file to destinations
-    indicating where the indexed commands should be moved.
-    Note that the destinations may be in other files.
-    The commands are presumed to not otherwise be modified in form or
-    content.
-    A list of location diffs is included, one for each of the sentences
-    that may be included in the command.
-    """
-    changed_commands: Dict[int,
-                           VernacCommandData] = default_field({})
+    changed_commands: Dict[
+        int,
+        SerializableDataDiff[VernacCommandData]] = default_field({})
     """
     A map from command indices in the original file to commands that
     should replace the indexed commands.
@@ -160,7 +153,7 @@ class VernacCommandDataListDiff:
         Return whether this diff is empty.
         """
         return not (
-            self.added_commands or self.moved_commands or self.changed_commands
+            self.added_commands or self.changed_commands
             or self.dropped_commands)
 
 
@@ -205,10 +198,12 @@ class ProjectCommitDataDiff:
         -------
         ProjectCommitData
             The patched commit data.
+            Note that goals will be fully patched and expanded.
+            Call `ProjectCommitData.diff_goals` on the result
         """
-        result = copy.deepcopy(data)
         # ensure goals are uncompressed
-        result.patch_goals()
+        data.patch_goals()
+        result = copy.deepcopy(data)
         result_command_data = result.command_data
         # decompose moves and changes into drops and adds
         dropped_commands: Dict[str,
@@ -222,32 +217,13 @@ class ProjectCommitDataDiff:
             # Include added commands from diff being applied.
             added = added_commands.setdefault(filename, VernacCommandDataList())
             added.extend(change.added_commands)
-            # decompose moves into drops and adds
-            dropped.update(change.moved_commands.keys())
-            for moved_idx, loc_diffs in change.moved_commands.items():
-                # Verify all sentences for the command have same
-                # destination file.
-                assert loc_diffs, "moves require destinations"
-                destination_file = loc_diffs[0].after_filename
-                assert all(
-                    ld.after_filename == destination_file
-                    for ld in loc_diffs), "commands move atomically"
-                # Get command from the state being patched.
-                command = result_command_data[filename][moved_idx]
-                # Change sentence location in place for each sentence
-                # in the command to the location in this diff.
-                for (sentence,
-                     loc_diff) in zip(command.sorted_sentences(),
-                                      loc_diffs):
-                    sentence.location = loc_diff.patch(sentence.location)
-                # Adds the moved command to the list of added commands
-                added = added_commands.setdefault(
-                    destination_file,
-                    VernacCommandDataList())
-                added.append(command)
             # decompose changes into drops and adds
             dropped.update(change.changed_commands.keys())
-            for command in change.changed_commands.values():
+            for original_command_index, command_diff in change.changed_commands.items():
+                # patch the original command
+                original_command = data.command_data[filename][
+                    original_command_index]
+                command = command_diff.patch(original_command)
                 added = added_commands.setdefault(
                     command.location.filename,
                     VernacCommandDataList())
@@ -286,12 +262,11 @@ class ProjectCommitDataDiff:
             except KeyError:
                 command_data = VernacCommandDataList()
                 result_command_data[filename] = command_data
-            command_data.extend(added)
+            command_data.extend((copy.deepcopy(c) for c in added))
             if not command_data:
                 assert not added, "file cannot be empty if commands were added"
                 # the resulting file would be empty; remove it
                 result_command_data.pop(filename, None)
-        result.diff_goals()
         return result
 
     @classmethod
@@ -352,19 +327,12 @@ class ProjectCommitDataDiff:
                 file_diff = changes.setdefault(
                     filename,
                     VernacCommandDataListDiff())
-                if acmd.all_text() != bcmd.all_text():
+                if acmd != bcmd:
                     # changed command
-                    file_diff.changed_commands[aidx
-                                               - offset] = copy.deepcopy(bcmd)
-                elif acmd.spanning_location() != bcmd.spanning_location():
-                    # the command was moved but otherwise unchanged
-                    file_diff.moved_commands[aidx - offset] = [
-                        LocDiff.compute_diff(k.location,
-                                             l.location) for k,
-                        l in zip(
-                            acmd.sorted_sentences(),
-                            bcmd.sorted_sentences())
-                    ]
+                    command_diff = SerializableDataDiff[
+                        VernacCommandData].compute_diff(acmd,
+                                                        bcmd)
+                    file_diff.changed_commands[aidx - offset] = command_diff
                 # else the command is unchanged and not in the diff
         return result
 
@@ -381,6 +349,10 @@ class ProjectCommitDataDiff:
         ----------
         a, b : ProjectCommitData
             Command data extracted from two commits of a project.
+            The goals of each command will be patched in-place as a
+            side-effect.
+            Call ``a.diff_goals()`` and ``b.diff_goals()`` to compress
+            them after alignment, if desired.
         alignment : np.ndarray
             A precomputed alignment between the commands of each project
             where ``(i,j)`` matches the ``i``-th command of `a` to the
@@ -395,8 +367,6 @@ class ProjectCommitDataDiff:
         a.patch_goals()
         b.patch_goals()
         diff = cls.from_aligned_commands(get_aligned_commands(a, b, alignment))
-        a.diff_goals()
-        b.diff_goals()
         return diff
 
     @classmethod
