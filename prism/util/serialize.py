@@ -26,6 +26,8 @@ from diff_match_patch import diff_match_patch
 from prism.util.radpytools.dataclasses import Dataclass
 
 _dmp = diff_match_patch()
+# Produce smaller diffs
+_dmp.Patch_Margin = 1
 
 
 @runtime_checkable
