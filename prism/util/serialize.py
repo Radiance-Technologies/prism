@@ -79,7 +79,7 @@ _S = TypeVar('_S')
 
 
 @dataclass
-class SerializableDiff(Generic[_S]):
+class SerializableDataDiff(Generic[_S]):
     """
     A diff between two serializable objects.
     """
@@ -113,7 +113,7 @@ class SerializableDiff(Generic[_S]):
         return patched_a
 
     @classmethod
-    def compute_diff(cls, a: _S, b: _S) -> 'SerializableDiff':
+    def compute_diff(cls, a: _S, b: _S) -> 'SerializableDataDiff':
         """
         Get a diff between two serializable objects of the same type.
 
@@ -134,7 +134,7 @@ class SerializableDiff(Generic[_S]):
         b_str = typing.cast(str, yaml.safe_dump(b))
         patches = _dmp.patch_make(a_str, b_str)
         diff = _dmp.patch_toText(patches)
-        return SerializableDiff(diff)
+        return SerializableDataDiff(diff)
 
 
 _Generic = Any
