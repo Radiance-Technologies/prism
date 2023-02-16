@@ -3,13 +3,20 @@ Test suite for `prism.data.repair.align`.
 """
 import typing
 import unittest
+from typing import Optional
 
+import pytest
 from seutil import io
 
-from prism.data.build_cache import ProjectCommitData
+from prism.data.build_cache import ProjectCommitData, VernacCommandData
 from prism.data.repair.align import default_align
 from prism.data.repair.diff import compute_git_diff
-from prism.data.repair.instance import ProjectCommitDataDiff
+from prism.data.repair.instance import (
+    GitRepairInstance,
+    ProjectCommitDataDiff,
+    ProjectCommitDataRepairInstance,
+    ProjectStateDiff,
+)
 from prism.interface.coq.goals import Goal, GoalLocation
 from prism.tests import _DATA_PATH
 
@@ -21,6 +28,8 @@ class TestRepairInstance(unittest.TestCase):
 
     initial_state: ProjectCommitData
     repaired_state: ProjectCommitData
+    compressed_repair_instance: GitRepairInstance
+    diff: Optional[ProjectCommitDataDiff]
 
     def _assert_commit_data_equal(
             self,
@@ -76,6 +85,70 @@ class TestRepairInstance(unittest.TestCase):
             patched_state.diff_goals()
             self.repaired_state.diff_goals()
             self._assert_commit_data_equal(patched_state, self.repaired_state)
+        self.diff = diff
+
+    @pytest.mark.dependency(
+        depends=["TestRepairInstance::test_ProjectCommitDataDiff"])
+    def test_mine_repair_examples_from_successful_commits(self) -> None:
+        """
+        Verify that a repair example can be mined from a commit pair.
+        """
+        num_mined = 0
+
+        def filter_one(command: VernacCommandData) -> bool:
+            """
+            Make a filter that allows us to mine one repaired proof.
+            """
+            nonlocal num_mined
+            allow = num_mined < 1
+            is_proof = command.command_type == "VernacStartTheoremProof"
+            if allow and is_proof:
+                num_mined += 1
+            return allow
+
+        if self.diff is None:
+            self.diff = ProjectCommitDataDiff.from_commit_data(
+                self.initial_state,
+                self.repaired_state,
+                default_align)
+
+        repairs = ProjectCommitDataRepairInstance.mine_repair_examples_from_successful_commits(  # noqa: B950
+            self.initial_state,
+            self.repaired_state,
+            repair_filter=filter_one)
+        # only one repair should be mined
+        self.assertEqual(len(repairs), 1)
+        repair_instance = repairs[0]
+        repair_state_diff = repair_instance.repaired_state_or_diff
+        # and it should be represented as two partial diffs
+        self.assertGreater(len(repair_instance.error.change.diff.changes), 0)
+        self.assertIsInstance(repair_state_diff, ProjectStateDiff)
+        assert isinstance(repair_state_diff, ProjectStateDiff)
+        # there should be only one change
+        self.assertEqual(len(list(repair_state_diff.diff.changed_commands)), 1)
+        self.assertEqual(len(list(repair_state_diff.diff.added_commands)), 0)
+        self.assertEqual(len(list(repair_state_diff.diff.dropped_commands)), 0)
+        # only one command should be changed in that file
+        (repaired_file, _, _) = list(repair_state_diff.diff.changed_commands)[0]
+        # the only changed proofs are in one file
+        self.assertEqual(repaired_file, "exgcd.v")
+        # and the first changed proof in the file should be repaired
+        broken_command_indices = set(
+            self.diff.changes[repaired_file].changed_commands.keys()
+        ).difference(
+            repair_instance.error.change.diff.changes[repaired_file]
+            .changed_commands.keys())
+        self.assertEqual(len(broken_command_indices), 1)
+        broken_command_index = broken_command_indices.pop()
+        broken_command = self.initial_state.command_data[repaired_file][
+            broken_command_index]
+        self.assertEqual(broken_command.command_type, "VernacStartTheoremProof")
+        self.assertEqual(broken_command.identifier, ["gcd_partial_proof"])
+        with self.subTest("compression"):
+            compressed_repair_instance = repair_instance.compress()
+            self.assertEqual(
+                compressed_repair_instance,
+                self.compressed_repair_instance)
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -90,6 +163,13 @@ class TestRepairInstance(unittest.TestCase):
             _DATA_PATH / "repaired_state.yml",
             clz=ProjectCommitData)
         cls.repaired_state = typing.cast(ProjectCommitData, repaired_state)
+        compressed_repair_instance = io.load(
+            _DATA_PATH / "compressed_repair_instance.yml",
+            clz=GitRepairInstance)
+        cls.compressed_repair_instance = typing.cast(
+            GitRepairInstance,
+            compressed_repair_instance)
+        cls.diff = None
 
 
 if __name__ == "__main__":
