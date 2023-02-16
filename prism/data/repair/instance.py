@@ -5,13 +5,16 @@ Defines representations of repair instances (or examples).
 import copy
 import typing
 from dataclasses import dataclass, fields
+from itertools import chain
 from typing import (
     Callable,
     Dict,
     Generic,
+    Iterator,
     List,
     Optional,
     Set,
+    Tuple,
     Type,
     TypeVar,
     Union,
@@ -28,6 +31,7 @@ from prism.data.repair.align import (
     AlignedCommands,
     AlignmentFunction,
     align_commits,
+    default_align,
     get_aligned_commands,
 )
 from prism.data.repair.diff import compute_git_diff
@@ -141,12 +145,23 @@ class VernacCommandDataListDiff:
     These new commands are presumed to be completely novel and not arise
     from relocating commands from other files.
     """
+    affected_commands: Dict[
+        int,
+        SerializableDataDiff[VernacCommandData]] = default_field({})
+    """
+    A map from command indices in the original file to diffs that can be
+    used to obtain commands that should replace the indexed commands.
+    Note that the replacements may be located in other files.
+    The commands are presumed to not be modified in form (text) but may
+    be modified in content (AST/goals/hypotheses) as a side-effect of
+    other changes.
+    """
     changed_commands: Dict[
         int,
         SerializableDataDiff[VernacCommandData]] = default_field({})
     """
-    A map from command indices in the original file to commands that
-    should replace the indexed commands.
+    A map from command indices in the original file to diffs that can be
+    used to obtain commands that should replace the indexed commands.
     Note that the replacements may be located in other files.
     The commands are presumed to have been modified in form or content
     rather than simply relocated.
@@ -163,8 +178,8 @@ class VernacCommandDataListDiff:
         Return whether this diff is empty.
         """
         return not (
-            self.added_commands or self.changed_commands
-            or self.dropped_commands)
+            self.added_commands or self.affected_commands
+            or self.changed_commands or self.dropped_commands)
 
 
 @dataclass
@@ -184,6 +199,89 @@ class ProjectCommitDataDiff:
     """
     A map containing per-file changes.
     """
+
+    @property
+    def added_commands(self) -> Iterator[Tuple[str, VernacCommandData]]:
+        """
+        Get an iterator over commands added to each file.
+
+        Yields
+        ------
+        str
+            The path to the file containing the added command.
+        VernacCommandData
+            The added command.
+        """
+        for filename, file_changes in self.changes.items():
+            for command in file_changes.added_commands:
+                yield filename, command
+
+    @property
+    def affected_commands(
+        self) -> Iterator[Tuple[str,
+                                int,
+                                SerializableDataDiff[VernacCommandData]]]:
+        """
+        Get an iterator over commands indirectly affected in each file.
+
+        An affected command is one whose text did not change but whose
+        data nevertheless did, e.g., due to a relocation or a
+        side-effect of a text modification elsewhere.
+
+        Yields
+        ------
+        str
+            The path to the file containing the affected command.
+        int
+            The index of the affected command in the original state's
+            list of commands for the file.
+        SerializableDataDiff[VernacCommandData]]
+            A diff that when applied to the original command yields the
+            affected version.
+        """
+        for filename, file_changes in self.changes.items():
+            for command_index, command_diff in file_changes.affected_commands.items():
+                yield filename, command_index, command_diff
+
+    @property
+    def changed_commands(
+        self) -> Iterator[Tuple[str,
+                                int,
+                                SerializableDataDiff[VernacCommandData]]]:
+        """
+        Get an iterator over commands changed in each file.
+
+        Yields
+        ------
+        str
+            The path to the file containing the changed command.
+        int
+            The index of the changed command in the original state's
+            list of commands for the file.
+        SerializableDataDiff[VernacCommandData]]
+            A diff that when applied to the original command yields the
+            changed version.
+        """
+        for filename, file_changes in self.changes.items():
+            for command_index, command_diff in file_changes.changed_commands.items():
+                yield filename, command_index, command_diff
+
+    @property
+    def dropped_commands(self) -> Iterator[Tuple[str, int]]:
+        """
+        Get an iterator over commands dropped from each file.
+
+        Yields
+        ------
+        str
+            The path to the file containing the dropped command.
+        int
+            The index of the dropped command in the original state's
+            list of commands for the file.
+        """
+        for filename, file_changes in self.changes.items():
+            for index in file_changes.dropped_commands:
+                yield filename, index
 
     @property
     def is_empty(self) -> bool:
@@ -226,10 +324,13 @@ class ProjectCommitDataDiff:
             dropped.update(change.dropped_commands)
             # Include added commands from diff being applied.
             added = added_commands.setdefault(filename, VernacCommandDataList())
-            added.extend(change.added_commands)
+            added.extend(copy.deepcopy(c) for c in change.added_commands)
             # decompose changes into drops and adds
             dropped.update(change.changed_commands.keys())
-            for original_command_index, command_diff in change.changed_commands.items():
+            dropped.update(change.affected_commands.keys())
+            for (original_command_index,
+                 command_diff) in chain(change.changed_commands.items(),
+                                        change.affected_commands.items()):
                 # patch the original command
                 original_command = data.command_data[filename][
                     original_command_index]
@@ -272,7 +373,7 @@ class ProjectCommitDataDiff:
             except KeyError:
                 command_data = VernacCommandDataList()
                 result_command_data[filename] = command_data
-            command_data.extend((copy.deepcopy(c) for c in added))
+            command_data.extend(added)
             if not command_data:
                 assert not added, "file cannot be empty if commands were added"
                 # the resulting file would be empty; remove it
@@ -338,11 +439,20 @@ class ProjectCommitDataDiff:
                     filename,
                     VernacCommandDataListDiff())
                 if acmd != bcmd:
-                    # changed command
                     command_diff = SerializableDataDiff[
                         VernacCommandData].compute_diff(acmd,
                                                         bcmd)
-                    file_diff.changed_commands[aidx - offset] = command_diff
+                    if acmd.all_text() != bcmd.all_text():
+                        # changed command
+                        container = file_diff.changed_commands
+                    else:
+                        # some extraneous content was affected
+                        # the command may have been moved, have a
+                        # modified AST due to a different Coq version,
+                        # or have different goals/hypotheses due to
+                        # side-effects
+                        container = file_diff.affected_commands
+                    container[aidx - offset] = command_diff
                 # else the command is unchanged and not in the diff
         return result
 
@@ -780,7 +890,9 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
             self.initial_state,
             ProjectState)
         initial_state = typing.cast(ProjectCommitDataState, initial_state)
-        return self.change.diff.patch(initial_state.offset_state)
+        error_state = self.change.diff.patch(initial_state.offset_state)
+        error_state.sort_commands()
+        return error_state
 
     def compress(self) -> GitErrorInstance:
         """
@@ -862,8 +974,8 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
     def _make_repair_instance(
         cls,
         initial_state: ProjectCommitData,
-        error_state_diff: ProjectCommitDataDiff,
-        error_state: ProjectCommitData,
+        broken_state_diff: ProjectCommitDataDiff,
+        broken_state: ProjectCommitData,
         repaired_state_diff: ProjectCommitDataDiff,
         repaired_state: ProjectCommitData,
         broken_command: VernacCommandData,
@@ -886,13 +998,13 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
                 initial_state=ProjectCommitDataState(initial_state,
                                                      None,
                                                      None),
-                change=ProjectCommitDataStateDiff(error_state_diff,
+                change=ProjectCommitDataStateDiff(broken_state_diff,
                                                   None),
                 error_location={broken_command.command.location},
                 tags=get_tags(
                     broken_command,
                     repair,
-                    error_state,
+                    broken_state,
                     repaired_state)),
             repaired_state_or_diff=ProjectCommitDataStateDiff(
                 repaired_state_diff,
@@ -979,6 +1091,7 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
             cls,
             initial_state: ProjectCommitData,
             repaired_state: ProjectCommitData,
+            align: Optional[AlignmentFunction] = None,
             repair_filter: Optional[Callable[[VernacCommandData],
                                              bool]] = None,
             get_tags: Optional[RepairAnnotator] = None,
@@ -992,7 +1105,7 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
         A virtual broken state is induced by partially applying the
         changes between the given commits such that one changed command
         is left out.
-        The left out change constitutes the presumptive "repair".
+        The left-out change constitutes the presumptive "repair".
         One may observe that not all mined broken states are guaranteed
         to actually raise an error when compiled.
         In such cases, one may infer the "repair" to be simply a
@@ -1015,12 +1128,18 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
             A function that annotates a repair with tags for subsequent
             filtering of the mined examples.
             By default, `default_get_tags` is used.
+        kwargs
+            Optional keyword arguments to
+            `ProjectCommitDataDiff.from_commit_data`, e.g., a
+            pre-computed diff.
 
         Returns
         -------
         List['ProjectCommitDataRepairInstance']
             A list of mined repair instances.
         """
+        if align is None:
+            align = default_align
         if get_tags is None:
             get_tags = cls.default_get_tags
         # sort commands for reproducible indexing of commands in
@@ -1029,56 +1148,51 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
         commit_diff = ProjectCommitDataDiff.from_commit_data(
             initial_state,
             repaired_state,
+            align,
             **kwargs)
         repair_instances: List[ProjectCommitDataRepairInstance] = []
-        for filename, file_changes in commit_diff.changes.items():
+        repairs_to_mine: List[Tuple[str, int]] = []
+        for filename, command_index, _ in commit_diff.changed_commands:
             # make an example for each filtered, *changed* command
-            for command_index in file_changes.changed_commands.keys():
-                original_command = initial_state.command_data[filename][
-                    command_index]
-                if repair_filter is not None and not repair_filter(
-                        original_command):
-                    # this command is filtered out
-                    continue
-                # make two partial diffs
-                # one partial diff creates a presumed broken state
-                broken_state_diff = copy.deepcopy(commit_diff)
-                broken_state_diff.changes[filename].changed_commands.pop(
-                    command_index)
-                broken_state = broken_state_diff.patch(initial_state)
-                # sort commands for reproducible indexing of commands in
-                # produced diffs
-                broken_state.sort_commands()
-                # the other partial diff repairs the broken state
-                repaired_state_diff = ProjectCommitDataDiff.from_commit_data(
-                    broken_state,
-                    repaired_state,
-                    **kwargs)
-                # get the broken command
-                repaired_files = list(repaired_state_diff.changes.keys())
-                assert repaired_files, \
-                    "A file should have been repaired"
-                repaired_filename = repaired_files[0]
-                repaired_commands = list(
-                    repaired_state_diff.changes[repaired_filename]
-                    .changed_commands.keys())
-                assert repaired_commands, \
-                    "A command should have been repaired"
-                repaired_command_index = repaired_commands[0]
-                broken_command = broken_state.command_data[repaired_filename][
-                    repaired_command_index]
-                # get the actual repair
-                repair = repaired_state_diff.changes[
-                    repaired_filename].changed_commands[repaired_command_index]
-                # assemble the repair instance
-                repair_instance = cls._make_repair_instance(
-                    initial_state,
-                    broken_state_diff,
-                    broken_state,
-                    repaired_state_diff,
-                    repaired_state,
-                    broken_command,
-                    repair,
-                    get_tags)
-                repair_instances.append(repair_instance)
+            original_command = initial_state.command_data[filename][
+                command_index]
+            if repair_filter is None or repair_filter(original_command):
+                # this command is filtered out
+                repairs_to_mine.append((filename, command_index))
+        # TODO: parallelize this loop
+        for filename, command_index in repairs_to_mine:
+            # make two partial diffs
+            # one partial diff creates a presumed broken state
+            broken_state_diff = copy.deepcopy(commit_diff)
+            broken_state_diff.changes[filename].changed_commands.pop(
+                command_index)
+            broken_state = broken_state_diff.patch(initial_state)
+            # sort commands for reproducible indexing of commands in
+            # produced diffs
+            broken_state.sort_commands()
+            # the other partial diff repairs the broken state
+            repaired_state_diff = ProjectCommitDataDiff.from_commit_data(
+                broken_state,
+                repaired_state,
+                align)
+            # get the broken command
+            repairs = list(repaired_state_diff.changed_commands)
+            assert repairs, \
+                "A command should have been repaired"
+            assert len(repairs) == 1, \
+                "The repair should have changed one command only"
+            repaired_filename, repaired_command_index, repair = repairs[0]
+            broken_command = broken_state.command_data[repaired_filename][
+                repaired_command_index]
+            # assemble the repair instance
+            repair_instance = cls._make_repair_instance(
+                initial_state,
+                broken_state_diff,
+                broken_state,
+                repaired_state_diff,
+                repaired_state,
+                broken_command,
+                repair,
+                get_tags)
+            repair_instances.append(repair_instance)
         return repair_instances
