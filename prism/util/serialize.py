@@ -2,6 +2,7 @@
 Supply a protocol for serializable data.
 """
 
+import copy
 import os
 import typing
 from dataclasses import dataclass, fields, is_dataclass
@@ -105,13 +106,16 @@ class SerializableDataDiff(Generic[_S]):
             ``SerializableDiff.compute_diff(a,b)``, then
             ``self.patch(a) == b``.
         """
-        clz = type(a)
-        a = su.io.serialize(a, fmt=su.io.Fmt.yaml)
-        a_str = typing.cast(str, yaml.safe_dump(a))
-        patches = _dmp.patch_fromText(self.diff)
-        patched_a_str, _ = _dmp.patch_apply(patches, a_str)
-        patched_a = yaml.safe_load(patched_a_str)
-        patched_a = su.io.deserialize(patched_a, clz=clz, error="raise")
+        if self.diff:
+            clz = type(a)
+            a = su.io.serialize(a, fmt=su.io.Fmt.yaml)
+            a_str = typing.cast(str, yaml.safe_dump(a))
+            patches = _dmp.patch_fromText(self.diff)
+            patched_a_str, _ = _dmp.patch_apply(patches, a_str)
+            patched_a = yaml.safe_load(patched_a_str)
+            patched_a = su.io.deserialize(patched_a, clz=clz, error="raise")
+        else:
+            patched_a = copy.deepcopy(a)
         return patched_a
 
     @classmethod
