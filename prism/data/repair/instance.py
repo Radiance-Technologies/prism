@@ -5,7 +5,17 @@ Defines representations of repair instances (or examples).
 import copy
 import typing
 from dataclasses import dataclass, fields
-from typing import Dict, Generic, Optional, Set, Type, TypeVar, Union
+from typing import (
+    Callable,
+    Dict,
+    Generic,
+    List,
+    Optional,
+    Set,
+    Type,
+    TypeVar,
+    Union,
+)
 
 import numpy as np
 
@@ -23,7 +33,7 @@ from prism.data.repair.align import (
 from prism.data.repair.diff import compute_git_diff
 from prism.language.gallina.analyze import SexpInfo
 from prism.util.diff import GitDiff
-from prism.util.opam import OpamSwitch
+from prism.util.opam import OpamSwitch, PackageFormula
 from prism.util.radpytools.dataclasses import Dataclass, default_field
 from prism.util.serialize import (
     SerializableDataDiff,
@@ -796,6 +806,18 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
             set(self.tags))
 
 
+RepairAnnotator = Callable[[
+    VernacCommandData,
+    SerializableDataDiff[VernacCommandData],
+    ProjectCommitData,
+    ProjectCommitData
+],
+                           Set[str]]  # noqa: E126
+"""
+A function that annotates a repaired command with a set of tags.
+"""
+
+
 @dataclass
 class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
                                                      ProjectCommitDataDiff]):
@@ -835,3 +857,228 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
                   GitProjectStateDiff],
             repaired)
         return GitRepairInstance(error.compress(), repaired)
+
+    @classmethod
+    def _make_repair_instance(
+        cls,
+        initial_state: ProjectCommitData,
+        error_state_diff: ProjectCommitDataDiff,
+        error_state: ProjectCommitData,
+        repaired_state_diff: ProjectCommitDataDiff,
+        repaired_state: ProjectCommitData,
+        broken_command: VernacCommandData,
+        repair: SerializableDataDiff[VernacCommandData],
+        get_tags: RepairAnnotator,
+    ) -> 'ProjectCommitDataRepairInstance':
+        """
+        Create the actual repair instance.
+        """
+        repaired_environment = None
+        if repaired_state.environment is not None:
+            repaired_environment = repaired_state.environment.switch_config
+            if initial_state.environment is not None:
+                initial_environment = initial_state.environment.switch_config
+                if repaired_environment != initial_environment:
+                    repaired_environment = repaired_state.environment.switch_config
+        repair_instance = ProjectCommitDataRepairInstance(
+            error=ProjectCommitDataErrorInstance(
+                project_name=initial_state.project_metadata.project_name,
+                initial_state=ProjectCommitDataState(initial_state,
+                                                     None,
+                                                     None),
+                change=ProjectCommitDataStateDiff(error_state_diff,
+                                                  None),
+                error_location={broken_command.command.location},
+                tags=get_tags(
+                    broken_command,
+                    repair,
+                    error_state,
+                    repaired_state)),
+            repaired_state_or_diff=ProjectCommitDataStateDiff(
+                repaired_state_diff,
+                repaired_environment))
+        return repair_instance
+
+    @classmethod
+    def default_get_tags(
+            cls,
+            broken_command: VernacCommandData,
+            repair: SerializableDataDiff[VernacCommandData],
+            initial_state: ProjectCommitData,
+            repaired_state: ProjectCommitData) -> Set[str]:
+        """
+        Get a default set of tags to apply to a repair.
+
+        The default set of tags identify the type of repaired command
+        and additionally note that the repair instance has been
+        artificially mined, that only one command is repaired in one
+        file, and whether any dependencies have been updated, dropped,
+        or added (including Coq version).
+
+        Parameters
+        ----------
+        broken_command : VernacCommandData
+            The command in need of repair
+        repair : SerializableDataDiff[VernacCommandData]
+            A diff that can be applied to the command to retrieve its
+            repaired version via ``repair.patch(broken_command)``.
+        initial_state : ProjectCommitData
+            The initial state containing the broken command.
+        repaired_state : ProjectCommitData
+            The repaired state.
+
+        Returns
+        -------
+        tags : Set[str]
+            A set of tags describing the repair.
+        """
+        tags = {
+            f"repair:{broken_command.command_type}",
+            "artificial:mined",
+            "repair:one-command",
+            "repair:one-file"
+        }
+        if (initial_state.environment is not None
+                and repaired_state.environment is not None
+                and initial_state.project_metadata.opam_dependencies is not None
+                and repaired_state.project_metadata.opam_dependencies):
+            initial_dependencies = set()
+            for dep in initial_state.project_metadata.opam_dependencies:
+                initial_dependencies.update(
+                    typing.cast(PackageFormula,
+                                PackageFormula.parse(dep)).packages)
+            repaired_dependencies = set()
+            for dep in repaired_state.project_metadata.opam_dependencies:
+                repaired_dependencies.update(
+                    typing.cast(PackageFormula,
+                                PackageFormula.parse(dep)).packages)
+            initial_packages = dict(
+                initial_state.environment.switch_config.installed)
+            repair_packages = dict(
+                repaired_state.environment.switch_config.installed)
+            tags.update(
+                {
+                    f"dropped-dependency:{p}" for p in repair_packages if
+                    p in initial_dependencies and p not in repaired_dependencies
+                })
+            tags.update(
+                {
+                    f"new-dependency:{p}" for p in repair_packages if
+                    p not in initial_dependencies and p in repaired_dependencies
+                })
+            tags.update(
+                {
+                    f"updated-dependency:{p}" for p in repair_packages
+                    if p in initial_dependencies and p in repaired_dependencies
+                    and initial_packages[p] != repair_packages[p]
+                })
+        return tags
+
+    @classmethod
+    def mine_repair_examples_from_successful_commits(
+            cls,
+            initial_state: ProjectCommitData,
+            repaired_state: ProjectCommitData,
+            repair_filter: Optional[Callable[[VernacCommandData],
+                                             bool]] = None,
+            get_tags: Optional[RepairAnnotator] = None,
+            **kwargs) -> List['ProjectCommitDataRepairInstance']:
+        r"""
+        Mine a pair of commits for repair examples.
+
+        Repair examples produced by this method comprise standalone
+        commands (complete theorems, definitions, etc.) that have been
+        modified between the commits.
+        A virtual broken state is induced by partially applying the
+        changes between the given commits such that one changed command
+        is left out.
+        The left out change constitutes the presumptive "repair".
+        One may observe that not all mined broken states are guaranteed
+        to actually raise an error when compiled.
+        In such cases, one may infer the "repair" to be simply a
+        directive to follow the original user's intention.
+
+        Parameters
+        ----------
+        initial_state : ProjectCommitData
+            An initial state, presumed to be without error.
+        repaired_state : ProjectCommitData
+            Another commit's state presumed to occur after
+            `initial_state` and also be without error.
+        repair_filter : Optional[Callable[[VernacCommandData], bool]], \
+                optional
+            A filter applied to changed commands' initial states that
+            can be used to select types of repair examples to mine.
+            By default, every changed command is extracted as a repair
+            example.
+        get_tags : Optional[RepairAnnotator], optional
+            A function that annotates a repair with tags for subsequent
+            filtering of the mined examples.
+            By default, `default_get_tags` is used.
+
+        Returns
+        -------
+        List['ProjectCommitDataRepairInstance']
+            A list of mined repair instances.
+        """
+        if get_tags is None:
+            get_tags = cls.default_get_tags
+        # sort commands for reproducible indexing of commands in
+        # produced diffs
+        initial_state.sort_commands()
+        commit_diff = ProjectCommitDataDiff.from_commit_data(
+            initial_state,
+            repaired_state,
+            **kwargs)
+        repair_instances: List[ProjectCommitDataRepairInstance] = []
+        for filename, file_changes in commit_diff.changes.items():
+            # make an example for each filtered, *changed* command
+            for command_index in file_changes.changed_commands.keys():
+                original_command = initial_state.command_data[filename][
+                    command_index]
+                if repair_filter is not None and not repair_filter(
+                        original_command):
+                    # this command is filtered out
+                    continue
+                # make two partial diffs
+                # one partial diff creates a presumed broken state
+                broken_state_diff = copy.deepcopy(commit_diff)
+                broken_state_diff.changes[filename].changed_commands.pop(
+                    command_index)
+                broken_state = broken_state_diff.patch(initial_state)
+                # sort commands for reproducible indexing of commands in
+                # produced diffs
+                broken_state.sort_commands()
+                # the other partial diff repairs the broken state
+                repaired_state_diff = ProjectCommitDataDiff.from_commit_data(
+                    broken_state,
+                    repaired_state,
+                    **kwargs)
+                # get the broken command
+                repaired_files = list(repaired_state_diff.changes.keys())
+                assert repaired_files, \
+                    "A file should have been repaired"
+                repaired_filename = repaired_files[0]
+                repaired_commands = list(
+                    repaired_state_diff.changes[repaired_filename]
+                    .changed_commands.keys())
+                assert repaired_commands, \
+                    "A command should have been repaired"
+                repaired_command_index = repaired_commands[0]
+                broken_command = broken_state.command_data[repaired_filename][
+                    repaired_command_index]
+                # get the actual repair
+                repair = repaired_state_diff.changes[
+                    repaired_filename].changed_commands[repaired_command_index]
+                # assemble the repair instance
+                repair_instance = cls._make_repair_instance(
+                    initial_state,
+                    broken_state_diff,
+                    broken_state,
+                    repaired_state_diff,
+                    repaired_state,
+                    broken_command,
+                    repair,
+                    get_tags)
+                repair_instances.append(repair_instance)
+        return repair_instances
