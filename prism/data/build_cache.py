@@ -867,6 +867,13 @@ class ProjectCommitData(Serializable):
         for _, commands in self.command_data.items():
             commands.patch_goals()
 
+    def sort_commands(self) -> None:
+        """
+        Sort the commands of each file in-place.
+        """
+        for commands in self.command_data.values():
+            commands.commands.sort()
+
     def sorted_sentences(self) -> Dict[str, List[VernacSentence]]:
         """
         Get the sentences of each file sorted by location.
