@@ -593,7 +593,7 @@ class HeuristicParser:
     def _get_sentences(
             cls,
             file_contents: str,
-            skip_sentence_errors: bool = False) -> List['StrWithLocation']:
+            skip_sentence_errors: bool = False) -> List[StrWithLocation]:
         """
         Get the sentences of the given file.
 
