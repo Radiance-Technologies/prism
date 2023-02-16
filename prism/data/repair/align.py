@@ -448,8 +448,7 @@ def _compute_diff_alignment(
     a_in_diff = ProjectCommitData(
         a.project_metadata,
         {
-            k: VernacCommandDataList([v[i] for i in a_indices_in_diff[k]])
-            for k,
+            k: VernacCommandDataList([v[i] for i in a_indices_in_diff[k]]) for k,
             v in a.command_data.items()
         },
         a.file_dependencies,
@@ -458,8 +457,7 @@ def _compute_diff_alignment(
     b_in_diff = ProjectCommitData(
         b.project_metadata,
         {
-            k: VernacCommandDataList([v[i] for i in b_indices_in_diff[k]])
-            for k,
+            k: VernacCommandDataList([v[i] for i in b_indices_in_diff[k]]) for k,
             v in b.command_data.items()
         },
         b.file_dependencies,
@@ -467,7 +465,9 @@ def _compute_diff_alignment(
         b.build_result)
     # rename files in b to match those renamed in a
     rename_map: Dict[str,
-                     str] = {k: k for k in b.command_data.keys()}
+                     str] = {
+                         k: k for k in b.command_data.keys()
+                     }
     for change in diff.changes:
         if change.is_rename:
             assert change.after_filename is not None
@@ -530,10 +530,14 @@ def align_commits(
     b_indices_in_diff = commands_in_diff(b, diff, False)
     a_files = a.files
     b_files = b.files
-    a_file_sizes = {k: len(v) for k,
-                    v in a.command_data.items()}
-    b_file_sizes = {k: len(v) for k,
-                    v in b.command_data.items()}
+    a_file_sizes = {
+        k: len(v) for k,
+        v in a.command_data.items()
+    }
+    b_file_sizes = {
+        k: len(v) for k,
+        v in b.command_data.items()
+    }
     a_indices_not_in_diff = {
         k: [i for i in range(a_file_sizes[k]) if not fast_contains(v,
                                                                    i)] for k,
@@ -546,23 +550,25 @@ def align_commits(
     }
     # sort unchanged indices by command location
     a_indices_not_in_diff = {
-        k: [
-            i for _,
-            i in sorted(
-                zip([a.command_data[k][i] for i in v],
-                    v),
-                key=lambda p: p[0])
-        ] for k,
+        k:
+            [
+                i for _,
+                i in sorted(
+                    zip([a.command_data[k][i] for i in v],
+                        v),
+                    key=lambda p: p[0])
+            ] for k,
         v in a_indices_not_in_diff.items()
     }
     b_indices_not_in_diff = {
-        k: [
-            i for _,
-            i in sorted(
-                zip([b.command_data[k][i] for i in v],
-                    v),
-                key=lambda p: p[0])
-        ] for k,
+        k:
+            [
+                i for _,
+                i in sorted(
+                    zip([b.command_data[k][i] for i in v],
+                        v),
+                    key=lambda p: p[0])
+            ] for k,
         v in b_indices_not_in_diff.items()
     }
     # calculate alignment only for those items that are known to have
