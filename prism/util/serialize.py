@@ -189,16 +189,91 @@ def get_typevar_bindings(
         _, base_bindings = get_typevar_bindings(base)
         type_bindings.update(
             {
-                k: v
-                if not isinstance(v,
-                                  TypeVar) or not clz_args else clz_args.pop()
-                for k,
+                k:
+                    v if not isinstance(v,
+                                        TypeVar) or not clz_args else
+                    clz_args.pop() for k,
                 v in base_bindings.items()
             })
     return clz_origin, type_bindings
 
 
+def substitute_typevars(
+        clz: Union[type,
+                   _Generic,
+                   Tuple],
+        bindings: Dict[TypeVar,
+                       type]) -> Union[type,
+                                       _Generic,
+                                       Tuple]:
+    """
+    Substitute type variables in a given type signature.
+
+    Parameters
+    ----------
+    clz : Union[type, _Generic, Tuple]
+        A type signature.
+    bindings : Dict[TypeVar, type]
+        Type variable bindings.
+
+    Returns
+    -------
+    Union[type, _Generic, Tuple]
+        The given type signature with type variables subsituted with
+        their bound types.
+    """
+    f_type = typing_inspect.get_origin(clz)
+    if f_type is None:
+        f_type = bindings.get(clz, clz)  # type: ignore
+    else:
+        # bind type vars
+        try:
+            getitem = f_type.__class_getitem__
+        except AttributeError:
+            getitem = f_type.__getitem__
+        f_type = getitem(
+            tuple(
+                substitute_typevars(tp,
+                                    bindings)
+                if not isinstance(tp,
+                                  TypeVar) else bindings[tp]
+                for tp in typing_inspect.get_args(clz)))
+    return f_type
+
+
 _T = TypeVar("_T", bound=Dataclass)
+
+
+def _deserialize_other(data: object, clz: type, error: str):
+    if typing_inspect.is_optional_type(clz):
+        clz_args = typing_inspect.get_args(clz)
+        if data is None:
+            return None
+        inner_clz = clz_args[0]
+        try:
+            return deserialize_generic_dataclass(data, inner_clz, error=error)
+        except su.io.DeserializationError as e:
+            raise su.io.DeserializationError(
+                data,
+                clz,
+                "(Optional removed) " + e.reason)
+    if typing_inspect.is_union_type(clz):
+        clz_args = typing_inspect.get_args(clz)
+        ret = None
+        for inner_clz in clz_args:
+            try:
+                ret = deserialize_generic_dataclass(
+                    data,
+                    inner_clz,
+                    error="raise")
+            except su.io.DeserializationError:
+                continue
+
+        if ret is None:
+            return su.io.deserialize(data, clz, error)
+        else:
+            return ret
+    return su.io.deserialize(data, clz, error)
 
 
 def deserialize_generic_dataclass(
@@ -237,7 +312,7 @@ def deserialize_generic_dataclass(
     clz_origin, bindings = get_typevar_bindings(clz)
     if not bindings or not is_dataclass(clz_origin):
         # not generic
-        return su.io.deserialize(data, clz, error)
+        _deserialize_other(data, clz, error)
     clz_origin = typing.cast(type, clz_origin)
     for binding in bindings.values():
         if isinstance(binding, TypeVar):
@@ -258,20 +333,18 @@ def deserialize_generic_dataclass(
     for f in fields(clz_origin):
         if f.name in data:
             field_values = init_field_values if f.init else non_init_field_values
-            f_type = typing_inspect.get_origin(f.type)
-            if f_type is None:
-                f_type = bindings.get(f.type, f.type)
-            else:
-                # bind type vars
-                f_type = f_type.__class_getitem__(
-                    tp if not isinstance(tp,
-                                         TypeVar) else bindings[tp]
-                    for tp in typing_inspect.get_args(f.type))
+            f_type = substitute_typevars(f.type, bindings)
             field_values[f.name] = deserialize_generic_dataclass(
                 data.get(f.name),
-                f.type,
+                f_type,
                 error=error)
-    obj = clz_origin(**init_field_values)
+    try:
+        obj = clz_origin(**init_field_values)
+    except TypeError as e:
+        raise su.io.DeserializationError(
+            data,
+            clz,
+            "Failed to get fields") from e
     for f_name, f_value in non_init_field_values.items():
         # use object.__setattr__ in case clz is frozen
         object.__setattr__(obj, f_name, f_value)
