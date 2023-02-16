@@ -850,8 +850,10 @@ class ProjectCommitData(Serializable):
         """
         Get the number of commands in each file in this commit.
         """
-        return {k: len(v) for k,
-                v in self.command_data.items()}
+        return {
+            k: len(v) for k,
+            v in self.command_data.items()
+        }
 
     def diff_goals(self) -> None:
         """
