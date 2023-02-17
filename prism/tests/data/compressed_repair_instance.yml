@@ -1,0 +1,343 @@
+error:
+  change:
+    diff:
+      text: 'diff --git a/exgcd.v b/exgcd.v
+
+        index bfac862..fe1ae41 100644
+
+        --- a/exgcd.v
+
+        +++ b/exgcd.v
+
+        @@ -18 +17,0 @@ Require Import Znumtheory.
+
+        -Require Import Bool.
+
+        @@ -144,0 +144 @@ Hint Resolve Zneq_bool_true Zneq_bool_false Zle_bool_imp_le
+        Zis_gcd_intro: zarit
+
+        +
+
+        @@ -164 +163,0 @@ Qed.
+
+        -
+
+        @@ -187 +186 @@ unfold Zwf; simpl; (intuition auto with zarith).
+
+        -cutrewrite <- ((fst e'')=(snd e'')) in H5; auto with zarith.
+
+        +replace (snd e'') with (fst e'') in H5; auto with zarith.
+
+        diff --git a/totalhoarelogic.v b/totalhoarelogic.v
+
+        index 16b08de..96ab82d 100644
+
+        --- a/totalhoarelogic.v
+
+        +++ b/totalhoarelogic.v
+
+        @@ -14 +13,0 @@ Require Export hoarelogicsemantics.
+
+        -Require Wf.
+
+        '
+    environment: null
+  error_location:
+  - beg_charno: 4179
+    bol_pos: 4179
+    bol_pos_last: 4253
+    end_charno: 4301
+    filename: exgcd.v
+    lineno: 145
+    lineno_last: 147
+  initial_state:
+    environment:
+      compiler:
+      - - base-bigarray
+        - prism.util.opam.version,OpamVersion,base
+      - - base-threads
+        - prism.util.opam.version,OpamVersion,base
+      - - base-unix
+        - prism.util.opam.version,OpamVersion,base
+      - - ocaml
+        - prism.util.opam.version,OCamlVersion,4.09.1
+      - - ocaml-base-compiler
+        - prism.util.opam.version,OCamlVersion,4.09.1
+      - - ocaml-config
+        - prism.util.opam.version,OpamVersion,1
+      installed:
+      - - base
+        - prism.util.opam.version,OpamVersion,v0.14.3
+      - - base-bigarray
+        - prism.util.opam.version,OpamVersion,base
+      - - base-threads
+        - prism.util.opam.version,OpamVersion,base
+      - - base-unix
+        - prism.util.opam.version,OpamVersion,base
+      - - cmdliner
+        - prism.util.opam.version,OCamlVersion,1.1.1
+      - - conf-findutils
+        - prism.util.opam.version,OpamVersion,1
+      - - coq
+        - prism.util.opam.version,OCamlVersion,8.10.2
+      - - coq-ext-lib
+        - prism.util.opam.version,OCamlVersion,0.11.6
+      - - coq-paco
+        - prism.util.opam.version,OCamlVersion,4.1.1
+      - - coq-serapi
+        - prism.util.opam.version,OCamlVersion,8.10.0+0.7.2
+      - - cppo
+        - prism.util.opam.version,OCamlVersion,1.6.9
+      - - csexp
+        - prism.util.opam.version,OCamlVersion,1.5.1
+      - - dune
+        - prism.util.opam.version,OCamlVersion,3.5.0
+      - - dune-configurator
+        - prism.util.opam.version,OCamlVersion,3.5.0
+      - - num
+        - prism.util.opam.version,OCamlVersion,1.4
+      - - ocaml
+        - prism.util.opam.version,OCamlVersion,4.09.1
+      - - ocaml-base-compiler
+        - prism.util.opam.version,OCamlVersion,4.09.1
+      - - ocaml-compiler-libs
+        - prism.util.opam.version,OpamVersion,v0.12.4
+      - - ocaml-config
+        - prism.util.opam.version,OpamVersion,1
+      - - ocamlfind
+        - prism.util.opam.version,OCamlVersion,1.9.5
+      - - parsexp
+        - prism.util.opam.version,OpamVersion,v0.14.2
+      - - ppx_derivers
+        - prism.util.opam.version,OCamlVersion,1.2.1
+      - - ppx_deriving
+        - prism.util.opam.version,OCamlVersion,5.2.1
+      - - ppx_deriving_yojson
+        - prism.util.opam.version,OCamlVersion,3.6.1
+      - - ppx_import
+        - prism.util.opam.version,OCamlVersion,1.9.1
+      - - ppx_sexp_conv
+        - prism.util.opam.version,OpamVersion,v0.14.3
+      - - ppxlib
+        - prism.util.opam.version,OCamlVersion,0.25.1
+      - - result
+        - prism.util.opam.version,OCamlVersion,1.5
+      - - seq
+        - prism.util.opam.version,OpamVersion,base
+      - - sexplib
+        - prism.util.opam.version,OpamVersion,v0.14.0
+      - - sexplib0
+        - prism.util.opam.version,OpamVersion,v0.14.0
+      - - stdlib-shims
+        - prism.util.opam.version,OCamlVersion,0.3.0
+      - - yojson
+        - prism.util.opam.version,OCamlVersion,2.0.2
+      opam_version: prism.util.opam.version,OCamlVersion,2.0
+      package_metadata:
+      - - coq-certicoq
+        - "{\n  opam-version: \"2.0\"\n  version: \"0.9~beta+8.14\"\n  synopsis: \"\
+          A Verified Compiler for Gallina, Written in Gallina\"\n  maintainer: \"\
+          The CertiCoq Team\"\n  authors: [\n    \"Andrew Appel\"\n    \"Yannick Forster\"\
+          \n    \"Anvay Grover\"\n    \"Joomy Korkut\"\n    \"John Li\"\n    \"Zoe\
+          \ Paraskevopoulou\"\n    \"Matthieu Sozeau\"\n    \"Matthew Weaver\"\n \
+          \   \"Abhishek Anand\"\n    \"Greg Morrisett\"\n    \"Randy Pollack\"\n\
+          \    \"Olivier Savary Belanger\"\n  ]\n  license: \"MIT\"\n  homepage: \"\
+          https://certicoq.org/\"\n  bug-reports: \"https://github.com/CertiCoq/certicoq/issues\"\
+          \n  depends: [\n    \"ocaml\"\n    \"coq\" {>= \"8.14\" & < \"8.15~\"}\n\
+          \    \"coq-compcert\" {= \"3.9\"}\n    \"coq-equations\" {= \"1.3+8.14\"\
+          }\n    \"coq-metacoq-erasure\" {= \"8.14.dev\"}\n    \"coq-ext-lib\" {>=\
+          \ \"0.11.5\"}\n  ]\n  build: [\n    [make \"all\"]\n    [make \"plugin\"\
+          ]\n  ]\n  install: [make \"install\"]\n  dev-repo: \"git+https://github.com/CertiCoq/certicoq\"\
+          \n  url {\n    src:\n      \"git+file:///home/whenderson/projects/PEARLS/repos_full/certicoq#HEAD\"\
+          \n  }\n}"
+      - - coq-metacoq
+        - "{\n  opam-version: \"2.0\"\n  version: \"8.14.dev\"\n  synopsis: \"A meta-programming\
+          \ framework for Coq\"\n  description: \"\"\"\nMetaCoq is a meta-programming\
+          \ framework for Coq.\n\nThe meta-package includes the template-coq library,\n\
+          the PCUIC development including a verified equivalence between Coq and PCUIC,\
+          \ \na safe type checker and verified erasure for PCUIC and example translations.\
+          \ \n\nSee individual packages for more detailed descriptions.\"\"\"\n  maintainer:\
+          \ \"matthieu.sozeau@inria.fr\"\n  authors: [\n    \"Abhishek Anand <aa755@cs.cornell.edu>\"\
+          \n    \"Simon Boulier <simon.boulier@inria.fr>\"\n    \"Cyril Cohen <cyril.cohen@inria.fr>\"\
+          \n    \"Yannick Forster <forster@ps.uni-saarland.de>\"\n    \"Fabian Kunze\
+          \ <fkunze@fakusb.de>\"\n    \"Gregory Malecha <gmalecha@gmail.com>\"\n \
+          \   \"Matthieu Sozeau <matthieu.sozeau@inria.fr>\"\n    \"Nicolas Tabareau\
+          \ <nicolas.tabareau@inria.fr>\"\n    \"Th\xE9o Winterhalter <theo.winterhalter@inria.fr>\"\
+          \n  ]\n  license: \"MIT\"\n  homepage: \"https://metacoq.github.io/metacoq\"\
+          \n  bug-reports: \"https://github.com/MetaCoq/metacoq/issues\"\n  depends:\
+          \ [\n    \"coq-metacoq-template\" {= version}\n    \"coq-metacoq-pcuic\"\
+          \ {= version}\n    \"coq-metacoq-safechecker\" {= version}\n    \"coq-metacoq-erasure\"\
+          \ {= version}\n    \"coq-metacoq-translations\" {= version}\n  ]\n  build:\
+          \ [\n    [\"sh\" \"./configure.sh\"] {with-test}\n    [make \"-C\" \"examples\"\
+          ] {with-test}\n    [make \"-C\" \"test-suite\"] {with-test}\n  ]\n  dev-repo:\
+          \ \"git+https://github.com/MetaCoq/metacoq.git#coq-8.11\"\n  url {\n   \
+          \ src:\n      \"git+file:///home/whenderson/projects/PEARLS/repos_full/certicoq/submodules/metacoq#HEAD\"\
+          \n  }\n}"
+      - - coq-metacoq-erasure
+        - "{\n  opam-version: \"2.0\"\n  version: \"8.14.dev\"\n  synopsis: \"Implementation\
+          \ and verification of an erasure procedure for Coq\"\n  description: \"\"\
+          \"\nMetaCoq is a meta-programming framework for Coq.\n\nThe Erasure module\
+          \ provides a complete specification of Coq's so-called\n\"extraction\" procedure,\
+          \ starting from the PCUIC calculus and targeting\nuntyped call-by-value\
+          \ lambda-calculus.\n\nThe `erasure` function translates types and proofs\
+          \ in well-typed terms\ninto a dummy `tBox` constructor, following closely\
+          \ P. Letouzey's PhD\nthesis.\"\"\"\n  maintainer: \"matthieu.sozeau@inria.fr\"\
+          \n  authors: [\n    \"Abhishek Anand <aa755@cs.cornell.edu>\"\n    \"Simon\
+          \ Boulier <simon.boulier@inria.fr>\"\n    \"Cyril Cohen <cyril.cohen@inria.fr>\"\
+          \n    \"Yannick Forster <forster@ps.uni-saarland.de>\"\n    \"Fabian Kunze\
+          \ <fkunze@fakusb.de>\"\n    \"Gregory Malecha <gmalecha@gmail.com>\"\n \
+          \   \"Matthieu Sozeau <matthieu.sozeau@inria.fr>\"\n    \"Nicolas Tabareau\
+          \ <nicolas.tabareau@inria.fr>\"\n    \"Th\xE9o Winterhalter <theo.winterhalter@inria.fr>\"\
+          \n  ]\n  license: \"MIT\"\n  homepage: \"https://metacoq.github.io/metacoq\"\
+          \n  bug-reports: \"https://github.com/MetaCoq/metacoq/issues\"\n  depends:\
+          \ [\n    \"coq-metacoq-template\" {= version}\n    \"coq-metacoq-pcuic\"\
+          \ {= version}\n    \"coq-metacoq-safechecker\" {= version}\n  ]\n  build:\
+          \ [\n    [\"sh\" \"./configure.sh\"]\n    [make \"-j\" \"%{jobs}%\" \"-C\"\
+          \ \"erasure\"]\n  ]\n  install: [make \"-C\" \"erasure\" \"install\"]\n\
+          \  dev-repo: \"git+https://github.com/MetaCoq/metacoq.git#coq-8.11\"\n \
+          \ url {\n    src:\n      \"git+file:///home/whenderson/projects/PEARLS/repos_full/certicoq/submodules/metacoq#HEAD\"\
+          \n  }\n}"
+      - - coq-metacoq-pcuic
+        - "{\n  opam-version: \"2.0\"\n  version: \"8.14.dev\"\n  synopsis: \"A type\
+          \ system equivalent to Coq's and its metatheory\"\n  description: \"\"\"\
+          \nMetaCoq is a meta-programming framework for Coq.\n\nThe PCUIC module provides\
+          \ a cleaned-up specification of Coq's typing algorithm along\nwith a certified\
+          \ typechecker for it. This module includes the standard metatheory of\n\
+          PCUIC: Weakening, Substitution, Confluence and Subject Reduction are proven\
+          \ here.\"\"\"\n  maintainer: \"matthieu.sozeau@inria.fr\"\n  authors: [\n\
+          \    \"Abhishek Anand <aa755@cs.cornell.edu>\"\n    \"Simon Boulier <simon.boulier@inria.fr>\"\
+          \n    \"Cyril Cohen <cyril.cohen@inria.fr>\"\n    \"Yannick Forster <forster@ps.uni-saarland.de>\"\
+          \n    \"Fabian Kunze <fkunze@fakusb.de>\"\n    \"Gregory Malecha <gmalecha@gmail.com>\"\
+          \n    \"Matthieu Sozeau <matthieu.sozeau@inria.fr>\"\n    \"Nicolas Tabareau\
+          \ <nicolas.tabareau@inria.fr>\"\n    \"Th\xE9o Winterhalter <theo.winterhalter@inria.fr>\"\
+          \n  ]\n  license: \"MIT\"\n  homepage: \"https://metacoq.github.io/metacoq\"\
+          \n  bug-reports: \"https://github.com/MetaCoq/metacoq/issues\"\n  depends:\
+          \ [\n    \"coq-equations\" {>= \"1.3\"}\n    \"coq-metacoq-template\" {=\
+          \ version}\n  ]\n  build: [\n    [\"sh\" \"./configure.sh\"]\n    [make\
+          \ \"-j\" \"%{jobs}%\" \"-C\" \"pcuic\"]\n  ]\n  install: [make \"-C\" \"\
+          pcuic\" \"install\"]\n  dev-repo: \"git+https://github.com/MetaCoq/metacoq.git#coq-8.11\"\
+          \n  url {\n    src:\n      \"git+file:///home/whenderson/projects/PEARLS/repos_full/certicoq/submodules/metacoq#HEAD\"\
+          \n  }\n}"
+      - - coq-metacoq-safechecker
+        - "{\n  opam-version: \"2.0\"\n  version: \"8.14.dev\"\n  synopsis:\n    \"\
+          Implementation and verification of safe conversion and typechecking algorithms\
+          \ for Coq\"\n  description: \"\"\"\nMetaCoq is a meta-programming framework\
+          \ for Coq.\n\nThe SafeChecker modules provides a correct implementation\
+          \ of\nweak-head reduction, conversion and typechecking of Coq definitions\
+          \ and global environments.\"\"\"\n  maintainer: \"matthieu.sozeau@inria.fr\"\
+          \n  authors: [\n    \"Abhishek Anand <aa755@cs.cornell.edu>\"\n    \"Simon\
+          \ Boulier <simon.boulier@inria.fr>\"\n    \"Cyril Cohen <cyril.cohen@inria.fr>\"\
+          \n    \"Yannick Forster <forster@ps.uni-saarland.de>\"\n    \"Fabian Kunze\
+          \ <fkunze@fakusb.de>\"\n    \"Gregory Malecha <gmalecha@gmail.com>\"\n \
+          \   \"Matthieu Sozeau <matthieu.sozeau@inria.fr>\"\n    \"Nicolas Tabareau\
+          \ <nicolas.tabareau@inria.fr>\"\n    \"Th\xE9o Winterhalter <theo.winterhalter@inria.fr>\"\
+          \n  ]\n  license: \"MIT\"\n  homepage: \"https://metacoq.github.io/metacoq\"\
+          \n  bug-reports: \"https://github.com/MetaCoq/metacoq/issues\"\n  depends:\
+          \ [\n    \"coq-metacoq-pcuic\" {= version}\n  ]\n  build: [\n    [\"sh\"\
+          \ \"./configure.sh\"]\n    [make \"-j\" \"%{jobs}%\" \"-C\" \"safechecker\"\
+          ]\n  ]\n  install: [make \"-C\" \"safechecker\" \"install\"]\n  dev-repo:\
+          \ \"git+https://github.com/MetaCoq/metacoq.git#coq-8.11\"\n  url {\n   \
+          \ src:\n      \"git+file:///home/whenderson/projects/PEARLS/repos_full/certicoq/submodules/metacoq#HEAD\"\
+          \n  }\n}"
+      - - coq-metacoq-template
+        - "{\n  opam-version: \"2.0\"\n  version: \"8.14.dev\"\n  synopsis: \"A quoting\
+          \ and unquoting library for Coq in Coq\"\n  description: \"\"\"\nMetaCoq\
+          \ is a meta-programming framework for Coq.\n\nTemplate Coq is a quoting\
+          \ library for Coq. It takes Coq terms and\nconstructs a representation of\
+          \ their syntax tree as a Coq inductive data\ntype. The representation is\
+          \ based on the kernel's term representation.\n\nIn addition to a complete\
+          \ reification and denotation of CIC terms,\nTemplate Coq includes:\n\n-\
+          \ Reification of the environment structures, for constant and inductive\
+          \ declarations.\n- Denotation of terms and global declarations\n- A monad\
+          \ for manipulating global declarations, calling the type\n  checker, and\
+          \ inserting them in the global environment, in the style of\n  MetaCoq/MTac.\"\
+          \"\"\n  maintainer: \"matthieu.sozeau@inria.fr\"\n  authors: [\n    \"Abhishek\
+          \ Anand <aa755@cs.cornell.edu>\"\n    \"Simon Boulier <simon.boulier@inria.fr>\"\
+          \n    \"Cyril Cohen <cyril.cohen@inria.fr>\"\n    \"Yannick Forster <forster@ps.uni-saarland.de>\"\
+          \n    \"Fabian Kunze <fkunze@fakusb.de>\"\n    \"Gregory Malecha <gmalecha@gmail.com>\"\
+          \n    \"Matthieu Sozeau <matthieu.sozeau@inria.fr>\"\n    \"Nicolas Tabareau\
+          \ <nicolas.tabareau@inria.fr>\"\n    \"Th\xE9o Winterhalter <theo.winterhalter@inria.fr>\"\
+          \n  ]\n  license: \"MIT\"\n  homepage: \"https://metacoq.github.io/metacoq\"\
+          \n  bug-reports: \"https://github.com/MetaCoq/metacoq/issues\"\n  depends:\
+          \ [\n    \"ocaml\" {>= \"4.07.1\"}\n    \"coq\" {>= \"8.14\" & < \"8.15~\"\
+          }\n    \"coq-equations\" {>= \"1.3\"}\n  ]\n  build: [\n    [\"sh\" \"./configure.sh\"\
+          ]\n    [make \"-j\" \"%{jobs}%\" \"template-coq\"]\n  ]\n  install: [make\
+          \ \"-C\" \"template-coq\" \"install\"]\n  dev-repo: \"git+https://github.com/MetaCoq/metacoq.git#master\"\
+          \n  url {\n    src:\n      \"git+file:///home/whenderson/projects/PEARLS/repos_full/certicoq/submodules/metacoq#HEAD\"\
+          \n  }\n}"
+      - - coq-metacoq-translations
+        - "{\n  opam-version: \"2.0\"\n  version: \"8.14.dev\"\n  synopsis: \"Translations\
+          \ built on top of MetaCoq\"\n  description: \"\"\"\nMetaCoq is a meta-programming\
+          \ framework for Coq.\n\nThe Translations modules provides implementation\
+          \ of standard translations \nfrom type theory to type theory, e.g. parametricity\
+          \ and the `cross-bool` \ntranslation that invalidates functional extensionality.\"\
+          \"\"\n  maintainer: \"matthieu.sozeau@inria.fr\"\n  authors: [\n    \"Simon\
+          \ Boulier <simon.boulier@inria.fr>\"\n    \"Cyril Cohen <cyril.cohen@inria.fr>\"\
+          \n    \"Matthieu Sozeau <matthieu.sozeau@inria.fr>\"\n    \"Nicolas Tabareau\
+          \ <nicolas.tabareau@inria.fr>\"\n    \"Th\xE9o Winterhalter <theo.winterhalter@inria.fr>\"\
+          \n  ]\n  license: \"MIT\"\n  homepage: \"https://metacoq.github.io/metacoq\"\
+          \n  bug-reports: \"https://github.com/MetaCoq/metacoq/issues\"\n  depends:\
+          \ [\n    \"coq-metacoq-template\" {= version}\n  ]\n  build: [\n    [\"\
+          sh\" \"./configure.sh\"]\n    [make \"-j\" \"%{jobs}%\" \"-C\" \"translations\"\
+          ]\n  ]\n  install: [make \"-C\" \"translations\" \"install\"]\n  dev-repo:\
+          \ \"git+https://github.com/MetaCoq/metacoq.git#coq-8.11\"\n  url {\n   \
+          \ src:\n      \"git+file:///home/whenderson/projects/PEARLS/repos_full/certicoq/submodules/metacoq#HEAD\"\
+          \n  }\n}\n"
+      pinned:
+      - - coq
+        - prism.util.opam.version,OCamlVersion,8.10.2
+      - - coq-certicoq
+        - prism.util.opam.version,OCamlVersion,0.9~beta+8.14
+      - - coq-metacoq
+        - prism.util.opam.version,OpamVersion,8.14.dev
+      - - coq-metacoq-erasure
+        - prism.util.opam.version,OpamVersion,8.14.dev
+      - - coq-metacoq-pcuic
+        - prism.util.opam.version,OpamVersion,8.14.dev
+      - - coq-metacoq-safechecker
+        - prism.util.opam.version,OpamVersion,8.14.dev
+      - - coq-metacoq-template
+        - prism.util.opam.version,OpamVersion,8.14.dev
+      - - coq-metacoq-translations
+        - prism.util.opam.version,OpamVersion,8.14.dev
+      - - coq-serapi
+        - prism.util.opam.version,OCamlVersion,8.10.0+0.7.2
+      roots:
+      - - coq
+        - prism.util.opam.version,OCamlVersion,8.10.2
+      - - coq-serapi
+        - prism.util.opam.version,OCamlVersion,8.10.0+0.7.2
+      - - ocaml-base-compiler
+        - prism.util.opam.version,OCamlVersion,4.09.1
+    offset: null
+    project_state: bda0bc601a038ba6b65da2e3c52cc02c4d910f35
+  project_name: hoare-tut
+  tags:
+  - VernacStartTheoremProof
+repaired_state_or_diff:
+  diff:
+    text: 'diff --git a/exgcd.v b/exgcd.v
+
+      index fe1ae41..91f7b60 100644
+
+      --- a/exgcd.v
+
+      +++ b/exgcd.v
+
+      @@ -144 +143,0 @@ Hint Resolve Zneq_bool_true Zneq_bool_false Zle_bool_imp_le
+      Zis_gcd_intro: zarit
+
+      -
+
+      @@ -159 +158 @@ intuition auto with zarith.
+
+      -cutrewrite <- ((fst e'')=(snd e'')) in H; auto with zarith.
+
+      +replace (snd e'') with (fst e'') in H; auto with zarith.
+
+      @@ -163,0 +163 @@ Qed.
+
+      +
+
+      '
+  environment: null
