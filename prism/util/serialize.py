@@ -193,10 +193,10 @@ def get_typevar_bindings(
         _, base_bindings = get_typevar_bindings(base)
         type_bindings.update(
             {
-                k:
-                    v if not isinstance(v,
-                                        TypeVar) or not clz_args else
-                    clz_args.pop() for k,
+                k: v
+                if not isinstance(v,
+                                  TypeVar) or not clz_args else clz_args.pop()
+                for k,
                 v in base_bindings.items()
             })
     return clz_origin, type_bindings

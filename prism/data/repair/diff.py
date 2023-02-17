@@ -137,11 +137,10 @@ def commands_in_diff(data: ProjectCommitData,
         files' respective commands that intersect the given `diff`.
     """
     return {
-        k:
-            locations_in_diff(
-                (c.spanning_location() for c in v),
-                diff,
-                is_before) for k,
+        k: locations_in_diff(
+            (c.spanning_location() for c in v),
+            diff,
+            is_before) for k,
         v in data.command_data.items()
     }
 
