@@ -3,7 +3,7 @@ Mine repair instances by looping over existing project build cache.
 """
 import traceback
 from pathlib import Path
-from typing import Callable, List, Tuple, Union, cast
+from typing import Callable, List, Optional, Tuple, Union, cast
 
 from tqdm.contrib.concurrent import process_map
 
@@ -197,10 +197,12 @@ def prepare_state_pairs(
 
 def repair_mining_loop(
         cache_root: Path,
+        cache_format_extension: str = "yml",
         prepare_pairs: PreparePairsFunctionSignature = prepare_state_pairs,
         miner: MiningFunctionSignature = default_miner,
-        cache_format_extension: str = "yml",
-        serial: bool = False):
+        serial: bool = False,
+        max_workers: Optional[int] = None,
+        chunk_size: int = 1):
     """
     Mine repair instances from the given build cache.
 
@@ -208,17 +210,22 @@ def repair_mining_loop(
     ----------
     cache_root : Path
         Path to cache root to mine repair instances from
+    cache_format_extension : str, optional
+        Extension of cache files, by default "yml"
     prepare_pairs : PreparePairsFunctionSignature, optional
         Function to prepare pairs of cache item labels to be used for
         repair instance mining
     miner : MiningFunctionSignature, optional
         Worker function to mine repair instances given a pair of cache
         objects
-    cache_format_extension : str, optional
-        Extension of cache files, by default "yml"
     serial : bool, optional
         Flag to control parallel execution, by default False. If True,
         use serial execution. If False, use parallel execution.
+    max_workers : int or None, optional
+        Maximum number of parallel workers to allow, by default None,
+        which sets the value to min(32, number of cpus + 4)
+    chunk_size : int, optional
+        Size of job chunk sent to each worker, by default 1
     """
     with CoqProjectBuildCacheServer() as cache_server:
         cache_args = (cache_server, cache_root, cache_format_extension)
@@ -231,4 +238,12 @@ def repair_mining_loop(
                     print(result.trace)
                     raise result.exception
         else:
-            process_map(build_repair_instance_star, jobs)
+            kwargs = {}
+            if max_workers is not None:
+                kwargs["max_workers"] = max_workers
+            kwargs["chunksize"] = chunk_size
+            process_map(
+                build_repair_instance_star,
+                jobs,
+                desc="Repair Mining",
+                **kwargs)
