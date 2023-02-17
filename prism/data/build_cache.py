@@ -450,10 +450,10 @@ class VernacCommandDataList:
     commands: List[VernacCommandData] = default_field(list())
 
     @overload
-    def __add__(
+    def __add__(  # noqa: D105
             self,
             o: List[VernacCommandData]
-    ) -> 'VernacCommandDataList':  # noqa: D105
+    ) -> 'VernacCommandDataList':
         ...
 
     @overload
@@ -529,9 +529,9 @@ class VernacCommandDataList:
                 'CoqDocumentData may only contain VernacCommandData')
         self.commands[idx] = item
 
-    def __mul__(
+    def __mul__(  # noqa: D105
             self,
-            n: SupportsIndex) -> 'VernacCommandDataList':  # noqa: D105
+            n: SupportsIndex) -> 'VernacCommandDataList':
         return VernacCommandDataList(self.commands * n)
 
     def append(self, item: Any) -> None:  # noqa: D102
