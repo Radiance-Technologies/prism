@@ -13,6 +13,7 @@ from prism.data.build_cache import (
     CoqProjectBuildCacheProtocol,
     CoqProjectBuildCacheServer,
 )
+from prism.data.repair.align import default_align
 from prism.data.repair.instance import ProjectCommitDataDiff
 
 AnnotatedException = Tuple[Exception, str]
@@ -27,20 +28,22 @@ Type hint for the output of build_repair_instance_star.
 
 
 def build_repair_instance(
-        cache_server: CoqProjectBuildCacheServer,
-        cache_item_a: CacheObjectStatus,
-        cache_item_b: CacheObjectStatus) -> Optional[ProjectCommitDataDiff]:
+        cache_args: Tuple[CoqProjectBuildCacheServer,
+                          Path,
+                          str],
+        cache_label_a: CacheObjectStatus,
+        cache_label_b: CacheObjectStatus) -> Optional[ProjectCommitDataDiff]:
     """
     Construct build repair instance from pairs of cache items.
 
     Parameters
     ----------
-    cache_server : CoqProjectBuildCacheServer
-        Cache server to load cache items from
-    cache_item_a : CacheObjectStatus
-        The initial cache item used to form the repair instance
-    cache_item_b : CacheObjectStatus
-        The final cache item used to form the repair instance
+    cache_server : Tuple[CoqProjectBuildCacheServer, Path, str]
+        Args to instantiate cache client
+    cache_label_a : CacheObjectStatus
+        The initial cache label used to form the repair instance
+    cache_label_b : CacheObjectStatus
+        The final cache label used to form the repair instance
 
     Returns
     -------
@@ -48,7 +51,25 @@ def build_repair_instance(
         If a repair instance is successfully created, return that.
         If the instance is empty, return None.
     """
-    ...
+    cache_client = cast(
+        CoqProjectBuildCacheProtocol,
+        CoqProjectBuildCacheClient(*cache_args))
+    cache_item_a = cache_client.get(
+        cache_label_a.project,
+        cache_label_a.commit_hash,
+        cache_label_a.coq_version)
+    cache_item_b = cache_client.get(
+        cache_label_b.project,
+        cache_label_b.commit_hash,
+        cache_label_b.coq_version)
+    diff = ProjectCommitDataDiff.from_commit_data(
+        cache_item_a,
+        cache_item_b,
+        default_align)
+    if diff.is_empty:
+        return None
+    else:
+        return diff
 
 
 def build_repair_instance_star(
@@ -129,12 +150,10 @@ def repair_mining_loop(
         "8.15.2"
     ]
     with CoqProjectBuildCacheServer() as cache_server:
+        cache_args = (cache_server, cache_root, cache_format_extension)
         local_cache_client = cast(
             CoqProjectBuildCacheProtocol,
-            CoqProjectBuildCacheClient(
-                cache_server,
-                cache_root,
-                cache_format_extension))
+            CoqProjectBuildCacheClient(*cache_args))
         project_list = local_cache_client.list_projects()
         all_cache_items = local_cache_client.list_status_success_only()
         cache_item_pairs: List[Tuple[CacheObjectStatus, CacheObjectStatus]] = []
@@ -150,7 +169,7 @@ def repair_mining_loop(
                             cache_item_pairs.append(
                                 (cache_item_a,
                                  cache_item_b))
-        jobs = [(cache_server, a, b) for a, b in cache_item_pairs]
+        jobs = [(cache_args, a, b) for a, b in cache_item_pairs]
         if serial:
             for job in jobs:
                 result = build_repair_instance_star(job)
