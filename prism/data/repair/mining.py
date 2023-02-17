@@ -3,7 +3,7 @@ Mine repair instances by looping over existing project build cache.
 """
 import traceback
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple, Union, cast
+from typing import Callable, List, Tuple, Union, cast
 
 from tqdm.contrib.concurrent import process_map
 
@@ -17,9 +17,7 @@ from prism.data.build_cache import (
 from prism.data.commit_map import Except
 from prism.data.repair.instance import ProjectCommitDataRepairInstance
 
-BuildRepairInstanceOutput = Optional[Union[
-    List[ProjectCommitDataRepairInstance],
-    Except]]
+BuildRepairInstanceOutput = Union[List[ProjectCommitDataRepairInstance], Except]
 """
 Type hint for the output of build_repair_instance_star.
 """
@@ -42,13 +40,13 @@ repair instance mining.
 
 
 def build_repair_instance(
-    cache_args: Tuple[CoqProjectBuildCacheServer,
-                      Path,
-                      str],
-    miner: MiningFunctionSignature,
-    cache_label_a: CacheObjectStatus,
-    cache_label_b: CacheObjectStatus
-) -> Optional[List[ProjectCommitDataRepairInstance]]:
+        cache_args: Tuple[CoqProjectBuildCacheServer,
+                          Path,
+                          str],
+        miner: MiningFunctionSignature,
+        cache_label_a: CacheObjectStatus,
+        cache_label_b: CacheObjectStatus
+) -> List[ProjectCommitDataRepairInstance]:
     """
     Construct build repair instance from pairs of cache items.
 
@@ -65,7 +63,7 @@ def build_repair_instance(
 
     Returns
     -------
-    Optional[ProjectCommitDataDiff]
+    List[ProjectCommitDataRepairInstance]
         If a repair instance is successfully created, return that.
         If the instance is empty, return None.
     """
@@ -81,8 +79,7 @@ def build_repair_instance(
         cache_label_b.commit_hash,
         cache_label_b.coq_version)
     repair_instances = miner(cache_item_a, cache_item_b)
-    if repair_instances:
-        return repair_instances
+    return repair_instances
 
 
 def build_repair_instance_star(
@@ -103,8 +100,7 @@ def build_repair_instance_star(
     Returns
     -------
     BuildRepairInstanceOutput
-        If a repair instance is successfully created, return that.
-        If the instance is empty, return None.
+        If a repair instances are successfully created, return those.
         If build_repair_instance raises an exception, return the
         exception annotated with its in-context traceback string.
     """
@@ -232,7 +228,7 @@ def repair_mining_loop(
             for job in jobs:
                 result = build_repair_instance_star(job)
                 if isinstance(result, Except):
-                    print(result[1])
-                    raise result[0]
+                    print(result.trace)
+                    raise result.exception
         else:
             process_map(build_repair_instance_star, jobs)
