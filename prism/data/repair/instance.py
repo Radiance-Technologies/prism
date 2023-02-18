@@ -10,6 +10,7 @@ from typing import (
     Callable,
     Dict,
     Generic,
+    Iterable,
     Iterator,
     List,
     Optional,
@@ -870,6 +871,43 @@ class ProjectCommitDataStateDiff(ProjectStateDiff[ProjectCommitDataDiff]):
             environment)
 
 
+ErrorAnnotator = Callable[[
+    VernacCommandData,
+    ProjectCommitData,
+    ProjectCommitDataDiff,
+    Optional[OpamSwitch.Configuration],
+    Optional[Iterable[str]]
+],
+                          Set[str]]  # noqa: E126
+"""
+A function that annotates a erroneous command with a set of tags.
+"""
+
+
+@dataclass
+class ChangeSelection:
+    """
+    Represents a selection from a `ProjectCommitDataDiff`.
+    """
+
+    added_commands: Iterable[Tuple[str, int]] = default_field([])
+    """
+    A list of pairs of filenames and added command indices.
+    """
+    affected_commands: Iterable[Tuple[str, int]] = default_field([])
+    """
+    A list of pairs of filenames and affected command indices.
+    """
+    changed_commands: Iterable[Tuple[str, int]] = default_field([])
+    """
+    A list of pairs of filenames and changed command indices.
+    """
+    dropped_commands: Iterable[Tuple[str, int]] = default_field([])
+    """
+    A list of pairs of filenames and dropped command indices.
+    """
+
+
 @dataclass
 class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
                                                    ProjectCommitDataDiff]):
@@ -916,6 +954,310 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
                 initial_state._environment),
             self.error_location,
             set(self.tags))
+
+    @classmethod
+    def _make_error_instance(
+            cls,
+            initial_state: ProjectCommitData,
+            broken_state_diff: ProjectCommitDataDiff,
+            broken_environment: Optional[OpamSwitch.Configuration],
+            broken_dependencies: Optional[Iterable[str]],
+            broken_commands: Iterable[VernacCommandData],
+            get_tags: ErrorAnnotator) -> 'ProjectCommitDataErrorInstance':
+        """
+        Create the actual error instance.
+        """
+        error_environment = None
+        if broken_environment is not None:
+            error_environment = broken_environment
+            if initial_state.environment is not None:
+                initial_environment = initial_state.environment.switch_config
+                if error_environment == initial_environment:
+                    error_environment = None
+        tags = set()
+        for broken_command in broken_commands:
+            tags.update(
+                get_tags(
+                    broken_command,
+                    initial_state,
+                    broken_state_diff,
+                    broken_environment,
+                    broken_dependencies))
+        error_instance = cls(
+            project_name=initial_state.project_metadata.project_name,
+            initial_state=ProjectCommitDataState(initial_state,
+                                                 None,
+                                                 None),
+            change=ProjectCommitDataStateDiff(
+                broken_state_diff,
+                error_environment),
+            error_location={bc.command.location for bc in broken_commands},
+            tags=tags)
+        return error_instance
+
+    @classmethod
+    def default_change_miner(
+        cls,
+        initial_state: ProjectCommitData,
+        commit_diff: ProjectCommitDataDiff,
+        error_filter: Optional[Callable[[VernacCommandData],
+                                        bool]] = None
+    ) -> List[ChangeSelection]:
+        r"""
+        Make selections by dropping individual changed commands.
+
+        Parameters
+        ----------
+        initial_state : ProjectCommitData
+            The initial state of the project.
+        commit_diff : ProjectCommitDataDiff
+            Changes to the state from which selections will be made.
+        error_filter : Optional[Callable[[VernacCommandData], bool]], \
+                optional
+            An optional filter one may use to skip dropping certain
+            commands, e.g., to create changes that drop only altered
+            proofs, by default None.
+
+        Returns
+        -------
+        selected_changes : List[ChangeSelection]
+            A list of selected changesets.
+        """
+        selected_changes: List[ChangeSelection] = []
+        for filename, command_index, _ in commit_diff.changed_commands:
+            # make an example for each filtered, *changed* command
+            original_command = initial_state.command_data[filename][
+                command_index]
+            if error_filter is None or error_filter(original_command):
+                # this command is not filtered out
+                added_commands = [
+                    (f,
+                     idx)
+                    for f,
+                    file_changes in commit_diff.changes.items()
+                    for idx in range(len(file_changes.added_commands))
+                ]
+                affected_commands = [
+                    (f,
+                     idx) for f,
+                    idx,
+                    _ in commit_diff.affected_commands
+                ]
+                # drop command in selection
+                changed_commands = [
+                    (f,
+                     idx)
+                    for f,
+                    idx,
+                    _ in commit_diff.changed_commands
+                    if f != filename or idx != command_index
+                ]
+                dropped_commands = list(commit_diff.dropped_commands)
+                selected_changes.append(
+                    ChangeSelection(
+                        added_commands,
+                        affected_commands,
+                        changed_commands,
+                        dropped_commands))
+        return selected_changes
+
+    @classmethod
+    def default_get_error_tags(
+            cls,
+            broken_command: VernacCommandData,
+            initial_state: ProjectCommitData,
+            broken_state_diff: ProjectCommitDataDiff,
+            broken_environment: Optional[OpamSwitch.Configuration],
+            broken_dependencies: Optional[Iterable[str]]) -> Set[str]:
+        """
+        Get a default set of tags to apply to an error.
+
+        The default set of tags identify the type of repaired command
+        and additionally note that the repair instance has been
+        artificially mined, that only one command is repaired in one
+        file, and whether any dependencies have been updated, dropped,
+        or added (including Coq version).
+
+        Parameters
+        ----------
+        broken_command : VernacCommandData
+            The command in need of repair
+        repair : SerializableDataDiff[VernacCommandData]
+            A diff that can be applied to the command to retrieve its
+            repaired version via ``repair.patch(broken_command)``.
+        initial_state : ProjectCommitData
+            The initial state containing the broken command.
+        repaired_state : ProjectCommitData
+            The repaired state.
+
+        Returns
+        -------
+        tags : Set[str]
+            A set of tags describing the repair.
+        """
+        tags = {
+            broken_command.command_type,
+            "artificial:mined",
+            "one-command",
+            "one-file"
+        }
+        if (initial_state.environment is not None
+                and broken_environment is not None
+                and initial_state.project_metadata.opam_dependencies is not None
+                and broken_dependencies is not None):
+            initial_dependencies = set()
+            for dep in initial_state.project_metadata.opam_dependencies:
+                initial_dependencies.update(
+                    typing.cast(PackageFormula,
+                                PackageFormula.parse(dep)).packages)
+            changed_dependencies = set()
+            for dep in broken_dependencies:
+                changed_dependencies.update(
+                    typing.cast(PackageFormula,
+                                PackageFormula.parse(dep)).packages)
+            initial_packages = dict(
+                initial_state.environment.switch_config.installed)
+            repair_packages = dict(broken_environment.installed)
+            tags.update(
+                {
+                    f"dropped-dependency:{p}" for p in repair_packages if
+                    p in initial_dependencies and p not in changed_dependencies
+                })
+            tags.update(
+                {
+                    f"new-dependency:{p}" for p in repair_packages if
+                    p not in initial_dependencies and p in changed_dependencies
+                })
+            tags.update(
+                {
+                    f"updated-dependency:{p}" for p in repair_packages
+                    if p in initial_dependencies and p in changed_dependencies
+                    and initial_packages[p] != repair_packages[p]
+                })
+        return {f"error:{t}" for t in tags}
+
+    @classmethod
+    def mine_from_successful_commits(
+            cls,
+            initial_state: ProjectCommitData,
+            repaired_state: ProjectCommitData,
+            align: Optional[AlignmentFunction] = None,
+            change_miner: Optional[Callable[
+                [ProjectCommitData,
+                 ProjectCommitDataDiff],
+                Iterable[ChangeSelection]]] = None,
+            get_error_tags: Optional[ErrorAnnotator] = None,
+            **kwargs) -> List['ProjectCommitDataErrorInstance']:
+        r"""
+        Mine a pair of commits for error examples.
+
+        By default, error examples produced by this method comprise
+        standalone broken commands (complete theorems, definitions,
+         etc.) that have been modified between the commits.
+        A virtual broken state is induced by partially applying the
+        changes between the given commits such that changed commands are
+        left out.
+        The `change_miner` dictates which changes are left out in one or
+        more derived changesets.
+        The left-out change may constitutes a presumptive "repair".
+        One may observe that not all mined broken states are guaranteed
+        to actually raise an error when compiled.
+
+        Parameters
+        ----------
+        initial_state : ProjectCommitData
+            An initial state, presumed to be without error.
+        repaired_state : ProjectCommitData
+            Another commit's state presumed to occur after
+            `initial_state` and also be without error.
+        align : Optional[AlignmentFunction], optional
+            A function that may be used to align the commands of
+            `initial_state` and `repaired_state`.
+        change_miner : Optional[Callable[ \
+                    [ProjectCommitData, \
+                     ProjectCommitDataDiff],
+                    Iterable[ChangeSelection]]], \
+                optional
+            A filter applied to changed commands' initial states that
+            can be used to select types of repair examples to mine.
+            By default, every changed command is extracted as a repair
+            example.
+        get_error_tags : Optional[RepairAnnotator], optional
+            A function that annotates a repair with tags for subsequent
+            filtering of the mined examples.
+            By default, `default_get_tags` is used.
+        kwargs
+            Optional keyword arguments to
+            `ProjectCommitDataDiff.from_commit_data`, e.g., a
+            pre-computed diff.
+
+        Returns
+        -------
+        List['ProjectCommitDataRepairInstance']
+            A list of mined repair instances.
+        """
+        if align is None:
+            align = default_align
+        if change_miner is None:
+            change_miner = cls.default_change_miner
+        if get_error_tags is None:
+            get_error_tags = cls.default_get_error_tags
+        # sort commands for reproducible indexing of commands in
+        # produced diffs
+        initial_state.sort_commands()
+        commit_diff = ProjectCommitDataDiff.from_commit_data(
+            initial_state,
+            repaired_state,
+            align,
+            **kwargs)
+        error_instances: List[ProjectCommitDataErrorInstance] = []
+        for changeset in change_miner(initial_state, commit_diff):
+            # make two partial diffs
+            # one partial diff creates a presumed broken state
+            broken_state_diff = ProjectCommitDataDiff(
+                {
+                    k: VernacCommandDataListDiff()
+                    for k in commit_diff.changes.keys()
+                })
+            broken_command_indices = {
+                (f,
+                 idx) for f,
+                idx,
+                _ in commit_diff.changed_commands
+            }
+            for filename, added_idx in changeset.added_commands:
+                broken_state_diff.changes[filename].added_commands.append(
+                    copy.deepcopy(
+                        commit_diff.changes[filename].added_commands[added_idx])
+                )
+            for filename, changed_idx in changeset.changed_commands:
+                broken_state_diff.changes[filename].affected_commands[
+                    changed_idx] = copy.deepcopy(
+                        commit_diff.changes[filename]
+                        .affected_commands[changed_idx])
+            for filename, changed_idx in changeset.changed_commands:
+                broken_state_diff.changes[filename].changed_commands[
+                    changed_idx] = copy.deepcopy(
+                        commit_diff.changes[filename]
+                        .changed_commands[changed_idx])
+                broken_command_indices.discard((filename, changed_idx))
+            for filename, dropped_idx in changeset.dropped_commands:
+                broken_state_diff.changes[filename].dropped_commands.add(
+                    dropped_idx)
+            broken_commands: List[VernacCommandData] = [
+                initial_state.command_data[f][idx] for f,
+                idx in broken_command_indices
+            ]
+            error_instance = cls._make_error_instance(
+                initial_state,
+                broken_state_diff,
+                repaired_state.environment.switch_config
+                if repaired_state.environment is not None else None,
+                repaired_state.project_metadata.opam_dependencies,
+                broken_commands,
+                get_error_tags)
+            error_instances.append(error_instance)
+        return error_instances
 
 
 RepairAnnotator = Callable[[
@@ -990,8 +1332,8 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
             repaired_environment = repaired_state.environment.switch_config
             if initial_state.environment is not None:
                 initial_environment = initial_state.environment.switch_config
-                if repaired_environment != initial_environment:
-                    repaired_environment = repaired_state.environment.switch_config
+                if repaired_environment == initial_environment:
+                    repaired_environment = None
         repair_instance = ProjectCommitDataRepairInstance(
             error=ProjectCommitDataErrorInstance(
                 project_name=initial_state.project_metadata.project_name,
@@ -1012,7 +1354,7 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
         return repair_instance
 
     @classmethod
-    def default_get_tags(
+    def default_get_repair_tags(
             cls,
             broken_command: VernacCommandData,
             repair: SerializableDataDiff[VernacCommandData],
@@ -1045,10 +1387,10 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
             A set of tags describing the repair.
         """
         tags = {
-            f"repair:{broken_command.command_type}",
+            f"{broken_command.command_type}",
             "artificial:mined",
-            "repair:one-command",
-            "repair:one-file"
+            "one-command",
+            "one-file"
         }
         if (initial_state.environment is not None
                 and repaired_state.environment is not None
@@ -1084,7 +1426,79 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
                     if p in initial_dependencies and p in repaired_dependencies
                     and initial_packages[p] != repair_packages[p]
                 })
-        return tags
+        return {f"repair:{t}" for t in tags}
+
+    @classmethod
+    def make_repair_instance(
+        cls,
+        error_instance: ProjectCommitDataErrorInstance,
+        repaired_state: ProjectCommitData,
+        align: Optional[AlignmentFunction] = None,
+        get_tags: Optional[RepairAnnotator] = None
+    ) -> 'ProjectCommitDataRepairInstance':
+        """
+        Create a repair instance from a given error instance.
+
+        Parameters
+        ----------
+        error_instance : ProjectCommitDataErrorInstance
+            A preconstructed example of an error.
+        repaired_state : ProjectCommitData
+            A state based on that of `error_instance` that is presumed
+            to be repaired.
+        align : Optional[AlignmentFunction], optional
+            _description_, by default None
+        get_tags : Optional[RepairAnnotator], optional
+            _description_, by default None
+
+        Returns
+        -------
+        ProjectCommitDataRepairInstance
+            _description_
+        """
+        if align is None:
+            align = default_align
+        if get_tags is None:
+            get_tags = cls.default_get_repair_tags
+        broken_state = error_instance.error_state
+        # sort commands for reproducible indexing of commands in
+        # produced diffs
+        broken_state.sort_commands()
+        # the other partial diff repairs the broken state
+        repaired_state_diff = ProjectCommitDataDiff.from_commit_data(
+            broken_state,
+            repaired_state,
+            align)
+        # get the broken commands
+        added = list(repaired_state_diff.added_commands)
+        repaired = list(repaired_state_diff.changed_commands)
+        dropped = list(repaired_state_diff.dropped_commands)
+        assert added or repaired or dropped, \
+            "Something should have been repaired"
+        # generate repair tags
+        tags = set()
+        for filename, broken_command_index, repair in repaired:
+            broken_command = broken_state.command_data[filename][
+                broken_command_index]
+            tags.update(
+                get_tags(broken_command,
+                         repair,
+                         broken_state,
+                         repaired_state))
+        # assemble the repair instance
+        repaired_environment = None
+        if repaired_state.environment is not None:
+            repaired_environment = repaired_state.environment.switch_config
+            if broken_state.environment is not None:
+                initial_environment = broken_state.environment.switch_config
+                if repaired_environment == initial_environment:
+                    repaired_environment = None
+        repair_instance = cls(
+            error_instance,
+            ProjectCommitDataStateDiff(
+                repaired_state_diff,
+                repaired_environment))
+        return repair_instance
 
     @classmethod
     def mine_repair_examples_from_successful_commits(
@@ -1141,7 +1555,7 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
         if align is None:
             align = default_align
         if get_tags is None:
-            get_tags = cls.default_get_tags
+            get_tags = cls.default_get_repair_tags
         # sort commands for reproducible indexing of commands in
         # produced diffs
         initial_state.sort_commands()
