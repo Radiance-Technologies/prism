@@ -112,7 +112,7 @@ class TestRepairInstance(unittest.TestCase):
                 self.repaired_state,
                 default_align)
 
-        repairs = ProjectCommitDataRepairInstance.mine_repair_examples_from_successful_commits(  # noqa: B950
+        repairs = ProjectCommitDataRepairInstance.mine_repair_examples(  # noqa: B950
             self.initial_state,
             self.repaired_state,
             repair_filter=filter_one)
