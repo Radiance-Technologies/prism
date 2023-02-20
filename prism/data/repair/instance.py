@@ -485,6 +485,8 @@ class ProjectCommitDataDiff:
             The diff between `a` and `b` such that
             ``diff.patch(a).command_data == b.command_data``.
         """
+        # NOTE (AG): I haven't been able to convince myself why patching
+        # goals is necessary, but all tests indicate that it is.
         a.patch_goals()
         b.patch_goals()
         diff = cls.from_aligned_commands(get_aligned_commands(a, b, alignment))
@@ -757,8 +759,6 @@ class GitProjectStateDiff(ProjectStateDiff[GitDiff]):
     A change in some implicit Git repository's state.
     """
 
-    pass
-
 
 @dataclass
 class GitErrorInstance(ErrorInstance[str, GitDiff]):
@@ -769,7 +769,11 @@ class GitErrorInstance(ErrorInstance[str, GitDiff]):
     induced by changes to source code and/or environment.
     """
 
-    pass
+    def _patch_generic_attributes_(self):
+        self.initial_state.__class__ = GitProjectState
+        self.change.__class__ = GitProjectStateDiff
+        assert isinstance(self.initial_state, GitProjectState)
+        assert isinstance(self.change, GitProjectStateDiff)
 
 
 @dataclass
@@ -782,7 +786,19 @@ class GitRepairInstance(RepairInstance[str, GitDiff]):
     environment.
     """
 
-    pass
+    def _patch_generic_attributes_(self):
+        self.error.__class__ = GitErrorInstance
+        if isinstance(self.repaired_state_or_diff, ProjectState):
+            self.repaired_state_or_diff.__class__ = GitProjectState
+            assert isinstance(self.repaired_state_or_diff, GitProjectState)
+        else:
+            assert isinstance(self.repaired_state_or_diff, ProjectStateDiff), \
+                "repaired_state_or_diff must be a state or a diff, " \
+                f"got {type(self.repaired_state_or_diff)}"
+            self.repaired_state_or_diff.__class__ = GitProjectStateDiff
+            assert isinstance(self.repaired_state_or_diff, GitProjectStateDiff)
+        assert isinstance(self.error, GitErrorInstance)
+        self.error._patch_generic_attributes_()
 
 
 @dataclass
@@ -940,6 +956,12 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
         error_state = self.change.diff.patch(initial_state.offset_state)
         error_state.sort_commands()
         return error_state
+
+    def _patch_generic_attributes_(self):
+        self.initial_state.__class__ = ProjectCommitDataState
+        self.change.__class__ = ProjectCommitDataStateDiff
+        assert isinstance(self.initial_state, ProjectCommitDataState)
+        assert isinstance(self.change, ProjectCommitDataStateDiff)
 
     def compress(self) -> GitErrorInstance:
         """
@@ -1219,7 +1241,7 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
                     copy.deepcopy(
                         commit_diff.changes[filename].added_commands[added_idx])
                 )
-            for filename, changed_idx in changeset.changed_commands:
+            for filename, changed_idx in changeset.affected_commands:
                 broken_state_diff.changes[filename].affected_commands[
                     changed_idx] = copy.deepcopy(
                         commit_diff.changes[filename]
@@ -1352,6 +1374,24 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
     environment.
     """
 
+    def _patch_generic_attributes_(self):
+        self.error.__class__ = ProjectCommitDataErrorInstance
+        if isinstance(self.repaired_state_or_diff, ProjectState):
+            self.repaired_state_or_diff.__class__ = ProjectCommitDataState
+            assert isinstance(
+                self.repaired_state_or_diff,
+                ProjectCommitDataState)
+        else:
+            assert isinstance(self.repaired_state_or_diff, ProjectStateDiff), \
+                "repaired_state_or_diff must be a state or a diff, " \
+                f"got {type(self.repaired_state_or_diff)}"
+            self.repaired_state_or_diff.__class__ = ProjectCommitDataStateDiff
+            assert isinstance(
+                self.repaired_state_or_diff,
+                ProjectCommitDataStateDiff)
+        assert isinstance(self.error, ProjectCommitDataErrorInstance)
+        self.error._patch_generic_attributes_()
+
     def compress(self) -> GitRepairInstance:
         """
         Get a concise Git-based representation of this repair instance.
@@ -1421,6 +1461,85 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
                 repaired_state_diff,
                 repaired_environment))
         return repair_instance
+
+    @classmethod
+    def default_changeset_miner(
+        cls,
+        initial_state: ProjectCommitData,
+        commit_diff: ProjectCommitDataDiff,
+        error_filter: Optional[Callable[[VernacCommandData],
+                                        bool]] = None
+    ) -> List[ChangeSelection]:
+        r"""
+        Make selections by dropping individual changed commands.
+
+        Parameters
+        ----------
+        initial_state : ProjectCommitData
+            The initial state of the project.
+        commit_diff : ProjectCommitDataDiff
+            Changes to the state from which selections will be made.
+        error_filter : Optional[Callable[[VernacCommandData], bool]], \
+                optional
+            An optional filter one may use to skip dropping certain
+            commands, e.g., to create changes that drop only altered
+            proofs, by default None.
+
+        Returns
+        -------
+        selected_changes : List[ChangeSelection]
+            A list of selected changesets.
+        """
+        selected_changes: List[ChangeSelection] = []
+        for filename, command_index, _ in commit_diff.changed_commands:
+            # make an example for each filtered, *changed* command
+            original_command = initial_state.command_data[filename][
+                command_index]
+            if error_filter is None or error_filter(original_command):
+                # this command is not filtered out
+                added_commands = [
+                    (f,
+                     idx)
+                    for f,
+                    file_changes in commit_diff.changes.items()
+                    for idx in range(len(file_changes.added_commands))
+                ]
+                affected_commands = [
+                    (f,
+                     idx) for f,
+                    idx,
+                    _ in commit_diff.affected_commands
+                ]
+                # drop command in selection
+                changed_commands = [
+                    (f,
+                     idx)
+                    for f,
+                    idx,
+                    _ in commit_diff.changed_commands
+                    if f != filename or idx != command_index
+                ]
+                dropped_commands = list(commit_diff.dropped_commands)
+                selected_changes.append(
+                    ChangeSelection(
+                        added_commands,
+                        affected_commands,
+                        changed_commands,
+                        dropped_commands))
+        return selected_changes
+
+    @classmethod
+    def default_get_error_tags(cls, *args, **kwargs) -> Set[str]:
+        """
+        Get a default set of tags to apply to an error.
+
+        See Also
+        --------
+        ProjectCommitDataErrorInstance.default_get_error_tags : For API
+        """
+        return ProjectCommitDataErrorInstance.default_get_error_tags(
+            *args,
+            **kwargs)
 
     @classmethod
     def default_get_repair_tags(
@@ -1504,7 +1623,7 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
         error_instance: ProjectCommitDataErrorInstance,
         repaired_state: ProjectCommitData,
         align: Optional[AlignmentFunction] = None,
-        get_tags: Optional[RepairAnnotator] = None
+        get_repair_tags: Optional[RepairAnnotator] = None
     ) -> 'ProjectCommitDataRepairInstance':
         """
         Create a repair instance from a given error instance.
@@ -1520,18 +1639,20 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
             The alignment algorithm to use when constructing the diff
             between the error instance's state and `repaired_state, by
             default `default_align`.
-        get_tags : Optional[RepairAnnotator], optional
-            _description_, by default None
+        get_repair_tags : Optional[RepairAnnotator], optional
+            A function that annotates a repair with tags for subsequent
+            filtering of the mined examples.
+            By default, `default_get_repair_tags` is used.
 
         Returns
         -------
         ProjectCommitDataRepairInstance
-            _description_
+            The repair instance.
         """
         if align is None:
             align = default_align
-        if get_tags is None:
-            get_tags = cls.default_get_repair_tags
+        if get_repair_tags is None:
+            get_repair_tags = cls.default_get_repair_tags
         broken_state = error_instance.error_state
         # sort commands for reproducible indexing of commands in
         # produced diffs
@@ -1548,15 +1669,16 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
         assert added or repaired or dropped, \
             "Something should have been repaired"
         # generate repair tags
-        tags = set()
+        tags = error_instance.tags
         for filename, broken_command_index, repair in repaired:
             broken_command = broken_state.command_data[filename][
                 broken_command_index]
             tags.update(
-                get_tags(broken_command,
-                         repair,
-                         broken_state,
-                         repaired_state))
+                get_repair_tags(
+                    broken_command,
+                    repair,
+                    broken_state,
+                    repaired_state))
         # assemble the repair instance
         repaired_environment = None
         if repaired_state.environment is not None:
@@ -1616,10 +1738,14 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
             changed command out one at a time.
             Consequently, every changed command is extracted as a repair
             example.
-        get_tags : Optional[RepairAnnotator], optional
+        get_error_tags : Optional[RepairAnnotator], optional
+            A function that annotates an error with tags for subsequent
+            filtering of the mined examples.
+            By default, `default_get_error_tags` is used.
+        get_repair_tags : Optional[RepairAnnotator], optional
             A function that annotates a repair with tags for subsequent
             filtering of the mined examples.
-            By default, `default_get_tags` is used.
+            By default, `default_get_repair_tags` is used.
         kwargs
             Optional keyword arguments to
             `ProjectCommitDataDiff.from_commit_data`, e.g., a
@@ -1633,7 +1759,9 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
         if align is None:
             align = default_align
         if changeset_miner is None:
-            changeset_miner = ProjectCommitDataErrorInstance.default_changeset_miner
+            changeset_miner = cls.default_changeset_miner
+        if get_error_tags is None:
+            get_error_tags = cls.default_get_error_tags
         if get_repair_tags is None:
             get_repair_tags = cls.default_get_repair_tags
         error_instances = ProjectCommitDataErrorInstance.mine_error_examples(

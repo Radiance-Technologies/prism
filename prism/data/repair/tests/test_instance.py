@@ -3,6 +3,7 @@ Test suite for `prism.data.repair.align`.
 """
 import typing
 import unittest
+from functools import partial
 from typing import Optional
 
 import pytest
@@ -14,6 +15,7 @@ from prism.data.repair.diff import compute_git_diff
 from prism.data.repair.instance import (
     GitRepairInstance,
     ProjectCommitDataDiff,
+    ProjectCommitDataErrorInstance,
     ProjectCommitDataRepairInstance,
     ProjectStateDiff,
 )
@@ -100,11 +102,16 @@ class TestRepairInstance(unittest.TestCase):
             Make a filter that allows us to mine one repaired proof.
             """
             nonlocal num_mined
-            allow = num_mined < 1
             is_proof = command.command_type == "VernacStartTheoremProof"
-            if allow and is_proof:
+            allow = num_mined < 1 and is_proof
+            if allow:
                 num_mined += 1
             return allow
+
+        # mine one changeset
+        mine_one = partial(
+            ProjectCommitDataErrorInstance.default_changeset_miner,
+            error_filter=filter_one)
 
         if self.diff is None:
             self.diff = ProjectCommitDataDiff.from_commit_data(
@@ -112,10 +119,10 @@ class TestRepairInstance(unittest.TestCase):
                 self.repaired_state,
                 default_align)
 
-        repairs = ProjectCommitDataRepairInstance.mine_repair_examples(  # noqa: B950
+        repairs = ProjectCommitDataRepairInstance.mine_repair_examples(
             self.initial_state,
             self.repaired_state,
-            repair_filter=filter_one)
+            changeset_miner=mine_one)
         # only one repair should be mined
         self.assertEqual(len(repairs), 1)
         repair_instance = repairs[0]
