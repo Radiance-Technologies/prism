@@ -2,11 +2,12 @@
 Test suite for `prism.data.build_cache`.
 """
 import shutil
+import typing
 import unittest
 from copy import deepcopy
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
-from typing import List, Union
+from typing import List, Optional, Union
 
 import seutil.io as io
 
@@ -48,7 +49,7 @@ class TestVernacSentence(unittest.TestCase):
         """
         Verify that `VernacSentence` can be serialize/deserialized.
         """
-        goals: List[Union[Goals, GoalsDiff]] = []
+        goals: List[Optional[Union[Goals, GoalsDiff]]] = []
         asts = []
         commands = [
             "Lemma foobar : unit.",
@@ -64,6 +65,8 @@ class TestVernacSentence(unittest.TestCase):
                 goals.append(serapi.query_goals())
                 asts.append(ast)
         # force multiple added goals
+        assert isinstance(goals[1], Goals)
+        assert isinstance(goals[2], Goals)
         goals[2].foreground_goals = [
             deepcopy(g) for g in goals[1].foreground_goals * 3
         ]
@@ -73,7 +76,9 @@ class TestVernacSentence(unittest.TestCase):
         goals = goals[0 : 1] + [
             GoalsDiff.compute_diff(g1,
                                    g2)
-            if g1 is not None and g2 is not None else g2 for g1,
+            if isinstance(g1,
+                          Goals) and isinstance(g2,
+                                                Goals) else g2 for g1,
             g2 in zip(goals,
                       goals[1 :])
         ]
@@ -96,8 +101,10 @@ class TestVernacSentence(unittest.TestCase):
                              0),
                 "CommandType",
                 g,
-                get_identifiers=lambda ast: get_all_idents(ast,
-                                                           True)) for c,
+                get_identifiers=lambda ast: typing.cast(
+                    list,
+                    get_all_idents(ast,
+                                   True))) for c,
             a,
             g in zip(commands,
                      asts,
@@ -117,12 +124,17 @@ class TestCoqProjectBuildCache(unittest.TestCase):
     """
 
     cache_dir = TEST_DIR / "project_build_cache"
+    storage: MetadataStorage
+    dir_list: List[Path]
+    dataset: CoqProjectBaseDataset
 
     def test_project_build_cache(self):
         """
         Test all aspects of the cache with subtests.
         """
-        projects: List[ProjectRepo] = list(self.dataset.projects.values())
+        projects = typing.cast(
+            List[ProjectRepo],
+            list(self.dataset.projects.values()))
         with CoqProjectBuildCacheServer() as cache_server:
             cache_client: CoqProjectBuildCacheProtocol = CoqProjectBuildCacheClient(
                 cache_server,
@@ -143,6 +155,7 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                             return_locations=True,
                             glom_proofs=False):
                         location = sentence.location
+                        assert location is not None
                         sentence = sentence.text
                         command_type, identifier = \
                             ParserUtils.extract_identifier(sentence)
@@ -152,9 +165,12 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                                 None,
                                 VernacSentence(
                                     str(sentence),
-                                    SexpList(
-                                        [SexpString("foo"),
-                                         SexpString("bar")]),
+                                    str(
+                                        SexpList(
+                                            [
+                                                SexpString("foo"),
+                                                SexpString("bar")
+                                            ])),
                                     [
                                         Identifier(
                                             IdentType.Ser_Qualid,
@@ -173,6 +189,8 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                     project.get_file_dependencies(),
                     environment,
                     uneventful_result)
+                assert data.project_metadata.commit_sha is not None
+                assert data.project_metadata.coq_version is not None
                 expected_path = (
                     self.cache_dir / project.name
                     / data.project_metadata.commit_sha / '.'.join(
@@ -212,6 +230,7 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                     OpamAPI.active_switch.export())
                 metadata = self.dataset.projects["float"].metadata
                 float_commit_sha = metadata.commit_sha
+                assert float_commit_sha is not None
                 item1 = ProjectCommitData(
                     metadata,
                     {},
@@ -223,6 +242,7 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                 cache.write(item1, block=True)
                 metadata = self.dataset.projects["lambda"].metadata
                 lambda_commit_sha = metadata.commit_sha
+                assert lambda_commit_sha is not None
                 cache.write_cache_error_log(
                     metadata,
                     True,
@@ -232,14 +252,17 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                 cache.write_misc_error_log(metadata, True, "float misc error")
                 metadata = self.dataset.projects["float"].metadata
                 metadata.commit_sha = 40 * "b"
+                failed_build_result = ProjectBuildResult(
+                    1,
+                    "build error",
+                    "build_error")
                 item2 = ProjectCommitData(
                     metadata,
                     {},
                     None,
                     environment,
-                    ProjectBuildResult(1,
-                                       "build error",
-                                       "build_error"))
+                    failed_build_result)
+                cache.write_build_error_log(metadata, True, failed_build_result)
                 cache.write(item2, block=True)
                 expected_project_list = ["float", "lambda"]
                 expected_commit_lists = {
