@@ -171,6 +171,8 @@ class VernacSentence:
             else:
                 goals_iter = self.goals.added_goals
             for goal, goal_idxs in goals_iter:
+                if goal.sexp is None:
+                    continue
                 gids = GoalIdentifiers(
                     get_identifiers(goal.sexp),
                     [
