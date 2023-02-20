@@ -1223,6 +1223,7 @@ def extract_cache_new(
             project.git.reset('--hard')
             project.git.clean('-fdx')
             project.git.checkout(commit_sha)
+            project.submodule_update(init=True, recursive=True)
             # get a switch
             dependency_formula = project.get_dependency_formula(coq_version)
             original_switch = project.opam_switch
