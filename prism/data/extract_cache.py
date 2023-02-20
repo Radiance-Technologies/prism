@@ -1239,16 +1239,21 @@ def extract_cache_new(
                 build_result = project.build(
                     max_runtime=max_runtime,
                     max_memory=max_memory)
-            except ProjectBuildError as pbe:
-                build_result = (pbe.return_code, pbe.stdout, pbe.stderr)
-                command_data = process_project_fallback(project)
-            except TimeoutExpired as exc:
-                stdout = exc.stdout.decode(
-                    "utf-8") if exc.stdout is not None else ''
-                stderr = exc.stderr.decode(
-                    "utf-8") if exc.stderr is not None else ''
-                build_result = (1, stdout, stderr)
-                command_data = process_project_fallback(project)
+            except (ProjectBuildError, TimeoutExpired) as pbe:
+                if isinstance(pbe, ProjectBuildError):
+                    build_result = (pbe.return_code, pbe.stdout, pbe.stderr)
+                    command_data = process_project_fallback(project)
+                else:
+                    stdout = pbe.stdout.decode(
+                        "utf-8") if pbe.stdout is not None else ''
+                    stderr = pbe.stderr.decode(
+                        "utf-8") if pbe.stderr is not None else ''
+                    build_result = (1, stdout, stderr)
+                    command_data = process_project_fallback(project)
+                build_cache_client.write_build_error_log(
+                    project.metadata,
+                    block,
+                    ProjectBuildResult(*build_result))
             else:
                 start_time = time()
                 try:
@@ -1264,7 +1269,7 @@ def extract_cache_new(
                     logger.exception(e)
                     logger_stream.flush()
                     logged_text = logger_stream.getvalue()
-                    build_cache_client.write_error_log(
+                    build_cache_client.write_cache_error_log(
                         project.metadata,
                         block,
                         logged_text)
@@ -1276,10 +1281,17 @@ def extract_cache_new(
                         block,
                         f"Elapsed time in extract_vernac_commands: {elapsed_time} s"
                     )
+            try:
+                file_dependencies = project.get_file_dependencies()
+            except CalledProcessError:
+                logger.exception(
+                    "Failed to get file dependencies. Are the IQR flags correct?"
+                )
+                file_dependencies = None
             data = ProjectCommitData(
                 metadata,
                 command_data,
-                project.get_file_dependencies(),
+                file_dependencies,
                 ProjectBuildEnvironment(project.opam_switch.export()),
                 ProjectBuildResult(*build_result))
             build_cache_client.write(data, block)
@@ -1298,7 +1310,7 @@ def extract_cache_new(
             logger.exception(e)
             logger_stream.flush()
             logged_text = logger_stream.getvalue()
-            build_cache_client.write_misc_log(
+            build_cache_client.write_misc_error_log(
                 project.metadata,
                 block,
                 logged_text)

@@ -223,10 +223,13 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                 cache.write(item1, block=True)
                 metadata = self.dataset.projects["lambda"].metadata
                 lambda_commit_sha = metadata.commit_sha
-                cache.write_error_log(metadata, True, "Lambda cache error")
+                cache.write_cache_error_log(
+                    metadata,
+                    True,
+                    "Lambda cache error")
                 metadata = self.dataset.projects["float"].metadata
                 metadata.commit_sha = 40 * "a"
-                cache.write_misc_log(metadata, True, "float misc error")
+                cache.write_misc_error_log(metadata, True, "float misc error")
                 metadata = self.dataset.projects["float"].metadata
                 metadata.commit_sha = 40 * "b"
                 item2 = ProjectCommitData(

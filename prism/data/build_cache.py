@@ -1387,24 +1387,46 @@ class CoqProjectBuildCacheProtocol(Protocol):
         The final `_` parameter in the definition is provided for
         compatibility with the other write methods.
         """
-        self._write_kernel(data, block, data)
-        # If there was an error in cache extraction, write an additional
-        # text file containing the output.
-        build_result = data.build_result
-        if build_result is not None and build_result.exit_code != 0:
-            str_to_write = "\n".join(
-                [
-                    f"@@Exit code@@\n{build_result.exit_code}",
-                    f"@@stdout@@\n{build_result.stdout}",
-                    f"@@stderr@@\n{build_result.stderr}"
-                ])
-            self._write_kernel(data, block, str_to_write, "_build_error.txt")
-        if block:
-            return "write complete"
-        else:
-            return None
+        return self._write_kernel(data, block, data)
 
-    def write_error_log(
+    def write_build_error_log(
+            self,
+            metadata: ProjectMetadata,
+            block: bool,
+            build_result: ProjectBuildResult) -> Optional[str]:
+        """
+        Write build error log to build cache directory.
+
+        Parameters
+        ----------
+        metadata : ProjectMetadata
+            Metadata for the project that had an error. Used by this
+            method to get the correct path to write to.
+        block : bool
+            If true, return a ``"write complete"`` message.
+        build_result : str
+            A triple containing a presumed nonzero exit code, stdout,
+            and stderr, in that order.
+
+        Returns
+        -------
+        str or None
+            If `block`, return ``"write complete"``; otherwise, return
+            nothing
+        """
+        str_to_write = "\n".join(
+            [
+                f"@@Exit code@@\n{build_result.exit_code}",
+                f"@@stdout@@\n{build_result.stdout}",
+                f"@@stderr@@\n{build_result.stderr}"
+            ])
+        return self._write_kernel(
+            metadata,
+            block,
+            str_to_write,
+            "_build_error.txt")
+
+    def write_cache_error_log(
             self,
             metadata: ProjectMetadata,
             block: bool,
@@ -1434,7 +1456,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
             cache_error_log,
             "_cache_error.txt")
 
-    def write_misc_log(
+    def write_misc_error_log(
             self,
             metadata: ProjectMetadata,
             block: bool,
