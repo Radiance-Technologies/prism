@@ -3,7 +3,6 @@ Supply a protocol for serializable data.
 """
 
 import copy
-import os
 import typing
 from dataclasses import dataclass, fields, is_dataclass
 from typing import (
@@ -24,7 +23,7 @@ import typing_inspect
 import yaml
 from diff_match_patch import diff_match_patch
 
-from prism.util.radpytools.dataclasses import Dataclass
+from prism.util.radpytools import PathLike
 
 _dmp = diff_match_patch()
 # Produce smaller diffs
@@ -39,7 +38,7 @@ class Serializable(Protocol):
 
     def dump(
             self,
-            output_filepath: os.PathLike,
+            output_filepath: PathLike,
             fmt: su.io.Fmt = su.io.Fmt.yaml) -> None:
         """
         Serialize data to text file.
@@ -57,7 +56,7 @@ class Serializable(Protocol):
     @classmethod
     def load(
             cls,
-            filepath: os.PathLike,
+            filepath: PathLike,
             fmt: Optional[su.io.Fmt] = None) -> 'Serializable':
         """
         Load a serialized object from file..
@@ -75,7 +74,7 @@ class Serializable(Protocol):
         Serializable
             The deserialized object.
         """
-        return su.io.load(filepath, fmt, clz=cls)
+        return typing.cast(Serializable, su.io.load(filepath, fmt, clz=cls))
 
 
 _S = TypeVar('_S')
@@ -152,11 +151,13 @@ Limitation of available type hints pre-Python 3.10.
 
 
 def get_typevar_bindings(
-        clz) -> Tuple[Union[type,
-                            _Generic,
-                            Tuple],
-                      Dict[TypeVar,
-                           type]]:
+    clz
+) -> Tuple[Union[type,
+                 _Generic,
+                 Tuple],
+           Dict[TypeVar,
+                Union[TypeVar,
+                      type]]]:
     """
     Get the type variable bindings for a given class.
 
@@ -176,7 +177,8 @@ def get_typevar_bindings(
         type variables themselves.
     """
     type_bindings: Dict[TypeVar,
-                        type] = {}
+                        Union[TypeVar,
+                              type]] = {}
     clz_origin = typing_inspect.get_origin(clz)
     if clz_origin is None:
         clz_origin = clz
@@ -203,13 +205,14 @@ def get_typevar_bindings(
 
 
 def substitute_typevars(
-        clz: Union[type,
-                   _Generic,
-                   Tuple],
-        bindings: Dict[TypeVar,
-                       type]) -> Union[type,
-                                       _Generic,
-                                       Tuple]:
+    clz: Union[type,
+               _Generic,
+               Tuple],
+    bindings: Dict[TypeVar,
+                   Union[TypeVar,
+                         type]]) -> Union[type,
+                                          _Generic,
+                                          Tuple]:
     """
     Substitute type variables in a given type signature.
 
@@ -245,10 +248,10 @@ def substitute_typevars(
     return f_type
 
 
-_T = TypeVar("_T", bound=Dataclass)
+_T = TypeVar("_T")
 
 
-def _deserialize_other(data: object, clz: type, error: str):
+def _deserialize_other(data: object, clz: Type[_T], error: str) -> Optional[_T]:
     if typing_inspect.is_optional_type(clz):
         clz_args = typing_inspect.get_args(clz)
         if data is None:
@@ -316,7 +319,7 @@ def deserialize_generic_dataclass(
     clz_origin, bindings = get_typevar_bindings(clz)
     if not bindings or not is_dataclass(clz_origin):
         # not generic
-        _deserialize_other(data, clz, error)
+        return typing.cast(_T, _deserialize_other(data, clz, error))
     clz_origin = typing.cast(type, clz_origin)
     for binding in bindings.values():
         if isinstance(binding, TypeVar):
@@ -352,4 +355,6 @@ def deserialize_generic_dataclass(
     for f_name, f_value in non_init_field_values.items():
         # use object.__setattr__ in case clz is frozen
         object.__setattr__(obj, f_name, f_value)
+    if hasattr(obj, "_patch_generic_attributes_"):
+        obj._patch_generic_attributes_()
     return obj
