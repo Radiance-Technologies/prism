@@ -13,9 +13,12 @@ from prism.data.build_cache import (
     CoqProjectBuildCacheProtocol,
     CoqProjectBuildCacheServer,
     ProjectCommitData,
+    atomic_write,
 )
 from prism.data.commit_map import Except
 from prism.data.repair.instance import ProjectCommitDataRepairInstance
+from prism.project.metadata import ProjectMetadata
+from prism.util.radpytools.multiprocessing import critical
 
 BuildRepairInstanceOutput = Union[List[ProjectCommitDataRepairInstance], Except]
 """
@@ -132,9 +135,20 @@ def default_miner(
     List[ProjectCommitDataRepairInstance]
         List of mined repair instances
     """
-    return ProjectCommitDataRepairInstance.mine_from_successful_commits(
+    return ProjectCommitDataRepairInstance.mine_repair_examples(
         commit_a,
         commit_b)
+
+
+@critical
+def get_record_name(
+        project_metadata: ProjectMetadata,
+        repair_instance: ProjectCommitDataRepairInstance,
+        save_directory: Path) -> Path:
+    """
+    Write record fields to database or file and return unique filename.
+    """
+    ...
 
 
 def write_repair_instance(
@@ -152,8 +166,26 @@ def write_repair_instance(
         A potential repair instance
     repair_file_directory : Path
         Path to directory to store serialized repair instances
+
+    Raises
+    ------
+    TypeError
+        If potential_diff is neither of ProjectCommitDataRepairInstance
+        nor of Except.
     """
-    ...
+    if isinstance(potential_diff, ProjectCommitDataRepairInstance):
+        metadata = potential_diff.error.initial_state.project_state.project_metadata
+        file_path = get_record_name(
+            metadata,
+            potential_diff,
+            repair_file_directory)
+        atomic_write(file_path, potential_diff)
+    elif isinstance(potential_diff, Except):
+        ...
+    else:
+        raise TypeError(
+            f"Type {type(potential_diff)} is not recognized and can't be "
+            "written.")
 
 
 def prepare_state_pairs(
