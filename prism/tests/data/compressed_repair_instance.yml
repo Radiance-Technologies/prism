@@ -322,29 +322,6 @@ error:
   - error:one-command
   - error:artificial:mined
 repaired_state_or_diff:
-  diff:
-    text: 'diff --git a/exgcd.v b/exgcd.v
-
-      index fe1ae41..91f7b60 100644
-
-      --- a/exgcd.v
-
-      +++ b/exgcd.v
-
-      @@ -144 +143,0 @@ Hint Resolve Zneq_bool_true Zneq_bool_false Zle_bool_imp_le
-      Zis_gcd_intro: zarit
-
-      -
-
-      @@ -159 +158 @@ intuition auto with zarith.
-
-      -cutrewrite <- ((fst e'')=(snd e'')) in H; auto with zarith.
-
-      +replace (snd e'') with (fst e'') in H; auto with zarith.
-
-      @@ -163,0 +163 @@ Qed.
-
-      +
-
-      '
-  environment: null
+  _environment: null
+  offset: null
+  project_state: 269c0cabb267be44e5d85e568c11f18562add6c4

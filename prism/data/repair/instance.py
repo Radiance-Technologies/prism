@@ -8,6 +8,7 @@ from dataclasses import dataclass, fields
 from itertools import chain
 from typing import (
     Callable,
+    ClassVar,
     Dict,
     Generic,
     Iterable,
@@ -835,9 +836,25 @@ class ProjectCommitDataState(ProjectState[ProjectCommitData,
             state = self.offset.patch(state)
         return state
 
-    def compress(self) -> GitProjectState:
-        """
+    def compress(
+        self,
+        reference_environment: Optional[OpamSwitch.Configuration] = None
+    ) -> GitProjectState:
+        r"""
         Get a concise Git-based representation of this state.
+
+        Parameters
+        ----------
+        reference_environment : Optional[OpamSwitch.Configuration], \
+                optional
+            The environment corresponding to a prior reference point.
+            For example, `self` may be a repaired state with
+            `reference_environment` taken from a broken state.
+
+        Returns
+        -------
+        GitProjectStateDiff
+            A concise representation of this diff.
         """
         offset = self.offset
         if self.offset is not None:
@@ -845,10 +862,14 @@ class ProjectCommitDataState(ProjectState[ProjectCommitData,
         offset = typing.cast(Optional[GitDiff], offset)
         if self.project_state.project_metadata.commit_sha is None:
             raise RuntimeError("Commit SHA must be known")
+        environment = None
+        if (reference_environment is None
+                or reference_environment != self.environment):
+            environment = self.environment
         return GitProjectState(
             self.project_state.project_metadata.commit_sha,
             offset,
-            self.environment)
+            environment)
 
 
 @dataclass
@@ -1374,6 +1395,15 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
     environment.
     """
 
+    _repair_commit_tag: ClassVar[str] = "repair:commit:"
+
+    @property
+    def tags(self) -> Set[str]:
+        """
+        The set of tags assigned to this repair instance.
+        """
+        return self.error.tags
+
     def _patch_generic_attributes_(self):
         self.error.__class__ = ProjectCommitDataErrorInstance
         if isinstance(self.repaired_state_or_diff, ProjectState):
@@ -1407,14 +1437,33 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
                 self.repaired_state_or_diff,
                 ProjectStateDiff)
             repaired = typing.cast(ProjectCommitDataState, repaired)
-            repaired = repaired.compress()
+            repaired = repaired.compress(error.environment)
         else:
             repaired = cast_from_base_cls(
                 ProjectCommitDataStateDiff,
                 self.repaired_state_or_diff,
                 ProjectStateDiff)
-            repaired = typing.cast(ProjectCommitDataStateDiff, repaired)
-            repaired = repaired.compress(error.error_state, error.environment)
+            repaired_commit_sha = None
+            tag = None
+            for tag in self.tags:
+                if tag.startswith(self._repair_commit_tag):
+                    repaired_commit_sha = tag[len(self._repair_commit_tag):]
+                    break
+            if repaired_commit_sha is not None:
+                # we can just save the commit SHA instead of the diff
+                repaired = GitProjectState(
+                    repaired_commit_sha,
+                    None,
+                    repaired.environment
+                    if repaired.environment != error.environment else None)
+                # remove the now-redundant tag
+                assert tag is not None
+                error.tags.discard(tag)
+            else:
+                repaired = typing.cast(ProjectCommitDataStateDiff, repaired)
+                repaired = repaired.compress(
+                    error.error_state,
+                    error.environment)
         repaired = typing.cast(
             Union[GitProjectState,
                   GitProjectStateDiff],
@@ -1692,6 +1741,14 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
             ProjectCommitDataStateDiff(
                 repaired_state_diff,
                 repaired_environment))
+        # make sure the repaired state's identity gets captured
+        if repaired_state.project_metadata.commit_sha is not None:
+            repair_instance.error.tags.add(
+                ''.join(
+                    [
+                        cls._repair_commit_tag,
+                        repaired_state.project_metadata.commit_sha
+                    ]))
         return repair_instance
 
     @classmethod
