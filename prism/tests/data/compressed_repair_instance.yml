@@ -51,88 +51,88 @@ error:
     lineno: 145
     lineno_last: 147
   initial_state:
-    environment:
+    _environment:
       compiler:
       - - base-bigarray
-        - prism.util.opam.version,OpamVersion,base
+        - base
       - - base-threads
-        - prism.util.opam.version,OpamVersion,base
+        - base
       - - base-unix
-        - prism.util.opam.version,OpamVersion,base
+        - base
       - - ocaml
-        - prism.util.opam.version,OCamlVersion,4.09.1
+        - 4.09.1
       - - ocaml-base-compiler
-        - prism.util.opam.version,OCamlVersion,4.09.1
+        - 4.09.1
       - - ocaml-config
-        - prism.util.opam.version,OpamVersion,1
+        - '1'
       installed:
       - - base
-        - prism.util.opam.version,OpamVersion,v0.14.3
+        - v0.14.3
       - - base-bigarray
-        - prism.util.opam.version,OpamVersion,base
+        - base
       - - base-threads
-        - prism.util.opam.version,OpamVersion,base
+        - base
       - - base-unix
-        - prism.util.opam.version,OpamVersion,base
+        - base
       - - cmdliner
-        - prism.util.opam.version,OCamlVersion,1.1.1
+        - 1.1.1
       - - conf-findutils
-        - prism.util.opam.version,OpamVersion,1
+        - '1'
       - - coq
-        - prism.util.opam.version,OCamlVersion,8.10.2
+        - 8.10.2
       - - coq-ext-lib
-        - prism.util.opam.version,OCamlVersion,0.11.6
+        - 0.11.6
       - - coq-paco
-        - prism.util.opam.version,OCamlVersion,4.1.1
+        - 4.1.1
       - - coq-serapi
-        - prism.util.opam.version,OCamlVersion,8.10.0+0.7.2
+        - 8.10.0+0.7.2
       - - cppo
-        - prism.util.opam.version,OCamlVersion,1.6.9
+        - 1.6.9
       - - csexp
-        - prism.util.opam.version,OCamlVersion,1.5.1
+        - 1.5.1
       - - dune
-        - prism.util.opam.version,OCamlVersion,3.5.0
+        - 3.5.0
       - - dune-configurator
-        - prism.util.opam.version,OCamlVersion,3.5.0
+        - 3.5.0
       - - num
-        - prism.util.opam.version,OCamlVersion,1.4
+        - '1.4'
       - - ocaml
-        - prism.util.opam.version,OCamlVersion,4.09.1
+        - 4.09.1
       - - ocaml-base-compiler
-        - prism.util.opam.version,OCamlVersion,4.09.1
+        - 4.09.1
       - - ocaml-compiler-libs
-        - prism.util.opam.version,OpamVersion,v0.12.4
+        - v0.12.4
       - - ocaml-config
-        - prism.util.opam.version,OpamVersion,1
+        - '1'
       - - ocamlfind
-        - prism.util.opam.version,OCamlVersion,1.9.5
+        - 1.9.5
       - - parsexp
-        - prism.util.opam.version,OpamVersion,v0.14.2
+        - v0.14.2
       - - ppx_derivers
-        - prism.util.opam.version,OCamlVersion,1.2.1
+        - 1.2.1
       - - ppx_deriving
-        - prism.util.opam.version,OCamlVersion,5.2.1
+        - 5.2.1
       - - ppx_deriving_yojson
-        - prism.util.opam.version,OCamlVersion,3.6.1
+        - 3.6.1
       - - ppx_import
-        - prism.util.opam.version,OCamlVersion,1.9.1
+        - 1.9.1
       - - ppx_sexp_conv
-        - prism.util.opam.version,OpamVersion,v0.14.3
+        - v0.14.3
       - - ppxlib
-        - prism.util.opam.version,OCamlVersion,0.25.1
+        - 0.25.1
       - - result
-        - prism.util.opam.version,OCamlVersion,1.5
+        - '1.5'
       - - seq
-        - prism.util.opam.version,OpamVersion,base
+        - base
       - - sexplib
-        - prism.util.opam.version,OpamVersion,v0.14.0
+        - v0.14.0
       - - sexplib0
-        - prism.util.opam.version,OpamVersion,v0.14.0
+        - v0.14.0
       - - stdlib-shims
-        - prism.util.opam.version,OCamlVersion,0.3.0
+        - 0.3.0
       - - yojson
-        - prism.util.opam.version,OCamlVersion,2.0.2
-      opam_version: prism.util.opam.version,OCamlVersion,2.0
+        - 2.0.2
+      opam_version: '2.0'
       package_metadata:
       - - coq-certicoq
         - "{\n  opam-version: \"2.0\"\n  version: \"0.9~beta+8.14\"\n  synopsis: \"\
@@ -285,35 +285,42 @@ error:
           \n  }\n}\n"
       pinned:
       - - coq
-        - prism.util.opam.version,OCamlVersion,8.10.2
+        - 8.10.2
       - - coq-certicoq
-        - prism.util.opam.version,OCamlVersion,0.9~beta+8.14
+        - 0.9~beta+8.14
       - - coq-metacoq
-        - prism.util.opam.version,OpamVersion,8.14.dev
+        - 8.14.dev
       - - coq-metacoq-erasure
-        - prism.util.opam.version,OpamVersion,8.14.dev
+        - 8.14.dev
       - - coq-metacoq-pcuic
-        - prism.util.opam.version,OpamVersion,8.14.dev
+        - 8.14.dev
       - - coq-metacoq-safechecker
-        - prism.util.opam.version,OpamVersion,8.14.dev
+        - 8.14.dev
       - - coq-metacoq-template
-        - prism.util.opam.version,OpamVersion,8.14.dev
+        - 8.14.dev
       - - coq-metacoq-translations
-        - prism.util.opam.version,OpamVersion,8.14.dev
+        - 8.14.dev
       - - coq-serapi
-        - prism.util.opam.version,OCamlVersion,8.10.0+0.7.2
+        - 8.10.0+0.7.2
       roots:
       - - coq
-        - prism.util.opam.version,OCamlVersion,8.10.2
+        - 8.10.2
       - - coq-serapi
-        - prism.util.opam.version,OCamlVersion,8.10.0+0.7.2
+        - 8.10.0+0.7.2
       - - ocaml-base-compiler
-        - prism.util.opam.version,OCamlVersion,4.09.1
+        - 4.09.1
     offset: null
     project_state: bda0bc601a038ba6b65da2e3c52cc02c4d910f35
   project_name: hoare-tut
   tags:
-  - VernacStartTheoremProof
+  - repair:one-command
+  - error:VernacStartTheoremProof
+  - repair:VernacStartTheoremProof
+  - error:one-file
+  - repair:one-file
+  - repair:artificial:mined
+  - error:one-command
+  - error:artificial:mined
 repaired_state_or_diff:
   diff:
     text: 'diff --git a/exgcd.v b/exgcd.v
