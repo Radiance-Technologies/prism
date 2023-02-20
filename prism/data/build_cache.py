@@ -53,6 +53,48 @@ CommandType = str
 _T = TypeVar('_T')
 
 
+def atomic_write(full_file_path: Path,
+                 file_contents: Union[str,
+                                      Serializable]) -> Optional[str]:
+    r"""
+    Write a message or object to a text file.
+
+    Any existing file contents are overwritten.
+
+    Parameters
+    ----------
+    full_file_path : Path
+        Full file path, including directory, filename, and extension, to
+        write to
+    file_contents : Union[str, Serializable]
+        The contents to write or serialized to the file.
+
+    Raises
+    ------
+    TypeError
+        If `file_contents` is not a string or `Serializable`.
+    """
+    if not isinstance(file_contents, (str, Serializable)):
+        raise TypeError(
+            f"Cannot write object of type {type(file_contents)} to file")
+    fmt_ext = full_file_path.suffix  # contains leading period
+    fmt = su.io.infer_fmt_from_ext(fmt_ext)
+    directory = full_file_path.parent
+    if not directory.exists():
+        os.makedirs(str(directory))
+    # Ensure that we write atomically.
+    # First, we write to a temporary file so that if we get
+    # interrupted, we aren't left with a corrupted file.
+    with tempfile.NamedTemporaryFile("w", delete=False, encoding='utf-8') as f:
+        if isinstance(file_contents, str):
+            f.write(file_contents)
+    if isinstance(file_contents, Serializable):
+        file_contents.dump(f.name, fmt)
+    # Then, we atomically move the file to the correct, final
+    # path.
+    os.replace(f.name, full_file_path)
+
+
 @dataclass
 class HypothesisIndentifiers:
     """
@@ -1068,40 +1110,11 @@ class CoqProjectBuildCacheProtocol(Protocol):
         str or None
             If `block`, return ``"write complete"``; otherwise, return
             nothing
-
-        Raises
-        ------
-        TypeError
-            If `file_contents` is not a string or `Serializable`.
         """
-        if not isinstance(file_contents, (str, Serializable)):
-            raise TypeError(
-                f"Cannot write object of type {type(file_contents)} to file")
         # standardize inputs to get_path
         if not isinstance(cache_id, tuple):
             cache_id = (cache_id,)
-        data_path = self.get_path(*cache_id)
-        cache_dir = data_path.parent
-        if not cache_dir.exists():
-            os.makedirs(str(cache_dir))
-        # Ensure that we write atomically.
-        # First, we write to a temporary file so that if we get
-        # interrupted, we aren't left with a corrupted file.
-        if suffix is None and isinstance(file_contents, Serializable):
-            suffix = f".{self.fmt_ext}"
-        data_path: Path = data_path.parent / (  # type: ignore
-            data_path.stem + suffix)
-        with tempfile.NamedTemporaryFile("w",
-                                         delete=False,
-                                         dir=self.root,
-                                         encoding='utf-8') as f:
-            if isinstance(file_contents, str):
-                f.write(file_contents)
-        if isinstance(file_contents, Serializable):
-            file_contents.dump(f.name, self.fmt)
-        # Then, we atomically move the file to the correct, final
-        # path.
-        os.replace(f.name, data_path)
+        atomic_write(self.get_path(*cache_id), file_contents)
         if block:
             return "write complete"
         else:
