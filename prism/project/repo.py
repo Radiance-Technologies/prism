@@ -8,7 +8,7 @@ import random
 import warnings
 from collections import deque
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import List, Optional, Set, Tuple
 
 import git
 from git import Commit, Repo
@@ -518,3 +518,13 @@ class ProjectRepo(Repo, Project):
             filename,
             glom_proofs,
             commit_name=commit_name)
+
+    def infer_ignore_path_regex(self) -> Set[str]:
+        """
+        Infer a default regex that ignores submodule directories.
+        """
+        ignore_paths = {
+            f"{submodule.path}/.*" for submodule in self.submodules
+        }
+        self._update_metadata(ignore_path_regex=ignore_paths)
+        return ignore_paths
