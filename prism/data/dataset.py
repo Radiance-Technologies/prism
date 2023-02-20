@@ -13,6 +13,7 @@ from prism.data.document import CoqDocument
 from prism.language.heuristic.parser import CoqSentence
 from prism.project import DirHasNoCoqFiles, Project, ProjectRepo
 from prism.project.metadata.storage import MetadataStorage
+from prism.util.radpytools import PathLike
 
 ProjectDict = Dict[str, Project]
 MetadataDict = dict
@@ -115,7 +116,7 @@ class CoqProjectBaseDataset:
             project_class: Optional[Type[Project]] = None,
             projects: Optional[ProjectDict] = None,
             base_dir: Optional[str] = None,
-            dir_list: Optional[Iterable[str]] = None,
+            dir_list: Optional[Iterable[PathLike]] = None,
             metadata_storage: Optional[MetadataStorage] = None,
             **project_class_kwargs):
         """
@@ -136,7 +137,7 @@ class CoqProjectBaseDataset:
             If provided, build `Project` objects from the subdirectories
             in this directory. Any subdirectories that are not
             repositories are ignored, by default None
-        dir_list : Optional[Iterable[str]], optional
+        dir_list : Optional[Iterable[PathLike]], optional
             If provided, build a `Project` from each of these
             directories. If any of these directories are not
             repositories, an exception is raised, by default None
