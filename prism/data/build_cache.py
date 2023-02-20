@@ -44,6 +44,7 @@ from prism.project.metadata import ProjectMetadata
 from prism.util.iterable import split
 from prism.util.opam.switch import OpamSwitch
 from prism.util.opam.version import Version, VersionString
+from prism.util.radpytools import PathLike
 from prism.util.radpytools.dataclasses import default_field
 from prism.util.serialize import Serializable
 
@@ -628,13 +629,13 @@ class VernacCommandDataList:
         sorted_sentences = VernacSentence.sort_sentences(sorted_sentences)
         return sorted_sentences
 
-    def write_coq_file(self, filepath: os.PathLike) -> None:
+    def write_coq_file(self, filepath: PathLike) -> None:
         """
         Dump the commands to a Coq file at the given location.
 
         Parameters
         ----------
-        filepath : os.PathLike
+        filepath : PathLike
             The location at which the file should be dumped.
             Any file already at the given path will be overwritten.
 
@@ -889,13 +890,13 @@ class ProjectCommitData(Serializable):
             result[filename] = commands.sorted_sentences()
         return result
 
-    def write_coq_project(self, dirpath: os.PathLike) -> None:
+    def write_coq_project(self, dirpath: PathLike) -> None:
         """
         Dump Coq files in the structure of the original project commit.
 
         Parameters
         ----------
-        dirpath : os.PathLike
+        dirpath : PathLike
             The directory in which to dump the cached commands.
             If the directory does not exist, it will be created.
             Note that any existing files that clash with file names in
@@ -1491,7 +1492,7 @@ class CoqProjectBuildCache(CoqProjectBuildCacheProtocol):
     Implementation of CoqProjectBuildCacheProtocol with added __init__.
     """
 
-    def __init__(self, root: Path, fmt_ext: str = "yml"):
+    def __init__(self, root: PathLike, fmt_ext: str = "yml"):
         self.root = Path(root)
         self.fmt_ext = fmt_ext
         if not self.root.exists():
