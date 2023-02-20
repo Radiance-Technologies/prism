@@ -69,8 +69,10 @@ def get_repaired_state_diff(
 
 
 def get_error_state_diff(
+        initial_state: ProjectCommitData,
         repaired_state_diff: ProjectCommitDataDiff,
-        changed_proof_file: str):
+        changed_proof_file: str) -> Tuple[VernacCommandData,
+                                          ProjectCommitDataDiff]:
     """
     Fabricate diff from initial state to erroneous state.
 
@@ -81,11 +83,12 @@ def get_error_state_diff(
     cmds = changes.changed_commands
     changed_cmd = None
     changed_cmd_idx = -1
-    for cmd_idx, cmd in cmds.items():
+    for cmd_idx, cmd_diff in cmds.items():
         if changed_cmd is not None:
             break
+        cmd = initial_state.command_data[changed_proof_file][cmd_idx]
         for _ in cmd.proofs:
-            changed_cmd = cmd
+            changed_cmd = cmd_diff.patch(cmd)
             changed_cmd_idx = cmd_idx
             break
     if changed_cmd is None:
@@ -130,7 +133,7 @@ def rebase_repaired_on_error(
 def repaired_proof_location(
         repaired_state_diff: ProjectCommitDataDiff,
         error_state: ProjectCommitData,
-        changed_proof_file: str):
+        changed_proof_file: str) -> SexpInfo.Loc:
     """
     Get location of repaired proof in error state.
     """
@@ -229,6 +232,7 @@ if __name__ == "__main__":
     repaired_state_diff = get_repaired_state_diff(initial_state, repaired_state)
     (changed_proof_data,
      error_state_diff) = get_error_state_diff(
+         initial_state,
          repaired_state_diff,
          changed_proof_file)
 
