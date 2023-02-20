@@ -65,6 +65,7 @@ class TestRepairInstance(unittest.TestCase):
                                 # a moved goal
                                 self.assertEqual(ag, bg)
 
+    @pytest.mark.dependency()
     def test_ProjectCommitDataDiff(self) -> None:
         """
         Verify that a diff captures the changes between two commits.
