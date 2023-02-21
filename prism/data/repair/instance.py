@@ -770,11 +770,19 @@ class GitErrorInstance(ErrorInstance[str, GitDiff]):
     induced by changes to source code and/or environment.
     """
 
-    def _patch_generic_attributes_(self):
-        self.initial_state.__class__ = GitProjectState
-        self.change.__class__ = GitProjectStateDiff
-        assert isinstance(self.initial_state, GitProjectState)
-        assert isinstance(self.change, GitProjectStateDiff)
+    def __post_init__(self):
+        """
+        Patch generic attributes to non-generic subclasses.
+        """
+        if not isinstance(self.initial_state, GitProjectState):
+            self.initial_state = GitProjectState(
+                self.initial_state.project_state,
+                self.initial_state.offset,
+                self.initial_state._environment)
+        if not isinstance(self.change, GitProjectStateDiff):
+            self.change = GitProjectStateDiff(
+                self.change.diff,
+                self.change.environment)
 
 
 @dataclass
@@ -787,19 +795,32 @@ class GitRepairInstance(RepairInstance[str, GitDiff]):
     environment.
     """
 
-    def _patch_generic_attributes_(self):
-        self.error.__class__ = GitErrorInstance
+    def __post_init__(self):
+        """
+        Patch generic attributes to non-generic subclasses.
+        """
+        if not isinstance(self.error, GitErrorInstance):
+            self.error = GitErrorInstance(
+                self.error.project_name,
+                self.error.initial_state,
+                self.error.change,
+                self.error.error_location,
+                self.error.tags)
         if isinstance(self.repaired_state_or_diff, ProjectState):
-            self.repaired_state_or_diff.__class__ = GitProjectState
-            assert isinstance(self.repaired_state_or_diff, GitProjectState)
+            if not isinstance(self.repaired_state_or_diff, GitProjectState):
+                self.repaired_state_or_diff = GitProjectState(
+                    self.repaired_state_or_diff.project_state,
+                    self.repaired_state_or_diff.offset,
+                    self.repaired_state_or_diff._environment)
+        elif isinstance(self.repaired_state_or_diff, ProjectStateDiff):
+            if not isinstance(self.repaired_state_or_diff, GitProjectStateDiff):
+                self.repaired_state_or_diff = GitProjectStateDiff(
+                    self.repaired_state_or_diff.diff,
+                    self.repaired_state_or_diff.environment)
         else:
-            assert isinstance(self.repaired_state_or_diff, ProjectStateDiff), \
-                "repaired_state_or_diff must be a state or a diff, " \
-                f"got {type(self.repaired_state_or_diff)}"
-            self.repaired_state_or_diff.__class__ = GitProjectStateDiff
-            assert isinstance(self.repaired_state_or_diff, GitProjectStateDiff)
-        assert isinstance(self.error, GitErrorInstance)
-        self.error._patch_generic_attributes_()
+            raise TypeError(
+                "repaired_state_or_diff must be a state or a diff, "
+                f"got {type(self.repaired_state_or_diff)}")
 
 
 @dataclass
@@ -964,6 +985,20 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
     induced by changes to source code and/or environment.
     """
 
+    def __post_init__(self):
+        """
+        Patch generic attributes to non-generic subclasses.
+        """
+        if not isinstance(self.initial_state, ProjectCommitDataState):
+            self.initial_state = ProjectCommitDataState(
+                self.initial_state.project_state,
+                self.initial_state.offset,
+                self.initial_state._environment)
+        if not isinstance(self.change, ProjectCommitDataStateDiff):
+            self.change = ProjectCommitDataStateDiff(
+                self.change.diff,
+                self.change.environment)
+
     @property
     def error_state(self) -> ProjectCommitData:
         """
@@ -977,12 +1012,6 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
         error_state = self.change.diff.patch(initial_state.offset_state)
         error_state.sort_commands()
         return error_state
-
-    def _patch_generic_attributes_(self):
-        self.initial_state.__class__ = ProjectCommitDataState
-        self.change.__class__ = ProjectCommitDataStateDiff
-        assert isinstance(self.initial_state, ProjectCommitDataState)
-        assert isinstance(self.change, ProjectCommitDataStateDiff)
 
     def compress(self) -> GitErrorInstance:
         """
@@ -1397,30 +1426,41 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
 
     _repair_commit_tag: ClassVar[str] = "repair:commit:"
 
+    def __post_init__(self):
+        """
+        Patch generic attributes to non-generic subclasses.
+        """
+        if not isinstance(self.error, ProjectCommitDataErrorInstance):
+            self.error = ProjectCommitDataErrorInstance(
+                self.error.project_name,
+                self.error.initial_state,
+                self.error.change,
+                self.error.error_location,
+                self.error.tags)
+        if isinstance(self.repaired_state_or_diff, ProjectState):
+            if not isinstance(self.repaired_state_or_diff,
+                              ProjectCommitDataState):
+                self.repaired_state_or_diff = ProjectCommitDataState(
+                    self.repaired_state_or_diff.project_state,
+                    self.repaired_state_or_diff.offset,
+                    self.repaired_state_or_diff._environment)
+        elif isinstance(self.repaired_state_or_diff, ProjectStateDiff):
+            if not isinstance(self.repaired_state_or_diff,
+                              ProjectCommitDataStateDiff):
+                self.repaired_state_or_diff = ProjectCommitDataStateDiff(
+                    self.repaired_state_or_diff.diff,
+                    self.repaired_state_or_diff.environment)
+        else:
+            raise TypeError(
+                "repaired_state_or_diff must be a state or a diff, "
+                f"got {type(self.repaired_state_or_diff)}")
+
     @property
     def tags(self) -> Set[str]:
         """
         The set of tags assigned to this repair instance.
         """
         return self.error.tags
-
-    def _patch_generic_attributes_(self):
-        self.error.__class__ = ProjectCommitDataErrorInstance
-        if isinstance(self.repaired_state_or_diff, ProjectState):
-            self.repaired_state_or_diff.__class__ = ProjectCommitDataState
-            assert isinstance(
-                self.repaired_state_or_diff,
-                ProjectCommitDataState)
-        else:
-            assert isinstance(self.repaired_state_or_diff, ProjectStateDiff), \
-                "repaired_state_or_diff must be a state or a diff, " \
-                f"got {type(self.repaired_state_or_diff)}"
-            self.repaired_state_or_diff.__class__ = ProjectCommitDataStateDiff
-            assert isinstance(
-                self.repaired_state_or_diff,
-                ProjectCommitDataStateDiff)
-        assert isinstance(self.error, ProjectCommitDataErrorInstance)
-        self.error._patch_generic_attributes_()
 
     def compress(self) -> GitRepairInstance:
         """

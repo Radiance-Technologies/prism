@@ -355,6 +355,4 @@ def deserialize_generic_dataclass(
     for f_name, f_value in non_init_field_values.items():
         # use object.__setattr__ in case clz is frozen
         object.__setattr__(obj, f_name, f_value)
-    if hasattr(obj, "_patch_generic_attributes_"):
-        obj._patch_generic_attributes_()
     return obj
