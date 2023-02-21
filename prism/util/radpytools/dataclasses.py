@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import (
     Any,
     Callable,
+    ClassVar,
     Dict,
     Protocol,
     Type,
@@ -22,7 +23,7 @@ class Dataclass(Protocol):
     A basic protocol for type-checking dataclasses.
     """
 
-    __dataclass_fields__: Dict[str, Any]
+    __dataclass_fields__: ClassVar[Dict[str, Any]]
 
 
 def default_field(obj: _T, **kwargs) -> _T:
