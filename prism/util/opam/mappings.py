@@ -6,6 +6,10 @@ import re
 
 import yaml
 
+from pathlib import Path
+
+
+_MAPPING_DATA_PATH = Path(__file__).parent / "logical_mapping.yml"
 
 class LogicalMappings:
     """
@@ -22,7 +26,7 @@ class LogicalMappings:
         if (not hasattr(cls, "mappings")):
             # load the mappings yaml
             # todo: this needs to be loaded from the pip installed dir!
-            with open("./dataset/logicalmapping.yml") as f:
+            with open(_MAPPING_DATA_PATH) as f:
                 cls.mappings = yaml.safe_load(f)
 
         if (prefix):
