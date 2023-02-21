@@ -303,6 +303,7 @@ class TestProject(unittest.TestCase):
             deps = self.test_infer_opam_deps_project.opam_dependencies
             self.assertEqual(set(deps), expected_deps)
 
+    @pytest.mark.dependency()
     def test_build_and_get_iqr(self):
         """
         Test `Project` method builds and extracts IQR flags.
