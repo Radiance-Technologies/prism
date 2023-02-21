@@ -240,6 +240,16 @@ class TestProject(unittest.TestCase):
         del test_repo
         shutil.rmtree(os.path.join(repo_path))
 
+    def test_infer_opam_dependencies(self):
+        """
+        Test inferring opam dependencies from a project dir.
+        """
+        # manually added an association between coq-sep-logic
+        # and one of its imports...
+        # but this actually isn't a coq package-- misleading.
+        deps = self.test_iqr_project.infer_opam_dependencies()
+        self.assertTrue("coq-sep-logic" in deps)
+
     def test_build_and_get_iqr(self):
         """
         Test `Project` method builds and extracts IQR flags.

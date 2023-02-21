@@ -28,6 +28,8 @@ from typing import (
     Union,
 )
 
+from seutil import bash
+
 from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.parser import (
@@ -51,6 +53,7 @@ from prism.util.opam import (
     PackageFormula,
     Version,
     major_minor_version_bound,
+    mappings,
 )
 from prism.util.opam.formula import LogicalPF, LogOp
 from prism.util.path import get_relative_path
@@ -967,9 +970,25 @@ class Project(ABC):
         try:
             formula = self.opam_switch.get_dependencies(self.path)
         except CalledProcessError:
-            # TODO: try to infer dependencies by other means
-            formula = []
-            return formula
+            # possibly prone to false positives/negatives
+            results = []
+            for m in bash.run(
+                    f"grep -Rh 'Import' {self.dir_abspath}").stdout.split("\n"):
+                for suffix in re.findall(r"\s*Require\s*Import\s*(.+)\.\s*", m):
+                    r = mappings.LogicalMappings.search(suffix=suffix)
+                    results.append(r)
+
+                for prefix, suffixes in re.findall(
+                        r"From\s*([^\s]+)\s*Require\s*Import\s*(.+)\.",
+                        m):
+                    for suffix in suffixes.split():
+                        r = mappings.LogicalMappings.search(
+                            prefix=prefix,
+                            suffix=suffix)
+                        results.append(r)
+
+            return list(filter(None, results))
+
         if isinstance(formula, PackageFormula):
             if isinstance(formula, LogicalPF):
                 formula = formula.to_conjunctive_list()
