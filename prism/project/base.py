@@ -28,8 +28,6 @@ from typing import (
     Union,
 )
 
-from seutil import bash
-
 from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.parser import (
@@ -761,10 +759,8 @@ class Project(ABC):
             self.coq_options,
             self.opam_switch,
             self.path)
-        return {
-            u: sorted(N.keys()) for u,
-            N in G.adjacency()
-        }
+        return {u: sorted(N.keys()) for u,
+                N in G.adjacency()}
 
     def get_file_list(
             self,
@@ -972,8 +968,8 @@ class Project(ABC):
         except CalledProcessError:
             # possibly prone to false positives/negatives
             results = []
-            for m in bash.run(
-                    f"grep -Rh 'Import' {self.dir_abspath}").stdout.split("\n"):
+            for m in self.run(f"grep -Rh 'Import' {self.dir_abspath}")[1].split(
+                    "\n"):
                 for suffix in re.findall(r"\s*Require\s*Import\s*(.+)\.\s*", m):
                     r = mappings.LogicalMappings.search(suffix=suffix)
                     results.append(r)

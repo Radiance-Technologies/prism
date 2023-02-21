@@ -3,13 +3,12 @@ class to cache and search the logical mappings yaml.
 """
 
 import re
+from pathlib import Path
 
 import yaml
 
-from pathlib import Path
-
-
 _MAPPING_DATA_PATH = Path(__file__).parent / "logical_mapping.yml"
+
 
 class LogicalMappings:
     """
