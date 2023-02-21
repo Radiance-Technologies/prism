@@ -22,7 +22,6 @@ from typing import (
     Dict,
     Generator,
     Iterable,
-    Iterator,
     List,
     Optional,
     Sequence,
@@ -1373,7 +1372,7 @@ class CacheExtractor:
             default_commits_path: str,
             commit_iterator_factory: Callable[[ProjectRepo,
                                                str],
-                                              Iterator[str]],
+                                              Iterable[str]],
             coq_version_iterator: Optional[Callable[[Project,
                                                      str],
                                                     Iterable[Union[
@@ -1457,7 +1456,7 @@ class CacheExtractor:
         build
         """
 
-        self.files_to_use = files_to_use
+        self.files_to_use_map = files_to_use
         """
         A mapping from project name to files to use from that project;
         or None. If None, all files are used. By default, None.
@@ -1473,9 +1472,8 @@ class CacheExtractor:
         """
 
     def get_commit_iterator_func(
-        self,
-        max_num_commits: Optional[int]) -> Callable[[ProjectRepo],
-                                                    Iterator[str]]:
+            self) -> Callable[[ProjectRepo],
+                              Iterable[str]]:
         """
         Return a commit iterator function.
 
@@ -1487,8 +1485,7 @@ class CacheExtractor:
         return partial(
             CacheExtractor._commit_iterator_func,
             default_commits=self.default_commits,
-            commit_iterator_factory=self.commit_iterator_factory,
-            max_num_commits=max_num_commits)
+            commit_iterator_factory=self.commit_iterator_factory)
 
     def get_extract_cache_func(
         self,
@@ -1530,7 +1527,7 @@ class CacheExtractor:
             process_project_fallback=self.process_project_fallback,
             recache=self.recache,
             coq_version_iterator=self.coq_version_iterator,
-            files_to_use=self.files_to_use,
+            files_to_use_map=self.files_to_use_map,
             force_serial=force_serial,
             worker_semaphore=worker_semaphore,
             max_memory=max_memory,
@@ -1546,7 +1543,6 @@ class CacheExtractor:
         force_serial: bool = False,
         n_build_workers: int = 1,
         project_names: Optional[List[str]] = None,
-        max_num_commits: Optional[int] = None,
         max_procs_file_level: int = 0,
         max_memory: Optional[int] = None,
         max_runtime: Optional[int] = None,
@@ -1580,9 +1576,6 @@ class CacheExtractor:
             If a list is provided, select only projects with names on
             the list for extraction. If projects on the given list
             aren't found, a warning is given. By default None.
-        max_num_commits : int | None, optional
-            If this argument is not None, process no more than
-            max_num_commits commits when extracting cache.
         max_procs_file_level : int, optional
             Maximum number of active workers to allow at once on the
             file-level of extraction, by default 0. If 0, allow
@@ -1649,7 +1642,7 @@ class CacheExtractor:
             # Create commit mapper
             project_looper = ProjectCommitUpdateMapper[None](
                 projects,
-                self.get_commit_iterator_func(max_num_commits),
+                self.get_commit_iterator_func(),
                 self.get_extract_cache_func(
                     force_serial,
                     worker_semaphore,
@@ -1687,13 +1680,13 @@ class CacheExtractor:
 
     @staticmethod
     def _commit_iterator_func(
-            project: ProjectRepo,
-            default_commits: Dict[str,
-                                  List[str]],
-            commit_iterator_factory: Callable[[ProjectRepo,
-                                               str],
-                                              Iterator[str]],
-            max_num_commits: Optional[int]) -> Iterator[str]:
+        project: ProjectRepo,
+        default_commits: Dict[str,
+                              List[str]],
+        commit_iterator_factory: Callable[[ProjectRepo,
+                                           str],
+                                          Iterable[str]]
+    ) -> Iterable[str]:
         # Just in case the local repo is out of date
         for remote in project.remotes:
             remote.fetch()
@@ -1705,10 +1698,7 @@ class CacheExtractor:
             # without a default commit; skip that one and any others
             # like it.
             return []
-        return commit_iterator_factory(
-            project,
-            starting_commit_sha,
-            max_num_commits)
+        return commit_iterator_factory(project, starting_commit_sha)
 
     @classmethod
     def default_coq_version_iterator(cls,
@@ -1767,8 +1757,8 @@ class CacheExtractor:
                                         str],
                                        Iterable[Union[str,
                                                       Version]]],
-        files_to_use: Optional[Dict[str,
-                                    Iterable[str]]],
+        files_to_use_map: Optional[Dict[str,
+                                        Iterable[str]]],
         force_serial: bool,
         worker_semaphore: Optional[BoundedSemaphore],
         max_memory: Optional[int],
@@ -1802,7 +1792,7 @@ class CacheExtractor:
                                         Iterable[Union[str, Version]]]
             A function that returns an iterable over allowable coq
             versions
-        files_to_use : Dict[str, Iterable[str]] | None
+        files_to_use_map : Dict[str, Iterable[str]] | None
             A mapping from project name to files to use from that
             project; or None. If None, all files are used. By default,
             None. This argument is especially useful for profiling.
@@ -1821,8 +1811,15 @@ class CacheExtractor:
             coq_version_iterator(project,
                                  commit_sha),
             desc="Coq version")
-        if files_to_use is not None:
-            files_to_use = files_to_use[project.name]
+        files_to_use = None
+        if files_to_use_map is not None:
+            try:
+                files_to_use = files_to_use_map[f"{project.name}@{commit_sha}"]
+            except KeyError:
+                try:
+                    files_to_use = files_to_use_map[project.name]
+                except KeyError:
+                    files_to_use = None
         for coq_version in pbar:
             pbar.set_description(
                 f"Coq version ({project.name}@{project.short_sha}): {coq_version}"
