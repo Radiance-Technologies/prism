@@ -4,17 +4,18 @@ Script to perform cache extraction.
 import argparse
 import json
 import logging
+import typing
 from datetime import datetime
 from functools import partial
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Callable, Dict, Iterable, List, Optional
 
 from prism.data.extract_cache import (
     CacheExtractor,
     cache_extract_commit_iterator,
 )
 from prism.data.setup import create_default_switches
-from prism.project.repo import CommitTraversalStrategy
+from prism.project.repo import CommitTraversalStrategy, ProjectRepo
 from prism.util.swim import (
     AutoSwitchManager,
     SharedSwitchManagerClient,
@@ -60,6 +61,25 @@ def load_files_to_use_file(json_file: str) -> Dict[str, Iterable[str]]:
         obj = json.load(f)
     return obj
 
+
+load_commits_to_use_file = load_files_to_use_file
+"""
+Load commits to use from a JSON file.
+
+The JSON file should contain a single object with keys corresponding
+to project names and values being lists of commits to load for those
+projects.
+
+Parameters
+----------
+json_file : str
+    JSON file to load
+
+Returns
+-------
+Dict[str, Iterable[str]]
+    Loaded dictionary
+"""
 
 if __name__ == "__main__":
     # Get args
@@ -197,7 +217,14 @@ if __name__ == "__main__":
         default=None,
         help="If provided, this should be a JSON file containing project-keyed "
         "lists of files to use for extraction. If not provided, use all files "
-        "in projects.")
+        "in projects. Keys of the form 'project@commit' can be used to restrict "
+        "files on a per-commit basis.")
+    parser.add_argument(
+        "--commits-to-use-file",
+        default=None,
+        help="If provided, this should be a JSON file containing project-keyed "
+        "lists of commits to use for extraction. If not provided, use the commit "
+        "iteration defined by other arguments.")
     parser.add_argument(
         "--commit-iterator-march-strategy",
         default="CURLICUE_NEW",
@@ -242,17 +269,23 @@ if __name__ == "__main__":
     max_num_commits: Optional[int] = \
         args.max_num_commits if args.max_num_commits else None
     if args.updated_md_storage_file:
-        updated_md_storage_file: str = args.updated_md_storage_file
+        updated_md_storage_file = args.updated_md_storage_file
     else:
-        updated_md_storage_file: str = mds_file
+        updated_md_storage_file = mds_file
     updated_md_storage_file = Path(updated_md_storage_file)
     updated_md_storage_file.parent.mkdir(parents=True, exist_ok=True)
     max_pool_size: int = args.max_switch_pool_size
     max_procs_file_level: int = args.max_procs_file_level
+    files_to_use: Optional[Dict[str, Iterable[str]]]
     if args.files_to_use_file is not None:
         files_to_use = load_files_to_use_file(args.files_to_use_file)
     else:
         files_to_use = None
+    commits_to_use: Optional[Dict[str, Iterable[str]]]
+    if args.commits_to_use_file is not None:
+        commits_to_use = load_commits_to_use_file(args.commits_to_use_file)
+    else:
+        commits_to_use = None
     commit_iterator_march_strategy = CommitTraversalStrategy[
         args.commit_iterator_march_strategy]
     limit_commits_by_date: bool = args.limit_commits_by_date
@@ -275,15 +308,45 @@ if __name__ == "__main__":
             swim_server,
             max_pool_size=max_pool_size)
 
+    default_commit_iterator_factory = typing.cast(
+        Callable[[ProjectRepo,
+                  str],
+                 Iterable[str]],
+        partial(
+            cache_extract_commit_iterator,
+            march_strategy=commit_iterator_march_strategy,
+            date_limit=limit_commits_by_date,
+            max_num_commits=max_num_commits))
+
+    if commits_to_use is None:
+        commit_iterator_factory = default_commit_iterator_factory
+    else:
+        commits_to_use_arg = typing.cast(
+            Dict[str,
+                 Iterable[str]],
+            commits_to_use)
+
+        def commit_iterator_factory(
+                project: ProjectRepo,
+                starting_commit_sha: str) -> Iterable[str]:
+            """
+            Try to use commits loaded from file.
+
+            Otherwise use default iteration.
+            """
+            try:
+                return iter(commits_to_use_arg[project.name])
+            except KeyError:
+                return default_commit_iterator_factory(
+                    project,
+                    starting_commit_sha)
+
     cache_extractor = CacheExtractor(
         cache_dir,
         mds_file,
         swim,
         default_commits_path,
-        partial(
-            cache_extract_commit_iterator,
-            march_strategy=commit_iterator_march_strategy,
-            date_limit=limit_commits_by_date),
+        commit_iterator_factory,
         coq_version_iterator=coq_version_iterator,
         files_to_use=files_to_use)
     cache_extractor.run(
@@ -293,7 +356,6 @@ if __name__ == "__main__":
         force_serial=force_serial,
         n_build_workers=n_build_workers,
         project_names=project_names,
-        max_num_commits=max_num_commits,
         updated_md_storage_file=updated_md_storage_file,
         max_procs_file_level=max_procs_file_level,
         max_memory=max_memory,
