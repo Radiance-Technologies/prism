@@ -31,8 +31,12 @@ class LogicalMappings:
         else:
             reg = re.compile(fr"(.+\.)?{re.escape(suffix)}")
 
+        candidate = None
+
         for x in cls.mappings:
             if re.match(reg, x):
-                return cls.mappings[x]
+                if (candidate is not None):
+                    return None  # double match, ambiguous
+                candidate = cls.mappings[x]
 
-        return None
+        return candidate
