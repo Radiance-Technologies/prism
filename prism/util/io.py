@@ -2,7 +2,6 @@
 Provides utility functions for serialized data files.
 """
 import os
-import shutil
 import tempfile
 from pathlib import Path
 from typing import Optional, Union
@@ -100,4 +99,4 @@ def atomic_write(full_file_path: Path,
         file_contents.dump(f.name, fmt)
     # Then, we atomically move the file to the correct, final
     # path.
-    shutil.move(f.name, str(full_file_path))
+    os.replace(f.name, full_file_path)
