@@ -5,7 +5,6 @@ import glob
 import os
 import re
 import subprocess
-import tempfile
 import warnings
 from dataclasses import InitVar, dataclass, field, fields
 from functools import reduce
@@ -42,6 +41,7 @@ from prism.language.gallina.analyze import SexpInfo
 from prism.language.heuristic.parser import CoqComment
 from prism.language.sexp.node import SexpNode
 from prism.project.metadata import ProjectMetadata
+from prism.util.io import atomic_write
 from prism.util.iterable import split
 from prism.util.opam.switch import OpamSwitch
 from prism.util.opam.version import Version, VersionString
@@ -51,48 +51,6 @@ from prism.util.serialize import Serializable
 
 CommandType = str
 _T = TypeVar('_T')
-
-
-def atomic_write(full_file_path: Path,
-                 file_contents: Union[str,
-                                      Serializable]) -> Optional[str]:
-    r"""
-    Write a message or object to a text file.
-
-    Any existing file contents are overwritten.
-
-    Parameters
-    ----------
-    full_file_path : Path
-        Full file path, including directory, filename, and extension, to
-        write to
-    file_contents : Union[str, Serializable]
-        The contents to write or serialized to the file.
-
-    Raises
-    ------
-    TypeError
-        If `file_contents` is not a string or `Serializable`.
-    """
-    if not isinstance(file_contents, (str, Serializable)):
-        raise TypeError(
-            f"Cannot write object of type {type(file_contents)} to file")
-    fmt_ext = full_file_path.suffix  # contains leading period
-    fmt = su.io.infer_fmt_from_ext(fmt_ext)
-    directory = full_file_path.parent
-    if not directory.exists():
-        os.makedirs(str(directory))
-    # Ensure that we write atomically.
-    # First, we write to a temporary file so that if we get
-    # interrupted, we aren't left with a corrupted file.
-    with tempfile.NamedTemporaryFile("w", delete=False, encoding='utf-8') as f:
-        if isinstance(file_contents, str):
-            f.write(file_contents)
-    if isinstance(file_contents, Serializable):
-        file_contents.dump(f.name, fmt)
-    # Then, we atomically move the file to the correct, final
-    # path.
-    os.replace(f.name, full_file_path)
 
 
 @dataclass

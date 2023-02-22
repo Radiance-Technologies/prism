@@ -16,7 +16,6 @@ from prism.data.build_cache import (
     CoqProjectBuildCacheProtocol,
     CoqProjectBuildCacheServer,
     ProjectCommitData,
-    atomic_write,
 )
 from prism.data.commit_map import Except
 from prism.data.repair.instance import (
@@ -24,6 +23,7 @@ from prism.data.repair.instance import (
     ProjectCommitDataRepairInstance,
 )
 from prism.project.metadata import ProjectMetadata
+from prism.util.io import atomic_write
 from prism.util.radpytools.multiprocessing import critical
 
 BuildRepairInstanceOutput = Union[List[ProjectCommitDataRepairInstance], Except]
