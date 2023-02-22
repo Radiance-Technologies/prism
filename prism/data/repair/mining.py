@@ -46,9 +46,10 @@ PreparePairsFunctionSignature = Callable[
 Signature of the function used to prepare cache item label pairs for
 repair instance mining.
 """
-CacheLabel = Tuple[str, str, str]
+CacheLabel = Dict[str, str]
 """
-Tuple labeling a cache object (project name, commit sha, coq version).
+Dictionary labeling a cache object (project name, commit sha,
+coq version).
 """
 ChangeSelectionMapping = Dict[str, str]
 """
@@ -77,6 +78,27 @@ class RepairInstanceDB:
                                       dropped_commands text,
                                       file_name text NOT NULL
                                   ); """
+    sql_insert_record = """INSERT INTO records (
+                               project_name,
+                               commit_sha,
+                               coq_version,
+                               added_commands,
+                               affected_commands,
+                               changed_commands,
+                               dropped_commands,
+                               file_name)
+                           VALUES(
+                               {project_name},
+                               {commit_sha},
+                               {coq_version},
+                               {added_commands},
+                               {affected_commands},
+                               {changed_commands},
+                               {dropped_commands},
+                               {file_name});"""
+    sql_update_file_name = """UPDATE records
+                              SET file_name = {file_name}
+                              WHERE id = {row_id};"""
 
     def __init__(self, db_location: Path):
         self.db_location = db_location
@@ -147,13 +169,24 @@ class RepairInstanceDB:
         """
         change_selection_mapping = self.process_change_selection(
             change_selection)
-        print(change_selection_mapping)
-        # Note for the future: cursor.lastrowid will return the ID of
-        # the last entered row, which will be handy here.
-        # Insert row with dummy filename, then update row with filename
-        # using row ID
-        # We should consider adding a column to the table recording
-        # whether the file has actually been written.
+        record = {
+            **cache_label,
+            **change_selection_mapping
+        }
+        record['file_name'] = "repair-n.yml"
+        self.cursor.execute(self.sql_insert_record.format(**record))
+        self.connection.commit()
+        recent_id = self.cursor.lastrowid
+        if recent_id is None:
+            raise RuntimeError(
+                "No id was returned after the last record insertion.")
+        # TODO: Add full path to new_file_name
+        new_file_name = f"repair-{recent_id}.yml"
+        self.cursor.execute(
+            self.sql_update_file_name.format(
+                file_name=new_file_name,
+                row_id=recent_id))
+        self.connection.commit()
 
     @staticmethod
     def process_change_selection(
