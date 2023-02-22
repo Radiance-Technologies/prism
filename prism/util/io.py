@@ -90,7 +90,10 @@ def atomic_write(full_file_path: Path,
     # Ensure that we write atomically.
     # First, we write to a temporary file so that if we get
     # interrupted, we aren't left with a corrupted file.
-    with tempfile.NamedTemporaryFile("w", delete=False, encoding='utf-8') as f:
+    with tempfile.NamedTemporaryFile("w",
+                                     delete=False,
+                                     dir=directory,
+                                     encoding='utf-8') as f:
         if isinstance(file_contents, str):
             f.write(file_contents)
     if isinstance(file_contents, Serializable):
