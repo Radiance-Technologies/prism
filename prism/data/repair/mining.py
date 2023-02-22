@@ -1,9 +1,12 @@
 """
 Mine repair instances by looping over existing project build cache.
 """
+import sqlite3
 import traceback
+from dataclasses import asdict
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple, Union, cast
+from types import TracebackType
+from typing import Callable, Dict, List, Optional, Tuple, Type, Union, cast
 
 from tqdm.contrib.concurrent import process_map
 
@@ -16,7 +19,10 @@ from prism.data.build_cache import (
     atomic_write,
 )
 from prism.data.commit_map import Except
-from prism.data.repair.instance import ProjectCommitDataRepairInstance
+from prism.data.repair.instance import (
+    ChangeSelection,
+    ProjectCommitDataRepairInstance,
+)
 from prism.project.metadata import ProjectMetadata
 from prism.util.radpytools.multiprocessing import critical
 
@@ -40,6 +46,138 @@ PreparePairsFunctionSignature = Callable[
 Signature of the function used to prepare cache item label pairs for
 repair instance mining.
 """
+CacheLabel = Tuple[str, str, str]
+"""
+Tuple labeling a cache object (project name, commit sha, coq version).
+"""
+ChangeSelectionMapping = Dict[str, str]
+"""
+Dictionary mapping field names of ChangeSelection to strings derived
+from those fields.
+"""
+
+
+class RepairInstanceDB:
+    """
+    Database for storing information about saved repair instances.
+
+    This is a single-table database. Each row in the table maps a set of
+    identifying details of a repair instance to the filename that stores
+    the serialized, saved repair instance.
+    """
+
+    sql_create_records_table = """CREATE TABLE IF NOT EXISTS records (
+                                      id integer PRIMARY KEY autoincrement,
+                                      project_name text NOT NULL,
+                                      commit_sha text NOT NULL,
+                                      coq_version text NOT NULL,
+                                      added_commands text,
+                                      affected_commands text,
+                                      changed_commands text,
+                                      dropped_commands text,
+                                      file_name text NOT NULL
+                                  ); """
+
+    def __init__(self, db_location: Path):
+        self.db_location = db_location
+        self.connection = sqlite3.connect(str(self.db_location))
+        self.cursor = self.connection.cursor()
+        self.create_table()
+
+    def __enter__(self) -> 'RepairInstanceDB':
+        """
+        Provide an entry point for the context manager.
+
+        Returns
+        -------
+        RepairInstanceDB
+            An instance of this class
+        """
+        return self
+
+    def __exit__(
+            self,
+            ext_type: Optional[Type[BaseException]],
+            exc_value: Optional[BaseException],
+            traceback: Optional[TracebackType]):
+        """
+        Clean up once context manager ends.
+
+        Parameters
+        ----------
+        ext_type : Optional[Type[BaseException]]
+            Exception type, if an exception is raised
+        exc_value : Optional[BaseException]
+            Exception itself, if one is raised
+        traceback : Optional[TracebackType]
+            Exception traceback, if an exception is raised
+        """
+        self.cursor.close()
+        if isinstance(exc_value, Exception):
+            self.connection.rollback()
+        else:
+            self.connection.commit()
+        self.connection.close()
+
+    def create_table(self):
+        """
+        Create the one table this database requires.
+        """
+        self.cursor.execute(self.sql_create_records_table)
+        self.connection.commit()
+
+    def insert_record(
+            self,
+            cache_label: CacheLabel,
+            change_selection: ChangeSelection) -> Path:
+        """
+        Insert a repair instance record into the database.
+
+        Parameters
+        ----------
+        cache_label : CacheLabel
+            The cache label portion of the record identifier
+        change_selection : ChangeSelection
+            The selected changes that further identify the record
+
+        Returns
+        -------
+        Path
+            The reserved path to the new repair instance file.
+        """
+        change_selection_mapping = self.process_change_selection(
+            change_selection)
+        print(change_selection_mapping)
+        # Note for the future: cursor.lastrowid will return the ID of
+        # the last entered row, which will be handy here.
+        # Insert row with dummy filename, then update row with filename
+        # using row ID
+        # We should consider adding a column to the table recording
+        # whether the file has actually been written.
+
+    @staticmethod
+    def process_change_selection(
+            change_selection: ChangeSelection) -> ChangeSelectionMapping:
+        """
+        Process ChangeSelection item to sort and combine field values.
+
+        Parameters
+        ----------
+        change_selection : ChangeSelection
+            ChangeSelection object to process
+
+        Returns
+        -------
+        ChangeSelectionMapping
+            Mapping containing results
+        """
+        # This function could be a one-liner, but that would just be too
+        # much.
+        mapping = {}
+        for key, value in asdict(change_selection).items():
+            mapping[key] = " ".join(
+                [f"{item[0]} {item[1]}" for item in sorted(value)])
+        return mapping
 
 
 def build_repair_instance(
