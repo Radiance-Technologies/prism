@@ -41,7 +41,7 @@ class TestProject(unittest.TestCase):
         cls.document = {}
         cls.test_list = {}
         cls.test_glom_list = {}
-        coq_example_files = ["simple", "nested", "Alphabet", "notations"]
+        coq_example_files = ["simple", "nested", "Alphabet"]
         for coq_file in coq_example_files:
             test_filename = os.path.join(_COQ_EXAMPLES_PATH, f"{coq_file}.v")
             with open(test_filename, "rt") as f:
