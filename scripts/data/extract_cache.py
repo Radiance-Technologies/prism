@@ -172,7 +172,7 @@ if __name__ == "__main__":
         nargs="*",
         default=[],
         help="A list of Coq versions that will be considered for each commit."
-        " If not provided, then only Coq 8.10[.2] is considered."
+        " If not provided, then all supported versions are considered."
         " Currently, only Coq 8.9.X to 8.15.Y are supported.")
     parser.add_argument(
         "--updated-md-storage-file",
