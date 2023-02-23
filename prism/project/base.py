@@ -970,20 +970,21 @@ class Project(ABC):
             results = []
             for m in self.run(f"grep -Rh 'Import' {self.dir_abspath}")[1].split(
                     "\n"):
-                for suffix in re.findall(r"\s*Require\s*Import\s*(.+)\.\s*", m):
-                    r = mappings.LogicalMappings.search(suffix=suffix)
-                    results.append(r)
+                for suffixes in re.findall(r"\s*Require\s*(?:Import|Export)?\s*(.+)\.\s*",
+                                         m):
+                    for suffix in suffixes.split():
+                        r = mappings.LogicalMappings.search(suffix=suffix)
+                        results.append(r)
 
                 for prefix, suffixes in re.findall(
-                        r"From\s*([^\s]+)\s*Require\s*Import\s*(.+)\.",
+                        r"From\s*([^\s]+)\s*Require\s*(?:Import|Export)?\s*(.+)\.",
                         m):
                     for suffix in suffixes.split():
                         r = mappings.LogicalMappings.search(
                             prefix=prefix,
                             suffix=suffix)
                         results.append(r)
-
-            return list(filter(None, results))
+            return list(set(results) - {None})
 
         if isinstance(formula, PackageFormula):
             if isinstance(formula, LogicalPF):
