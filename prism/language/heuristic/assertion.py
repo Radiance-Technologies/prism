@@ -5,9 +5,8 @@ from dataclasses import dataclass
 from typing import List, Optional
 from warnings import warn
 
+from prism.language.heuristic.util import ParserUtils
 from prism.util.radpytools.dataclasses import default_field
-
-from .util import ParserUtils
 
 
 @dataclass

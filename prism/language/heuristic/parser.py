@@ -13,18 +13,17 @@ import prism.language.gallina.util as gu
 from prism.data.document import CoqDocument
 from prism.language.gallina.analyze import SexpAnalyzer, SexpInfo
 from prism.language.gallina.parser import CoqParser
+from prism.language.heuristic.assertion import Assertion
 from prism.language.heuristic.str_with_location import StrWithLocation
+from prism.language.heuristic.util import ParserUtils
+from prism.language.sexp.list import SexpList
+from prism.language.sexp.node import SexpNode
+from prism.language.sexp.string import SexpString
 from prism.util.iterable import CallableIterator, CompareIterator
 from prism.util.path import get_relative_path
 from prism.util.radpytools import PathLike
 from prism.util.radpytools.dataclasses import default_field
 from prism.util.radpytools.os import pushd
-
-from ..sexp.list import SexpList
-from ..sexp.node import SexpNode
-from ..sexp.string import SexpString
-from .assertion import Assertion
-from .util import ParserUtils
 
 
 @dataclass
