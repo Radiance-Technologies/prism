@@ -6,9 +6,11 @@ import re
 import warnings
 from dataclasses import dataclass
 from functools import cached_property
-from typing import ClassVar, Iterable, List, Optional, Tuple, Union
+from itertools import repeat
+from typing import Callable, ClassVar, Iterable, List, Optional, Tuple, Union
 
 from prism.language.gallina.analyze import SexpInfo
+from prism.util.radpytools import PathLike
 from prism.util.radpytools.dataclasses import default_field
 from prism.util.string import escape_backslash
 
@@ -157,7 +159,7 @@ class StrWithLocation(str):
     def get_location(
             self,
             file_contents: str,
-            filename: str,
+            filename: PathLike,
             start_idx: int = 0,
             newlines_so_far: int = 0) -> SexpInfo.Loc:
         """
@@ -174,7 +176,7 @@ class StrWithLocation(str):
         ----------
         file_contents : str
             The full file contents in string form
-        filename : str
+        filename : PathLike
             The filename the file contents were loaded from
         start_idx : int, optional
             Index of file_contents to start with. Pass this argument if
@@ -191,6 +193,8 @@ class StrWithLocation(str):
         SexpInfo.Loc
             The derived SexpInfo.Loc location
         """
+        if not isinstance(filename, str):
+            filename = str(filename)
         num_newlines_before_string = file_contents.count(
             "\n",
             start_idx,
@@ -337,7 +341,8 @@ class StrWithLocation(str):
             pattern: Union[str,
                            re.Pattern],
             repl: Union[str,
-                        Iterable[str]],
+                        Callable[[re.Match],
+                                 str]],
             string: 'StrWithLocation',
             count: int = 0,
             flags: Union[int,
@@ -354,9 +359,9 @@ class StrWithLocation(str):
         ----------
         pattern : Union[str, re.Pattern]
             Pattern to match for split
-        repl : Union[str, Iterable[str]]
-            String to substitute in when pattern is found or an iterable
-            from which to sequentially draw substitution strings.
+        repl : Union[str, Callable[[re.Match], str]]]
+            String to substitute in when pattern is found or a function
+            with which to compute a substitution given a match.
         string : StrWithLocation
             The string to perform the substitution on
         count : int, optional
@@ -382,12 +387,24 @@ class StrWithLocation(str):
         match = pattern.search(string)
         if not match:
             return string
+        repls: Iterable[str] = []
+        if callable(repl):
 
-        subbed_string = pattern.sub(escape_backslash(repl), string, count)
+            def _repl(match: re.Match, repl=repl) -> str:
+                nonlocal repls
+                sub = repl(match)  # type: ignore
+                repls.append(escape_backslash(sub))
+                return sub
+
+            repl = _repl
+        else:
+            repls = repeat(escape_backslash(repl))
+
+        subbed_string = pattern.sub(repl, string, count)
         subbed_indices = []
         prev_end = 0
         idx = 0
-        for match in pattern.finditer(string):
+        for match, repl in zip(pattern.finditer(string), repls):
             if count > 0 and idx >= count:
                 break
             else:
@@ -397,6 +414,8 @@ class StrWithLocation(str):
                 subbed = string[match.start(): match.end()]
                 start = subbed.start
                 end = subbed.end
+                assert start is not None
+                assert end is not None
                 step = (end - start) / len(repl)
                 subbed_indices.extend(
                     [
