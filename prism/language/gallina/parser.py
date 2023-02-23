@@ -5,7 +5,6 @@ Adapted from `roosterize.parser.CoqParser`
 at https://github.com/EngineeringSoftware/roosterize/.
 """
 import logging
-import os
 from typing import List, Optional, Set, Tuple, Union
 
 from prism.data.document import CoqDocument, VernacularSentence
@@ -17,6 +16,7 @@ from prism.language.token import Token, TokenConsts
 from prism.language.types import SourceCode
 from prism.util.debug import Debug
 from prism.util.opam.switch import OpamSwitch
+from prism.util.radpytools import PathLike
 
 
 class CoqParserConsts:
@@ -939,7 +939,7 @@ class CoqParser:
     @classmethod
     def parse_document(
             cls,
-            file_path: os.PathLike,
+            file_path: PathLike,
             serapi_options: str = "",
             opam_switch: Optional[OpamSwitch] = None) -> CoqDocument:
         """
@@ -947,7 +947,7 @@ class CoqParser:
 
         Parameters
         ----------
-        file_name : str
+        file_name : PathLike
             The absolute or relative path of a Coq file.
         serapi_options : str, optional
             Options to control the output of SerAPI, which is used to
@@ -982,7 +982,7 @@ class CoqParser:
     @classmethod
     def parse_sentences(
             cls,
-            file_path: os.PathLike,
+            file_path: PathLike,
             serapi_options: str = "",
             opam_switch: Optional[OpamSwitch] = None
     ) -> List[VernacularSentence]:
@@ -991,7 +991,7 @@ class CoqParser:
 
         Parameters
         ----------
-        file_name : str
+        file_name : PathLike
             The absolute or relative path of a Coq file.
         serapi_options : str, optional
             Options to control the output of SerAPI, which is used to
@@ -1196,13 +1196,13 @@ class CoqParser:
         return vernac_sentences
 
     @classmethod
-    def parse_source(cls, file_path: os.PathLike) -> SourceCode:
+    def parse_source(cls, file_path: PathLike) -> SourceCode:
         """
         Parse the raw source code from the indicated document.
 
         Parameters
         ----------
-        file_path : str
+        file_path : PathLike
             The absolute or relative path of a Coq file.
 
         Returns
@@ -1217,7 +1217,7 @@ class CoqParser:
     @classmethod
     def parse_tokens(
             cls,
-            file_path: os.PathLike,
+            file_path: PathLike,
             sertok_options: str = "",
             opam_switch: Optional[OpamSwitch] = None) -> List[SexpNode]:
         """
@@ -1225,7 +1225,7 @@ class CoqParser:
 
         Parameters
         ----------
-        file_path : str
+        file_path : PathLike
             The absolute or relative path of a Coq file.
         sertok_options : str, optional
             Options to control the output of ``sertok``, which is used
