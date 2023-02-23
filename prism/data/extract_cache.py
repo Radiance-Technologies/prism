@@ -2,6 +2,7 @@
 Module for storing cache extraction functions.
 """
 import calendar
+import copy
 import logging
 import multiprocessing as mp
 import os
@@ -76,7 +77,7 @@ from prism.util.opam.switch import OpamSwitch
 from prism.util.opam.version import OpamVersion, Version
 from prism.util.radpytools import PathLike, unzip
 from prism.util.radpytools.os import pushd
-from prism.util.swim import SwitchManager
+from prism.util.swim import SwitchManager, UnsatisfiableConstraints
 
 SentenceState = Tuple[CoqSentence,
                       Optional[Union[Goals,
@@ -1307,11 +1308,15 @@ def extract_cache_new(
             if isinstance(e, CalledProcessError):
                 logger.critical(f"stdout:\n{e.stdout}\n")
                 logger.critical(f"stderr:\n{e.stderr}\n")
+            project_metadata = project.metadata
+            if isinstance(e, UnsatisfiableConstraints):
+                project_metadata = copy.copy(project_metadata)
+                project_metadata.coq_version = coq_version
             logger.exception(e)
             logger_stream.flush()
             logged_text = logger_stream.getvalue()
             build_cache_client.write_misc_error_log(
-                project.metadata,
+                project_metadata,
                 block,
                 logged_text)
         finally:
