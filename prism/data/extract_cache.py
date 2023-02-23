@@ -1827,7 +1827,7 @@ class CacheExtractor:
                     files_to_use = None
         for coq_version in pbar:
             pbar.set_description(
-                f"Coq version ({project.name}@{project.short_sha}): {coq_version}"
+                f"Coq version ({project.name}@{commit_sha[: 8]}): {coq_version}"
             )
             extract_cache(
                 build_cache_client,
