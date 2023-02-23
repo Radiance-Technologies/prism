@@ -5,6 +5,7 @@ import json
 import unittest
 from itertools import chain, repeat
 from pathlib import Path
+from typing import Dict, List
 
 import pytest
 
@@ -20,21 +21,92 @@ class TestHeuristicParser(unittest.TestCase):
     Test suite for `HeuristicParser`.
     """
 
-    def setUp(self) -> None:
+    test_files: Dict[str, Path]
+    test_contents: Dict[str, str]
+    test_list: Dict[str, List[str]]
+    test_glom_list: Dict[str, List[str]]
+
+    @classmethod
+    def setUpClass(cls) -> None:
         """
         Set up a common document for each test.
         """
-        coq_example_files = ["simple", "nested", "Alphabet", "attribute_syntax"]
-        self.test_files = {
+        coq_example_files = [
+            "simple",
+            "nested",
+            "Alphabet",
+            "attribute_syntax",
+            "notations"
+        ]
+        cls.test_files = {
             coq_file: Path(_COQ_EXAMPLES_PATH) / f"{coq_file}.v"
             for coq_file in coq_example_files
         }
-        self.test_contents = {
+        cls.test_contents = {
             name: CoqParser.parse_source(path) for name,
-            path in self.test_files.items()
+            path in cls.test_files.items()
         }
+        cls.test_list = {}
+        cls.test_glom_list = {}
+        expected_filename = _COQ_EXAMPLES_PATH / "split_by_sentence_expected.json"
+        for coq_file in coq_example_files:
+            test_filename = cls.test_files[coq_file]
+            with open(test_filename, "rt") as f:
+                cls.test_contents[coq_file] = f.read()
+            with open(expected_filename, "rt") as f:
+                contents = json.load(f)
+                try:
+                    cls.test_list[coq_file] = contents[f"{coq_file}_test_list"]
+                except KeyError:
+                    pass
+                try:
+                    cls.test_glom_list[coq_file] = contents[
+                        f"{coq_file}_test_glom_list"]
+                except KeyError:
+                    pass
 
-    def test_simple_statistics(self):
+    def test_parsing(self) -> None:
+        """
+        Test accuracy of heuristic parsing on a number of examples.
+        """
+        for coq_file, expected_parsed in self.test_list.items():
+            test_file_name = self.test_files[coq_file]
+            actual_parsed = [
+                str(s) for s in HeuristicParser.parse_sentences_from_file(
+                    test_file_name,
+                    glom_proofs=False)
+            ]
+            actual_parsed_with_locs = [
+                str(s) for s in HeuristicParser.parse_sentences_from_file(
+                    test_file_name,
+                    glom_proofs=False,
+                    return_locations=True)
+            ]
+            self.assertEqual(actual_parsed, expected_parsed)
+            self.assertEqual(actual_parsed_with_locs, expected_parsed)
+
+    def test_proof_glomming(self) -> None:
+        """
+        Test accuracy of heuristic proof glomming on multiple examples.
+        """
+        for coq_file, expected_parsed in self.test_glom_list.items():
+            test_file_name = self.test_files[coq_file]
+            actual_parsed = [
+                str(s) for s in HeuristicParser.parse_sentences_from_file(
+                    test_file_name,
+                    glom_proofs=True,
+                    return_locations=False)
+            ]
+            with self.assertRaises(NotImplementedError):
+                _ = [
+                    str(s) for s in HeuristicParser.parse_sentences_from_file(
+                        test_file_name,
+                        glom_proofs=True,
+                        return_locations=True)
+                ]
+            self.assertEqual(actual_parsed, expected_parsed)
+
+    def test_simple_statistics(self) -> None:
         """
         Verify statistic match expectation for simple Coq file.
         """
@@ -92,11 +164,11 @@ class TestHeuristicParser(unittest.TestCase):
                            19,
                            23,
                            26},
-            query_indices=[4,
+            query_indices={4,
                            6,
                            9,
-                           24],
-            fail_indices={},
+                           24},
+            fail_indices=set(),
             nesting_allowed=[False for _ in range(27)],
             requirements=set(),
             custom_tactics=set())
@@ -159,8 +231,8 @@ class TestHeuristicParser(unittest.TestCase):
                            13,
                            14,
                            15},
-            query_indices=[16],
-            fail_indices={},
+            query_indices={16},
+            fail_indices=set(),
             nesting_allowed=list(chain(repeat(False,
                                               6),
                                        repeat(True,
@@ -349,8 +421,8 @@ class TestHeuristicParser(unittest.TestCase):
                 expected_ender_indices,
                 expected_program_indices,
                 expected_obligation_indices),
-            query_indices=[],
-            fail_indices={},
+            query_indices=set(),
+            fail_indices=set(),
             nesting_allowed=[False for _ in range(170)],
             custom_tactics=set())
         sentences = HeuristicParser._get_sentences(
@@ -377,19 +449,19 @@ class TestHeuristicParser(unittest.TestCase):
             theorem_indices={2,
                              6,
                              8},
-            starter_indices={},
-            tactic_indices={},
+            starter_indices=set(),
+            tactic_indices=set(),
             ender_indices=[],
             program_indices=[8],
             obligation_indices=[],
             proof_indices={2,
                            6,
                            8},
-            query_indices=[3,
-                           7],
+            query_indices={3,
+                           7},
             fail_indices={5},
-            nesting_allowed=repeat(False,
-                                   10),
+            nesting_allowed=list(repeat(False,
+                                        10)),
             requirements={'Coq.Program'},
             custom_tactics={"foo"})
         sentences = HeuristicParser._get_sentences(
@@ -445,6 +517,9 @@ class TestSerAPIParser(unittest.TestCase):
     Unit test suite for the heuristic SerAPI parser.
     """
 
+    test_files: Dict[str, Path]
+    test_glom_ltac_list: Dict[str, List[str]]
+
     @classmethod
     def setUpClass(cls) -> None:
         """
@@ -484,7 +559,9 @@ class TestSerAPIParser(unittest.TestCase):
                 self.assertEqual(expected_glommed, actual_glommed_sentences)
                 # assert some ltac ASTs got glommed
                 self.assertTrue(
-                    any(s.ast.head() == "glommed_ltac" for s in actual_glommed))
+                    any(
+                        s.ast is not None and s.ast.head() == "glommed_ltac"
+                        for s in actual_glommed))
                 # assert locations got glommed
                 self.assertTrue(
                     all(s.location is not None for s in actual_glommed))

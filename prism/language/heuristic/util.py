@@ -2,6 +2,7 @@
 Provides internal utilities for heuristic parsing of Coq source files.
 """
 
+import math
 import re
 from functools import partialmethod
 from typing import Iterable, List, Optional, Set, Tuple
@@ -426,7 +427,8 @@ class ParserUtils:
     """
     Used to define logical paths of loaded files and libraries.
     """
-    sentence_splitter: re.Pattern = re.compile(r"(\(\*|\*\))")
+    comment_splitter: re.Pattern = re.compile(r"(\(\*|\*\))")
+    string_splitter: re.Pattern = re.compile(r"(\")")
     brace_splitter: re.Pattern = re.compile(r"^\s*({|})")
     bullet_splitter: re.Pattern = re.compile(r"^\s*(-+|\++|\*+)")
 
@@ -448,15 +450,15 @@ class ParserUtils:
 
     @staticmethod
     def _strip_comments(
-            file_contents: 'StrWithLocation',
-            encoding: str = 'utf-8') -> 'StrWithLocation':
+            file_contents: StrWithLocation,
+            encoding: str = 'utf-8') -> StrWithLocation:
         # comments can be nested, so a single regex cannot be used
         # to detect this recursive structure.
         # Instead, split on comment boundaries and manually match
         # openers and closers.
         comment_depth = 0
         comment_delimited = StrWithLocation.re_split(
-            ParserUtils.sentence_splitter,
+            ParserUtils.comment_splitter,
             file_contents)
         str_no_comments = []
         for segment in comment_delimited:
@@ -469,6 +471,53 @@ class ParserUtils:
                     comment_depth -= 1
         str_no_comments = StrWithLocation().join(str_no_comments)
         return str_no_comments
+
+    @staticmethod
+    def _mask_strings(
+            file_contents: StrWithLocation,
+            string_mask: str) -> Tuple[StrWithLocation,
+                                       List[StrWithLocation]]:
+        in_string = False
+        string_delimited = StrWithLocation.re_split(
+            ParserUtils.string_splitter,
+            file_contents)
+        str_no_strings = []
+        strings = []
+        current_string: Optional[List[StrWithLocation]] = None
+        string_mask_size = len(string_mask)
+        for segment in string_delimited:
+            if segment == '"':
+                if current_string is not None:
+                    # string concluded
+                    current_string.append(segment)
+                    strings.append(StrWithLocation().join(current_string))
+                    current_string = None
+                else:
+                    # string started
+                    current_string = [segment]
+                in_string = not in_string
+            else:
+                if in_string:
+                    assert current_string is not None
+                    current_string.append(segment)
+                    start = segment.start
+                    end = segment.end
+                    assert start is not None
+                    assert end is not None
+                    step = (end - start) / string_mask_size
+                    subbed_indices = [
+                        (
+                            start + math.floor(i * step),
+                            min(end,
+                                start + math.ceil((i + 1) * step)))
+                        for i in range(string_mask_size)
+                    ]
+                    subbed_mask = StrWithLocation(string_mask, subbed_indices)
+                    str_no_strings.append(subbed_mask)
+                else:
+                    str_no_strings.append(segment)
+        str_no_strings = StrWithLocation().join(str_no_strings)
+        return str_no_strings, strings
 
     defines_tactic = partialmethod(_is_command_type, tactic_definers)
     """
@@ -645,9 +694,9 @@ class ParserUtils:
 
         Returns
         -------
-        stripped : Union[str, 'StrWithLocation']
+        stripped : Union[str, StrWithLocation]
             The sentence stripped of its leading attribute.
-        attribute : Optional[Union[str, 'StrWithLocation']]
+        attribute : Optional[Union[str, StrWithLocation]]
             The leading attribute or None if there is no attribute.
         """
         if isinstance(sentence, str) and not hasattr(sentence, 'indices'):
@@ -661,7 +710,8 @@ class ParserUtils:
                 return stripped, attribute
             else:
                 return sentence, attribute
-        elif isinstance(sentence, StrWithLocation):
+        else:
+            assert isinstance(sentence, StrWithLocation)
             attribute = re.match(ParserUtils.attributes, sentence)
             if attribute is None:
                 attribute = StrWithLocation()
@@ -685,9 +735,9 @@ class ParserUtils:
 
         Returns
         -------
-        stripped : Union[str, 'StrWithLocation']
+        stripped : Union[str, StrWithLocation]
             The sentence stripped of its leading attributes.
-        attributes : List[Union[str, 'StrWithLocation']]
+        attributes : List[Union[str, StrWithLocation]]
             The stripped attributes in order of appearance.
         """
         attributes = []
@@ -722,21 +772,21 @@ class ParserUtils:
 
     @staticmethod
     def split_brace(
-        sentence: 'StrWithLocation') -> Tuple['StrWithLocation',
-                                              'StrWithLocation']:
+            sentence: StrWithLocation) -> Tuple[StrWithLocation,
+                                                StrWithLocation]:
         """
         Split the bullets from the start of a sentence.
 
         Parameters
         ----------
-        sentence : 'StrWithLocation'
+        sentence : StrWithLocation
             A sentence.
 
         Returns
         -------
-        bullet : 'StrWithLocation'
+        bullet : StrWithLocation
             The brace or an empty string if no bullets are found.
-        remainder : 'StrWithLocation'
+        remainder : StrWithLocation
             The rest of the sentence after the bullet.
 
         Notes
@@ -758,9 +808,8 @@ class ParserUtils:
 
     @staticmethod
     def split_braces_and_bullets(
-        sentence: 'StrWithLocation'
-    ) -> Tuple[List['StrWithLocation'],
-               'StrWithLocation']:
+        sentence: StrWithLocation) -> Tuple[List[StrWithLocation],
+                                            StrWithLocation]:
         """
         Split braces and bullets from the start of a sentence.
 
@@ -797,21 +846,21 @@ class ParserUtils:
 
     @staticmethod
     def split_bullet(
-        sentence: 'StrWithLocation') -> Tuple['StrWithLocation',
-                                              'StrWithLocation']:
+            sentence: StrWithLocation) -> Tuple[StrWithLocation,
+                                                StrWithLocation]:
         """
         Split a bullet from the start of a sentence.
 
         Parameters
         ----------
-        sentence : 'StrWithLocation'
+        sentence : StrWithLocation
             A sentence.
 
         Returns
         -------
-        bullet : 'StrWithLocation'
+        bullet : StrWithLocation
             The bullet or an empty string if no bullets are found.
-        remainder : 'StrWithLocation'
+        remainder : StrWithLocation
             The rest of the sentence after the bullet.
 
         Notes

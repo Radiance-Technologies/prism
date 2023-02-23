@@ -16,6 +16,7 @@ from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.str_with_location import StrWithLocation
 from prism.util.iterable import CallableIterator, CompareIterator
 from prism.util.path import get_relative_path
+from prism.util.radpytools import PathLike
 from prism.util.radpytools.dataclasses import default_field
 from prism.util.radpytools.os import pushd
 
@@ -608,7 +609,7 @@ class HeuristicParser:
 
         Returns
         -------
-        List['StrWithLocation']
+        List[StrWithLocation]
             The sentences of the Coq document.
         """
         located_file_contents = StrWithLocation.create_from_file_contents(
@@ -618,17 +619,14 @@ class HeuristicParser:
             located_file_contents)
         # Mask notations to avoid accidental splitting on quoted
         # periods.
-        notations = re.findall(r"Notation\s+\".*\"", file_contents_no_comments)
-        file_contents_no_comments = StrWithLocation.re_sub(
-            r"Notation \".*\"",
-            cls.notation_mask,
-            file_contents_no_comments)
-        # Mask strings to avoid accidental splitting on quoted periods.
-        strings = re.findall(r"\".*\"", file_contents_no_comments)
-        file_contents_no_comments = StrWithLocation.re_sub(
-            r"Notation \".*\"",
-            cls.string_mask,
-            file_contents_no_comments)
+        # TODO: Make a proper lexer/parser; rare notations could still
+        # break this
+        # Mask strings to avoid accidental splitting on quoted periods
+        # or other weird notations.
+        (file_contents_no_comments,
+         strings) = ParserUtils._mask_strings(
+             file_contents_no_comments,
+             cls.string_mask)
         # Split sentences by instances of single periods followed by
         # whitespace. Double (or more) periods are specifically
         # excluded.
@@ -640,9 +638,8 @@ class HeuristicParser:
             file_contents_no_comments)
         # Now perform further splitting of braces, bullets, and ellipses
         i = 0
-        notation_it = iter(notations)
         # re.sub will pull from this automatically to make substitutions
-        string_it = CallableIterator(strings)
+        string_it = CallableIterator[str](strings)
         processed_sentences: List[StrWithLocation] = []
         while i < len(sentences):  # `sentences` length may change
             try:
@@ -684,15 +681,6 @@ class HeuristicParser:
                 if num_new > 0:
                     sentences[i : i + 1] = new_new_sentences
                     sentence = sentences[i]
-                sentence_sans_control = ParserUtils.strip_control(sentence)
-                sentence_sans_attributes, _ = ParserUtils.strip_attributes(
-                    sentence_sans_control)
-                # restore notation
-                if sentence_sans_attributes.startswith(cls.notation_mask):
-                    sentence = StrWithLocation.re_sub(
-                        cls.notation_mask,
-                        next(notation_it),
-                        sentence)
                 # restore strings
                 sentence = StrWithLocation.re_sub(
                     cls.string_mask,
@@ -712,7 +700,7 @@ class HeuristicParser:
     @classmethod
     def parse_proofs(
             cls,
-            file_path: str,
+            file_path: PathLike,
             encoding: str = 'utf-8',
             glom_proofs: bool = True) -> List[Assertion]:
         """
@@ -720,7 +708,7 @@ class HeuristicParser:
 
         Parameters
         ----------
-        file_path : str
+        file_path : PathLike
             The path to a Coq source file.
         encoding : str, optional
             The encoding to use for decoding if a bytestring is
@@ -741,10 +729,10 @@ class HeuristicParser:
     @classmethod
     def parse_sentences_from_file(
             cls,
-            file_path: str,
+            file_path: PathLike,
             encoding: str = 'utf-8',
             glom_proofs: bool = True,
-            project_path: str = "",
+            project_path: PathLike = "",
             return_locations: bool = False,
             **kwargs) -> List[CoqSentence]:
         """
@@ -754,7 +742,7 @@ class HeuristicParser:
 
         Parameters
         ----------
-        file_path : str
+        file_path : PathLike
             The path to a Coq source file.
         encoding : str, optional
             The encoding to use for decoding if a bytestring is
@@ -764,7 +752,7 @@ class HeuristicParser:
             after sentences are split, by default `True`. If glom_proofs
             is True, return_locations is set to False no matter the
             given value.
-        project_path : str, optional
+        project_path : PathLike, optional
             Path to the project this file is from, by default "".
         return_locations : bool, optional
             A flag indicating whether sentence locations are returned,
