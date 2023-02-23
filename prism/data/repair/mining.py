@@ -22,9 +22,8 @@ from prism.data.repair.instance import (
     ChangeSelection,
     ProjectCommitDataRepairInstance,
 )
-from prism.project.metadata import ProjectMetadata
 from prism.util.io import atomic_write
-from prism.util.radpytools.multiprocessing import critical
+from prism.util.radpytools.multiprocessing import synchronizedmethod
 
 BuildRepairInstanceOutput = Union[List[ProjectCommitDataRepairInstance], Except]
 """
@@ -99,6 +98,17 @@ class RepairInstanceDB:
     sql_update_file_name = """UPDATE records
                               SET file_name = {file_name}
                               WHERE id = {row_id};"""
+    sql_get_record = """SELECT *
+                        FROM records
+                        WHERE
+                            project_name = {project_name}
+                            AND commit_sha = {commit_sha}
+                            AND coq_version = {coq_version}
+                            AND added_commands = {added_commands}
+                            AND affected_commands = {affected_commands}
+                            AND changed_commands = {changed_commands}
+                            AND dropped_commands = {dropped_commands}
+                        ORDER BY id;"""
 
     def __init__(self, db_location: Path):
         self.db_location = db_location
@@ -148,6 +158,7 @@ class RepairInstanceDB:
         self.cursor.execute(self.sql_create_records_table)
         self.connection.commit()
 
+    @synchronizedmethod
     def insert_record(
             self,
             cache_label: CacheLabel,
@@ -188,6 +199,57 @@ class RepairInstanceDB:
                 row_id=recent_id))
         self.connection.commit()
 
+    def get_record(
+            self,
+            cache_label: CacheLabel,
+            change_selection: ChangeSelection) -> Optional[Dict[str,
+                                                                str]]:
+        """
+        Get a record from the records table if it exists.
+
+        Parameters
+        ----------
+        cache_label : CacheLabel
+            The cache label portion of the record identifier
+        change_selection : ChangeSelection
+            The selected changes that further identify the record
+
+        Returns
+        -------
+        Optional[Dict[str, str]]
+            The record as a dictionary, or None if no record was found
+
+        Raises
+        ------
+        RuntimeError
+            If multiple records are found for the query. This shouldn't
+            be able to happen, and if it does, it indicates a bug.
+        """
+        change_selection_mapping = self.process_change_selection(
+            change_selection)
+        record_to_get = {
+            **cache_label,
+            **change_selection_mapping
+        }
+        self.cursor.execute(self.sql_get_record.format(**record_to_get))
+        records = self.cursor.fetchall()
+        if not records:
+            return
+        if len(records) > 1:
+            raise RuntimeError("There are duplicate rows in the records table.")
+        record = records[0]
+        return {
+            'id': record[0],
+            'project_name': record[1],
+            'commit_sha': record[2],
+            'coq_version': record[3],
+            'added_commands': record[4],
+            'affected_commands': record[5],
+            'changed_commands': record[6],
+            'dropped_commands': record[7],
+            'file_name': record[8]
+        }
+
     @staticmethod
     def process_change_selection(
             change_selection: ChangeSelection) -> ChangeSelectionMapping:
@@ -217,6 +279,8 @@ def build_repair_instance(
         cache_args: Tuple[CoqProjectBuildCacheServer,
                           Path,
                           str],
+        repair_save_directory: Path,
+        repair_instance_db: RepairInstanceDB,
         miner: MiningFunctionSignature,
         cache_label_a: CacheObjectStatus,
         cache_label_b: CacheObjectStatus
@@ -228,6 +292,10 @@ def build_repair_instance(
     ----------
     cache_server : Tuple[CoqProjectBuildCacheServer, Path, str]
         Args to instantiate cache client
+    repair_save_directory : Path
+        Path to directory to save repair instances
+    repair_instance_db : RepairInstanceDB
+        Database for recording new repair instances saved to disk
     miner : MiningFunctionSignature
         Function used to mine repair instances
     cache_label_a : CacheObjectStatus
@@ -241,23 +309,32 @@ def build_repair_instance(
         If a repair instance is successfully created, return that.
         If the instance is empty, return None.
     """
-    cache_client = cast(
-        CoqProjectBuildCacheProtocol,
-        CoqProjectBuildCacheClient(*cache_args))
-    cache_item_a = cache_client.get(
-        cache_label_a.project,
-        cache_label_a.commit_hash,
-        cache_label_a.coq_version)
-    cache_item_b = cache_client.get(
-        cache_label_b.project,
-        cache_label_b.commit_hash,
-        cache_label_b.coq_version)
-    repair_instances = miner(cache_item_a, cache_item_b)
-    return repair_instances
+    try:
+        cache_client = cast(
+            CoqProjectBuildCacheProtocol,
+            CoqProjectBuildCacheClient(*cache_args))
+        cache_item_a = cache_client.get(
+            cache_label_a.project,
+            cache_label_a.commit_hash,
+            cache_label_a.coq_version)
+        cache_item_b = cache_client.get(
+            cache_label_b.project,
+            cache_label_b.commit_hash,
+            cache_label_b.coq_version)
+        result = miner(cache_item_a, cache_item_b)
+    except Exception as e:
+        result = Except(None, e, traceback.format_exc())
+    finally:
+        write_repair_instance(result, repair_save_directory, repair_instance_db)
+    return result
 
 
 def build_repair_instance_star(
     args: Tuple[CoqProjectBuildCacheServer,
+                Path,
+                str,
+                Path,
+                RepairInstanceDB,
                 MiningFunctionSignature,
                 CacheObjectStatus,
                 CacheObjectStatus]
@@ -267,7 +344,8 @@ def build_repair_instance_star(
 
     Parameters
     ----------
-    args : Tuple[CoqProjectBuildCacheServer, MiningFunctionSignature,
+    args : Tuple[CoqProjectBuildCacheServer, Path, str, Path,
+                 RepairInstanceDB, MiningFunctionSignature,
                  CacheObjectStatus, CacheObjectStatus]
         Bundled arguments for build_repair_instance
 
@@ -278,13 +356,7 @@ def build_repair_instance_star(
         If build_repair_instance raises an exception, return the
         exception annotated with its in-context traceback string.
     """
-    result = None
-    try:
-        result = build_repair_instance(*args)
-    except Exception as e:
-        result = Except(None, e, traceback.format_exc())
-    finally:
-        write_repair_instance(result)
+    result = build_repair_instance(*args)
     return result
 
 
@@ -311,20 +383,10 @@ def default_miner(
         commit_b)
 
 
-@critical
-def get_record_name(
-        project_metadata: ProjectMetadata,
-        repair_instance: ProjectCommitDataRepairInstance,
-        save_directory: Path) -> Path:
-    """
-    Write record fields to database or file and return unique filename.
-    """
-    ...
-
-
 def write_repair_instance(
         potential_diff: BuildRepairInstanceOutput,
-        repair_file_directory: Path):
+        repair_file_directory: Path,
+        repair_instance_db: RepairInstanceDB):
     """
     Write a repair instance to disk, or log an exception.
 
@@ -337,6 +399,8 @@ def write_repair_instance(
         A potential repair instance
     repair_file_directory : Path
         Path to directory to store serialized repair instances
+    repair_instance_db : RepairInstanceDB
+        Database for recording new repair instances saved to disk
 
     Raises
     ------
@@ -346,10 +410,16 @@ def write_repair_instance(
     """
     if isinstance(potential_diff, ProjectCommitDataRepairInstance):
         metadata = potential_diff.error.initial_state.project_state.project_metadata
-        file_path = get_record_name(
-            metadata,
+        cache_label = {
+            "project_name": metadata.project_name,
+            "commit_sha": metadata.commit_sha,
+            "coq_version": metadata.coq_version
+        }
+        file_path = repair_instance_db.insert_record(
+            cache_label,
             potential_diff,
-            repair_file_directory)
+            repair_file_directory,
+            repair_instance_db)
         atomic_write(file_path, potential_diff)
     elif isinstance(potential_diff, Except):
         ...
@@ -400,6 +470,7 @@ def prepare_state_pairs(
 
 def repair_mining_loop(
         cache_root: Path,
+        repair_save_directory: Path,
         cache_format_extension: str = "yml",
         prepare_pairs: PreparePairsFunctionSignature = prepare_state_pairs,
         miner: MiningFunctionSignature = default_miner,
@@ -413,6 +484,8 @@ def repair_mining_loop(
     ----------
     cache_root : Path
         Path to cache root to mine repair instances from
+    repair_save_directory : Path
+        Path to directory for saving repair instances
     cache_format_extension : str, optional
         Extension of cache files, by default "yml"
     prepare_pairs : PreparePairsFunctionSignature, optional
@@ -431,22 +504,32 @@ def repair_mining_loop(
         Size of job chunk sent to each worker, by default 1
     """
     with CoqProjectBuildCacheServer() as cache_server:
-        cache_args = (cache_server, cache_root, cache_format_extension)
-        cache_item_pairs = prepare_pairs(*cache_args)
-        jobs = [(cache_args, miner, a, b) for a, b in cache_item_pairs]
-        if serial:
-            for job in jobs:
-                result = build_repair_instance_star(job)
-                if isinstance(result, Except):
-                    print(result.trace)
-                    raise result.exception
-        else:
-            kwargs = {}
-            if max_workers is not None:
-                kwargs["max_workers"] = max_workers
-            kwargs["chunksize"] = chunk_size
-            process_map(
-                build_repair_instance_star,
-                jobs,
-                desc="Repair Mining",
-                **kwargs)
+        db_file = repair_save_directory / "repair_records.sqlite3"
+        with RepairInstanceDB(db_file) as db_instance:
+            cache_args = (cache_server, cache_root, cache_format_extension)
+            cache_item_pairs = prepare_pairs(*cache_args)
+            jobs = [
+                (cache_args,
+                 repair_save_directory,
+                 db_instance,
+                 miner,
+                 a,
+                 b) for a,
+                b in cache_item_pairs
+            ]
+            if serial:
+                for job in jobs:
+                    result = build_repair_instance_star(job)
+                    if isinstance(result, Except):
+                        print(result.trace)
+                        raise result.exception
+            else:
+                kwargs = {}
+                if max_workers is not None:
+                    kwargs["max_workers"] = max_workers
+                kwargs["chunksize"] = chunk_size
+                process_map(
+                    build_repair_instance_star,
+                    jobs,
+                    desc="Repair Mining",
+                    **kwargs)
