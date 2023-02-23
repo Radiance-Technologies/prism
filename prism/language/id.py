@@ -54,9 +54,3 @@ class LanguageId(Enum):
             return LanguageId.Vernac
         else:
             return self
-
-    def debug_repr(self) -> str:
-        """
-        Get a representation of the language ID for debug messages.
-        """
-        return self.__repr__()
