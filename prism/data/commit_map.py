@@ -106,7 +106,7 @@ def _project_commit_fmap(
     for commit in pbar:
         if is_terminated:
             break
-        pbar.set_description(f"Commit {project.short_sha} of {project.name}")
+        pbar.set_description(f"Commit {commit[:8]} of {project.name}")
         try:
             result = commit_fmap(
                 project,
