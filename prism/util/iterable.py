@@ -45,6 +45,12 @@ class CallableIterator(Generic[T]):
         """
         return next(self.it)
 
+    def __iter__(self) -> Iterator[T]:
+        """
+        Get the iterator.
+        """
+        return self.it
+
 
 @dataclass
 class CompareIterator(Generic[C]):
