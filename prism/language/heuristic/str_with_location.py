@@ -7,7 +7,16 @@ import warnings
 from dataclasses import dataclass
 from functools import cached_property
 from itertools import repeat
-from typing import Callable, ClassVar, Iterable, List, Optional, Tuple, Union
+from typing import (
+    Callable,
+    ClassVar,
+    Iterable,
+    List,
+    Optional,
+    SupportsIndex,
+    Tuple,
+    Union,
+)
 
 from prism.language.gallina.analyze import SexpInfo
 from prism.util.radpytools import PathLike
@@ -66,7 +75,8 @@ class StrWithLocation(str):
             The string to be located, by default the empty string
         indices : Optional[List[Tuple[int, int]]], optional
             The indices locating the string within its original
-            document, by default None.
+            document, by default None, in which case the location is
+            understood to be unbounded.
 
         Returns
         -------
@@ -110,7 +120,7 @@ class StrWithLocation(str):
                 raise ValueError(
                     f"Expected two locations in ascending order, got {ind}")
 
-    def __add__(self, other: 'StrWithLocation'):
+    def __add__(self, other: str) -> 'StrWithLocation':
         """
         Combine this instance with another using '+'.
         """
@@ -121,7 +131,7 @@ class StrWithLocation(str):
         else:
             return NotImplemented
 
-    def __eq__(self, other: Union[str, 'StrWithLocation']) -> bool:
+    def __eq__(self, other: object) -> bool:
         """
         Test equality of objects.
         """
@@ -133,7 +143,10 @@ class StrWithLocation(str):
         else:
             return NotImplemented
 
-    def __getitem__(self, idx: Union[int, slice]) -> 'StrWithLocation':
+    def __getitem__(
+            self,
+            idx: Union[SupportsIndex,
+                       slice]) -> 'StrWithLocation':
         """
         Return a portion of the located string at the given idx.
         """
@@ -195,6 +208,12 @@ class StrWithLocation(str):
         """
         if not isinstance(filename, str):
             filename = str(filename)
+        start = self.start
+        if start is None:
+            start = 0
+        end = self.end
+        if end is None:
+            end = len(file_contents)
         num_newlines_before_string = file_contents.count(
             "\n",
             start_idx,
@@ -203,13 +222,13 @@ class StrWithLocation(str):
         bol_match = self._bol_matcher.search(
             file_contents,
             pos=0,
-            endpos=self.start + 1)
+            endpos=start + 1)
         assert bol_match is not None
         bol_pos = bol_match.start()
         bol_last_match = self._bol_matcher.search(
             file_contents,
             pos=0,
-            endpos=self.end)
+            endpos=end)
         assert bol_last_match is not None
         bol_pos_last = bol_last_match.start()
         return SexpInfo.Loc(
@@ -218,10 +237,10 @@ class StrWithLocation(str):
             bol_pos=bol_pos,
             lineno_last=num_newlines_before_string + num_newlines_in_string,
             bol_pos_last=bol_pos_last,
-            beg_charno=self.start,
-            end_charno=self.end - 1)
+            beg_charno=start,
+            end_charno=end - 1)
 
-    def join(self, it: Iterable['StrWithLocation']) -> 'StrWithLocation':
+    def join(self, it: Iterable[str]) -> 'StrWithLocation':
         """
         Reimplement str join method for StrWithLocation.
 
@@ -235,9 +254,14 @@ class StrWithLocation(str):
         StrWithLocation
             Joined StrWithLocation object
         """
+        # make a copy of input in case it can only be iterated once
+        it = list(it)
         str_part = super().join(it)
         indices_part = []
         for i, item in enumerate(it):
+            if not isinstance(item, StrWithLocation):
+                raise NotImplementedError(
+                    f"Joining with type {type(item)} not implemented.")
             if i < len(it) - 1:
                 indices_part.extend(item.indices)
                 indices_part.extend(self.indices)
@@ -245,28 +269,34 @@ class StrWithLocation(str):
                 indices_part.extend(item.indices)
         return StrWithLocation(str_part, indices_part)
 
-    def lstrip(self) -> 'StrWithLocation':
+    def lstrip(self, s: Optional[str] = None) -> 'StrWithLocation':
         """
         Mimic str lstrip method, keeping track of location.
         """
+        if s is not None:
+            raise NotImplementedError(
+                "Stripping of given strings not implemented.")
         stripped = super().lstrip()
         len_to_strip = len(self) - len(stripped)
         return StrWithLocation(stripped, self.indices[len_to_strip :])
 
-    def rstrip(self) -> 'StrWithLocation':
+    def rstrip(self, s: Optional[str] = None) -> 'StrWithLocation':
         """
         Mimic str rstrip method, keeping track of location.
         """
+        if s is not None:
+            raise NotImplementedError(
+                "Stripping of given strings not implemented.")
         stripped = super().rstrip()
         len_to_strip = len(self) - len(stripped)
         end_idx = -1 * len_to_strip if len_to_strip > 0 else None
         return StrWithLocation(stripped, self.indices[: end_idx])
 
-    def strip(self) -> 'StrWithLocation':
+    def strip(self, s: Optional[str] = None) -> 'StrWithLocation':
         """
         Mimic str strip method, but don't take an argument.
         """
-        return self.lstrip().rstrip()
+        return self.lstrip(s).rstrip(s)
 
     @classmethod
     def create_from_file_contents(cls, file_contents: str) -> 'StrWithLocation':
@@ -387,13 +417,14 @@ class StrWithLocation(str):
         match = pattern.search(string)
         if not match:
             return string
-        repls: Iterable[str] = []
+        repls: Iterable[str]
         if callable(repl):
+            repls = []
 
             def _repl(match: re.Match, repl=repl) -> str:
                 nonlocal repls
-                sub = repl(match)  # type: ignore
-                repls.append(escape_backslash(sub))
+                sub = repl(match)
+                repls.append(escape_backslash(sub))  # type: ignore
                 return sub
 
             repl = _repl
