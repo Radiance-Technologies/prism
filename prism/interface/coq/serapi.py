@@ -13,7 +13,17 @@ import typing
 from dataclasses import InitVar, dataclass, field
 from functools import cached_property
 from pathlib import Path
-from typing import Dict, Iterable, List, NoReturn, Optional, Tuple, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    NoReturn,
+    Optional,
+    Tuple,
+    Union,
+)
 
 import pexpect
 from pexpect.popen_spawn import PopenSpawn
@@ -264,6 +274,54 @@ class SerAPI:
         Get the directory in which the SerAPI process is being executed.
         """
         return self._cwd
+
+    def _handle_identifier_reserved_coqexn(
+            self,
+            exc: CoqExn,
+            f: Callable[[Any],
+                        Any],
+            *args,
+            **kwargs) -> Any:
+        """
+        Handle ``"The identifier <ident> is reserved."`` exceptions.
+
+        Certain reserved identifiers may appear when ssreflect is
+        required, and they raise an error when parsed.
+        Temporarily lower the error to a warning and try again.
+        See `coq/plugins/ssrparser.mlg` for more information.
+
+        This function attempts to recompute the given function, which is
+        presumed to have raised the above error, within a temporary,
+        safe context where the error is reduced to a warning.
+
+        Parameters
+        ----------
+        exc : CoqExn
+            A Coq exception.
+        f : Callable[..., Any]
+            The function that originally raised the exception.
+        args
+            The original positional arguments to `f`.
+        kwargs
+            The original keyword arguments to `f`.
+
+        Returns
+        -------
+        Any
+            The desired result of `f`.
+
+        Raises
+        ------
+        CoqExn
+            If `exc` is not an instance of the above exception.
+        """
+        if exc.msg.endswith("is reserved."):
+            self.execute("Unset SsrIdents.")
+            result = f(*args, **kwargs)
+            self.execute("Set SsrIdents.")
+            return result
+        else:
+            raise exc
 
     def _process_coq_exn(self, exception: SexpNode) -> NoReturn:
         """
@@ -671,15 +729,22 @@ class SerAPI:
         try:
             ast = self.ast_cache[cmd]
         except KeyError:
-            responses, _, _ = self.send(f'(Parse () "{escape(cmd)}")')
-            ast: AbstractSyntaxTree = responses[1][2][1][0]
-            assert ast[0] == SexpString("CoqAst")
-            if OpamVersion.less_than("8.10.2", self.serapi_version):
-                # vernac_control data structure changed in Coq 8.11
-                ast = ast[1][0][1]
+            try:
+                responses, _, _ = self.send(f'(Parse () "{escape(cmd)}")')
+            except CoqExn as e:
+                ast = self._handle_identifier_reserved_coqexn(
+                    e,
+                    self.query_ast,
+                    cmd)
             else:
-                ast = ast[1][1]
-            self.ast_cache[cmd] = ast
+                ast: AbstractSyntaxTree = responses[1][2][1][0]
+                assert ast[0] == SexpString("CoqAst")
+                if OpamVersion.less_than("8.10.2", self.serapi_version):
+                    # vernac_control data structure changed in Coq 8.11
+                    ast = ast[1][0][1]
+                else:
+                    ast = ast[1][1]
+                self.ast_cache[cmd] = ast
         return ast
 
     def query_env(
@@ -905,16 +970,23 @@ class SerAPI:
         """
         if qualid.startswith('"') or qualid.endswith('"'):
             raise ValueError(f"Cannot qualify notation {qualid}.")
-        feedback = self.query_vernac(f"Locate {qualid}.")
-        assert feedback
-        feedback = feedback[0]
-        if feedback.startswith("No object of basename"):
-            return []
-        qualids = []
-        for line in feedback.splitlines():
-            line = line.strip()
-            if not line.startswith("("):
-                qualids.append(line.split()[1])
+        try:
+            feedback = self.query_vernac(f"Locate {qualid}.")
+        except CoqExn as e:
+            qualids = self._handle_identifier_reserved_coqexn(
+                e,
+                self.query_full_qualids,
+                qualid)
+        else:
+            assert feedback
+            feedback = feedback[0]
+            if feedback.startswith("No object of basename"):
+                return []
+            qualids = []
+            for line in feedback.splitlines():
+                line = line.strip()
+                if not line.startswith("("):
+                    qualids.append(line.split()[1])
         return qualids
 
     def query_goals(self) -> Optional[Goals]:
