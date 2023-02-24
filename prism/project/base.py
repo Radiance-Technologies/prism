@@ -970,8 +970,9 @@ class Project(ABC):
             results = []
             for m in self.run(f"grep -Rh 'Import' {self.dir_abspath}")[1].split(
                     "\n"):
-                for suffixes in re.findall(r"\s*Require\s*(?:Import|Export)?\s*(.+)\.\s*",
-                                         m):
+                for suffixes in re.findall(
+                        r"\s*Require\s*(?:Import|Export)?\s*(.+)\.\s*",
+                        m):
                     for suffix in suffixes.split():
                         r = mappings.LogicalMappings.search(suffix=suffix)
                         results.append(r)

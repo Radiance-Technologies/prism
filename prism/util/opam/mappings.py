@@ -42,7 +42,7 @@ class LogicalMappings:
                     return None  # double match, ambiguous
                 candidate = cls.mappings[x]
 
-        if (prefix == "" and len(suffix.split("."))<2):
+        if (prefix == "" and len(suffix.split(".")) < 2):
             # non-local, non-standard library imports always seem
             # to require at least 2 parts.
             # this is probably local/standard library.
