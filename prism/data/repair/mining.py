@@ -66,49 +66,49 @@ class RepairInstanceDB:
     the serialized, saved repair instance.
     """
 
-    sql_create_records_table = """CREATE TABLE IF NOT EXISTS records (
-                                      id integer PRIMARY KEY autoincrement,
-                                      project_name text NOT NULL,
-                                      commit_sha text NOT NULL,
-                                      coq_version text NOT NULL,
-                                      added_commands text,
-                                      affected_commands text,
-                                      changed_commands text,
-                                      dropped_commands text,
-                                      file_name text NOT NULL
-                                  ); """
-    sql_insert_record = """INSERT INTO records (
-                               project_name,
-                               commit_sha,
-                               coq_version,
-                               added_commands,
-                               affected_commands,
-                               changed_commands,
-                               dropped_commands,
-                               file_name)
-                           VALUES(
-                               {project_name},
-                               {commit_sha},
-                               {coq_version},
-                               {added_commands},
-                               {affected_commands},
-                               {changed_commands},
-                               {dropped_commands},
-                               {file_name});"""
-    sql_update_file_name = """UPDATE records
-                              SET file_name = {file_name}
-                              WHERE id = {row_id};"""
-    sql_get_record = """SELECT *
-                        FROM records
-                        WHERE
-                            project_name = {project_name}
-                            AND commit_sha = {commit_sha}
-                            AND coq_version = {coq_version}
-                            AND added_commands = {added_commands}
-                            AND affected_commands = {affected_commands}
-                            AND changed_commands = {changed_commands}
-                            AND dropped_commands = {dropped_commands}
-                        ORDER BY id;"""
+    _sql_create_records_table = """CREATE TABLE IF NOT EXISTS records (
+                                       id integer PRIMARY KEY autoincrement,
+                                       project_name text NOT NULL,
+                                       commit_sha text NOT NULL,
+                                       coq_version text NOT NULL,
+                                       added_commands text,
+                                       affected_commands text,
+                                       changed_commands text,
+                                       dropped_commands text,
+                                       file_name text NOT NULL
+                                   ); """
+    _sql_insert_record = """INSERT INTO records (
+                                project_name,
+                                commit_sha,
+                                coq_version,
+                                added_commands,
+                                affected_commands,
+                                changed_commands,
+                                dropped_commands,
+                                file_name)
+                            VALUES(
+                                :project_name,
+                                :commit_sha,
+                                :coq_version,
+                                :added_commands,
+                                :affected_commands,
+                                :changed_commands,
+                                :dropped_commands,
+                                :file_name);"""
+    _sql_update_file_name = """UPDATE records
+                                   SET file_name = :file_name
+                                   WHERE id = :row_id;"""
+    _sql_get_record = """SELECT *
+                         FROM records
+                         WHERE
+                             project_name = :project_name
+                             AND commit_sha = :commit_sha
+                             AND coq_version = :coq_version
+                             AND added_commands = :added_commands
+                             AND affected_commands = :affected_commands
+                             AND changed_commands = :changed_commands
+                             AND dropped_commands = :dropped_commands
+                         ORDER BY id;"""
 
     def __init__(self, db_location: Path):
         self.db_location = db_location
@@ -155,7 +155,7 @@ class RepairInstanceDB:
         """
         Create the one table this database requires.
         """
-        self.cursor.execute(self.sql_create_records_table)
+        self.cursor.execute(self._sql_create_records_table)
         self.connection.commit()
 
     @synchronizedmethod
@@ -185,7 +185,7 @@ class RepairInstanceDB:
             **change_selection_mapping
         }
         record['file_name'] = "repair-n.yml"
-        self.cursor.execute(self.sql_insert_record.format(**record))
+        self.cursor.execute(self._sql_insert_record, record)
         self.connection.commit()
         recent_id = self.cursor.lastrowid
         if recent_id is None:
@@ -194,10 +194,13 @@ class RepairInstanceDB:
         # TODO: Add full path to new_file_name
         new_file_name = f"repair-{recent_id}.yml"
         self.cursor.execute(
-            self.sql_update_file_name.format(
-                file_name=new_file_name,
-                row_id=recent_id))
+            self._sql_update_file_name,
+            {
+                'file_name': new_file_name,
+                'row_id': recent_id
+            })
         self.connection.commit()
+        return Path(new_file_name)
 
     def get_record(
             self,
@@ -231,7 +234,7 @@ class RepairInstanceDB:
             **cache_label,
             **change_selection_mapping
         }
-        self.cursor.execute(self.sql_get_record.format(**record_to_get))
+        self.cursor.execute(self._sql_get_record, record_to_get)
         records = self.cursor.fetchall()
         if not records:
             return
