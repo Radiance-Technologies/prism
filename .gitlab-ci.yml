@@ -30,6 +30,7 @@ before_script:
   - make install
 
 precommit:
+  interruptible: true
   stage: test
   before_script:
     # Global before_script does not get prepended
@@ -66,6 +67,7 @@ precommit:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
 
 .runTests:
+  interruptible: true
   stage: test
   script:
     - export OPAMROOT=${PWD}/.opam
