@@ -3,7 +3,6 @@ Mine repair instances by looping over existing project build cache.
 """
 import sqlite3
 import traceback
-from dataclasses import asdict
 from pathlib import Path
 from types import TracebackType
 from typing import Callable, Dict, List, Optional, Tuple, Type, Union, cast
@@ -49,11 +48,6 @@ CacheLabel = Dict[str, str]
 """
 Dictionary labeling a cache object (project name, commit sha,
 coq version).
-"""
-ChangeSelectionMapping = Dict[str, str]
-"""
-Dictionary mapping field names of ChangeSelection to strings derived
-from those fields.
 """
 
 
@@ -178,8 +172,7 @@ class RepairInstanceDB:
         Path
             The reserved path to the new repair instance file.
         """
-        change_selection_mapping = self.process_change_selection(
-            change_selection)
+        change_selection_mapping = change_selection.as_joined_dict()
         record = {
             **cache_label,
             **change_selection_mapping
@@ -228,8 +221,7 @@ class RepairInstanceDB:
             If multiple records are found for the query. This shouldn't
             be able to happen, and if it does, it indicates a bug.
         """
-        change_selection_mapping = self.process_change_selection(
-            change_selection)
+        change_selection_mapping = change_selection.as_joined_dict()
         record_to_get = {
             **cache_label,
             **change_selection_mapping
@@ -252,30 +244,6 @@ class RepairInstanceDB:
             'dropped_commands': record[7],
             'file_name': record[8]
         }
-
-    @staticmethod
-    def process_change_selection(
-            change_selection: ChangeSelection) -> ChangeSelectionMapping:
-        """
-        Process ChangeSelection item to sort and combine field values.
-
-        Parameters
-        ----------
-        change_selection : ChangeSelection
-            ChangeSelection object to process
-
-        Returns
-        -------
-        ChangeSelectionMapping
-            Mapping containing results
-        """
-        # This function could be a one-liner, but that would just be too
-        # much.
-        mapping = {}
-        for key, value in asdict(change_selection).items():
-            mapping[key] = " ".join(
-                [f"{item[0]} {item[1]}" for item in sorted(value)])
-        return mapping
 
 
 def build_repair_instance(

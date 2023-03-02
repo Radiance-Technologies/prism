@@ -4,7 +4,7 @@ Defines representations of repair instances (or examples).
 
 import copy
 import typing
-from dataclasses import dataclass, fields
+from dataclasses import asdict, dataclass, fields
 from itertools import chain
 from typing import (
     Callable,
@@ -941,6 +941,12 @@ ErrorAnnotator = Callable[[
 A function that annotates a erroneous command with a set of tags.
 """
 
+ChangeSelectionMapping = Dict[str, str]
+"""
+Dictionary mapping field names of ChangeSelection to strings derived
+from those fields.
+"""
+
 
 @dataclass
 class ChangeSelection:
@@ -964,6 +970,28 @@ class ChangeSelection:
     """
     A list of pairs of filenames and dropped command indices.
     """
+
+    def as_joined_dict(self) -> ChangeSelectionMapping:
+        """
+        Join ChangeSelection fields as strings and return as dictionary.
+
+        Parameters
+        ----------
+        change_selection : ChangeSelection
+            ChangeSelection object to process
+
+        Returns
+        -------
+        ChangeSelectionMapping
+            Mapping containing joined fields dictionary
+        """
+        # This function could be a one-liner, but that would just be too
+        # much.
+        mapping = {}
+        for key, value in asdict(self).items():
+            mapping[key] = " ".join(
+                [f"{item[0]} {item[1]}" for item in sorted(value)])
+        return mapping
 
 
 ChangeSetMiner = Callable[[ProjectCommitData,
