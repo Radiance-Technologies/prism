@@ -7,6 +7,7 @@ import ast
 import logging
 import os
 import re
+import stat
 import tempfile
 import typing
 from dataclasses import dataclass, field
@@ -302,6 +303,25 @@ def _parse_strace_logdir(logdir: str,
     return res
 
 
+DUMMY_COQC_PATH_ = tempfile.TemporaryDirectory()
+
+with open(f"{DUMMY_COQC_PATH_.name}/coqc", "w") as f:
+    f.write(
+        """#!/bin/bash
+
+for last; do true; done
+
+test -f $last &&
+touch "${last%.v}.vo" &&
+touch "${last%.v}.glob" ||
+PATH=$OPAM_SWITCH_PREFIX/bin:$PATH coqc $@
+    """)
+
+os.chmod(
+    f"{DUMMY_COQC_PATH_.name}/coqc",
+    stat.S_IRWXO | stat.S_IRWXG | stat.S_IRWXU)
+
+
 def strace_build(
         opam_switch: OpamSwitch,
         command: str,
@@ -309,6 +329,7 @@ def strace_build(
         regex: str = _REGEX,
         workdir: Optional[PathLike] = None,
         strace_logdir: Optional[PathLike] = None,
+        use_dummy_coqc: Optional[bool] = False,
         **kwargs) -> Tuple[List[CoqContext],
                            int,
                            str,
@@ -335,6 +356,9 @@ def strace_build(
         The cwd to execute the `command` in, by default None.
     strace_logdir : Optional[PathLike], optional
         The directory in which to store the temporary strace logs.
+    use_dummy_coqc : Optional[bool]
+        Attempt to use a stub coqc that doesn't actually
+        build anything.
     kwargs : Dict[str, Any]
         Additional keyword arguments to `OpamSwitch.run`.
 
@@ -370,6 +394,10 @@ def strace_build(
         strace_cmd = (
             'strace -e trace=execve -v -ff -s 100000000 -xx -ttt -o'
             f' {logfname} bash -c "{command}"')
+
+        if use_dummy_coqc:
+            strace_cmd = (f'PATH={DUMMY_COQC_PATH_.name}:$PATH ' + strace_cmd)
+
         r = opam_switch.run(strace_cmd, cwd=workdir, **kwargs)
         if r.stdout is not None:
             for line in r.stdout.splitlines():
