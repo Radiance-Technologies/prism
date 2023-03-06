@@ -1,5 +1,5 @@
 """
-Contains all metadata related to paticular GitHub repositories.
+Defines a class for holding project metadata.
 """
 
 import os
