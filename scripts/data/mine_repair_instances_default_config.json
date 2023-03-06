@@ -5,7 +5,13 @@
   "prepare_pairs": "prism.data.repair.mining.prepare_label_pairs",
   "repair_miner": "prism.data.repair.instance.ProjectCommitDataRepairInstance",
   "changeset_miner": "prism.data.repair.instance.ProjectCommitDataErrorInstance.default_changeset_miner",
-  "serial": false,
+  "serial": true,
   "max_workers": null,
-  "chunk_size": 1
+  "chunk_size": 1,
+  "project_commit_hash_map": {
+    "hoare-tut": [
+      "bda0bc601a038ba6b65da2e3c52cc02c4d910f35",
+      "269c0cabb267be44e5d85e568c11f18562add6c4"
+    ]
+  }
 }
