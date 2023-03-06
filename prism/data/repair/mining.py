@@ -39,11 +39,14 @@ RepairMiner = Callable[[ProjectCommitDataErrorInstance,
 """
 Signature of the function used to create repair instances.
 """
-PreparePairsFunction = Callable[[CoqProjectBuildCacheServer,
-                                 Path,
-                                 str],
-                                List[Tuple[CacheObjectStatus,
-                                           CacheObjectStatus]]]
+ProjectCommitHashMap = Optional[Dict[str, Optional[List[str]]]]
+PreparePairsFunction = Callable[
+    [CoqProjectBuildCacheServer,
+     Path,
+     str,
+     ProjectCommitHashMap],
+    List[Tuple[CacheObjectStatus,
+               CacheObjectStatus]]]
 """
 Signature of the function used to prepare cache item label pairs for
 repair instance mining.
@@ -493,7 +496,9 @@ def write_repair_instance(
 def prepare_label_pairs(
     cache_server: CoqProjectBuildCacheServer,
     cache_root: Path,
-    cache_format_extension: str
+    cache_format_extension: str,
+    project_commit_hash_map: Optional[Dict[str,
+                                           Optional[List[str]]]] = None
 ) -> List[Tuple[CacheObjectStatus,
                 CacheObjectStatus]]:
     """
@@ -507,25 +512,87 @@ def prepare_label_pairs(
         Root directory to load cache from
     cache_format_extension : str
         Extension format used by the cache files
+    project_commit_hash_map : Dict[str, List[str] or None] or None
+        An optional list of maps from project names to commit hashes.
+        If this arg is None, consider all projects and commit hashes
+        found in the cache.
+        If this arg is not None, consider only projects found in the
+        keys of the map.
+        For a given project name key, if the value is None, consider all
+        commit hashes for that project.
+        If instead the value is a list, use only those commit hashes
+        listed for that project
 
     Returns
     -------
     List[Tuple[CacheObjectStatus, CacheObjectStatus]]
         List of cache label pairs to be used for repair mining
     """
+
+    def _append_if_labels_differ(
+            cache_item_a: CacheObjectStatus,
+            cache_item_b: CacheObjectStatus,
+            cache_item_pairs: List[Tuple[CacheObjectStatus,
+                                         CacheObjectStatus]]):
+        """
+        Check if labels differ; if so, add to list in-place.
+        """
+        if cache_item_a != cache_item_b:
+            cache_item_pairs.append((cache_item_a, cache_item_b))
+
+    def _loop_over_second_label(
+            cache_item_a: CacheObjectStatus,
+            cache_items: List[CacheObjectStatus],
+            project_commit_hash_map: ProjectCommitHashMap,
+            cache_item_pairs: List[Tuple[CacheObjectStatus,
+                                         CacheObjectStatus]]):
+        """
+        Loop over the second item in the label pairs, populate list.
+
+        Modifies cache_item_pairs in-place.
+        """
+        for cache_item_b in cache_items:
+            if (project_commit_hash_map is None or cache_item_b.commit_hash
+                    in project_commit_hash_map[project]):
+                _append_if_labels_differ(
+                    cache_item_a,
+                    cache_item_b,
+                    cache_item_pairs)
+
+    def _loop_over_labels(
+            cache_items: List[CacheObjectStatus],
+            project_commit_hash_map: ProjectCommitHashMap,
+            cache_item_pairs: List[Tuple[CacheObjectStatus,
+                                         CacheObjectStatus]]):
+        """
+        Loop over all label pairs and populate cache_item_pairs.
+
+        Modifies cache_item_pairs in-place.
+        """
+        for cache_item_a in cache_items:
+            if (project_commit_hash_map is None or cache_item_a.commit_hash
+                    in project_commit_hash_map[project]):
+                _loop_over_second_label(
+                    cache_item_a,
+                    cache_items,
+                    project_commit_hash_map,
+                    cache_item_pairs)
+
     cache_args = (cache_server, cache_root, cache_format_extension)
     local_cache_client = cast(
         CoqProjectBuildCacheProtocol,
         CoqProjectBuildCacheClient(*cache_args))
     project_list = local_cache_client.list_projects()
+    if project_commit_hash_map is not None:
+        project_list = [p for p in project_list if p in project_commit_hash_map]
     all_cache_items = local_cache_client.list_status_success_only()
     cache_item_pairs: List[Tuple[CacheObjectStatus, CacheObjectStatus]] = []
     for project in project_list:
         cache_items = [t for t in all_cache_items if t.project == project]
-        for cache_item_a in cache_items:
-            for cache_item_b in cache_items:
-                if cache_item_a != cache_item_b:
-                    cache_item_pairs.append((cache_item_a, cache_item_b))
+        _loop_over_labels(
+            cache_items,
+            project_commit_hash_map,
+            cache_item_pairs)
     return cache_item_pairs
 
 
@@ -538,7 +605,9 @@ def repair_mining_loop(
         changeset_miner: Optional[ChangeSetMiner] = None,
         serial: bool = False,
         max_workers: Optional[int] = None,
-        chunk_size: int = 1):
+        chunk_size: int = 1,
+        project_commit_hash_map: Optional[Dict[str,
+                                               Optional[List[str]]]] = None):
     """
     Mine repair instances from the given build cache.
 
@@ -566,6 +635,16 @@ def repair_mining_loop(
         which sets the value to min(32, number of cpus + 4)
     chunk_size : int, optional
         Size of job chunk sent to each worker, by default 1
+    project_commit_hash_map : Dict[str, List[str] or None] or None
+        An optional list of maps from project names to commit hashes.
+        If this arg is None, consider all projects and commit hashes
+        found in the cache.
+        If this arg is not None, consider only projects found in the
+        keys of the map.
+        For a given project name key, if the value is None, consider all
+        commit hashes for that project.
+        If instead the value is a list, use only those commit hashes
+        listed for that project
     """
     if prepare_pairs is None:
         prepare_pairs = prepare_label_pairs
@@ -578,7 +657,9 @@ def repair_mining_loop(
         db_file = repair_save_directory / "repair_records.sqlite3"
         with RepairInstanceDB(db_file) as db_instance:
             cache_args = (cache_server, cache_root, cache_format_extension)
-            cache_label_pairs = prepare_pairs(*cache_args)
+            cache_label_pairs = prepare_pairs(
+                *cache_args,
+                project_commit_hash_map)
             # ##########################################################
             # Build error instances
             # ##########################################################
