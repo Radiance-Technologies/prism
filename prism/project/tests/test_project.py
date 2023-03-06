@@ -29,6 +29,9 @@ class TestProject(unittest.TestCase):
     Test suite for Project class.
     """
 
+    test_iqr_project: Project
+    test_infer_opam_deps_project: Project
+
     @classmethod
     def setUpClass(cls):
         """
@@ -75,6 +78,12 @@ class TestProject(unittest.TestCase):
             metadata_storage=storage,
             sentence_extraction_method=SEM.HEURISTIC,
             num_cores=8)
+        cls.test_infer_opam_deps_project = ProjectRepo(
+            test_path / "CompCert",
+            metadata_storage=MetadataStorage.load(
+                _COQ_EXAMPLES_PATH / "comp_cert_storage.yml"))
+        cls.test_infer_opam_deps_project.git.checkout(
+            '1a7b93078eb531a6e9e5d4dc02bec143605c2264')
         # Complete pre-req setup.
         # Use the default switch since there are no dependencies beyond
         # Coq and the package will not be installed.
@@ -102,8 +111,9 @@ class TestProject(unittest.TestCase):
         """
         Clean up build artifacts produced as test side-effects.
         """
-        repo_path = cls.test_iqr_project.path
-        shutil.rmtree(repo_path)
+        for repo_path in [cls.test_iqr_project.path,
+                          cls.test_infer_opam_deps_project.path]:
+            shutil.rmtree(repo_path)
 
     def test_extract_sentences_heuristic(self):
         """
@@ -244,11 +254,23 @@ class TestProject(unittest.TestCase):
         """
         Test inferring opam dependencies from a project dir.
         """
-        # manually added an association between coq-sep-logic
-        # and one of its imports...
-        # but this actually isn't a coq package-- misleading.
-        deps = self.test_iqr_project.infer_opam_dependencies()
-        self.assertTrue("coq-sep-logic" in deps)
+        expected_deps = {
+            'coq-flocq',
+            'coq-zorns-lemma',
+            'coq-bedrock2-compiler',
+            'coq-itauto',
+            'coq-riscv',
+            'coq-rewriter',
+            'coq-itree',
+            'coq-ext-lib',
+            'coq-containers',
+            'coq-library-undecidability',
+            'coq-lin-alg',
+            'coq-menhirlib',
+            'menhir'
+        }
+        deps = self.test_infer_opam_deps_project.infer_opam_dependencies()
+        self.assertEqual(set(deps), expected_deps)
 
     def test_build_and_get_iqr(self):
         """

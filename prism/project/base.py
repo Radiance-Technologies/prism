@@ -8,6 +8,7 @@ import os
 import pathlib
 import random
 import re
+import typing
 from abc import ABC, abstractmethod
 from dataclasses import fields
 from enum import Enum, auto
@@ -23,11 +24,13 @@ from typing import (
     List,
     NamedTuple,
     Optional,
+    Set,
     Tuple,
     Type,
     Union,
 )
 
+import prism.util.build_tools.opamdep as opamdep
 from prism.data.document import CoqDocument
 from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.parser import (
@@ -51,7 +54,6 @@ from prism.util.opam import (
     PackageFormula,
     Version,
     major_minor_version_bound,
-    mappings,
 )
 from prism.util.opam.formula import LogicalPF, LogOp
 from prism.util.path import get_relative_path
@@ -193,9 +195,8 @@ class Project(ABC):
             The command-line options for invoking Coq tools, e.g.,
             ``f"coqc {coq_options} file.v"``.
         """
-        if self.serapi_options is not None:
-            iqr = IQR.extract_iqr(self.serapi_options)
-            iqr.delim = " "
+        iqr = self.iqr_flags
+        if iqr is not None:
             coq_options = str(iqr)
         else:
             coq_options = None
@@ -206,6 +207,7 @@ class Project(ABC):
         """
         Get the version of OCaml installed in the project's switch.
         """
+        assert self._coq_version is not None, "Coq must be installed"
         return self._coq_version
 
     @property
@@ -221,6 +223,18 @@ class Project(ABC):
         Return the list of commands that install the project.
         """
         return self.metadata.install_cmd
+
+    @property
+    def iqr_flags(self) -> Optional[IQR]:
+        """
+        The IQR flags given to the Coq when compiling this project.
+        """
+        iqr = None
+        if self.serapi_options is not None:
+            iqr = IQR.extract_iqr(self.serapi_options)
+            iqr.pwd = self.path
+            iqr.delim = " "
+        return iqr
 
     @property
     def is_metadata_stale(self) -> bool:
@@ -967,25 +981,16 @@ class Project(ABC):
             formula = self.opam_switch.get_dependencies(self.path)
         except CalledProcessError:
             # possibly prone to false positives/negatives
-            results = []
-            for m in self.run(f"grep -Rh 'Import' {self.dir_abspath}")[1].split(
-                    "\n"):
-                for suffixes in re.findall(
-                        r"\s*Require\s*(?:Import|Export)?\s*(.+)\.\s*",
-                        m):
-                    for suffix in suffixes.split():
-                        r = mappings.LogicalMappings.search(suffix=suffix)
-                        results.append(r)
-
-                for prefix, suffixes in re.findall(
-                        r"From\s*([^\s]+)\s*Require\s*(?:Import|Export)?\s*(.+)\.",
-                        m):
-                    for suffix in suffixes.split():
-                        r = mappings.LogicalMappings.search(
-                            prefix=prefix,
-                            suffix=suffix)
-                        results.append(r)
-            return list(set(results) - {None})
+            required_libraries = opamdep.get_required_libraries(
+                self.path,
+                self.path)
+            dependencies = opamdep.guess_opam_packages(
+                typing.cast(
+                    Dict[PathLike,
+                         Set[opamdep.RequiredLibrary]],
+                    required_libraries),
+                self.iqr_flags)
+            return list(dependencies)
 
         if isinstance(formula, PackageFormula):
             if isinstance(formula, LogicalPF):
