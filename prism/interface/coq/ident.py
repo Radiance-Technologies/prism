@@ -42,7 +42,7 @@ def id_re(capture_name: Optional[str]) -> re.Pattern:
         str_of_id = rf"(?P<{capture_name}>[^\)\s]+)"
     else:
         str_of_id = r"[^\)\s]+"
-    return re.compile(rf"\(\s*Id\s+{str_of_id}\)")
+    return re.compile(rf"\(\s*Id\s+{str_of_id}\s*\)")
 
 
 dirpath_re = re.compile(
