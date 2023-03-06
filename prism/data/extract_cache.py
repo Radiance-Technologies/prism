@@ -1223,7 +1223,12 @@ def extract_cache_new(
             project.git.reset('--hard')
             project.git.clean('-fdx')
             project.git.checkout(commit_sha)
-            project.submodule_update(init=True, recursive=True)
+            project.submodule_update(
+                init=True,
+                recursive=True,
+                keep_going=True,
+                force_remove=True,
+                force_reset=True)
             # get a switch
             dependency_formula = project.get_dependency_formula(coq_version)
             original_switch = project.opam_switch
@@ -1243,14 +1248,13 @@ def extract_cache_new(
             except (ProjectBuildError, TimeoutExpired) as pbe:
                 if isinstance(pbe, ProjectBuildError):
                     build_result = (pbe.return_code, pbe.stdout, pbe.stderr)
-                    command_data = process_project_fallback(project)
                 else:
                     stdout = pbe.stdout.decode(
                         "utf-8") if pbe.stdout is not None else ''
                     stderr = pbe.stderr.decode(
                         "utf-8") if pbe.stderr is not None else ''
                     build_result = (1, stdout, stderr)
-                    command_data = process_project_fallback(project)
+                command_data = process_project_fallback(project)
                 build_cache_client.write_build_error_log(
                     project.metadata,
                     block,
