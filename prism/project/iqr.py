@@ -3,13 +3,18 @@ Provides an abstraction of Coq library linking command-line options.
 """
 
 import argparse
+import glob
 import os
-import pathlib
 import re
 import typing
 from dataclasses import dataclass
-from typing import ClassVar, List, Set, Tuple, Union
+from pathlib import Path
+from typing import ClassVar, Iterator, List, Optional, Set, Tuple, Union
 
+from prism.interface.coq.re_patterns import (
+    IDENT_PATTERN,
+    QUALIFIED_IDENT_PATTERN,
+)
 from prism.util.path import get_relative_path
 from prism.util.radpytools import PathLike
 
@@ -46,8 +51,8 @@ class IQR:
     def __or__(self, other: 'IQR') -> 'IQR':  # noqa: D105
         if not isinstance(other, IQR):
             return NotImplemented
-        self_pwd = pathlib.Path(self.pwd).resolve()
-        other_pwd = pathlib.Path(other.pwd).resolve()
+        self_pwd = Path(self.pwd).resolve()
+        other_pwd = Path(other.pwd).resolve()
         if self_pwd != other_pwd:
             pwd = os.path.commonpath([self_pwd, other_pwd])
             return self.relocate(pwd) | other.relocate(pwd)
@@ -67,6 +72,105 @@ class IQR:
         options.extend([f"-Q {p}{self.delim}{q}" for p, q in self.Q])
         options.extend([f"-R {p}{self.delim}{r}" for p, r in self.R])
         return " ".join(options)
+
+    def bindings_iter(
+            self,
+            root: Optional[PathLike] = None) -> Iterator[Tuple[Path,
+                                                               str]]:
+        """
+        Get an iterator over bound physical and logical library paths.
+
+        Parameters
+        ----------
+        root : Optional[PathLike], optional
+            The root from which to evaluate IQR flags, by default `pwd`.
+
+        Yields
+        ------
+        Tuple[Path, str]
+            A pair comprising a physical path bound to a fully qualified
+            logical library name.
+        """
+        yield from self.Q_bindings_iter(root)
+        yield from self.R_bindings_iter(root)
+
+    def local_libraries(self, root: Optional[PathLike] = None) -> List[str]:
+        """
+        Get a list of all locally bound libraries.
+        """
+        return [lib for _, lib in self.bindings_iter(root)]
+
+    def Q_bindings_iter(
+            self,
+            root: Optional[PathLike] = None) -> Iterator[Tuple[Path,
+                                                               str]]:
+        """
+        Get an iterator over Q-bound physical and logical library paths.
+
+        Parameters
+        ----------
+        root : Optional[PathLike], optional
+            The root from which to evaluate IQR flags, by default `pwd`.
+
+        Yields
+        ------
+        Tuple[Path, str]
+            A pair comprising a physical path bound to a fully qualified
+            logical library name.
+        """
+        if root is None:
+            root = self.pwd
+        root = Path(root)
+        for path, prefix in self.Q:
+            bound_path = root / path
+            yield Path(path), prefix
+            for f in glob.glob(f"{bound_path}/*.v", recursive=False):
+                coq_file = Path(f)
+                suffix = coq_file.stem
+                if QUALIFIED_IDENT_PATTERN.match(suffix):
+                    yield coq_file, '.'.join([prefix, suffix])
+
+    def R_bindings_iter(
+            self,
+            root: Optional[PathLike] = None) -> Iterator[Tuple[Path,
+                                                               str]]:
+        """
+        Get an iterator over R-bound physical and logical library paths.
+
+        Parameters
+        ----------
+        root : Optional[PathLike], optional
+            The root from which to evaluate IQR flags, by default `pwd`.
+
+        Yields
+        ------
+        Tuple[Path, str]
+            A pair comprising a physical path bound to a fully qualified
+            logical library name.
+        """
+        # https://coq.inria.fr/refman/language/core/modules.html#libraries-and-filesystem
+        # https://coq.inria.fr/refman/proof-engine/vernacular-commands.html#compiled-files
+        if root is None:
+            root = self.pwd
+        root = Path(root)
+        for path, prefix in self.R:
+            bound_path = root / path
+            for subdir, _, filenames in os.walk(bound_path):
+                subpath = get_relative_path(subdir, bound_path)
+                if all(IDENT_PATTERN.match(part) for part in subpath.parts):
+                    suffix = '.'.join(subpath.parts)
+                    if suffix:
+                        lib = '.'.join([prefix, suffix])
+                    else:
+                        lib = prefix
+                    yield subpath, lib
+                    # catch actual Coq files/libraries
+                    for filename in filenames:
+                        filepath = subpath / filename
+                        libname = filepath.stem
+                        if (filepath.suffix == '.v'
+                                and QUALIFIED_IDENT_PATTERN.match(libname)):
+                            yield filepath, '.'.join([lib, libname])
 
     def union(self, other: 'IQR') -> 'IQR':
         """
@@ -168,7 +272,6 @@ class IQR:
                 Set[Tuple[str,
                           str]],
                 {tuple(i) for i in parsed_args.R})
-
         else:
             # these could be serapi options with embedded commas
             I_ = {m.group('phy') for m in cls._i_regex.finditer(args)}
