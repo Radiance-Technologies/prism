@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Set, Tuple, Union
 from seutil import bash
 
 from prism.project.iqr import IQR
-from prism.util.opam.mappings import LogicalMappings
+from prism.util.build_tools.mappings import LogicalMappings
 from prism.util.path import get_relative_path
 from prism.util.radpytools import PathLike
 
