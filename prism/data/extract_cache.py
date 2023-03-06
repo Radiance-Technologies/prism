@@ -53,6 +53,7 @@ from prism.data.build_cache import (
 )
 from prism.data.commit_map import Except, ProjectCommitUpdateMapper
 from prism.data.util import get_project_func
+from prism.interface.coq.exception import CoqExn
 from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.interface.coq.ident import Identifier, get_all_qualified_idents
 from prism.interface.coq.re_patterns import (
@@ -752,90 +753,139 @@ def _extract_vernac_commands(
             # execution)
             location = sentence.location
             text = sentence.text
-            feedback, sexp = _execute_cmd(serapi, text)
-            sentence.ast = sexp
-            # Attach an undocumented extra field to the CoqSentence
-            # object containing fully qualified referenced identifiers
-            # NOTE: This must be done before identifiers get shadowed in
-            # the `global_id_cache`
-            sentence.identifiers = get_identifiers(str(sexp))
-            # get new ids and shadow redefined ones
-            (ids,
-             local_ids,
-             pre_proof_id,
-             post_proof_id) = _update_ids(
-                 serapi,
-                 feedback,
+            try:
+                feedback, sexp = _execute_cmd(serapi, text)
+                sentence.ast = sexp
+                # Attach an undocumented extra field to the CoqSentence
+                # object containing fully qualified referenced identifiers
+                # NOTE: This must be done before identifiers get shadowed in
+                # the `global_id_cache`
+                sentence.identifiers = get_identifiers(str(sexp))
+                # get new ids and shadow redefined ones
+                (ids,
                  local_ids,
-                 post_proof_id,
-                 expanded_ids)
-            proof_id_changed = post_proof_id != pre_proof_id
-            # update goals
-            if (use_goals_diff and pre_goals is not None
-                    and post_goals is not None):
-                pre_goals_or_diff = GoalsDiff.compute_diff(
-                    pre_goals,
-                    post_goals)
-            else:
-                pre_goals_or_diff = post_goals
-            pre_goals = post_goals
-            # analyze command
-            vernac = SexpAnalyzer.analyze_vernac(sexp)
-            if vernac.extend_type is None:
-                command_type = vernac.vernac_type
-            else:
-                command_type = vernac.extend_type
-            is_proof_aborted = ABORT_COMMAND_PATTERN.match(
-                command_type) is not None
-            is_program = any(
-                _program_regex.search(attr) is not None
-                for attr in vernac.attributes)
-            # Check if we're dealing with a subproof
-            is_subproof = (
-                post_proof_id is not None
-                and any(is_subproof_of(post_proof_id,
-                                       i) for i in ids))
-            if is_program:
-                # A program was declared.
-                # Persist the current goals.
-                # Programs do not open proof mode, so post_proof_id
-                # may be None or refer to another conjecture.
-                program = _start_program(
-                    sentence,
-                    command_type,
-                    ids,
-                    pre_goals_or_diff,
-                    programs,
-                    get_identifiers)
-                if program is not None:
-                    file_commands.append(program)
-            elif proof_id_changed:
-                post_goals = serapi.query_goals()
-                if ids or is_proof_aborted:
-                    # a proof has concluded or been aborted
-                    if pre_proof_id in partial_proof_stacks:
-                        partial_proof_stacks[pre_proof_id].append(
+                 pre_proof_id,
+                 post_proof_id) = _update_ids(
+                     serapi,
+                     feedback,
+                     local_ids,
+                     post_proof_id,
+                     expanded_ids)
+                proof_id_changed = post_proof_id != pre_proof_id
+                # update goals
+                if (use_goals_diff and pre_goals is not None
+                        and post_goals is not None):
+                    pre_goals_or_diff = GoalsDiff.compute_diff(
+                        pre_goals,
+                        post_goals)
+                else:
+                    pre_goals_or_diff = post_goals
+                pre_goals = post_goals
+                # analyze command
+                vernac = SexpAnalyzer.analyze_vernac(sexp)
+                if vernac.extend_type is None:
+                    command_type = vernac.vernac_type
+                else:
+                    command_type = vernac.extend_type
+                is_proof_aborted = ABORT_COMMAND_PATTERN.match(
+                    command_type) is not None
+                is_program = any(
+                    _program_regex.search(attr) is not None
+                    for attr in vernac.attributes)
+                # Check if we're dealing with a subproof
+                is_subproof = (
+                    post_proof_id is not None
+                    and any(is_subproof_of(post_proof_id,
+                                           i) for i in ids))
+                if is_program:
+                    # A program was declared.
+                    # Persist the current goals.
+                    # Programs do not open proof mode, so post_proof_id
+                    # may be None or refer to another conjecture.
+                    program = _start_program(
+                        sentence,
+                        command_type,
+                        ids,
+                        pre_goals_or_diff,
+                        programs,
+                        get_identifiers)
+                    if program is not None:
+                        file_commands.append(program)
+                elif proof_id_changed:
+                    post_goals = serapi.query_goals()
+                    if ids or is_proof_aborted:
+                        # a proof has concluded or been aborted
+                        if pre_proof_id in partial_proof_stacks:
+                            partial_proof_stacks[pre_proof_id].append(
+                                (sentence,
+                                 pre_goals_or_diff,
+                                 command_type))
+                            completed_lemma = _conclude_proof(
+                                local_ids,
+                                ids,
+                                pre_proof_id,
+                                is_proof_aborted,
+                                conjectures,
+                                partial_proof_stacks,
+                                obligation_map,
+                                finished_proof_stacks,
+                                defined_lemmas,
+                                get_identifiers)
+                            if completed_lemma is not None:
+                                file_commands.append(completed_lemma)
+                            continue
+                        else:
+                            # That's not supposed to happen...
+                            already_defined = _handle_anomalous_proof(
+                                pre_proof_id,
+                                defined_lemmas,
+                                ProofSentence(
+                                    text,
+                                    sentence.ast,
+                                    sentence.identifiers,
+                                    location,
+                                    command_type,
+                                    pre_goals_or_diff,
+                                    get_identifiers),
+                                logger)
+                            if already_defined:
+                                continue
+                    if (post_proof_id is not None
+                            and post_proof_id not in partial_proof_stacks):
+                        # We are starting a new proof (or obligation).
+                        _start_proof_block(
                             (sentence,
                              pre_goals_or_diff,
-                             command_type))
-                        completed_lemma = _conclude_proof(
-                            local_ids,
-                            ids,
-                            pre_proof_id,
-                            is_proof_aborted,
+                             command_type),
+                            post_proof_id,
                             conjectures,
                             partial_proof_stacks,
                             obligation_map,
-                            finished_proof_stacks,
-                            defined_lemmas,
-                            get_identifiers)
-                        if completed_lemma is not None:
-                            file_commands.append(completed_lemma)
-                        continue
+                            programs)
                     else:
+                        # we are continuing a delayed proof
+                        assert post_proof_id in partial_proof_stacks, \
+                            f"{post_proof_id} should be in-progress"
+                        proof_stack = partial_proof_stacks[post_proof_id]
+                        proof_stack.append(
+                            (sentence,
+                             pre_goals_or_diff,
+                             command_type))
+                elif post_proof_id is not None and (not ids or is_subproof):
+                    # we are continuing an open proof
+                    if post_proof_id in partial_proof_stacks:
+                        post_goals = serapi.query_goals()
+                        proof_stack = partial_proof_stacks[post_proof_id]
+                        proof_stack.append(
+                            (sentence,
+                             pre_goals_or_diff,
+                             command_type))
+                    else:
+                        assert post_proof_id in defined_lemmas, \
+                            f"{post_proof_id} should be defined"
                         # That's not supposed to happen...
-                        already_defined = _handle_anomalous_proof(
-                            pre_proof_id,
+                        _handle_anomalous_proof(
+                            post_proof_id,
                             defined_lemmas,
                             ProofSentence(
                                 text,
@@ -846,71 +896,25 @@ def _extract_vernac_commands(
                                 pre_goals_or_diff,
                                 get_identifiers),
                             logger)
-                        if already_defined:
-                            continue
-                if (post_proof_id is not None
-                        and post_proof_id not in partial_proof_stacks):
-                    # We are starting a new proof (or obligation).
-                    _start_proof_block(
-                        (sentence,
-                         pre_goals_or_diff,
-                         command_type),
-                        post_proof_id,
-                        conjectures,
-                        partial_proof_stacks,
-                        obligation_map,
-                        programs)
+                        continue
                 else:
-                    # we are continuing a delayed proof
-                    assert post_proof_id in partial_proof_stacks, \
-                        f"{post_proof_id} should be in-progress"
-                    proof_stack = partial_proof_stacks[post_proof_id]
-                    proof_stack.append(
-                        (sentence,
-                         pre_goals_or_diff,
-                         command_type))
-            elif post_proof_id is not None and (not ids or is_subproof):
-                # we are continuing an open proof
-                if post_proof_id in partial_proof_stacks:
-                    post_goals = serapi.query_goals()
-                    proof_stack = partial_proof_stacks[post_proof_id]
-                    proof_stack.append(
-                        (sentence,
-                         pre_goals_or_diff,
-                         command_type))
-                else:
-                    assert post_proof_id in defined_lemmas, \
-                        f"{post_proof_id} should be defined"
-                    # That's not supposed to happen...
-                    _handle_anomalous_proof(
-                        post_proof_id,
-                        defined_lemmas,
-                        ProofSentence(
-                            text,
-                            sentence.ast,
-                            sentence.identifiers,
-                            location,
-                            command_type,
-                            pre_goals_or_diff,
-                            get_identifiers),
-                        logger)
-                    continue
-            else:
-                # We are either not in a proof
-                # OR we just defined something new as a side-effect.
-                # We let the previous goals persist.
-                file_commands.append(
-                    VernacCommandData(
-                        ids,
-                        None,
-                        VernacSentence(
-                            text,
-                            sentence.ast,
-                            sentence.identifiers,
-                            location,
-                            command_type,
-                            pre_goals_or_diff,
-                            get_identifiers)))
+                    # We are either not in a proof
+                    # OR we just defined something new as a side-effect.
+                    # We let the previous goals persist.
+                    file_commands.append(
+                        VernacCommandData(
+                            ids,
+                            None,
+                            VernacSentence(
+                                text,
+                                sentence.ast,
+                                sentence.identifiers,
+                                location,
+                                command_type,
+                                pre_goals_or_diff,
+                                get_identifiers)))
+            except CoqExn as e:
+                raise CoqExn(e.msg, e.full_sexp, location) from e
     # assert that we have extracted all proofs
     assert not conjectures
     assert not partial_proof_stacks
