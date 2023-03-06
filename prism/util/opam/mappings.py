@@ -4,48 +4,91 @@ class to cache and search the logical mappings yaml.
 
 import re
 from pathlib import Path
+from typing import ClassVar, Dict, Optional, Set
 
 import yaml
+
+from prism.util.radpytools import cachedmethod
 
 _MAPPING_DATA_PATH = Path(__file__).parent / "logical_mapping.yml"
 
 
 class LogicalMappings:
     """
-    cache and search logical mappings for coq packages.
+    Cache and search logical mappings for Coq packages.
+    """
+
+    mappings: ClassVar[Optional[Dict[str, str]]] = None
+    """
+    The cached map from logical library names to package names.
+
+    If None, then it will be refreshed on the next call to `search`.
     """
 
     @classmethod
-    def search(cls, prefix="", suffix=""):
+    def search(cls, prefix: Optional[str] = None, suffix: str = "") -> Set[str]:
         """
-        Search coq package logical mappings for the owner package.
+        Search Coq package logical mappings for the owner package.
 
-        provide a suffix and optionally a prefix of the logical path.
+        Parameters
+        ----------
+        prefix : Optional[str]
+            The prefix logical path to a library or None if not
+            required.
+        suffix : str
+            The suffix logical path to a library.
+
+        Returns
+        -------
+        Set[str]
+            The set of packages matching the given logical prefixes and
+            suffixes, if any.
         """
-        if (not hasattr(cls, "mappings")):
+        if cls.mappings is None:
             # load the mappings yaml
-            # todo: this needs to be loaded from the pip installed dir!
             with open(_MAPPING_DATA_PATH) as f:
                 cls.mappings = yaml.safe_load(f)
 
-        if (prefix):
+        matching_packages: Set[str] = set()
+
+        for x in cls.mappings:
+            if cls.is_match(prefix, suffix, x):
+                matching_packages.add(cls.mappings[x])
+
+        return matching_packages
+
+    @cachedmethod
+    @staticmethod
+    def _match_pattern(prefix: Optional[str], suffix: str) -> re.Pattern:
+        """
+        Get a regex that matches a given library prefix and suffix.
+        """
+        if prefix:
             reg = re.compile(
                 fr"{re.escape(prefix)}\.(.+\.)*{re.escape(suffix)}")
         else:
             reg = re.compile(fr"(.+\.)?{re.escape(suffix)}")
+        return reg
 
-        candidate = None
+    @staticmethod
+    def is_match(prefix: Optional[str], suffix: str, library: str) -> bool:
+        """
+        Return whether a given prefix and suffix match a given library.
 
-        for x in cls.mappings:
-            if re.match(reg, x):
-                if (candidate is not None):
-                    return None  # double match, ambiguous
-                candidate = cls.mappings[x]
+        Parameters
+        ----------
+        prefix : Optional[str]
+            The prefix logical path to a library or None if not
+            required.
+        suffix : str
+            The suffix logical path to a library.
+        library : str
+            A logical library path.
 
-        if (prefix == "" and len(suffix.split(".")) < 2):
-            # non-local, non-standard library imports always seem
-            # to require at least 2 parts.
-            # this is probably local/standard library.
-            return None
-
-        return candidate
+        Returns
+        -------
+        bool
+            True if the library is a match, False otherwise.
+        """
+        reg = LogicalMappings._match_pattern(prefix, suffix)
+        return reg.match(library) is not None

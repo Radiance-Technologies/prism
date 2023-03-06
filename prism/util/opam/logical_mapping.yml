@@ -4447,4 +4447,3 @@ stdpp.tactics: coq-stdpp
 stdpp.telescopes: coq-stdpp
 stdpp.vector: coq-stdpp
 stdpp.zmap: coq-stdpp
-SepLogic.Reification.Varmap: coq-sep-logic
