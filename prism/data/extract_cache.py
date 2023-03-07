@@ -157,48 +157,48 @@ class CommandExtractor:
     The accuracy of this extraction depends upon a few assumptions:
 
     * No lemma emits an identifier before it is defined (i.e.,
-    before it is proved).
-    Neither a verbose info message nor ``Print All.`` command should
-    indicate the lemma (or program, or other conjecture) is defined
-    before its proof(s) are complete.
+      before it is proved).
+      Neither a verbose info message nor ``Print All.`` command should
+      indicate the lemma (or program, or other conjecture) is defined
+      before its proof(s) are complete.
     * No plugin defines their own ``Abort`` or ``Abort All``
-    equivalents, i.e., no plugin concludes a proof without emitting
-    an identifier.
+      equivalents, i.e., no plugin concludes a proof without emitting
+      an identifier.
     * No plugins define their own ``Obligation`` equivalents (i.e.,
-    no plugins define multi-block proofs).
-    If any plugin does so, then each "obligation" is expected to be
-    extracted as an unrelated command.
+      no plugins define multi-block proofs).
+      If any plugin does so, then each "obligation" is expected to be
+      extracted as an unrelated command.
     * No command can both end one proof and start another (this
-    should be true based on the mutually exclusive ``VtStartProof``
-    and ``VtQed`` Vernacular classes in
+      should be true based on the mutually exclusive ``VtStartProof``
+      and ``VtQed`` Vernacular classes in
     https://github.com/coq/coq/blob/master/vernac/vernacextend.mli).
     * No conjecture fails to enter proof mode after its initial
-    sentence is executed.
-    The only known exceptions to this rule comprise ``Program``s,
-    which do not enter proof mode until their first ``Obligation``'s
-    proof is begun.
-    If a plugin violates this rule, then the conjecture may be
-    extracted as an unidentified command.
-    However, an error may also be raised as the situation is
-    untested.
+      sentence is executed.
+      The only known exceptions to this rule comprise ``Program``s,
+      which do not enter proof mode until their first ``Obligation``'s
+      proof is begun.
+      If a plugin violates this rule, then the conjecture may be
+      extracted as an unidentified command.
+      However, an error may also be raised as the situation is
+      untested.
     * The conjecture IDs returned by ``Show Conjectures.`` are
-    ordered such that the conjecture actively being proved is listed
-    first.
+      ordered such that the conjecture actively being proved is listed
+      first.
     * If a new identifier shadows an existing one, then the defining
-    command does not reference the shadowed ID. Violation of this
-    assumption is possible (consider a recursive function named
-    after a type that takes arguments of said type as input) but not
-    expected to occur frequently as it is unlikely in the first
+      command does not reference the shadowed ID. Violation of this
+      assumption is possible (consider a recursive function named
+      after a type that takes arguments of said type as input) but not
+      expected to occur frequently as it is unlikely in the first
     place and poor practice. If it does occur, then the fully
-    qualified identifiers in the cache will erroneously interpret
-    the shadowed ID as its shadower (i.e., as the recursive function
-    in the example above).
+      qualified identifiers in the cache will erroneously interpret
+      the shadowed ID as its shadower (i.e., as the recursive function
+      in the example above).
     * A change in the current conjecture implies that either a new
-    proof has begun or the current proof has ended (but not both).
+      proof has begun or the current proof has ended (but not both).
     * No plugin defines its own `Qed` or `Save` equivalents (i.e.,
-    no plugin defines its own opaque proof environments) or no file
-    to be extracted uses such equivalent commands to end a nested
-    proof.
+      no plugin defines its own opaque proof environments) or no file
+      to be extracted uses such equivalent commands to end a nested
+      proof.
     """
 
     filename: PathLike
