@@ -481,17 +481,44 @@ class ParserUtils:
         string_delimited = StrWithLocation.re_split(
             ParserUtils.string_splitter,
             file_contents)
+        string_delimited = [s for s in string_delimited if s]
         str_no_strings = []
         strings = []
         current_string: Optional[List[StrWithLocation]] = None
         string_mask_size = len(string_mask)
-        for segment in string_delimited:
+        i = 0
+        while i < len(string_delimited):
+            segment = string_delimited[i]
             if segment == '"':
                 if current_string is not None:
-                    # string concluded
                     current_string.append(segment)
-                    strings.append(StrWithLocation().join(current_string))
-                    current_string = None
+                    j = i + 1
+                    if j < len(string_delimited) and string_delimited[j] == '"':
+                        # escaped double quote
+                        current_string.append(string_delimited[j])
+                        i += 2
+                        continue
+                    else:
+                        # string concluded
+                        string = StrWithLocation().join(current_string)
+                        strings.append(string)
+                        start = string.start
+                        end = string.end
+                        assert start is not None
+                        assert end is not None
+                        step = (end - start) / string_mask_size
+                        subbed_indices = [
+                            (
+                                start + math.floor(i * step),
+                                min(end,
+                                    start + math.ceil((i + 1) * step)))
+                            for i in range(string_mask_size)
+                        ]
+                        subbed_mask = StrWithLocation(
+                            string_mask,
+                            subbed_indices)
+                        str_no_strings.append(subbed_mask)
+                        current_string = None
                 else:
                     # string started
                     current_string = [segment]
@@ -500,22 +527,9 @@ class ParserUtils:
                 if in_string:
                     assert current_string is not None
                     current_string.append(segment)
-                    start = segment.start
-                    end = segment.end
-                    assert start is not None
-                    assert end is not None
-                    step = (end - start) / string_mask_size
-                    subbed_indices = [
-                        (
-                            start + math.floor(i * step),
-                            min(end,
-                                start + math.ceil((i + 1) * step)))
-                        for i in range(string_mask_size)
-                    ]
-                    subbed_mask = StrWithLocation(string_mask, subbed_indices)
-                    str_no_strings.append(subbed_mask)
                 else:
                     str_no_strings.append(segment)
+            i += 1
         str_no_strings = StrWithLocation().join(str_no_strings)
         return str_no_strings, strings
 

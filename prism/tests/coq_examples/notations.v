@@ -46,3 +46,4 @@ Tactic Notation "coqeal" "[" ssrpatternarg(pat) "]" open_constr(strategy) :=
 (* Some extra challenging notations. *)
 Notation "a := b" := (a <> string_dec "asd" <> b) (at level 60).
 Notation "a ;; b" := (a := string_dec "asd" := b) (at level 50).
+Notation """a""" := (string_dec """" <> a <> string_dec """") (at level 70).
