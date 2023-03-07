@@ -6,9 +6,11 @@ import os
 import sqlite3
 import traceback
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import TracebackType
 from typing import Callable, Dict, List, Optional, Tuple, Type, Union, cast
 
+from git import Repo
 from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 
@@ -28,6 +30,7 @@ from prism.data.repair.instance import (
     ProjectCommitDataRepairInstance,
     default_align,
 )
+from prism.project.metadata.storage import MetadataStorage
 from prism.util.io import atomic_write
 from prism.util.radpytools.multiprocessing import synchronizedmethod
 
@@ -514,10 +517,35 @@ def write_repair_instance(
             "written.")
 
 
+def _get_consecutive_commit_hashes(
+        metadata_storage: MetadataStorage,
+        project: str,
+        repo_root: Path,
+        cache_items: List[CacheObjectStatus]) -> List[Tuple[str,
+                                                            str]]:
+    """
+    Build a list of consecutive commit hash tuples for project & cache.
+    """
+    repo = Repo.clone_from(
+        metadata_storage.get(project).project_url,
+        repo_root / project)
+    commit_hashes = set(ci.commit_hash for ci in cache_items)
+    dated_commit_hashes = sorted(
+        [(repo.commit(ch).authored_datetime,
+          ch) for ch in commit_hashes])
+    return [
+        (dch1[1],
+         dch2[1]) for dch1,
+        dch2 in zip(dated_commit_hashes,
+                    dated_commit_hashes[1 :])
+    ]
+
+
 def prepare_label_pairs(
     cache_server: CoqProjectBuildCacheServer,
     cache_root: Path,
     cache_format_extension: str,
+    metadata_storage: MetadataStorage,
     project_commit_hash_map: Optional[Dict[str,
                                            Optional[List[str]]]] = None
 ) -> List[Tuple[CacheObjectStatus,
@@ -554,11 +582,15 @@ def prepare_label_pairs(
             cache_item_a: CacheObjectStatus,
             cache_item_b: CacheObjectStatus,
             cache_item_pairs: List[Tuple[CacheObjectStatus,
-                                         CacheObjectStatus]]):
+                                         CacheObjectStatus]],
+            consecutive_commit_hashes: List[Tuple[str,
+                                                  str]]):
         """
         Check if labels differ; if so, add to list in-place.
         """
-        if cache_item_a != cache_item_b:
+        if cache_item_a != cache_item_b and (
+                cache_item_a.commit_hash,
+                cache_item_b.commit_hash) in consecutive_commit_hashes:
             cache_item_pairs.append((cache_item_a, cache_item_b))
 
     def _loop_over_second_label(
@@ -566,7 +598,9 @@ def prepare_label_pairs(
             cache_items: List[CacheObjectStatus],
             project_commit_hash_map: ProjectCommitHashMap,
             cache_item_pairs: List[Tuple[CacheObjectStatus,
-                                         CacheObjectStatus]]):
+                                         CacheObjectStatus]],
+            consecutive_commit_hashes: List[Tuple[str,
+                                                  str]]):
         """
         Loop over the second item in the label pairs, populate list.
 
@@ -578,13 +612,16 @@ def prepare_label_pairs(
                 _append_if_labels_differ(
                     cache_item_a,
                     cache_item_b,
-                    cache_item_pairs)
+                    cache_item_pairs,
+                    consecutive_commit_hashes)
 
     def _loop_over_labels(
             cache_items: List[CacheObjectStatus],
             project_commit_hash_map: ProjectCommitHashMap,
             cache_item_pairs: List[Tuple[CacheObjectStatus,
-                                         CacheObjectStatus]]):
+                                         CacheObjectStatus]],
+            consecutive_commit_hashes: List[Tuple[str,
+                                                  str]]):
         """
         Loop over all label pairs and populate cache_item_pairs.
 
@@ -597,24 +634,35 @@ def prepare_label_pairs(
                     cache_item_a,
                     cache_items,
                     project_commit_hash_map,
-                    cache_item_pairs)
+                    cache_item_pairs,
+                    consecutive_commit_hashes)
 
-    cache_args = (cache_server, cache_root, cache_format_extension)
-    local_cache_client = cast(
-        CoqProjectBuildCacheProtocol,
-        CoqProjectBuildCacheClient(*cache_args))
-    project_list = local_cache_client.list_projects()
-    if project_commit_hash_map is not None:
-        project_list = [p for p in project_list if p in project_commit_hash_map]
-    all_cache_items = local_cache_client.list_status_success_only()
-    cache_item_pairs: List[Tuple[CacheObjectStatus, CacheObjectStatus]] = []
-    for project in project_list:
-        cache_items = [t for t in all_cache_items if t.project == project]
-        _loop_over_labels(
-            cache_items,
-            project_commit_hash_map,
-            cache_item_pairs)
-    return cache_item_pairs
+    with TemporaryDirectory() as tmpdir:
+        repo_root = Path(tmpdir)
+        cache_args = (cache_server, cache_root, cache_format_extension)
+        local_cache_client = cast(
+            CoqProjectBuildCacheProtocol,
+            CoqProjectBuildCacheClient(*cache_args))
+        project_list = local_cache_client.list_projects()
+        if project_commit_hash_map is not None:
+            project_list = [
+                p for p in project_list if p in project_commit_hash_map
+            ]
+        all_cache_items = local_cache_client.list_status_success_only()
+        cache_item_pairs: List[Tuple[CacheObjectStatus, CacheObjectStatus]] = []
+        for project in project_list:
+            cache_items = [t for t in all_cache_items if t.project == project]
+            consecutive_commit_hashes = _get_consecutive_commit_hashes(
+                metadata_storage,
+                project,
+                repo_root,
+                cache_items)
+            _loop_over_labels(
+                cache_items,
+                project_commit_hash_map,
+                cache_item_pairs,
+                consecutive_commit_hashes)
+        return cache_item_pairs
 
 
 def repair_mining_loop(
