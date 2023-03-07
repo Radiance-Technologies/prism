@@ -25,7 +25,7 @@ class Dataclass(Protocol):
     __dataclass_fields__: Dict[str, Any]
 
 
-def default_field(obj: _T) -> _T:
+def default_field(obj: _T, **kwargs) -> _T:
     r"""
     Specify the default value of a dataclass field.
 
@@ -61,7 +61,7 @@ def default_field(obj: _T) -> _T:
     >>> b = Example()
     >>> assert id(a.example) != id(b.example)
     """
-    return field(default_factory=lambda: deepcopy(obj))
+    return field(default_factory=lambda: deepcopy(obj), **kwargs)
 
 
 def immutable_dataclass(*args, **kwargs) -> Callable[[Type[_T]], Type[_T]]:
