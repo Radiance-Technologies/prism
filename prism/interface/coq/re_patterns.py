@@ -124,7 +124,7 @@ _mutual_inductive = rf"\s+with\s(?P<mind>{QUALIFIED_IDENT_PATTERN.pattern})\s+:"
 """
 Match additional types in a mutually inductive body.
 """
-_constant = rf"(?P<constant>{QUALIFIED_IDENT_PATTERN.pattern})\s+:\s"
+_constant = rf"(?P<constant>{QUALIFIED_IDENT_PATTERN.pattern})(?:@{{[^{{}}]*}})?\s+:\s"
 """
 Match a constant.
 """
