@@ -21,12 +21,12 @@ from prism.data.build_cache import (
     ProjectBuildEnvironment,
     ProjectBuildResult,
     ProjectCommitData,
-    VernacCommandData,
+    VernacCommandDataList,
     VernacSentence,
 )
 from prism.data.dataset import CoqProjectBaseDataset
 from prism.data.document import CoqDocument
-from prism.data.extract_cache import _extract_vernac_commands, extract_cache
+from prism.data.extract_cache import CommandExtractor, extract_cache
 from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.interface.coq.ident import Identifier, IdentType
 from prism.language.gallina.parser import CoqParser
@@ -225,7 +225,8 @@ class TestExtractCache(unittest.TestCase):
         Test the function to extract vernac commands from a project.
         """
         with pushd(_COQ_EXAMPLES_PATH):
-            extracted_commands = _extract_vernac_commands(
+            extracted_commands = CommandExtractor(
+                "Alphabet.v",
                 Project.extract_sentences(
                     CoqDocument(
                         "Alphabet.v",
@@ -234,14 +235,14 @@ class TestExtractCache(unittest.TestCase):
                     sentence_extraction_method=SEM.HEURISTIC,
                     return_locations=True,
                     glom_proofs=False),
-                "Alphabet.v",
                 serapi_options="",
-                opam_switch=self.test_switch)
+                opam_switch=self.test_switch).extracted_commands
         self.assertEqual(len(extracted_commands), 37)
         self.assertEqual(len([c for c in extracted_commands if c.proofs]), 9)
         with self.subTest("delayed_proof"):
             with pushd(_COQ_EXAMPLES_PATH):
-                extracted_commands = _extract_vernac_commands(
+                extracted_commands = CommandExtractor(
+                    "delayed_proof.v",
                     Project.extract_sentences(
                         CoqDocument(
                             "delayed_proof.v",
@@ -250,9 +251,8 @@ class TestExtractCache(unittest.TestCase):
                         sentence_extraction_method=SEM.HEURISTIC,
                         return_locations=True,
                         glom_proofs=False),
-                    "delayed_proof.v",
                     serapi_options="",
-                    opam_switch=self.test_switch)
+                    opam_switch=self.test_switch).extracted_commands
             self.assertEqual(len(extracted_commands), 11)
             expected_ids = [
                 [],
@@ -334,11 +334,11 @@ class TestExtractCache(unittest.TestCase):
                     glom_proofs=False,
                     return_locations=True,
                     sentence_extraction_method=SEM.HEURISTIC)
-                actual_vernac_commands = _extract_vernac_commands(
-                    sentences,
+                actual_vernac_commands = CommandExtractor(
                     'fermat4_mwe.v',
+                    sentences,
                     serapi_options="",
-                    opam_switch=self.test_switch)
+                    opam_switch=self.test_switch).extracted_commands
                 actual_vernac_commands_text = {
                     avc.command.text for avc in actual_vernac_commands
                 }
@@ -395,7 +395,8 @@ class TestExtractCache(unittest.TestCase):
                     expected_proof_sentence_counts)
         with self.subTest("extract_idents"):
             with pushd(_COQ_EXAMPLES_PATH):
-                extracted_commands = _extract_vernac_commands(
+                extracted_commands = CommandExtractor(
+                    "shadowing.v",
                     Project.extract_sentences(
                         CoqDocument(
                             "shadowing.v",
@@ -404,9 +405,8 @@ class TestExtractCache(unittest.TestCase):
                         sentence_extraction_method=SEM.HEURISTIC,
                         return_locations=True,
                         glom_proofs=False),
-                    "shadowing.v",
                     serapi_options="",
-                    opam_switch=self.test_switch)
+                    opam_switch=self.test_switch).extracted_commands
             self.assertEqual(len(extracted_commands), 4)
             expected_ids = [
                 ["nat"],
@@ -567,7 +567,8 @@ class TestExtractCache(unittest.TestCase):
         Verify that aborted proofs can be extracted.
         """
         with pushd(_COQ_EXAMPLES_PATH):
-            extracted_commands = _extract_vernac_commands(
+            extracted_commands = CommandExtractor(
+                "aborted.v",
                 Project.extract_sentences(
                     CoqDocument(
                         "aborted.v",
@@ -576,9 +577,8 @@ class TestExtractCache(unittest.TestCase):
                     sentence_extraction_method=SEM.HEURISTIC,
                     return_locations=True,
                     glom_proofs=False),
-                "aborted.v",
                 serapi_options="",
-                opam_switch=self.test_switch)
+                opam_switch=self.test_switch).extracted_commands
         expected_commands_text = [
             "Definition idw (A : Type) := A.",
             "Lemma foobar : unit.",
@@ -597,7 +597,8 @@ class TestExtractCache(unittest.TestCase):
         Verify that proofs concluded with Save have the correct ids.
         """
         with pushd(_COQ_EXAMPLES_PATH):
-            extracted_commands = _extract_vernac_commands(
+            extracted_commands = CommandExtractor(
+                "save.v",
                 Project.extract_sentences(
                     CoqDocument(
                         "save.v",
@@ -606,9 +607,8 @@ class TestExtractCache(unittest.TestCase):
                     sentence_extraction_method=SEM.HEURISTIC,
                     return_locations=True,
                     glom_proofs=False),
-                "save.v",
                 serapi_options="",
-                opam_switch=self.test_switch)
+                opam_switch=self.test_switch).extracted_commands
             self.assertTrue(
                 any("foobaz" in ec.identifier for ec in extracted_commands))
             self.assertTrue(
@@ -625,7 +625,8 @@ class TestExtractCache(unittest.TestCase):
         This test is expected to work only with Coq 8.12 and later.
         """
         with pushd(_COQ_EXAMPLES_PATH):
-            extracted_commands = _extract_vernac_commands(
+            extracted_commands = CommandExtractor(
+                "save_named_theorem.v",
                 Project.extract_sentences(
                     CoqDocument(
                         "save_named_theorem.v",
@@ -634,9 +635,8 @@ class TestExtractCache(unittest.TestCase):
                     sentence_extraction_method=SEM.HEURISTIC,
                     return_locations=True,
                     glom_proofs=False),
-                "save_named_theorem.v",
                 serapi_options="",
-                opam_switch=self.test_switch)
+                opam_switch=self.test_switch).extracted_commands
             self.assertTrue(
                 any("foobaz" in ec.identifier for ec in extracted_commands))
             self.assertTrue(
@@ -648,7 +648,7 @@ class TestExtractCache(unittest.TestCase):
         Test the reconstruction of Goals from GoalsDiff.
         """
 
-        def _sort(cmd_list: List[VernacCommandData]) -> List[VernacSentence]:
+        def _sort(cmd_list: VernacCommandDataList) -> List[VernacSentence]:
             """
             Sort all commands' sentences by locations.
             """
@@ -680,7 +680,8 @@ class TestExtractCache(unittest.TestCase):
             return sentences
 
         with pushd(_COQ_EXAMPLES_PATH):
-            extracted_commands_no_diffs = _extract_vernac_commands(
+            extracted_commands_no_diffs = CommandExtractor(
+                "fermat4_mwe.v",
                 Project.extract_sentences(
                     CoqDocument(
                         "fermat4_mwe.v",
@@ -689,11 +690,11 @@ class TestExtractCache(unittest.TestCase):
                     sentence_extraction_method=SEM.HEURISTIC,
                     return_locations=True,
                     glom_proofs=False),
-                "fermat4_mwe.v",
                 serapi_options="",
                 use_goals_diff=False,
-                opam_switch=self.test_switch)
-            extracted_commands_with_diffs = _extract_vernac_commands(
+                opam_switch=self.test_switch).extracted_commands
+            extracted_commands_with_diffs = CommandExtractor(
+                "fermat4_mwe.v",
                 Project.extract_sentences(
                     CoqDocument(
                         "fermat4_mwe.v",
@@ -702,10 +703,9 @@ class TestExtractCache(unittest.TestCase):
                     sentence_extraction_method=SEM.HEURISTIC,
                     return_locations=True,
                     glom_proofs=False),
-                "fermat4_mwe.v",
                 serapi_options="",
                 use_goals_diff=True,
-                opam_switch=self.test_switch)
+                opam_switch=self.test_switch).extracted_commands
             sentences_no_diffs = _sort(extracted_commands_no_diffs)
             sentences_with_diffs = _sort(extracted_commands_with_diffs)
             sentences_reconstructed = _reconstruct_goals(sentences_with_diffs)

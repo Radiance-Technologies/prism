@@ -10,6 +10,7 @@ import re
 import traceback
 import typing
 import warnings
+from dataclasses import InitVar, dataclass, field
 from datetime import datetime
 from functools import partial
 from io import StringIO
@@ -77,6 +78,7 @@ from prism.util.alignment import Alignment, align_factory
 from prism.util.opam.switch import OpamSwitch
 from prism.util.opam.version import OpamVersion, Version
 from prism.util.radpytools import PathLike, unzip
+from prism.util.radpytools.dataclasses import default_field
 from prism.util.radpytools.os import pushd
 from prism.util.swim import SwitchManager, UnsatisfiableConstraints
 
@@ -84,12 +86,17 @@ SentenceState = Tuple[CoqSentence,
                       Optional[Union[Goals,
                                      GoalsDiff]],
                       CommandType]
-ProofSentenceState = Tuple[CoqSentence, Union[Goals, GoalsDiff], CommandType]
+ProofSentenceState = Tuple[CoqSentence,
+                           Optional[Union[Goals,
+                                          GoalsDiff]],
+                           CommandType]
 ProofBlock = List[ProofSentenceState]
 
 _program_regex = re.compile("[Pp]rogram")
 
 _save_pattern = re.compile(rf"Save\s+(?P<ident>{IDENT_PATTERN.pattern})\s*.")
+
+_printing_options_pattern = re.compile(r"(?:Set|Unset)\s+Printing\s+.*\.")
 
 
 class ExtractVernacCommandsError(RuntimeError):
@@ -140,787 +147,824 @@ def serapi_id_align(x: Sequence[str], y: Sequence[str]) -> Alignment:
     return typing.cast(Alignment, alignment)
 
 
-def _process_proof_block(
-        block: ProofBlock,
-        get_identifiers: Callable[[str],
-                                  List[Identifier]]) -> Proof:
+@dataclass
+class CommandExtractor:
     """
-    Convert a proof block into the form expected for extraction.
-
-    Parameters
-    ----------
-    block : List[Tuple[CoqSentence, Goals, CommandType]]
-        A list of proof steps within the block paired with goals prior
-        to the proof step and Vernacular types.
-    get_identifiers : Callable[[str], List[Identifier]]
-        A function that accepts a serialized AST and returns a list of
-        fully qualified identifiers in the order of their appearance in
-        the AST.
-
-    Returns
-    -------
-    Proof
-        The compiled proof.
-    """
-    if not block:
-        return []
-    proof_steps, goals, command_types = unzip(block)
-    proof = []
-    for tactic, goal, command_type in zip(proof_steps, goals, command_types):
-        tactic: CoqSentence
-        proof.append(
-            ProofSentence(
-                tactic.text,
-                tactic.ast,
-                tactic.identifiers,
-                tactic.location,
-                command_type,
-                goal,
-                get_identifiers))
-    return proof
-
-
-def _conclude_proof(
-    local_ids: List[str],
-    ids: List[str],
-    pre_proof_id: str,
-    is_proof_aborted: bool,
-    conjectures: Dict[str,
-                      SentenceState],
-    partial_proof_stacks: Dict[str,
-                               ProofBlock],
-    obligation_map: Dict[str,
-                         str],
-    finished_proof_stacks: Dict[str,
-                                List[Tuple[str,
-                                           Proof]]],
-    defined_lemmas: Dict[str,
-                         VernacCommandData],
-    get_identifiers: Callable[[str],
-                              List[Identifier]]
-) -> Optional[VernacCommandData]:
-    r"""
-    Complete accumulation of a proof/proved conjecture.
-
-    Parameters
-    ----------
-    local_ids : List[str]
-        The set of identifiers introduced in the interactive session.
-    ids : List[str]
-        The list of identifiers introduced by the final proof command.
-    pre_proof_id : str
-        The ID of the proved conjecture or obligation.
-    is_aborted : bool
-        Whether the proof has been aborted or not.
-    conjectures : Dict[str, SentenceState]
-        A map from conjecture IDs to their statements.
-        This map will be modified in-place.
-    partial_proof_stacks : Dict[str, ProofBlock]
-        A map from conjecture/obligation IDs to partially accumulated
-        proofs.
-        This map will be modified in-place.
-    obligation_map : Dict[str, str]
-        A map from obligation IDs to conjecture IDs.
-    finished_proof_stacks : Dict[str, List[Tuple[str, Proof]]]
-        A map from conjecture IDs to lists of concluded proof blocks
-        (e.g., one block per obligation).
-        This map will be modified in-place.
-    defined_lemmas : Dict[str, VernacCommandData]
-        A map from conjecture/obligation IDs to the corresponding cache
-        data structure.
-    get_identifiers : Callable[[str], List[Identifier]]
-        A function that accepts a serialized AST and returns a list of
-        fully qualified identifiers in the order of their appearance in
-        the AST.
-
-    Returns
-    -------
-    Optional[VernacCommandData]
-        The compiled command data for a concluded conjecture or None if
-        no conjecture was concluded (e.g., an obligation was completed
-        but more work remains for the overall conjecture).
-    """
-    new_proofs = []
-    for new_id in set(ids).union({pre_proof_id}):
-        # Try to cover edge cases of plugins with unusual
-        # behavior that may conclude multiple
-        # proofs/obligations at once.
-        # Note that a new ID need not have an explicit proof
-        # (for example, an automatically solved obligation).
-        proof_block = _process_proof_block(
-            partial_proof_stacks.pop(new_id,
-                                     []),
-            get_identifiers)
-        new_proofs.append((new_id, proof_block))
-    finished_proof_id = obligation_map.get(pre_proof_id, pre_proof_id)
-    # add to other finished obligations
-    finished_stack = finished_proof_stacks.setdefault(finished_proof_id, [])
-    finished_stack.extend(new_proofs)
-    is_obligation = pre_proof_id in obligation_map
-    is_program_completed = finished_proof_id in local_ids
-    is_conjecture_completed = not is_obligation or is_program_completed
-    if is_conjecture_completed or (not is_obligation and is_proof_aborted):
-        # A lemma has (presumably) been defined or aborted.
-        # Note that a plugin may cause related proofs to
-        # show up as separate entries if it defines custom
-        # proof environments.
-        ids, proofs = unzip(finished_proof_stacks.pop(finished_proof_id))
-        lemma, pre_goals_or_diff, lemma_type = conjectures.pop(finished_proof_id)
-        lemma = VernacSentence(
-            lemma.text,
-            lemma.ast,
-            lemma.identifiers,
-            lemma.location,
-            lemma_type,
-            pre_goals_or_diff,
-            get_identifiers)
-        # uniquify but keep original order
-        ids = dict.fromkeys(ids)
-        # ensure conjecture ID is last
-        ids.pop(finished_proof_id, None)
-        ids[finished_proof_id] = None
-        lemma = VernacCommandData(
-            list(ids),
-            None,
-            lemma,
-            [p for p in proofs if p])
-        for ident in ids:
-            defined_lemmas[ident] = lemma
-        return lemma
-    else:
-        return None
-
-
-def _start_proof_block(
-        sentence: SentenceState,
-        post_proof_id: str,
-        conjectures: Dict[str,
-                          SentenceState],
-        partial_proof_stacks: Dict[str,
-                                   ProofBlock],
-        obligation_map: Dict[str,
-                             str],
-        programs: List[SentenceState]) -> None:
-    """
-    Start accumulation of a new proof block.
-
-    Parameters
-    ----------
-    sentence : SentenceState
-        The sentence that instigated the proof.
-    post_proof_id : str
-        The conjecture or obligation ID to which the proof corresponds.
-    conjectures : Dict[str, SentenceState]
-        A map from conjecture IDs to their statements.
-        This map will be modified in-place.
-    partial_proof_stacks : Dict[str, ProofBlock]
-        A map from conjecture/obligation IDs to partially accumulated
-        proofs.
-        This map will be modified in-place.
-    obligation_map : Dict[str, str]
-        A map from obligation IDs to conjecture IDs.
-    programs : List[SentenceState]
-        A list of unfinished programs begun prior to the `sentence`.
-    """
-    assert post_proof_id not in partial_proof_stacks
-    command_type = sentence[2]
-    if command_type == "Obligations":
-        # Obligations get accumulated separately, but we
-        # need to know to which lemma (program) they ultimately
-        # correspond.
-        program_id = OBLIGATION_ID_PATTERN.match(
-            post_proof_id).groupdict()['proof_id']
-        obligation_map[post_proof_id] = program_id
-        proof_stack = partial_proof_stacks.setdefault(post_proof_id, [])
-        proof_stack.append(sentence)
-        if program_id not in conjectures:
-            # Programs unfortunately do not open proof
-            # mode until an obligation's proof has been
-            # started.
-            # Consequently, we cannot rely upon
-            # get_conjecture_id to catch the ID
-            # of the program.
-            for i, program in enumerate(reversed(programs)):
-                if program_id in program[0].text:
-                    conjectures[program_id] = program
-                    programs.pop(len(programs) - i - 1)
-                    break
-            assert program_id in conjectures
-    else:
-        assert post_proof_id not in conjectures
-        conjectures[post_proof_id] = sentence
-        partial_proof_stacks[post_proof_id] = []
-
-
-def _start_program(
-    sentence: CoqSentence,
-    command_type: str,
-    ids: List[str],
-    pre_goals_or_diff: Optional[Union[Goals,
-                                      GoalsDiff]],
-    programs: List[SentenceState],
-    get_identifiers: Callable[[str],
-                              List[Identifier]]
-) -> Optional[VernacCommandData]:
-    """
-    Start accumulation of a new program.
-
-    Parameters
-    ----------
-    sentence : CoqSentence
-        The sentence that instigated the program.
-    command_type : str
-        The type of the sentence's Vernacular command.
-    ids : List[str]
-        The list of definitions emitted by the program's declaration, if
-        any.
-    pre_goals_or_diff : Optional[Union[Goals, GoalsDiff]]
-        Proof goals prior to the execution of the sentence, if any.
-    programs : List[SentenceState]
-        The list of all unfinished programs encountered thus far in
-        extraction.
-    get_identifiers : Callable[[str], List[Identifier]]
-        A function that accepts a serialized AST and returns a list of
-        fully qualified identifiers in the order of their appearance in
-        the AST.
-
-    Returns
-    -------
-    Optional[VernacCommandData]
-        The compiled command data for the program if all of its
-        obligations were automatically resolved or None if some
-        obligations remain.
-    """
-    # Try to determine if all of the obligations were
-    # immediately resolved.
-    program_id = None
-    ids_set = set(ids)
-    for new_id in ids:
-        match = OBLIGATION_ID_PATTERN.match(new_id)
-        if match is not None:
-            program_id = match.groupdict()['proof_id']
-            if program_id in ids_set:
-                break
-            else:
-                # reset
-                program_id = None
-    if program_id is not None:
-        # all obligations were resolved
-        return VernacCommandData(
-            ids,
-            None,
-            VernacSentence(
-                sentence.text,
-                sentence.ast,
-                sentence.identifiers,
-                sentence.location,
-                command_type,
-                pre_goals_or_diff,
-                get_identifiers))
-    else:
-        # some obligations remain
-        programs.append((sentence, pre_goals_or_diff, command_type))
-        return None
-
-
-def is_subproof_of(proof_id: str, id_under_test: str) -> bool:
-    """
-    Check if the given ID corresponds to a subproof of a conjecture ID.
-
-    Parameters
-    ----------
-    proof_id : str
-        The identifier of a conjecture.
-    id_under_test : List[str]
-        An identifier of a possible subproof.
-
-    Returns
-    -------
-    bool
-        True if `id_under_test` is a subproof of `proof_id`, False
-        otherwise.
-    """
-    match = SUBPROOF_ID_PATTERN.match(id_under_test)
-    return match is not None and match['proof_id'] == proof_id
-
-
-def _update_ids(
-    serapi: SerAPI,
-    feedback: List[str],
-    local_ids: List[str],
-    post_proof_id: Optional[str],
-    expanded_ids: Dict[str,
-                       str]
-) -> Tuple[List[str],
-           List[str],
-           Optional[str],
-           Optional[str]]:
-    """
-    Update known local identifiers.
-
-    Parameters
-    ----------
-    serapi : SerAPI
-        An interactive `sertop` session.
-    feedback : List[str]
-        Feedback received from a command executed in the `serapi`
-        session.
-    local_ids : List[str]
-        The set of locally defined identifiers.
-    post_proof_id : Optional[str]
-        The ID of the active conjecture prior to the most recently
-        executed command.
-    expanded_ids : Dict[str, str]
-        A map from unqualified or partially qualified IDs to fully
-        qualified variants.
-
-    Returns
-    -------
-    ids : List[str]
-        The set of identifiers introduced by the most recent command.
-    local_ids : List[str]
-        The list of locally defined identifiers.
-    pre_proof_id : Optional[str]
-        The ID of the active conjecture prior to the most recently
-        executed command.
-    post_proof_id : Optional[str]
-        The ID of the active conjecture immediately after the most
-        recent command's execution.
-    """
-    # ids = serapi.parse_new_identifiers(feedback)
-    all_local_ids = serapi.get_local_ids()
-    # get new identifiers
-    alignment = serapi_id_align(local_ids, all_local_ids)
-    new_ids = []
-    for element_a, element_b in reversed(alignment):
-        if element_a is not None:
-            break
-        new_ids.append(element_b)
-    ids = new_ids[::-1]
-    # update reference set
-    local_ids = all_local_ids
-    for ident in ids:
-        # shadow old ids
-        expanded_ids.pop(ident, None)
-    pre_proof_id = post_proof_id
-    post_proof_id = serapi.get_conjecture_id()
-    return ids, local_ids, pre_proof_id, post_proof_id
-
-
-def _handle_anomalous_proof(
-        proof_id: str,
-        defined_lemmas: Dict[str,
-                             VernacCommandData],
-        proof_sentence: ProofSentence,
-        logger: Optional[logging.Logger] = None) -> bool:
-    """
-    Handle anomalies dealing with inconsistent proof states.
-
-    Sometimes a conjecture may be reported as open
-
-    Parameters
-    ----------
-    proof_id : str
-        The reported open conjecture.
-    defined_lemmas : Dict[str, VernacCommandData]
-        A map from defined conjectures to their extracted command data.
-    proof_sentence : ProofSentence
-        The anomalous proof sentence.
-    logger : Optional[logging.Logger], optional
-        An optional logger with which a warning will be logged, by
-        default None.
-
-    Returns
-    -------
-    bool
-        Whether `proof_id` was indeed already defined.
-    """
-    if OBLIGATION_ID_PATTERN.match(proof_id) is not None:
-        extra = "Is there an extra 'Next Obligation.'?"
-    else:
-        extra = ""
-    message = (
-        f"Anomaly detected. '{proof_id}' is an open "
-        f"conjecture but is also already defined. {extra}")
-    if logger is not None:
-        logger.warning(message)
-    else:
-        warnings.warn(message)
-    if proof_id in defined_lemmas:
-        # add to the existing lemma as a new proof
-        # block
-        lemma = defined_lemmas[proof_id]
-        lemma.proofs.append([proof_sentence])
-        return True
-    return False
-
-
-def _execute_cmd(serapi: SerAPI,
-                 cmd: str) -> Tuple[List[str],
-                                    AbstractSyntaxTree]:
-    """
-    Execute a command in the given SerAPI session.
-
-    Parameters
-    ----------
-    serapi : SerAPI
-        An active `sertop` session.
-    cmd : str
-        A command to be executed.
-
-    Returns
-    -------
-    feedback : List[str]
-        Verbose feedback from executing the command.
-    AbstractSyntaxTree
-        The parsed AST of the given command.
-
-    Raises
-    ------
-    CoqExn
-        If an error occurs when attempting to execute the command.
-    """
-    # We cannot Print All in Coq 8.15.2 in certain situations
-    # without getting a "Cannot access delayed opaque proof"
-    # error.
-    # The culprits (so far) appear to be opaque proofs (Qed or Save).
-    # We execute them normally first to verify that they are
-    # valid, then we replace the Qed with an Admitted statement,
-    # which does not prevent us from printing the environment.
-    admit_qed = (
-        OpamVersion.less_than("8.14.1",
-                              serapi.serapi_version) and cmd == "Qed.")
-    saved_ident_match = _save_pattern.match(cmd)
-    define_saved = (
-        OpamVersion.less_than("8.14.1",
-                              serapi.serapi_version)
-        and saved_ident_match is not None)
-    if admit_qed or define_saved:
-        serapi.push()
-    _, feedback, sexp = serapi.execute(cmd, return_ast=True, verbose=True)
-    if admit_qed:
-        serapi.pop()
-        if serapi.try_execute("Admitted.",
-                              return_ast=False,
-                              verbose=False) is None:
-            # Admitted is not supported for Derived
-            # https://github.com/coq/coq/issues/16856.
-            # Fall back to Qed in that case (or any other
-            # unanticipated error).
-            serapi.execute(cmd, return_ast=False, verbose=False)
-    elif define_saved:
-        serapi.pop()
-        assert saved_ident_match is not None
-        saved_ident = saved_ident_match['ident']
-        serapi.push()
-        if (serapi.try_execute(f"Defined {saved_ident}.",
-                               return_ast=False,
-                               verbose=False) is None
-                or serapi.try_execute(f"Opaque {saved_ident}.",
-                                      return_ast=False,
-                                      verbose=False) is None):
-            serapi.pop()
-            serapi.execute(cmd, return_ast=False, verbose=False)
-        else:
-            serapi.pull()
-    return feedback, sexp
-
-
-def _extract_vernac_commands(
-        sentences: Iterable[CoqSentence],
-        filename: PathLike,
-        opam_switch: Optional[OpamSwitch] = None,
-        serapi_options: str = "",
-        use_goals_diff: bool = True,
-        logger: Optional[logging.Logger] = None) -> VernacCommandDataList:
-    """
-    Compile Vernacular commands from a sequence of sentences.
-
-    Parameters
-    ----------
-    sentences : Iterable[CoqSentence]
-        A sequence of sentences derived from a document.
-    filename : PathLike
-        The name of the document from which the `sentences` are taken,
-        relative to the root of the project.
-    opam_switch : Optional[OpamSwitch], optional
-        The switch in which to execute the commands, which sets the
-        version of `sertop` and controls the availability of external
-        libraries.
-        If None, then the default global switch is used.
-    serapi_options : str, optional
-        Arguments with which to initialize `sertop`, namely IQR flags.
-    use_goals_diff : bool, optional
-        If True, make use of GoalsDiff to save space in cache files, by
-        default True. This argument is for testing purposes only.
-
-    Returns
-    -------
-    CoqDocumentData
-        The compiled vernacular commands.
-
-    See Also
-    --------
-    prism.project.iqr : For more information about IQR flags.
+    A class that extracts commands from a given Coq file.
 
     Notes
     -----
     The accuracy of this extraction depends upon a few assumptions:
 
-    * No lemma emits an identifier before it is defined (i.e., before it
-      is proved).
-      Neither a verbose info message nor ``Print All.`` command should
-      indicate the lemma (or program, or other conjecture) is defined
-      before its proof(s) are complete.
+    * No lemma emits an identifier before it is defined (i.e.,
+    before it is proved).
+    Neither a verbose info message nor ``Print All.`` command should
+    indicate the lemma (or program, or other conjecture) is defined
+    before its proof(s) are complete.
     * No plugin defines their own ``Abort`` or ``Abort All``
-      equivalents, i.e., no plugin concludes a proof without emitting an
-      identifier.
-    * No plugins define their own ``Obligation`` equivalents (i.e., no
-      plugins define multi-block proofs).
-      If any plugin does so, then each "obligation" is expected to be
-      extracted as an unrelated command.
-    * No command can both end one proof and start another (this should
-      be true based on the mutually exclusive ``VtStartProof`` and
-      ``VtQed`` Vernacular classes in
-      https://github.com/coq/coq/blob/master/vernac/vernacextend.mli).
+    equivalents, i.e., no plugin concludes a proof without emitting
+    an identifier.
+    * No plugins define their own ``Obligation`` equivalents (i.e.,
+    no plugins define multi-block proofs).
+    If any plugin does so, then each "obligation" is expected to be
+    extracted as an unrelated command.
+    * No command can both end one proof and start another (this
+    should be true based on the mutually exclusive ``VtStartProof``
+    and ``VtQed`` Vernacular classes in
+    https://github.com/coq/coq/blob/master/vernac/vernacextend.mli).
     * No conjecture fails to enter proof mode after its initial
-      sentence is executed.
-      The only known exceptions to this rule comprise ``Program``s,
-      which do not enter proof mode until their first ``Obligation``'s
-      proof is begun.
-      If a plugin violates this rule, then the conjecture may be
-      extracted as an unidentified command.
-      However, an error may also be raised as the situation is untested.
-    * The conjecture IDs returned by ``Show Conjectures.`` are ordered
-      such that the conjecture actively being proved is listed first.
+    sentence is executed.
+    The only known exceptions to this rule comprise ``Program``s,
+    which do not enter proof mode until their first ``Obligation``'s
+    proof is begun.
+    If a plugin violates this rule, then the conjecture may be
+    extracted as an unidentified command.
+    However, an error may also be raised as the situation is
+    untested.
+    * The conjecture IDs returned by ``Show Conjectures.`` are
+    ordered such that the conjecture actively being proved is listed
+    first.
     * If a new identifier shadows an existing one, then the defining
-      command does not reference the shadowed ID. Violation of this
-      assumption is possible (consider a recursive function named after
-      a type that takes arguments of said type as input) but not
-      expected to occur frequently as it is unlikely in the first place
-      and poor practice. If it does occur, then the fully qualified
-      identifiers in the cache will erroneously interpret the shadowed
-      ID as its shadower (i.e., as the recursive function in the example
-      above).
-    * A change in the current conjecture implies that either a new proof
-      has begun or the current proof has ended (but not both).
-    * No plugin defines its own `Qed` or `Save` equivalents (i.e., no
-      plugin defines its own opaque proof environments) or no file to be
-      extracted uses such equivalent commands to end a nested proof.
+    command does not reference the shadowed ID. Violation of this
+    assumption is possible (consider a recursive function named
+    after a type that takes arguments of said type as input) but not
+    expected to occur frequently as it is unlikely in the first
+    place and poor practice. If it does occur, then the fully
+    qualified identifiers in the cache will erroneously interpret
+    the shadowed ID as its shadower (i.e., as the recursive function
+    in the example above).
+    * A change in the current conjecture implies that either a new
+    proof has begun or the current proof has ended (but not both).
+    * No plugin defines its own `Qed` or `Save` equivalents (i.e.,
+    no plugin defines its own opaque proof environments) or no file
+    to be extracted uses such equivalent commands to end a nested
+    proof.
     """
-    modpath = Project.get_local_modpath(filename, serapi_options)
-    file_commands: List[VernacCommandData] = []
-    programs: List[SentenceState] = []
+
+    filename: PathLike
+    """
+    The name of (path to) the file being extracted, relative to the root
+    of the project.
+    """
+    sentences: InitVar[Optional[Iterable[CoqSentence]]] = None
+    """
+    A sequence of sentences derived from a document.
+
+    If provided, then the extraction occurs upon object initialization.
+    Otherwise, one may initiate the extraction by calling the
+    constructed object with the sentences as argument.
+    """
+    serapi_options: str = ""
+    """
+    The options given to `sertop` with which to perform extraction.
+    """
+    opam_switch: Optional[OpamSwitch] = None
+    """
+    The switch in which to execute the commands, which sets the
+    version of `sertop` and controls the availability of
+    external libraries.
+    If None, then the default global switch is used.
+    """
+    logger: Optional[logging.Logger] = None
+    """
+    """
+    use_goals_diff: bool = True
+    """
+    If True, make use of GoalsDiff to save space in cache files,
+    by default True.
+    This argument is for testing purposes only.
+    """
+    modpath: str = field(init=False)
+    """
+    The logical library name of the filename.
+    """
+    extracted_commands: VernacCommandDataList = default_field(
+        VernacCommandDataList(),
+        init=False)
+    """
+    The list of extracted commands.
+    """
+    programs: List[SentenceState] = default_field([], init=False)
+    """
+    The list of all unfinished programs encountered thus far in
+    extraction.
+    """
     conjectures: Dict[str,
-                      Tuple[CoqSentence,
-                            Optional[Union[Goals,
-                                           GoalsDiff]],
-                            CommandType]] = {}
+                      SentenceState] = default_field({},
+                                                     init=False)
+    """
+    A map from conjecture IDs to their statements.
+    """
     partial_proof_stacks: Dict[str,
-                               List[Tuple[CoqSentence,
-                                          Union[Goals,
-                                                GoalsDiff],
-                                          CommandType]]] = {}
+                               ProofBlock] = default_field({},
+                                                           init=False)
+    """
+    A map from conjecture/obligation IDs to partially accumulated
+    proofs.
+    """
     obligation_map: Dict[str,
-                         str] = {}
+                         str] = default_field({},
+                                              init=False)
+    """
+    A map from obligation IDs to conjecture IDs.
+    """
     finished_proof_stacks: Dict[str,
                                 List[Tuple[str,
-                                           Proof]]] = {}
-    # A partitioned list of sentences that occur at the beginning or
-    # in the middle of a proof each paired with the goals that
-    # result before the sentence is executed and the type and the
-    # identifier of the command.
-    # The beginning of each partition is a Vernacular command that
-    # is not Ltac-related.
+                                           Proof]]] = default_field(
+                                               {},
+                                               init=False)
+    """
+    A map from conjecture IDs to lists of concluded proof blocks
+    (e.g., one block per obligation).
+    """
     expanded_ids: Dict[str,
-                       str] = {}
+                       str] = default_field({},
+                                            init=False)
+    """
+    A map from unqualified or partially qualified IDs to fully
+    qualified variants.
+    """
     defined_lemmas: Dict[str,
-                         VernacCommandData] = {}
-    local_ids = ['SerTop']
-    pre_proof_id = None
-    pre_goals = None
-    post_proof_id = None
-    post_goals = None
-    with SerAPI(serapi_options, opam_switch=opam_switch) as serapi:
-        get_identifiers = partial(
-            get_all_qualified_idents,
-            serapi,
-            modpath,
-            ordered=True,
-            id_cache=expanded_ids)
-        for sentence in sentences:
-            # TODO: Optionally filter queries out of results (and
-            # execution)
-            location = sentence.location
-            text = sentence.text
-            try:
-                feedback, sexp = _execute_cmd(serapi, text)
-                sentence.ast = sexp
-                # Attach an undocumented extra field to the CoqSentence
-                # object containing fully qualified referenced identifiers
-                # NOTE: This must be done before identifiers get shadowed in
-                # the `global_id_cache`
-                sentence.identifiers = get_identifiers(str(sexp))
-                # get new ids and shadow redefined ones
-                (ids,
-                 local_ids,
-                 pre_proof_id,
-                 post_proof_id) = _update_ids(
-                     serapi,
-                     feedback,
-                     local_ids,
-                     post_proof_id,
-                     expanded_ids)
-                proof_id_changed = post_proof_id != pre_proof_id
-                # update goals
-                if (use_goals_diff and pre_goals is not None
-                        and post_goals is not None):
-                    pre_goals_or_diff = GoalsDiff.compute_diff(
-                        pre_goals,
-                        post_goals)
-                else:
-                    pre_goals_or_diff = post_goals
-                pre_goals = post_goals
-                # analyze command
-                vernac = SexpAnalyzer.analyze_vernac(sexp)
-                if vernac.extend_type is None:
-                    command_type = vernac.vernac_type
-                else:
-                    command_type = vernac.extend_type
-                is_proof_aborted = ABORT_COMMAND_PATTERN.match(
-                    command_type) is not None
-                is_program = any(
-                    _program_regex.search(attr) is not None
-                    for attr in vernac.attributes)
-                # Check if we're dealing with a subproof
-                is_subproof = (
-                    post_proof_id is not None
-                    and any(is_subproof_of(post_proof_id,
-                                           i) for i in ids))
-                if is_program:
-                    # A program was declared.
-                    # Persist the current goals.
-                    # Programs do not open proof mode, so post_proof_id
-                    # may be None or refer to another conjecture.
-                    program = _start_program(
-                        sentence,
-                        command_type,
+                         VernacCommandData] = default_field({},
+                                                            init=False)
+    """
+    A map from conjecture/obligation IDs to the corresponding cache
+    data structure.
+    """
+    local_ids: List[str] = default_field(['SerTop'], init=False)
+    """
+    The set of identifiers introduced in the interactive session.
+    """
+    pre_proof_id: Optional[str] = default_field(None, init=False)
+    """
+    The ID of the active open conjecture, if any, before execution of
+    the most recent command.
+    """
+    pre_goals: Optional[Goals] = default_field(None, init=False)
+    """
+    The open goals, if any, before execution of the most recent command.
+    """
+    post_proof_id: Optional[str] = default_field(None, init=False)
+    """
+    The ID of the active open conjecture, if any, after execution of the
+    most recent command.
+    """
+    post_goals: Optional[Goals] = default_field(None, init=False)
+    """
+    The open goals, if any, after execution of the most recent command.
+    """
+
+    def __post_init__(self, sentences: Optional[Iterable[CoqSentence]]):
+        """
+        Initialize the `modpath`.
+        """
+        self.modpath = Project.get_local_modpath(
+            self.filename,
+            self.serapi_options)
+        if sentences is not None:
+            self(sentences)
+
+    def __call__(
+            self,
+            sentences: Iterable[CoqSentence]) -> VernacCommandDataList:
+        """
+        Perform the extraction.
+        """
+        return self._extract_vernac_commands(sentences)
+
+    def _conclude_proof(
+        self,
+        ids: List[str],
+        is_proof_aborted: bool,
+        get_identifiers: Callable[[str],
+                                  List[Identifier]]
+    ) -> Optional[VernacCommandData]:
+        r"""
+        Complete accumulation of a proof/proved conjecture.
+
+        Parameters
+        ----------
+        ids : List[str]
+            The list of identifiers introduced by the final proof
+            command.
+        is_aborted : bool
+            Whether the proof has been aborted or not.
+        get_identifiers : Callable[[str], List[Identifier]]
+            A function that accepts a serialized AST and returns a list
+            of fully qualified identifiers in the order of their
+            appearance in the AST.
+
+        Returns
+        -------
+        Optional[VernacCommandData]
+            The compiled command data for a concluded conjecture or None
+            if no conjecture was concluded (e.g., an obligation was
+            completed but more work remains for the overall conjecture).
+        """
+        assert self.pre_proof_id is not None, \
+            "pre_proof_id must not be None"
+        new_proofs = []
+        for new_id in set(ids).union({self.pre_proof_id}):
+            # Try to cover edge cases of plugins with unusual
+            # behavior that may conclude multiple
+            # proofs/obligations at once.
+            # Note that a new ID need not have an explicit proof
+            # (for example, an automatically solved obligation).
+            proof_block = self._process_proof_block(
+                self.partial_proof_stacks.pop(new_id,
+                                              []),
+                get_identifiers)
+            new_proofs.append((new_id, proof_block))
+        finished_proof_id = self.obligation_map.get(
+            self.pre_proof_id,
+            self.pre_proof_id)
+        # add to other finished obligations
+        finished_stack = self.finished_proof_stacks.setdefault(
+            finished_proof_id,
+            [])
+        finished_stack.extend(new_proofs)
+        is_obligation = self.pre_proof_id in self.obligation_map
+        is_program_completed = finished_proof_id in self.local_ids
+        is_conjecture_completed = not is_obligation or is_program_completed
+        if is_conjecture_completed or (not is_obligation and is_proof_aborted):
+            # A lemma has (presumably) been defined or aborted.
+            # Note that a plugin may cause related proofs to
+            # show up as separate entries if it defines custom
+            # proof environments.
+            (ids,
+             proofs) = unzip(self.finished_proof_stacks.pop(finished_proof_id))
+            (lemma,
+             pre_goals_or_diff,
+             lemma_type) = self.conjectures.pop(finished_proof_id)
+            lemma = VernacSentence(
+                lemma.text,
+                lemma.ast,
+                lemma.identifiers,
+                lemma.location,
+                lemma_type,
+                pre_goals_or_diff,
+                get_identifiers)
+            # uniquify but keep original order
+            ids = dict.fromkeys(ids)
+            # ensure conjecture ID is last
+            ids.pop(finished_proof_id, None)
+            ids[finished_proof_id] = None
+            lemma = VernacCommandData(
+                list(ids),
+                None,
+                lemma,
+                [p for p in proofs if p])
+            for ident in ids:
+                self.defined_lemmas[ident] = lemma
+            return lemma
+        else:
+            return None
+
+    def _execute_cmd(self,
+                     serapi: SerAPI,
+                     cmd: str) -> Tuple[List[str],
+                                        AbstractSyntaxTree]:
+        """
+        Execute a command in the given SerAPI session.
+
+        Parameters
+        ----------
+        serapi : SerAPI
+            An active `sertop` session.
+        cmd : str
+            A command to be executed.
+
+        Returns
+        -------
+        feedback : List[str]
+            Verbose feedback from executing the command.
+        AbstractSyntaxTree
+            The parsed AST of the given command.
+
+        Raises
+        ------
+        CoqExn
+            If an error occurs when attempting to execute the command.
+        """
+        # We cannot Print All in Coq 8.15.2 in certain situations
+        # without getting a "Cannot access delayed opaque proof"
+        # error.
+        # The culprits (so far) appear to be opaque proofs (Qed or
+        # Save).
+        # We execute them normally first to verify that they are
+        # valid, then we replace the Qed with an Admitted statement,
+        # which does not prevent us from printing the environment.
+        admit_qed = (
+            OpamVersion.less_than("8.14.1",
+                                  serapi.serapi_version) and cmd == "Qed.")
+        saved_ident_match = _save_pattern.match(cmd)
+        define_saved = (
+            OpamVersion.less_than("8.14.1",
+                                  serapi.serapi_version)
+            and saved_ident_match is not None)
+        if admit_qed or define_saved:
+            serapi.push()
+        if _printing_options_pattern.match(cmd):
+            # Do not allow alteration of printing options.
+            # Changing them can break extraction.
+            feedback = []
+            sexp = serapi.query_ast(cmd)
+        else:
+            (_,
+             feedback,
+             sexp) = serapi.execute(
+                 cmd,
+                 return_ast=True,
+                 verbose=True)
+        if admit_qed:
+            serapi.pop()
+            if serapi.try_execute("Admitted.",
+                                  return_ast=False,
+                                  verbose=False) is None:
+                # Admitted is not supported for Derived
+                # https://github.com/coq/coq/issues/16856.
+                # Fall back to Qed in that case (or any other
+                # unanticipated error).
+                serapi.execute(cmd, return_ast=False, verbose=False)
+        elif define_saved:
+            serapi.pop()
+            assert saved_ident_match is not None
+            saved_ident = saved_ident_match['ident']
+            serapi.push()
+            if (serapi.try_execute(f"Defined {saved_ident}.",
+                                   return_ast=False,
+                                   verbose=False) is None
+                    or serapi.try_execute(f"Opaque {saved_ident}.",
+                                          return_ast=False,
+                                          verbose=False) is None):
+                serapi.pop()
+                serapi.execute(cmd, return_ast=False, verbose=False)
+            else:
+                serapi.pull()
+        return feedback, sexp
+
+    def _extract_vernac_commands(
+            self,
+            sentences: Iterable[CoqSentence]) -> VernacCommandDataList:
+        """
+        Compile Vernacular commands from a sequence of sentences.
+
+        Parameters
+        ----------
+        sentences : Iterable[CoqSentence]
+            A sequence of sentences derived from a document.
+
+        Returns
+        -------
+        VernacCommandDataList
+            The compiled vernacular commands.
+
+        See Also
+        --------
+        prism.project.iqr : For more information about IQR flags.
+        """
+        with SerAPI(self.serapi_options,
+                    opam_switch=self.opam_switch) as serapi:
+            get_identifiers = partial(
+                get_all_qualified_idents,
+                serapi,
+                self.modpath,
+                ordered=True,
+                id_cache=self.expanded_ids)
+            for sentence in sentences:
+                # TODO: Optionally filter queries out of results (and
+                # execution)
+                try:
+                    self._extract_vernac_sentence(
+                        serapi,
+                        get_identifiers,
+                        sentence)
+                except CoqExn as e:
+                    raise CoqExn(
+                        e.msg,
+                        e.full_sexp,
+                        sentence.location,
+                        sentence.text) from e
+                except Exception as e:
+                    # slight abuse of CoqExn
+                    raise CoqExn(
+                        str(e),
+                        "",
+                        sentence.location,
+                        sentence.text) from e
+        # assert that we have extracted all proofs
+        assert not self.conjectures
+        assert not self.partial_proof_stacks
+        assert not self.finished_proof_stacks
+        assert not self.programs
+        return self.extracted_commands
+
+    def _extract_vernac_sentence(
+            self,
+            serapi: SerAPI,
+            get_identifiers: Callable[[str],
+                                      List[Identifier]],
+            sentence: CoqSentence) -> None:
+        """
+        Extract a single sentence.
+
+        Parameters
+        ----------
+        serapi : SerAPI
+            The established interactive SerAPI session.
+        get_identifiers : Callable[[str], List[Identifier]]
+            A function that takes a serialized AST and returns a list of
+            qualified identifiers in the order of their appearance.
+        sentence : CoqSentence
+            The sentence to be extracted.
+        """
+        location = sentence.location
+        assert location is not None, \
+            "Sentences must be extracted with locations"
+        text = sentence.text
+        # TODO: extract feedback
+        feedback, sexp = self._execute_cmd(serapi, text)
+        sentence.ast = sexp
+        # Attach an undocumented extra field to the CoqSentence
+        # object containing fully qualified referenced identifiers
+        # NOTE: This must be done before identifiers get shadowed in
+        # the `global_id_cache`
+        sentence.identifiers = get_identifiers(str(sexp))
+        # get new ids and shadow redefined ones
+        ids = self._update_ids(serapi)
+        proof_id_changed = self.post_proof_id != self.pre_proof_id
+        # update goals
+        if (self.use_goals_diff and self.pre_goals is not None
+                and self.post_goals is not None):
+            pre_goals_or_diff = GoalsDiff.compute_diff(
+                self.pre_goals,
+                self.post_goals)
+        else:
+            pre_goals_or_diff = self.post_goals
+        self.pre_goals = self.post_goals
+        # analyze command
+        vernac = SexpAnalyzer.analyze_vernac(sexp)
+        if vernac.extend_type is None:
+            command_type = vernac.vernac_type
+        else:
+            command_type = vernac.extend_type
+        is_proof_aborted = ABORT_COMMAND_PATTERN.match(command_type) is not None
+        is_program = any(
+            _program_regex.search(attr) is not None
+            for attr in vernac.attributes)
+        # Check if we're dealing with a subproof
+        is_subproof = (
+            self.post_proof_id is not None
+            and any(self.is_subproof_of(self.post_proof_id,
+                                        i) for i in ids))
+        if is_program:
+            # A program was declared.
+            # Persist the current goals.
+            # Programs do not open proof mode, so post_proof_id
+            # may be None or refer to another conjecture.
+            program = self._start_program(
+                sentence,
+                command_type,
+                ids,
+                pre_goals_or_diff,
+                get_identifiers)
+            if program is not None:
+                self.extracted_commands.append(program)
+        elif proof_id_changed:
+            self.post_goals = serapi.query_goals()
+            if ids or is_proof_aborted:
+                # a proof has concluded or been aborted
+                if self.pre_proof_id in self.partial_proof_stacks:
+                    self.partial_proof_stacks[self.pre_proof_id].append(
+                        (sentence,
+                         pre_goals_or_diff,
+                         command_type))
+                    completed_lemma = self._conclude_proof(
                         ids,
-                        pre_goals_or_diff,
-                        programs,
+                        is_proof_aborted,
                         get_identifiers)
-                    if program is not None:
-                        file_commands.append(program)
-                elif proof_id_changed:
-                    post_goals = serapi.query_goals()
-                    if ids or is_proof_aborted:
-                        # a proof has concluded or been aborted
-                        if pre_proof_id in partial_proof_stacks:
-                            partial_proof_stacks[pre_proof_id].append(
-                                (sentence,
-                                 pre_goals_or_diff,
-                                 command_type))
-                            completed_lemma = _conclude_proof(
-                                local_ids,
-                                ids,
-                                pre_proof_id,
-                                is_proof_aborted,
-                                conjectures,
-                                partial_proof_stacks,
-                                obligation_map,
-                                finished_proof_stacks,
-                                defined_lemmas,
-                                get_identifiers)
-                            if completed_lemma is not None:
-                                file_commands.append(completed_lemma)
-                            continue
-                        else:
-                            # That's not supposed to happen...
-                            already_defined = _handle_anomalous_proof(
-                                pre_proof_id,
-                                defined_lemmas,
-                                ProofSentence(
-                                    text,
-                                    sentence.ast,
-                                    sentence.identifiers,
-                                    location,
-                                    command_type,
-                                    pre_goals_or_diff,
-                                    get_identifiers),
-                                logger)
-                            if already_defined:
-                                continue
-                    if (post_proof_id is not None
-                            and post_proof_id not in partial_proof_stacks):
-                        # We are starting a new proof (or obligation).
-                        _start_proof_block(
-                            (sentence,
-                             pre_goals_or_diff,
-                             command_type),
-                            post_proof_id,
-                            conjectures,
-                            partial_proof_stacks,
-                            obligation_map,
-                            programs)
-                    else:
-                        # we are continuing a delayed proof
-                        assert post_proof_id in partial_proof_stacks, \
-                            f"{post_proof_id} should be in-progress"
-                        proof_stack = partial_proof_stacks[post_proof_id]
-                        proof_stack.append(
-                            (sentence,
-                             pre_goals_or_diff,
-                             command_type))
-                elif post_proof_id is not None and (not ids or is_subproof):
-                    # we are continuing an open proof
-                    if post_proof_id in partial_proof_stacks:
-                        post_goals = serapi.query_goals()
-                        proof_stack = partial_proof_stacks[post_proof_id]
-                        proof_stack.append(
-                            (sentence,
-                             pre_goals_or_diff,
-                             command_type))
-                    else:
-                        assert post_proof_id in defined_lemmas, \
-                            f"{post_proof_id} should be defined"
-                        # That's not supposed to happen...
-                        _handle_anomalous_proof(
-                            post_proof_id,
-                            defined_lemmas,
-                            ProofSentence(
-                                text,
-                                sentence.ast,
-                                sentence.identifiers,
-                                location,
-                                command_type,
-                                pre_goals_or_diff,
-                                get_identifiers),
-                            logger)
-                        continue
+                    if completed_lemma is not None:
+                        self.extracted_commands.append(completed_lemma)
+                    return
                 else:
-                    # We are either not in a proof
-                    # OR we just defined something new as a side-effect.
-                    # We let the previous goals persist.
-                    file_commands.append(
-                        VernacCommandData(
-                            ids,
-                            None,
-                            VernacSentence(
-                                text,
-                                sentence.ast,
-                                sentence.identifiers,
-                                location,
-                                command_type,
-                                pre_goals_or_diff,
-                                get_identifiers)))
-            except CoqExn as e:
-                raise CoqExn(e.msg, e.full_sexp, location) from e
-    # assert that we have extracted all proofs
-    assert not conjectures
-    assert not partial_proof_stacks
-    assert not finished_proof_stacks
-    assert not programs
-    return VernacCommandDataList(file_commands)
+                    # That's not supposed to happen...
+                    assert self.pre_proof_id is not None
+                    already_defined = self._handle_anomalous_proof(
+                        self.pre_proof_id,
+                        ProofSentence(
+                            text,
+                            sentence.ast,
+                            sentence.identifiers,
+                            location,
+                            command_type,
+                            pre_goals_or_diff,
+                            get_identifiers),
+                        self.logger)
+                    if already_defined:
+                        return
+            if (self.post_proof_id is not None
+                    and self.post_proof_id not in self.partial_proof_stacks):
+                # We are starting a new proof (or obligation).
+                self._start_proof_block(
+                    (sentence,
+                     pre_goals_or_diff,
+                     command_type))
+            else:
+                # we are continuing a delayed proof
+                assert self.post_proof_id in self.partial_proof_stacks, \
+                    f"{self.post_proof_id} should be in-progress"
+                proof_stack = self.partial_proof_stacks[self.post_proof_id]
+                proof_stack.append((sentence, pre_goals_or_diff, command_type))
+        elif self.post_proof_id is not None and (not ids or is_subproof):
+            # we are continuing an open proof
+            if self.post_proof_id in self.partial_proof_stacks:
+                self.post_goals = serapi.query_goals()
+                proof_stack = self.partial_proof_stacks[self.post_proof_id]
+                proof_stack.append((sentence, pre_goals_or_diff, command_type))
+            else:
+                assert self.post_proof_id in self.defined_lemmas, \
+                    f"{self.post_proof_id} should be defined"
+                # That's not supposed to happen...
+                self._handle_anomalous_proof(
+                    self.post_proof_id,
+                    ProofSentence(
+                        text,
+                        sentence.ast,
+                        sentence.identifiers,
+                        location,
+                        command_type,
+                        pre_goals_or_diff,
+                        get_identifiers),
+                    self.logger)
+                return
+        else:
+            # We are either not in a proof
+            # OR we just defined something new as a side-effect.
+            # We let the previous goals persist.
+            self.extracted_commands.append(
+                VernacCommandData(
+                    ids,
+                    None,
+                    VernacSentence(
+                        text,
+                        sentence.ast,
+                        sentence.identifiers,
+                        location,
+                        command_type,
+                        pre_goals_or_diff,
+                        get_identifiers)))
+
+    def _handle_anomalous_proof(
+            self,
+            proof_id: str,
+            proof_sentence: ProofSentence,
+            logger: Optional[logging.Logger] = None) -> bool:
+        """
+        Handle anomalies dealing with inconsistent proof states.
+
+        Sometimes a conjecture may be reported as open
+
+        Parameters
+        ----------
+        proof_id : str
+            The reported open conjecture.
+        proof_sentence : ProofSentence
+            The anomalous proof sentence.
+        logger : Optional[logging.Logger], optional
+            An optional logger with which a warning will be logged, by
+            default None.
+
+        Returns
+        -------
+        bool
+            Whether `proof_id` was indeed already defined.
+        """
+        if OBLIGATION_ID_PATTERN.match(proof_id) is not None:
+            extra = "Is there an extra 'Next Obligation.'?"
+        else:
+            extra = ""
+        message = (
+            f"Anomaly detected. '{proof_id}' is an open "
+            f"conjecture but is also already defined. {extra}")
+        if logger is not None:
+            logger.warning(message)
+        else:
+            warnings.warn(message)
+        if proof_id in self.defined_lemmas:
+            # add to the existing lemma as a new proof
+            # block
+            lemma = self.defined_lemmas[proof_id]
+            lemma.proofs.append([proof_sentence])
+            return True
+        return False
+
+    def _process_proof_block(
+            self,
+            block: ProofBlock,
+            get_identifiers: Callable[[str],
+                                      List[Identifier]]) -> Proof:
+        """
+        Convert a proof block into the form expected for extraction.
+
+        Parameters
+        ----------
+        block : List[Tuple[CoqSentence, Goals, CommandType]]
+            A list of proof steps within the block paired with goals
+            prior to the proof step and Vernacular types.
+        get_identifiers : Callable[[str], List[Identifier]]
+            A function that accepts a serialized AST and returns a list
+            of fully qualified identifiers in the order of their
+            appearance in the AST.
+
+        Returns
+        -------
+        Proof
+            The compiled proof.
+        """
+        if not block:
+            return []
+        proof_steps, goals, command_types = unzip(block)
+        proof = []
+        for tactic, goal, command_type in zip(proof_steps, goals, command_types):
+            tactic: CoqSentence
+            proof.append(
+                ProofSentence(
+                    tactic.text,
+                    tactic.ast,
+                    tactic.identifiers,
+                    tactic.location,
+                    command_type,
+                    goal,
+                    get_identifiers))
+        return proof
+
+    def _start_program(
+        self,
+        sentence: CoqSentence,
+        command_type: str,
+        ids: List[str],
+        pre_goals_or_diff: Optional[Union[Goals,
+                                          GoalsDiff]],
+        get_identifiers: Callable[[str],
+                                  List[Identifier]]
+    ) -> Optional[VernacCommandData]:
+        """
+        Start accumulation of a new program.
+
+        Parameters
+        ----------
+        sentence : CoqSentence
+            The sentence that instigated the program.
+        command_type : str
+            The type of the sentence's Vernacular command.
+        ids : List[str]
+            The list of definitions emitted by the program's
+            declaration, if any.
+        pre_goals_or_diff : Optional[Union[Goals, GoalsDiff]]
+            Proof goals prior to the execution of the sentence, if any.
+        get_identifiers : Callable[[str], List[Identifier]]
+            A function that accepts a serialized AST and returns a list
+            of fully qualified identifiers in the order of their
+            appearance in the AST.
+
+        Returns
+        -------
+        Optional[VernacCommandData]
+            The compiled command data for the program if all of its
+            obligations were automatically resolved or None if some
+            obligations remain.
+        """
+        # Try to determine if all of the obligations were
+        # immediately resolved.
+        program_id = None
+        ids_set = set(ids)
+        for new_id in ids:
+            match = OBLIGATION_ID_PATTERN.match(new_id)
+            if match is not None:
+                program_id = match.groupdict()['proof_id']
+                if program_id in ids_set:
+                    break
+                else:
+                    # reset
+                    program_id = None
+        if program_id is not None:
+            # all obligations were resolved
+            return VernacCommandData(
+                ids,
+                None,
+                VernacSentence(
+                    sentence.text,
+                    sentence.ast,
+                    sentence.identifiers,
+                    sentence.location,
+                    command_type,
+                    pre_goals_or_diff,
+                    get_identifiers))
+        else:
+            # some obligations remain
+            self.programs.append((sentence, pre_goals_or_diff, command_type))
+            return None
+
+    def _start_proof_block(self, sentence: SentenceState) -> None:
+        """
+        Start accumulation of a new proof block.
+
+        Parameters
+        ----------
+        sentence : SentenceState
+            The sentence that instigated the proof.
+        """
+        assert self.post_proof_id is not None, \
+            "post_proof_id must not be None"
+        assert self.post_proof_id not in self.partial_proof_stacks, \
+            f"The proof of {self.post_proof_id} has already been started"
+        command_type = sentence[2]
+        if command_type == "Obligations":
+            # Obligations get accumulated separately, but we
+            # need to know to which lemma (program) they ultimately
+            # correspond.
+            program_id = OBLIGATION_ID_PATTERN.match(
+                self.post_proof_id).groupdict()['proof_id']
+            self.obligation_map[self.post_proof_id] = program_id
+            proof_stack = self.partial_proof_stacks.setdefault(
+                self.post_proof_id,
+                [])
+            proof_stack.append(sentence)
+            if program_id not in self.conjectures:
+                # Programs unfortunately do not open proof
+                # mode until an obligation's proof has been
+                # started.
+                # Consequently, we cannot rely upon
+                # get_conjecture_id to catch the ID
+                # of the program.
+                for i, program in enumerate(reversed(self.programs)):
+                    if program_id in program[0].text:
+                        self.conjectures[program_id] = program
+                        self.programs.pop(len(self.programs) - i - 1)
+                        break
+                assert program_id in self.conjectures
+        else:
+            assert self.post_proof_id not in self.conjectures, \
+                f"The proof of {self.post_proof_id} has already been started"
+            self.conjectures[self.post_proof_id] = sentence
+            self.partial_proof_stacks[self.post_proof_id] = []
+
+    def _update_ids(
+        self,
+        serapi: SerAPI,
+    ) -> List[str]:
+        """
+        Update known local identifiers.
+
+        Parameters
+        ----------
+        serapi : SerAPI
+            An interactive `sertop` session.
+
+        Returns
+        -------
+        ids : List[str]
+            The set of identifiers introduced by the most recent
+            command.
+        """
+        # ids = serapi.parse_new_identifiers(feedback)
+        all_local_ids = serapi.get_local_ids()
+        # get new identifiers
+        alignment = serapi_id_align(self.local_ids, all_local_ids)
+        new_ids = []
+        for element_a, element_b in reversed(alignment):
+            if element_a is not None:
+                break
+            new_ids.append(element_b)
+        ids = new_ids[::-1]
+        # update reference set
+        self.local_ids = all_local_ids
+        for ident in ids:
+            # shadow old ids
+            self.expanded_ids.pop(ident, None)
+        self.pre_proof_id = self.post_proof_id
+        self.post_proof_id = serapi.get_conjecture_id()
+        return ids
+
+    def is_subproof_of(self, proof_id: str, id_under_test: str) -> bool:
+        """
+        Check if the given ID corresponds to a subproof of a conjecture.
+
+        Parameters
+        ----------
+        proof_id : str
+            The identifier of a conjecture.
+        id_under_test : List[str]
+            An identifier of a possible subproof.
+
+        Returns
+        -------
+        bool
+            True if `id_under_test` is a subproof of `proof_id`, False
+            otherwise.
+        """
+        match = SUBPROOF_ID_PATTERN.match(id_under_test)
+        return match is not None and match['proof_id'] == proof_id
 
 
 def extract_vernac_commands(
@@ -1016,13 +1060,15 @@ def _extract_vernac_commands_worker(
     if worker_semaphore is not None:
         worker_semaphore.acquire()
     try:
-        result = _extract_vernac_commands(
+        assert project.serapi_options is not None, \
+            "serapi_options must not be None"
+        result = CommandExtractor(
+            filename,
             project.get_sentences(
                 filename,
                 SEM.HEURISTIC,
                 return_locations=True,
                 glom_proofs=False),
-            filename,
             opam_switch=project.opam_switch,
             serapi_options=project.serapi_options)
     except Exception as e:
@@ -1036,7 +1082,7 @@ def _extract_vernac_commands_worker(
             worker_semaphore.release()
     if pbar is not None:
         pbar.update(1)
-    return result
+    return result.extracted_commands
 
 
 def _extract_vernac_commands_worker_star(
