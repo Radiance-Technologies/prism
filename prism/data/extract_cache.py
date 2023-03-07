@@ -1013,8 +1013,8 @@ def extract_vernac_commands(
                 final_file_list.append(filename)
         if force_serial:
             pbar = tqdm.tqdm(
-                file_list,
-                total=len(file_list),
+                final_file_list,
+                total=len(final_file_list),
                 desc=f"Caching {project.name}@{project.short_sha}")
             for filename in pbar:
                 # Verify that accompanying vo file exists first
