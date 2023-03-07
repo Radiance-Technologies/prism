@@ -39,6 +39,7 @@ from prism.data.repair.align import (
 from prism.data.repair.diff import compute_git_diff
 from prism.language.gallina.analyze import SexpInfo
 from prism.util.diff import GitDiff
+from prism.util.io import Serializable
 from prism.util.opam import OpamSwitch, PackageFormula
 from prism.util.radpytools.dataclasses import Dataclass, default_field
 from prism.util.serialize import (
@@ -695,7 +696,7 @@ class ErrorInstance(Generic[_State, _Diff]):
 
 
 @dataclass
-class RepairInstance(Generic[_State, _Diff]):
+class RepairInstance(Serializable, Generic[_State, _Diff]):
     """
     A concise example of a repair.
 

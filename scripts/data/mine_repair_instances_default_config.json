@@ -1,12 +1,12 @@
 {
-  "cache_root": "~/cache_root",
-  "repair_save_directory": "~/repairs",
+  "cache_root": "/shared/PEARLS/caching_2023-02-15/",
+  "repair_save_directory": "./test_repairs",
   "cache_format_extension": "yml",
   "prepare_pairs": "prism.data.repair.mining.prepare_label_pairs",
   "repair_miner": "prism.data.repair.instance.ProjectCommitDataRepairInstance",
   "changeset_miner": "prism.data.repair.instance.ProjectCommitDataErrorInstance.default_changeset_miner",
   "serial": true,
-  "max_workers": null,
+  "max_workers": 32,
   "chunk_size": 1,
   "project_commit_hash_map": {
     "hoare-tut": [

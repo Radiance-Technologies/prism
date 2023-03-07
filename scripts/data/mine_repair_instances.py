@@ -63,7 +63,7 @@ def _process_config(config: Dict[str,
         config["changeset_miner"] = changeset_miner_map.get(
             config["changeset_miner"],
             None)
-    logger.info("Final config:", config)
+    logger.info(f"Final config: {config}")
     return config
 
 
@@ -98,8 +98,10 @@ def load_config_json(config_file_path: Optional[str],
 
 if __name__ == "__main__":
     script_logger = logging.getLogger(__name__)
-    handler = logging.FileHandler("mine_repair_instances.log", mode="w")
-    handler.setFormatter('%(asctime)s %(message)s')
+    handler = logging.FileHandler(
+        Path(__file__).parent / "mine_repair_instances.log",
+        mode="w")
+    handler.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
     handler.setLevel(logging.DEBUG)
     script_logger.addHandler(handler)
     parser = argparse.ArgumentParser()
@@ -108,6 +110,6 @@ if __name__ == "__main__":
         default=None,
         help="Location of json configuration file for this script.")
     args = parser.parse_args()
-    script_logger.info("Script command-line args:", args)
+    script_logger.info(f"Script command-line args: {args}")
     kwargs = load_config_json(args.config_json, script_logger)
     repair_mining_loop(**kwargs)
