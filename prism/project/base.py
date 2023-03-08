@@ -10,6 +10,7 @@ import random
 import re
 import typing
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from dataclasses import fields
 from enum import Enum, auto
 from functools import partialmethod, reduce
@@ -19,6 +20,7 @@ from subprocess import CalledProcessError
 from typing import (
     Any,
     Dict,
+    Generator,
     Iterable,
     Iterator,
     List,
@@ -50,6 +52,7 @@ from prism.util.build_tools.coqdep import (
 )
 from prism.util.logging import default_log_level
 from prism.util.opam import (
+    AssignedVariables,
     OpamSwitch,
     PackageFormula,
     Version,
@@ -60,6 +63,7 @@ from prism.util.path import get_relative_path
 from prism.util.radpytools import PathLike
 from prism.util.radpytools.os import pushd
 from prism.util.re import regex_from_options
+from prism.util.swim import SwitchManager
 
 logger: logging.Logger = logging.getLogger(__name__)
 logger.setLevel(default_log_level())
@@ -124,17 +128,12 @@ class Project(ABC):
         Object for tracking OpamSwitch relevant for this project
     sentence_extraction_method : SentenceExtractionMethod
         The method by which sentences are extracted.
-
-    Attributes
-    ----------
-    dir_abspath : str
-        The absolute path to the project's root directory.
-    metadata: ProjectMetadata
-        Project metadata containing information such as project name
-        and commands.
-    sentence_extraction_method : SentenceExtractionMethod
-        The method by which sentences are extracted.
     """
+
+    _missing_dependency_pattern = re.compile(
+        r"[Cc]annot find a physical path bound to logical path".replace(
+            " ",
+            r"\s+"))
 
     coq_library_exts = ["*.vio", "*.vo", "*.vos", "*.vok"]
     """
@@ -147,13 +146,24 @@ class Project(ABC):
             metadata_storage: MetadataStorage,
             opam_switch: Optional[OpamSwitch] = None,
             sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI,
-            num_cores: Optional[int] = None):
+            num_cores: Optional[int] = None,
+            switch_manager: Optional[SwitchManager] = None):
         """
         Initialize Project object.
         """
         self.dir_abspath = dir_abspath
+        """
+        The absolute path to the project's root directory.
+        """
         self.metadata_storage = metadata_storage
+        """
+        Project metadata containing information such as project name
+        and commands.
+        """
         self.sentence_extraction_method = sentence_extraction_method
+        """
+        The method by which sentences are extracted.
+        """
         if opam_switch is not None:
             self.opam_switch = opam_switch
         else:
@@ -161,6 +171,7 @@ class Project(ABC):
         self.num_cores = num_cores
         self._last_metadata_args: Optional[MetadataArgs] = None
         self._metadata: Optional[ProjectMetadata] = None
+        self.switch_manager = switch_manager
 
     @property
     def build_cmd(self) -> List[str]:
@@ -270,7 +281,7 @@ class Project(ABC):
         ...
 
     @property
-    def ocaml_version(self) -> str:
+    def ocaml_version(self) -> Optional[str]:
         """
         Get the version of OCaml installed in the project's switch.
         """
@@ -481,6 +492,8 @@ class Project(ABC):
                     yield self.path / p
 
     def _prepare_command(self, target: str) -> str:
+        # wrap in parentheses to preserve operator precedence when
+        # joining commands with &&
         commands = [f"({cmd})" for cmd in getattr(self, f"{target}_cmd")]
         if not commands:
             raise RuntimeError(
@@ -544,8 +557,6 @@ class Project(ABC):
         TimeoutExpired
             If runtime of command exceeds `max_runtime`.
         """
-        # wrap in parentheses to preserve operator precedence when
-        # joining commands with &&
         cmd = self._prepare_command(target)
         r = self.opam_switch.run(
             cmd,
@@ -586,7 +597,13 @@ class Project(ABC):
                 for f in self.get_file_list(relative=True)
             ]
 
-    def build(self, **kwargs) -> Tuple[int, str, str]:
+    def build(
+            self,
+            managed_switch_kwargs: Optional[Dict[str,
+                                                 Any]] = None,
+            **kwargs) -> Tuple[int,
+                               str,
+                               str]:
         """
         Build the project.
 
@@ -597,12 +614,75 @@ class Project(ABC):
         If serapi_options is incorrect after building, infer
         serapi_options after building and concatenate the results of the
         builds.
+
+        If the project's current switch has missing or incorrect
+        dependencies as indicated by standard error output, then
+        dependencies are freshly inferred.
+        If a switch manager is available, then a new switch is obtained
+        with the dependencies and the build is re-attempted.
+
+        Parameters
+        ----------
+        managed_switch_kwargs : Optional[Dict[str, Any]], optional
+            A dictionary containing keyword arguments to
+            `managed_switch`.
+        max_memory: Optional[int], optional
+            Max memory (bytes) allowed to make project.
+        max_runtime: Optional[int], optional
+            Max time (seconds) allowed to make project.
+
+        Returns
+        -------
+        return_code : int
+            The exit code of the build process.
+        stdout : str
+            The captured standard output of the build process.
+        stderr : str
+            The captured standard error of the build process.
+
+        See Also
+        --------
+        managed_switch : For valid `managed_switch_kwargs`
         """
+        if managed_switch_kwargs is None:
+            managed_switch_kwargs = {}
+        switch_manager = managed_switch_kwargs.get(
+            'switch_manager',
+            self.switch_manager)
         if not self._check_serapi_option_health_pre_build():
             _, rcode, stdout, stderr = self.infer_serapi_options(**kwargs)
             return rcode, stdout, stderr
         else:
-            rcode, stdout, stderr = self._make("build", "Compilation", **kwargs)
+            original_switch = self.opam_switch
+            try:
+                with self.managed_switch(**managed_switch_kwargs):
+                    (rcode,
+                     stdout,
+                     stderr) = self._make("build",
+                                          "Compilation",
+                                          **kwargs)
+            except ProjectBuildError as e:
+                if self._missing_dependency_pattern.search(
+                        e.stderr) is not None:
+                    self.infer_opam_dependencies()
+                    if switch_manager is not None:
+                        # try to build again with fresh dependencies
+                        release = managed_switch_kwargs.get('release', True)
+                        if not release and original_switch != self.opam_switch:
+                            # release flawed switch if it is not already
+                            # released
+                            switch_manager.release_switch(self.opam_switch)
+                            self.opam_switch = original_switch
+                        # force reattempt build
+                        with self.managed_switch(**managed_switch_kwargs):
+                            (rcode,
+                             stdout,
+                             stderr) = self._make(
+                                 "build",
+                                 "Compilation",
+                                 **kwargs)
+                else:
+                    raise e
         if not self._check_serapi_option_health_post_build():
             separator = "\n@@\nInferring SerAPI Options...\n@@\n"
             _, rcode, stdout_post, stderr_post = self.infer_serapi_options(
@@ -1100,6 +1180,81 @@ class Project(ABC):
             *result,
             ExcType=ProjectCommandError)
         return result
+
+    @contextmanager
+    def managed_switch(
+        self,
+        coq_version: Optional[Union[str,
+                                    Version]] = None,
+        variables: Optional[AssignedVariables] = None,
+        release: bool = True,
+        switch_manager: Optional[SwitchManager] = None
+    ) -> Generator[OpamSwitch,
+                   None,
+                   None]:
+        """
+        Yield a context with a switch matching given constraints.
+
+        For the duration of the context, this project's switch will be
+        set to a managed switch obtained from the project's switch
+        manager.
+
+        Parameters
+        ----------
+        coq_version : Optional[Union[str, Version]], optional
+            A, by default None
+        variables : Optional[AssignedVariables], optional
+            Optional variables that may impact interpretation of the
+            project's dependency formula and override those of the
+            switch manager, by default None.
+        release : bool, optional
+            Whether to release the managed switch upon exiting the
+            context.
+            A switch that has been released cannot safely be used again.
+        switch_manager : Optional[SwitchManager], optional
+            An optional switch manager that will override the project's
+            manager.
+
+        Yields
+        ------
+        OpamSwitch
+            The original switch so that it can be restored manually if
+            `release` is False.
+
+        Raises
+        ------
+        RuntimeError
+            If `coq_version` or `variables` is not None and both
+            `switch_manager` and ``self.switch_manager`` are None.
+        """
+        dependency_formula = self.get_dependency_formula(coq_version)
+        managed_switch_requested = (
+            coq_version is not None and variables is not None)
+        if variables is None:
+            variables = {}
+        if switch_manager is None:
+            switch_manager = self.switch_manager
+        is_switch_stale = False
+        if switch_manager is not None:
+            is_switch_stale = switch_manager.satisfies(
+                self.opam_switch,
+                dependency_formula,
+                **variables)
+        managed_switch_requested = managed_switch_requested or is_switch_stale
+        if managed_switch_requested and switch_manager is None:
+            raise RuntimeError(
+                "Cannot use managed switch without a switch manager")
+        original_switch = self.opam_switch
+        try:
+            if managed_switch_requested and switch_manager is not None:
+                self.opam_switch = switch_manager.get_switch(
+                    dependency_formula,
+                    variables)
+            yield original_switch
+        finally:
+            if managed_switch_requested and switch_manager is not None and release:
+                switch_manager.release_switch(self.opam_switch)
+                self.opam_switch = original_switch
 
     @staticmethod
     def extract_sentences(
