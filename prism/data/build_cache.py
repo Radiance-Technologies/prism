@@ -1072,7 +1072,12 @@ class CoqProjectBuildCacheProtocol(Protocol):
         # standardize inputs to get_path
         if not isinstance(cache_id, tuple):
             cache_id = (cache_id,)
-        atomic_write(self.get_path(*cache_id), file_contents)
+        if suffix is not None:
+            file_path = Path(
+                str(self.get_path(*cache_id).with_suffix("")) + suffix)
+        else:
+            file_path = self.get_path(*cache_id)
+        atomic_write(file_path, file_contents)
         if block:
             return "write complete"
         else:
