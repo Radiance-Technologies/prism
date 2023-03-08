@@ -973,10 +973,13 @@ class SerAPI:
         try:
             feedback = self.query_vernac(f"Locate {qualid}.")
         except CoqExn as e:
-            qualids = self._handle_identifier_reserved_coqexn(
-                e,
-                self.query_full_qualids,
-                qualid)
+            try:
+                qualids = self._handle_identifier_reserved_coqexn(
+                    e,
+                    self.query_full_qualids,
+                    qualid)
+            except CoqExn:
+                qualids = []
         else:
             assert feedback
             feedback = feedback[0]
