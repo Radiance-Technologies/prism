@@ -175,7 +175,6 @@ class RepairInstanceDB:
         self.cursor.execute(self._sql_create_records_table)
         self.connection.commit()
 
-    @synchronizedmethod
     def insert_record(
             self,
             cache_label: CacheLabel,
@@ -272,34 +271,6 @@ class RepairInstanceDB:
         }
 
 
-class RepairInstanceDBServer(BaseManager):
-    """
-    A BaseManager-derived server for managing build cache.
-    """
-
-
-RepairInstanceDBServer.register(
-    "RepairInstanceDB",
-    RepairInstanceDB,
-    exposed=[
-        "__enter__",
-        "__exit__",
-        "create_table",
-        "insert_record",
-        "get_record"
-    ])
-
-
-def RepairInstanceDBClient(
-        server: RepairInstanceDBServer,
-        *args,
-        **kwargs) -> RepairInstanceDB:
-    """
-    Return client object for writing build cache.
-    """
-    return cast(RepairInstanceDB, server.RepairInstanceDB(*args, **kwargs))
-
-
 class RepairMiningExceptionLogger:
     """
     Logger for writing exception logs during repair mining process.
@@ -333,12 +304,36 @@ class RepairMiningExceptionLogger:
             self.logger.error(f"Preempted result: {exception.value}")
 
 
+class RepairMiningExceptionLoggerServer(BaseManager):
+    """
+    A BaseManager-derived server for managing exception logging.
+    """
+
+
+RepairMiningExceptionLoggerServer.register(
+    "RepairMiningExceptionLogger",
+    RepairMiningExceptionLogger)
+
+
+def RepairMiningExceptionLoggerClient(
+        server: RepairMiningExceptionLoggerServer,
+        *args,
+        **kwargs) -> RepairMiningExceptionLogger:
+    """
+    Return client object for writing build cache.
+    """
+    return cast(
+        RepairMiningExceptionLogger,
+        server.RepairMiningExceptionLogger(*args,
+                                           **kwargs))
+
+
 def build_repair_instance(
         error_instance: ProjectCommitDataErrorInstance,
         repaired_state: ProjectCommitData,
         change_selection: ChangeSelection,
         repair_save_directory: Path,
-        repair_instance_db: RepairInstanceDB,
+        repair_instance_db_file: Path,
         miner: RepairMiner,
         exception_logger: RepairMiningExceptionLogger
 ) -> BuildRepairInstanceOutput:
@@ -357,8 +352,9 @@ def build_repair_instance(
         repaired state
     repair_save_directory : Path
         Path to directory to save repair instances
-    repair_instance_db : RepairInstanceDB
-        Database for recording new repair instances saved to disk
+    repair_instance_db_file : Path
+        Path to database for recording new repair instances saved to
+        disk
     miner : RepairMiner
         Function used to mine repair instances
     exception_logger : RepairMiningExceptionLogger
@@ -379,7 +375,7 @@ def build_repair_instance(
             result,
             change_selection,
             repair_save_directory,
-            repair_instance_db,
+            repair_instance_db_file,
             exception_logger)
     return result
 
@@ -501,7 +497,7 @@ def write_repair_instance(
         potential_diff: BuildRepairInstanceOutput,
         change_selection: ChangeSelection,
         repair_file_directory: Path,
-        repair_instance_db: RepairInstanceDB,
+        repair_instance_db_file: Path,
         exception_logger: RepairMiningExceptionLogger):
     """
     Write a repair instance to disk, or log an exception.
@@ -515,8 +511,9 @@ def write_repair_instance(
         A potential repair instance
     repair_file_directory : Path
         Path to directory to store serialized repair instances
-    repair_instance_db : RepairInstanceDB
-        Database for recording new repair instances saved to disk
+    repair_instance_db_file : Path
+        Path to database for recording new repair instances saved to
+        disk
     exception_logger : RepairMiningExceptionLogger
         Object used to log errors
 
@@ -526,24 +523,25 @@ def write_repair_instance(
         If potential_diff is neither of ProjectCommitDataRepairInstance
         nor of Except.
     """
-    if isinstance(potential_diff, ProjectCommitDataRepairInstance):
-        metadata = potential_diff.error.initial_state.project_state.project_metadata
-        cache_label = {
-            "project_name": metadata.project_name,
-            "commit_sha": metadata.commit_sha,
-            "coq_version": metadata.coq_version
-        }
-        file_path = repair_instance_db.insert_record(
-            cache_label,
-            change_selection,
-            repair_file_directory)
-        atomic_write(file_path, potential_diff.compress())
-    elif isinstance(potential_diff, Except):
-        exception_logger.write_exception_log(potential_diff)
-    else:
-        raise TypeError(
-            f"Type {type(potential_diff)} is not recognized and can't be "
-            "written.")
+    with RepairInstanceDB(repair_instance_db_file) as repair_instance_db:
+        if isinstance(potential_diff, ProjectCommitDataRepairInstance):
+            metadata = potential_diff.error.initial_state.project_state.project_metadata
+            cache_label = {
+                "project_name": metadata.project_name,
+                "commit_sha": metadata.commit_sha,
+                "coq_version": metadata.coq_version
+            }
+            file_path = repair_instance_db.insert_record(
+                cache_label,
+                change_selection,
+                repair_file_directory)
+            atomic_write(file_path, potential_diff.compress())
+        elif isinstance(potential_diff, Except):
+            exception_logger.write_exception_log(potential_diff)
+        else:
+            raise TypeError(
+                f"Type {type(potential_diff)} is not recognized and can't be "
+                "written.")
 
 
 def _get_consecutive_commit_hashes(
@@ -751,89 +749,90 @@ def repair_mining_loop(
         repair_miner = ProjectCommitDataRepairInstance.make_repair_instance
     if changeset_miner is None:
         changeset_miner = ProjectCommitDataErrorInstance.default_changeset_miner
-    exception_logger = RepairMiningExceptionLogger(repair_save_directory)
     with CoqProjectBuildCacheServer() as cache_server:
         db_file = repair_save_directory / "repair_records.sqlite3"
-        with RepairInstanceDBServer() as db_server:
-            with RepairInstanceDBClient(db_server, db_file) as db_instance:
-                cache_args = (cache_server, cache_root, cache_format_extension)
-                cache_label_pairs = prepare_pairs(
-                    *cache_args,
-                    project_commit_hash_map)
-                # ##########################################################
-                # Build error instances
-                # ##########################################################
-                if serial:  # Serial
-                    error_instances: List[ProjectCommitDataErrorInstance] = []
-                    for label_a, label_b in tqdm(
-                            cache_label_pairs, desc="Error instance mining"):
-                        new_error_instances = build_error_instances_from_label_pair(
-                            label_a,
-                            label_b,
-                            cache_server,
-                            cache_root,
-                            cache_format_extension,
-                            changeset_miner,
-                            exception_logger)
-                        if not isinstance(new_error_instances, Except):
-                            error_instances.extend(new_error_instances)
-                else:  # Parallel
-                    # Prepare process_map kwargs:
-                    process_map_kwargs = {}
-                    if max_workers is not None:
-                        process_map_kwargs["max_workers"] = max_workers
-                    process_map_kwargs["chunksize"] = chunk_size
-                    error_instance_jobs = [
-                        (
-                            label_a,
-                            label_b,
-                            cache_server,
-                            cache_root,
-                            cache_format_extension,
-                            changeset_miner,
-                            exception_logger) for label_a,
-                        label_b in cache_label_pairs
-                    ]
-                    error_instances_list = process_map(
-                        build_error_instances_from_label_pair_star,
-                        error_instance_jobs,
-                        desc="Error instance mining",
-                        **process_map_kwargs)
-                    error_instances: List[AugmentedErrorInstance] = []
-                    for item in error_instances_list:
-                        if not isinstance(item, Except):
-                            error_instances.extend(item)
-                # ##########################################################
-                # Build repair instances
-                # ##########################################################
-                if serial:  # Serial
-                    for error_instance, repaired_state, change_selection in tqdm(
-                            error_instances, desc="Repair instance mining."):
-                        result = build_repair_instance(
-                            error_instance,
-                            repaired_state,
-                            change_selection,
-                            repair_save_directory,
-                            db_instance,
-                            repair_miner,
-                            exception_logger)
-                        if isinstance(result, Except):
-                            print(result.trace)
-                            raise result.exception
-                else:  # Parallel
-                    repair_instance_jobs = [
-                        (
-                            error_instance,
-                            repaired_state,
-                            change_selection,
-                            repair_save_directory,
-                            db_instance,
-                            repair_miner,
-                            exception_logger) for error_instance,
-                        repaired_state in error_instances
-                    ]
-                    process_map(
-                        build_repair_instance_star,
-                        repair_instance_jobs,
-                        desc="Repair Mining",
-                        **process_map_kwargs)
+        with RepairMiningExceptionLoggerServer() as exception_server:
+            exception_logger = RepairMiningExceptionLoggerClient(
+                exception_server,
+                repair_save_directory)
+            cache_args = (cache_server, cache_root, cache_format_extension)
+            cache_label_pairs = prepare_pairs(
+                *cache_args,
+                project_commit_hash_map)
+            # ##########################################################
+            # Build error instances
+            # ##########################################################
+            if serial:  # Serial
+                error_instances: List[ProjectCommitDataErrorInstance] = []
+                for label_a, label_b in tqdm(
+                        cache_label_pairs, desc="Error instance mining"):
+                    new_error_instances = build_error_instances_from_label_pair(
+                        label_a,
+                        label_b,
+                        cache_server,
+                        cache_root,
+                        cache_format_extension,
+                        changeset_miner,
+                        exception_logger)
+                    if not isinstance(new_error_instances, Except):
+                        error_instances.extend(new_error_instances)
+            else:  # Parallel
+                # Prepare process_map kwargs:
+                process_map_kwargs = {}
+                if max_workers is not None:
+                    process_map_kwargs["max_workers"] = max_workers
+                process_map_kwargs["chunksize"] = chunk_size
+                error_instance_jobs = [
+                    (
+                        label_a,
+                        label_b,
+                        cache_server,
+                        cache_root,
+                        cache_format_extension,
+                        changeset_miner,
+                        exception_logger) for label_a,
+                    label_b in cache_label_pairs
+                ]
+                error_instances_list = process_map(
+                    build_error_instances_from_label_pair_star,
+                    error_instance_jobs,
+                    desc="Error instance mining",
+                    **process_map_kwargs)
+                error_instances: List[AugmentedErrorInstance] = []
+                for item in error_instances_list:
+                    if not isinstance(item, Except):
+                        error_instances.extend(item)
+            # ##########################################################
+            # Build repair instances
+            # ##########################################################
+            if serial:  # Serial
+                for error_instance, repaired_state, change_selection in tqdm(
+                        error_instances, desc="Repair instance mining."):
+                    result = build_repair_instance(
+                        error_instance,
+                        repaired_state,
+                        change_selection,
+                        repair_save_directory,
+                        db_file,
+                        repair_miner,
+                        exception_logger)
+                    if isinstance(result, Except):
+                        print(result.trace)
+                        raise result.exception
+            else:  # Parallel
+                repair_instance_jobs = [
+                    (
+                        error_instance,
+                        repaired_state,
+                        change_selection,
+                        repair_save_directory,
+                        db_file,
+                        repair_miner,
+                        exception_logger) for error_instance,
+                    repaired_state in error_instances
+                ]
+                process_map(
+                    build_repair_instance_star,
+                    repair_instance_jobs,
+                    desc="Repair Mining",
+                    **process_map_kwargs)
