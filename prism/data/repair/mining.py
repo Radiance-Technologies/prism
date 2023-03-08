@@ -11,7 +11,6 @@ from tempfile import TemporaryDirectory
 from types import TracebackType
 from typing import Callable, Dict, List, Optional, Tuple, Type, Union, cast
 
-from git import Repo
 from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 
@@ -32,6 +31,7 @@ from prism.data.repair.instance import (
     default_align,
 )
 from prism.project.metadata.storage import MetadataStorage
+from prism.project.repo import ProjectRepo
 from prism.util.io import atomic_write
 from prism.util.radpytools.multiprocessing import synchronizedmethod
 
@@ -46,13 +46,15 @@ RepairMiner = Callable[[ProjectCommitDataErrorInstance,
 Signature of the function used to create repair instances.
 """
 ProjectCommitHashMap = Optional[Dict[str, Optional[List[str]]]]
-PreparePairsFunction = Callable[
-    [CoqProjectBuildCacheServer,
-     Path,
-     str,
-     ProjectCommitHashMap],
-    List[Tuple[CacheObjectStatus,
-               CacheObjectStatus]]]
+PreparePairsReturn = List[Tuple[CacheObjectStatus, CacheObjectStatus]]
+# yapf: disable
+PreparePairsFunction = Callable[[CoqProjectBuildCacheServer,
+                                 Path,
+                                 str,
+                                 MetadataStorage,
+                                 ProjectCommitHashMap],
+                                PreparePairsReturn]
+# yapf: enable
 """
 Signature of the function used to prepare cache item label pairs for
 repair instance mining.
@@ -276,13 +278,16 @@ class RepairMiningExceptionLogger:
     Logger for writing exception logs during repair mining process.
     """
 
-    def __init__(self, repair_save_directory: Path):
+    def __init__(self, repair_save_directory: Path, level: int):
         self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging.DEBUG)
+        # Get rid of the stdout handler
+        for handler in self.logger.handlers:
+            self.logger.removeHandler(handler)
+        self.logger.setLevel(level)
         self.handler = logging.FileHandler(
             str(repair_save_directory / "repair_mining_error_log.txt"))
         self.handler.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
-        self.handler.setLevel(logging.DEBUG)
+        self.handler.setLevel(level)
         self.logger.addHandler(self.handler)
 
     @synchronizedmethod
@@ -302,6 +307,18 @@ class RepairMiningExceptionLogger:
         self.logger.error(f"Traceback: {exception.trace}")
         if exception.value is not None:
             self.logger.error(f"Preempted result: {exception.value}")
+
+    @synchronizedmethod
+    def write_debug_log(self, message: str):
+        """
+        Write a debug message.
+
+        Parameters
+        ----------
+        message : str
+            Message to write as a debug message to the logger.
+        """
+        self.logger.debug(message)
 
 
 class RepairMiningExceptionLoggerServer(BaseManager):
@@ -402,9 +419,7 @@ def build_repair_instance_star(args: tuple) -> BuildRepairInstanceOutput:
 def build_error_instances_from_label_pair(
     label_a: CacheObjectStatus,
     label_b: CacheObjectStatus,
-    cache_server: CoqProjectBuildCacheServer,
-    cache_root: Path,
-    cache_format_extension: str,
+    cache: CoqProjectBuildCacheProtocol,
     changeset_miner: ChangeSetMiner,
     exception_logger: RepairMiningExceptionLogger
 ) -> Union[List[AugmentedErrorInstance],
@@ -421,12 +436,8 @@ def build_error_instances_from_label_pair(
         The label corresponding to the initial state.
     label_b : CacheObjectStatus
         The label corresponding to the repaired state.
-    cache_server : CoqProjectBuildCacheServer
-        The cache server to connect the cache client to.
-    cache_root: Path
-        The path to the cache root
-    cache_format_extension: str
-        The extension used by the cache files
+    cache : CoqProjectBuildCacheProtocol
+        The Coq project build cache object to load from
     changeset_miner : ChangeSetMiner
         The callable used to mine ChangeSelection objects
     exception_logger : RepairMiningExceptionLogger
@@ -439,20 +450,20 @@ def build_error_instances_from_label_pair(
         object if there's an error.
     """
     try:
-        cache_client = cast(
-            CoqProjectBuildCacheProtocol,
-            CoqProjectBuildCacheClient(
-                cache_server,
-                cache_root,
-                cache_format_extension))
-        initial_state = cache_client.get(
+        initial_state = cache.get(
             label_a.project,
             label_a.commit_hash,
             label_a.coq_version)
-        repaired_state = cache_client.get(
+        exception_logger.write_debug_log(
+            "build_error_instances_from_label_pair: Finished loading cache for"
+            f" label a: {label_a}.")
+        repaired_state = cache.get(
             label_b.project,
             label_b.commit_hash,
             label_b.coq_version)
+        exception_logger.write_debug_log(
+            "build_error_instances_from_label_pair: Finished loading cache for"
+            f" label b: {label_b}.")
         initial_state.sort_commands()
         commit_diff = ProjectCommitDataDiff.from_commit_data(
             initial_state,
@@ -553,9 +564,7 @@ def _get_consecutive_commit_hashes(
     """
     Build a list of consecutive commit hash tuples for project & cache.
     """
-    repo = Repo.clone_from(
-        metadata_storage.get(project).project_url,
-        repo_root / project)
+    repo = ProjectRepo(repo_root / project, metadata_storage=metadata_storage)
     commit_hashes = set(ci.commit_hash for ci in cache_items)
     dated_commit_hashes = sorted(
         [(repo.commit(ch).authored_datetime,
@@ -695,6 +704,7 @@ def prepare_label_pairs(
 def repair_mining_loop(
         cache_root: Path,
         repair_save_directory: Path,
+        metadata_storage_file: Path,
         cache_format_extension: str = "yml",
         prepare_pairs: Optional[PreparePairsFunction] = None,
         repair_miner: Optional[RepairMiner] = None,
@@ -703,7 +713,8 @@ def repair_mining_loop(
         max_workers: Optional[int] = None,
         chunk_size: int = 1,
         project_commit_hash_map: Optional[Dict[str,
-                                               Optional[List[str]]]] = None):
+                                               Optional[List[str]]]] = None,
+        logging_level: int = logging.DEBUG):
     """
     Mine repair instances from the given build cache.
 
@@ -713,6 +724,8 @@ def repair_mining_loop(
         Path to cache root to mine repair instances from
     repair_save_directory : Path
         Path to directory for saving repair instances
+    metadata_storage_file : Path
+        Path to metadata storage file to load for commit identification
     cache_format_extension : str, optional
         Extension of cache files, by default "yml"
     prepare_pairs : PreparePairsFunction, optional
@@ -741,6 +754,8 @@ def repair_mining_loop(
         commit hashes for that project.
         If instead the value is a list, use only those commit hashes
         listed for that project
+    logging_level : int, optional
+        Logging level for the exception logger, by default DEBUG.
     """
     os.makedirs(str(repair_save_directory), exist_ok=True)
     if prepare_pairs is None:
@@ -749,15 +764,21 @@ def repair_mining_loop(
         repair_miner = ProjectCommitDataRepairInstance.make_repair_instance
     if changeset_miner is None:
         changeset_miner = ProjectCommitDataErrorInstance.default_changeset_miner
+    metadata_storage = MetadataStorage.load(metadata_storage_file)
     with CoqProjectBuildCacheServer() as cache_server:
         db_file = repair_save_directory / "repair_records.sqlite3"
         with RepairMiningExceptionLoggerServer() as exception_server:
             exception_logger = RepairMiningExceptionLoggerClient(
                 exception_server,
-                repair_save_directory)
+                repair_save_directory,
+                logging_level)
             cache_args = (cache_server, cache_root, cache_format_extension)
+            cache = cast(
+                CoqProjectBuildCacheProtocol,
+                CoqProjectBuildCacheClient(*cache_args))
             cache_label_pairs = prepare_pairs(
                 *cache_args,
+                metadata_storage,
                 project_commit_hash_map)
             # ##########################################################
             # Build error instances
@@ -769,9 +790,7 @@ def repair_mining_loop(
                     new_error_instances = build_error_instances_from_label_pair(
                         label_a,
                         label_b,
-                        cache_server,
-                        cache_root,
-                        cache_format_extension,
+                        cache,
                         changeset_miner,
                         exception_logger)
                     if not isinstance(new_error_instances, Except):
@@ -786,9 +805,7 @@ def repair_mining_loop(
                     (
                         label_a,
                         label_b,
-                        cache_server,
-                        cache_root,
-                        cache_format_extension,
+                        cache,
                         changeset_miner,
                         exception_logger) for label_a,
                     label_b in cache_label_pairs
@@ -829,7 +846,8 @@ def repair_mining_loop(
                         db_file,
                         repair_miner,
                         exception_logger) for error_instance,
-                    repaired_state in error_instances
+                    repaired_state,
+                    change_selection in error_instances
                 ]
                 process_map(
                     build_repair_instance_star,

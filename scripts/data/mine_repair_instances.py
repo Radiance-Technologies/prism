@@ -51,6 +51,8 @@ def _process_config(config: Dict[str,
         config["cache_root"] = Path(config["cache_root"])
     if "repair_save_directory" in config:
         config["repair_save_directory"] = Path(config["repair_save_directory"])
+    if "metadata_storage_file" in config:
+        config["metadata_storage_file"] = Path(config["metadata_storage_file"])
     if "prepare_pairs" in config:
         config["prepare_pairs"] = prepare_pairs_map.get(
             config["prepare_pairs"],
@@ -63,6 +65,8 @@ def _process_config(config: Dict[str,
         config["changeset_miner"] = changeset_miner_map.get(
             config["changeset_miner"],
             None)
+    if "logging_level" in config:
+        config["logging_level"] = getattr(logging, config["logging_level"])
     logger.info(f"Final config: {config}")
     return config
 
