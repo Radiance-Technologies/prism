@@ -7,7 +7,7 @@ import re
 from prism.util.iterable import CallableIterator
 
 _whitespace_regex = re.compile(r"\s+", flags=re.DOTALL)
-_escape_regex = re.compile('(["\'\\\b\f\t\n\r\v\a])')
+_escape_regex = re.compile('(["\'\\\\\b\f\t\n\r\v\a])')
 
 
 def escape(s: str) -> str:
