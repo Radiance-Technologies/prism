@@ -424,12 +424,13 @@ class StrWithLocation(str):
             def _repl(match: re.Match, repl=repl) -> str:
                 nonlocal repls
                 sub = repl(match)
-                repls.append(escape_backslash(sub))  # type: ignore
+                repls.append(sub)  # type: ignore
                 return sub
 
             repl = _repl
         else:
-            repls = repeat(escape_backslash(repl))
+            repls = repeat(repl)
+            repl = escape_backslash(repl)
 
         subbed_string = pattern.sub(repl, string, count)
         subbed_indices = []

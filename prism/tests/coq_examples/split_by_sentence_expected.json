@@ -396,7 +396,7 @@
     "Tactic Notation \"coqeal\" \"[\" ssrpatternarg(pat) \"]\" open_constr(strategy) := let H := fresh \"H\" in let Q := fresh \"Q\" in let eqQ := fresh \"eqQ\" in ssrpattern pat => H; elim/abstract_context : (H) => Q eqQ; rewrite /H {H} [(X in Q X)](coqeal strategy) eqQ {Q eqQ}.",
     "Notation \"a := b\" := (a <> string_dec \"asd\" <> b) (at level 60).",
     "Notation \"a ;; b\" := (a := string_dec \"asd\" := b) (at level 50).",
-    "Notation \"\"\"a\"\"\" := (string_dec \"\"\"\" <> a <> string_dec \"\"\"\") (at level 70)."
+    "Notation \"\"\"a\"\"\" := (string_dec \"\"\"\" <> a <> string_dec \"\\\") (at level 70)."
   ],
   "notations_test_glom_list": [
     "Notation \"0\" := zero_op : computable_scope.",
@@ -426,6 +426,6 @@
     "Tactic Notation \"coqeal\" \"[\" ssrpatternarg(pat) \"]\" open_constr(strategy) := let H := fresh \"H\" in let Q := fresh \"Q\" in let eqQ := fresh \"eqQ\" in ssrpattern pat => H; elim/abstract_context : (H) => Q eqQ; rewrite /H {H} [(X in Q X)](coqeal strategy) eqQ {Q eqQ}.",
     "Notation \"a := b\" := (a <> string_dec \"asd\" <> b) (at level 60).",
     "Notation \"a ;; b\" := (a := string_dec \"asd\" := b) (at level 50).",
-    "Notation \"\"\"a\"\"\" := (string_dec \"\"\"\" <> a <> string_dec \"\"\"\") (at level 70)."
+    "Notation \"\"\"a\"\"\" := (string_dec \"\"\"\" <> a <> string_dec \"\\\") (at level 70)."
   ]
 }
