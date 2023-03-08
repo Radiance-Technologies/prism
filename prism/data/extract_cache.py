@@ -1266,6 +1266,17 @@ def extract_cache_new(
         for h in logger.handlers:
             logger.removeHandler(h)
         logger.addHandler(handler)
+        original_switch = project.opam_switch
+        managed_switch_kwargs = {
+            'coq_version': coq_version,
+            'variables': {
+                'build': True,
+                'post': True,
+                'dev': True
+            },
+            'release': False,
+            'switch_manager': switch_manager,
+        }
         try:
             # Make sure there aren't any changes or uncommitted files
             # left over from previous iterations, then check out the
@@ -1279,20 +1290,11 @@ def extract_cache_new(
                 keep_going=True,
                 force_remove=True,
                 force_reset=True)
-            # get a switch
-            dependency_formula = project.get_dependency_formula(coq_version)
-            original_switch = project.opam_switch
-            project.opam_switch = switch_manager.get_switch(
-                dependency_formula,
-                variables={
-                    'build': True,
-                    'post': True,
-                    'dev': True
-                })
             # process the commit
             metadata = project.metadata
             try:
                 build_result = project.build(
+                    managed_switch_kwargs=managed_switch_kwargs,
                     max_runtime=max_runtime,
                     max_memory=max_memory)
             except (ProjectBuildError, TimeoutExpired) as pbe:
