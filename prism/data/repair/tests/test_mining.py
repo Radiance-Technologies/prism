@@ -71,13 +71,22 @@ class TestRepairInstanceDB(unittest.TestCase):
         with RepairInstanceDB(self._test_db_path) as db:
             path: Path = db.insert_record(
                 self._cache_label,
-                self._change_selection)
+                self._change_selection,
+                self._test_db_path.parent)
             db.cursor.execute("SELECT * FROM records")
             result = db.cursor.fetchall()
             self.assertListEqual(result, [self._test_record])
-            self.assertEqual(path, Path('repair-1.yml'))
-            db.insert_record(self._cache_label, self._change_selection)
-            db.insert_record(self._cache_label, self._change_selection)
+            self.assertEqual(
+                path,
+                self._test_db_path.parent / Path('repair-1.yml'))
+            db.insert_record(
+                self._cache_label,
+                self._change_selection,
+                self._test_db_path.parent)
+            db.insert_record(
+                self._cache_label,
+                self._change_selection,
+                self._test_db_path.parent)
             db.cursor.execute("SELECT * FROM records WHERE id = 3")
             result = db.cursor.fetchone()
             self.assertEqual(result[0], 3)
@@ -87,7 +96,10 @@ class TestRepairInstanceDB(unittest.TestCase):
         Verify records are fetched correctly.
         """
         with RepairInstanceDB(self._test_db_path) as db:
-            db.insert_record(self._cache_label, self._change_selection)
+            db.insert_record(
+                self._cache_label,
+                self._change_selection,
+                self._test_db_path.parent)
             record = db.get_record(self._cache_label, self._change_selection)
             expected_record = {
                 'id': 1,
