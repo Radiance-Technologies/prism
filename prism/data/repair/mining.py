@@ -384,16 +384,28 @@ def build_repair_instance(
         If the instance is empty, return None.
     """
     try:
-        result = miner(error_instance, repaired_state)
+        with RepairInstanceDB(repair_instance_db_file) as db_instance:
+            metadata = error_instance.initial_state.project_state.project_metadata
+            cache_label = {
+                "project_name": metadata.project_name,
+                "commit_sha": metadata.commit_sha,
+                "coq_version": metadata.coq_version
+            }
+            if db_instance.get_record(cache_label,
+                                      change_selection) is not None:
+                result = miner(error_instance, repaired_state)
+            else:
+                result = None
     except Exception as e:
         result = Except(None, e, traceback.format_exc())
     finally:
-        write_repair_instance(
-            result,
-            change_selection,
-            repair_save_directory,
-            repair_instance_db_file,
-            exception_logger)
+        if result is not None:
+            write_repair_instance(
+                result,
+                change_selection,
+                repair_save_directory,
+                repair_instance_db_file,
+                exception_logger)
     return result
 
 
@@ -534,8 +546,8 @@ def write_repair_instance(
         If potential_diff is neither of ProjectCommitDataRepairInstance
         nor of Except.
     """
-    with RepairInstanceDB(repair_instance_db_file) as repair_instance_db:
-        if isinstance(potential_diff, ProjectCommitDataRepairInstance):
+    if isinstance(potential_diff, ProjectCommitDataRepairInstance):
+        with RepairInstanceDB(repair_instance_db_file) as repair_instance_db:
             metadata = potential_diff.error.initial_state.project_state.project_metadata
             cache_label = {
                 "project_name": metadata.project_name,
@@ -547,12 +559,12 @@ def write_repair_instance(
                 change_selection,
                 repair_file_directory)
             atomic_write(file_path, potential_diff.compress())
-        elif isinstance(potential_diff, Except):
-            exception_logger.write_exception_log(potential_diff)
-        else:
-            raise TypeError(
-                f"Type {type(potential_diff)} is not recognized and can't be "
-                "written.")
+    elif isinstance(potential_diff, Except):
+        exception_logger.write_exception_log(potential_diff)
+    else:
+        raise TypeError(
+            f"Type {type(potential_diff)} is not recognized and can't be "
+            "written.")
 
 
 def _get_consecutive_commit_hashes(
