@@ -1042,9 +1042,23 @@ class Project(ABC):
                     f"Cannot infer metadata field named '{f}'")
         return inferred_fields
 
-    def infer_opam_dependencies(self) -> List[str]:
+    def infer_opam_dependencies(
+            self,
+            ignore_iqr_flags: bool = False,
+            ignore_coq_version: bool = False) -> List[str]:
         """
         Try to infer Opam-installable dependencies for the project.
+
+        Parameters
+        ----------
+        ignore_iqr_flags : bool, optional
+            If True, then do not account for the project's own libraries
+            when inferring dependencies.
+            By default False.
+        ignore_coq_version : bool, optional
+            If True, then do not account for the current Coq version or
+            standard libraries when inferring dependencies.
+            By default False.
 
         Returns
         -------
@@ -1069,8 +1083,9 @@ class Project(ABC):
                     Dict[PathLike,
                          Set[opamdep.RequiredLibrary]],
                     required_libraries),
-                self.iqr_flags)
-            return list(dependencies)
+                self.iqr_flags if not ignore_iqr_flags else None,
+                self.coq_version if not ignore_coq_version else None)
+            formula = list(dependencies)
 
         if isinstance(formula, PackageFormula):
             if isinstance(formula, LogicalPF):

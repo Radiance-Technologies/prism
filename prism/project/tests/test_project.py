@@ -83,7 +83,7 @@ class TestProject(unittest.TestCase):
             metadata_storage=MetadataStorage.load(
                 _COQ_EXAMPLES_PATH / "comp_cert_storage.yml"))
         cls.test_infer_opam_deps_project.git.checkout(
-            '1a7b93078eb531a6e9e5d4dc02bec143605c2264')
+            '7b3bc19117e48d601e392f2db2c135c7df1d8376')
         # Complete pre-req setup.
         # Use the default switch since there are no dependencies beyond
         # Coq and the package will not be installed.
@@ -91,7 +91,7 @@ class TestProject(unittest.TestCase):
         coq_version = switch.get_installed_version("coq")
         if switch.get_installed_version("coq") is None:
             coq_version = "8.10.2"
-            switch.install("coq", coq_version, yes=True)
+            switch.install("coq", coq_version)
         cls.assertFalse(TestProject(), metadata.opam_repos)
         for repo in metadata.opam_repos:
             switch.add_repo(*repo.split())
@@ -254,23 +254,54 @@ class TestProject(unittest.TestCase):
         """
         Test inferring opam dependencies from a project dir.
         """
-        expected_deps = {
-            'coq-flocq',
-            'coq-zorns-lemma',
-            'coq-bedrock2-compiler',
-            'coq-itauto',
-            'coq-riscv',
-            'coq-rewriter',
-            'coq-itree',
-            'coq-ext-lib',
-            'coq-containers',
-            'coq-library-undecidability',
-            'coq-lin-alg',
-            'coq-menhirlib',
-            'menhir'
-        }
-        deps = self.test_infer_opam_deps_project.infer_opam_dependencies()
-        self.assertEqual(set(deps), expected_deps)
+        with self.subTest("standard"):
+            expected_deps = {'menhir'}
+            self.test_infer_opam_deps_project.infer_opam_dependencies()
+            deps = self.test_infer_opam_deps_project.opam_dependencies
+            self.assertEqual(set(deps), expected_deps)
+        with self.subTest("ignore_iqr_flags"):
+            expected_deps = {
+                'coq-flocq',
+                'coq-itree',
+                'coq-bedrock2',
+                'coq-bedrock2-compiler',
+                'coq-library-undecidability',
+                'coq-menhirlib',
+                'menhir'
+            }
+            self.test_infer_opam_deps_project.infer_opam_dependencies(
+                ignore_iqr_flags=True)
+            deps = self.test_infer_opam_deps_project.opam_dependencies
+            self.assertEqual(set(deps), expected_deps)
+        with self.subTest("ignore_coq_version"):
+            expected_deps = {
+                'coq-rewriter',
+                'coq-ext-lib',
+                'coq-containers',
+                'menhir'
+            }
+            self.test_infer_opam_deps_project.infer_opam_dependencies(
+                ignore_coq_version=True)
+            deps = self.test_infer_opam_deps_project.opam_dependencies
+            self.assertEqual(set(deps), expected_deps)
+        with self.subTest("ignore_iqr_and_coq"):
+            expected_deps = {
+                'coq-flocq',
+                'coq-itree',
+                'coq-bedrock2',
+                'coq-bedrock2-compiler',
+                'coq-library-undecidability',
+                'coq-menhirlib',
+                'coq-rewriter',
+                'coq-ext-lib',
+                'coq-containers',
+                'menhir'
+            }
+            self.test_infer_opam_deps_project.infer_opam_dependencies(
+                ignore_iqr_flags=True,
+                ignore_coq_version=True)
+            deps = self.test_infer_opam_deps_project.opam_dependencies
+            self.assertEqual(set(deps), expected_deps)
 
     def test_build_and_get_iqr(self):
         """
