@@ -1,17 +1,19 @@
 {
-  "cache_root": "/shared/PEARLS/caching_2023-02-15/",
+  "cache_root": "./cache_root",
   "repair_save_directory": "./test_repairs",
+  "metadata_storage_file": "",
   "cache_format_extension": "yml",
   "prepare_pairs": "prism.data.repair.mining.prepare_label_pairs",
   "repair_miner": "prism.data.repair.instance.ProjectCommitDataRepairInstance",
   "changeset_miner": "prism.data.repair.instance.ProjectCommitDataErrorInstance.default_changeset_miner",
-  "serial": true,
+  "serial": false,
   "max_workers": 32,
   "chunk_size": 1,
   "project_commit_hash_map": {
     "hoare-tut": [
       "bda0bc601a038ba6b65da2e3c52cc02c4d910f35",
-      "269c0cabb267be44e5d85e568c11f18562add6c4"
+      "64b36d30430ca8e6e335283290cf866decba8bb8"
     ]
-  }
+  },
+  "logging_level": "DEBUG"
 }

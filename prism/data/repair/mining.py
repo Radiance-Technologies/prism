@@ -82,49 +82,77 @@ class RepairInstanceDB:
     the serialized, saved repair instance.
     """
 
-    _sql_create_records_table = """CREATE TABLE IF NOT EXISTS records (
-                                       id integer PRIMARY KEY autoincrement,
-                                       project_name text NOT NULL,
-                                       commit_sha text NOT NULL,
-                                       coq_version text NOT NULL,
-                                       added_commands text,
-                                       affected_commands text,
-                                       changed_commands text,
-                                       dropped_commands text,
-                                       file_name text NOT NULL
-                                   ); """
-    _sql_insert_record = """INSERT INTO records (
-                                project_name,
-                                commit_sha,
-                                coq_version,
-                                added_commands,
-                                affected_commands,
-                                changed_commands,
-                                dropped_commands,
-                                file_name)
-                            VALUES(
-                                :project_name,
-                                :commit_sha,
-                                :coq_version,
-                                :added_commands,
-                                :affected_commands,
-                                :changed_commands,
-                                :dropped_commands,
-                                :file_name);"""
-    _sql_update_file_name = """UPDATE records
-                                   SET file_name = :file_name
-                                   WHERE id = :row_id;"""
-    _sql_get_record = """SELECT *
-                         FROM records
-                         WHERE
-                             project_name = :project_name
-                             AND commit_sha = :commit_sha
-                             AND coq_version = :coq_version
-                             AND added_commands = :added_commands
-                             AND affected_commands = :affected_commands
-                             AND changed_commands = :changed_commands
-                             AND dropped_commands = :dropped_commands
-                         ORDER BY id;"""
+    _sql_create_records_table = """
+        CREATE TABLE IF NOT EXISTS records (
+            id integer PRIMARY KEY autoincrement,
+            project_name text NOT NULL,
+            initial_commit_sha text NOT NULL,
+            repaired_commit_sha text NOT NULL,
+            initial_coq_version text NOT NULL,
+            repaired_coq_version text NOT NULL,
+            added_commands text,
+            affected_commands text,
+            changed_commands text,
+            dropped_commands text,
+            file_name text NOT NULL
+        );"""
+    _sql_insert_record = """
+        INSERT INTO records (
+            project_name,
+            initial_commit_sha,
+            repaired_commit_sha,
+            initial_coq_version,
+            repaired_coq_version,
+            added_commands,
+            affected_commands,
+            changed_commands,
+            dropped_commands,
+            file_name)
+        VALUES(
+            :project_name,
+            :initial_commit_sha,
+            :repaired_commit_sha,
+            :initial_coq_version,
+            :repaired_coq_version,
+            :added_commands,
+            :affected_commands,
+            :changed_commands,
+            :dropped_commands,
+            :file_name);"""
+    _sql_update_file_name = """
+        UPDATE records
+            SET file_name = :file_name
+            WHERE id = :row_id;"""
+    _sql_get_record = """
+        SELECT *
+        FROM records
+        WHERE
+            project_name = :project_name
+            AND initial_commit_sha = :initial_commit_sha
+            AND repaired_commit_sha = :repaired_commit_sha
+            AND initial_coq_version = :initial_coq_version
+            AND repaired_coq_version = :repaired_coq_version
+            AND added_commands = :added_commands
+            AND affected_commands = :affected_commands
+            AND changed_commands = :changed_commands
+            AND dropped_commands = :dropped_commands
+        ORDER BY id;"""
+    _sql_get_records_for_commit_pair = """
+        SELECT *
+        FROM records
+        WHERE
+            project_name = :project_name
+            AND initial_commit_sha = :initial_commit_sha
+            AND repaired_commit_sha = :repaired_commit_sha
+            AND initial_coq_version = :initial_coq_version
+            AND repaired_coq_version = :repaired_coq_version
+        ORDER BY id;"""
+    _sql_get_record_for_filename = """
+        SELECT *
+        FROM records
+        WHERE
+            file_name = :file_name
+        ORDER BY id;"""
 
     def __init__(self, db_location: Path):
         self.db_location = db_location
@@ -170,6 +198,36 @@ class RepairInstanceDB:
             self.connection.commit()
         self.connection.close()
 
+    @staticmethod
+    def _record_to_dictionary(
+        record: Tuple[int,
+                      str,
+                      str,
+                      str,
+                      str,
+                      str,
+                      str,
+                      str,
+                      str,
+                      str,
+                      str]
+    ) -> Dict[str,
+              Union[int,
+                    str]]:
+        return {
+            'id': record[0],
+            'project_name': record[1],
+            'initial_commit_sha': record[2],
+            'repaired_commit_sha': record[3],
+            'initial_coq_version': record[4],
+            'repaired_coq_version': record[5],
+            'added_commands': record[6],
+            'affected_commands': record[7],
+            'changed_commands': record[8],
+            'dropped_commands': record[9],
+            'file_name': record[10]
+        }
+
     def create_table(self):
         """
         Create the one table this database requires.
@@ -177,9 +235,13 @@ class RepairInstanceDB:
         self.cursor.execute(self._sql_create_records_table)
         self.connection.commit()
 
-    def insert_record(
+    def insert_record_get_path(
             self,
-            cache_label: CacheLabel,
+            project_name: str,
+            initial_commit_sha: str,
+            repaired_commit_sha: str,
+            initial_coq_version: str,
+            repaired_coq_version: str,
             change_selection: ChangeSelection,
             repair_save_directory: Path) -> Path:
         """
@@ -187,8 +249,11 @@ class RepairInstanceDB:
 
         Parameters
         ----------
-        cache_label : CacheLabel
-            The cache label portion of the record identifier
+        project_name : str
+        initial_commit_sha : str
+        repaired_commit_sha : str
+        initial_coq_version : str
+        repaired_coq_version : str
         change_selection : ChangeSelection
             The selected changes that further identify the record
         repair_save_directory : Path
@@ -198,21 +263,65 @@ class RepairInstanceDB:
         -------
         Path
             The reserved path to the new repair instance file.
+
+        Notes
+        -----
+        Summary:
+        * Insert a record with a place-holder file name.
+        * Immediately fetch the new row back with its auto-incremented
+          row id.
+        * Fetch all rows matching the project name and commit pair and
+          coq verison pair.
+        * Get the row indices from each returned row, sort them, and
+          get the index of the just-inserted row in that list.
+        * Use this index to name the file, along with the project name,
+          commit sha pair, and coq version pair
+        * Update the row with the newly-computed file name.
+        * Return the new file name.
         """
-        change_selection_mapping = change_selection.as_joined_dict()
+        cache_id_label = {
+            "project_name": project_name,
+            "initial_commit_sha": initial_commit_sha,
+            "repaired_commit_sha": repaired_commit_sha,
+            "initial_coq_version": initial_coq_version,
+            "repaired_coq_version": repaired_coq_version
+        }
         record = {
-            **cache_label,
-            **change_selection_mapping
+            **cache_id_label,
+            **change_selection.as_joined_dict()
         }
         record['file_name'] = "repair-n.yml"
         self.cursor.execute(self._sql_insert_record, record)
         self.connection.commit()
-        recent_id = self.cursor.lastrowid
-        if recent_id is None:
+        inserted_row = self.get_record(
+            project_name,
+            initial_commit_sha,
+            repaired_commit_sha,
+            initial_coq_version,
+            repaired_coq_version,
+            change_selection)
+        if inserted_row is None:
             raise RuntimeError(
                 "No id was returned after the last record insertion.")
-        # TODO: Add full path to new_file_name
-        new_file_name = str(repair_save_directory / f"repair-{recent_id}.yml")
+        recent_id = inserted_row["id"]
+        self.cursor.execute(
+            self._sql_get_records_for_commit_pair,
+            cache_id_label)
+        label_related_rows = self.cursor.fetchall()
+        row_ids = sorted([row[0] for row in label_related_rows])
+        file_index = row_ids.index(recent_id)
+        new_file_name = str(
+            repair_save_directory / (
+                "-".join(
+                    [
+                        "repair",
+                        project_name,
+                        initial_commit_sha,
+                        repaired_commit_sha,
+                        initial_coq_version,
+                        repaired_coq_version,
+                        str(file_index)
+                    ]) + ".yml"))
         self.cursor.execute(
             self._sql_update_file_name,
             {
@@ -223,17 +332,25 @@ class RepairInstanceDB:
         return Path(new_file_name)
 
     def get_record(
-            self,
-            cache_label: CacheLabel,
-            change_selection: ChangeSelection) -> Optional[Dict[str,
-                                                                str]]:
+        self,
+        project_name: str,
+        initial_commit_sha: str,
+        repaired_commit_sha: str,
+        initial_coq_version: str,
+        repaired_coq_version: str,
+        change_selection: ChangeSelection) -> Optional[Dict[str,
+                                                            Union[int,
+                                                                  str]]]:
         """
         Get a record from the records table if it exists.
 
         Parameters
         ----------
-        cache_label : CacheLabel
-            The cache label portion of the record identifier
+        project_name : str
+        initial_commit_sha : str
+        repaired_commit_sha : str
+        initial_coq_version : str
+        repaired_coq_version : str
         change_selection : ChangeSelection
             The selected changes that further identify the record
 
@@ -248,10 +365,13 @@ class RepairInstanceDB:
             If multiple records are found for the query. This shouldn't
             be able to happen, and if it does, it indicates a bug.
         """
-        change_selection_mapping = change_selection.as_joined_dict()
         record_to_get = {
-            **cache_label,
-            **change_selection_mapping
+            "project_name": project_name,
+            "initial_commit_sha": initial_commit_sha,
+            "repaired_commit_sha": repaired_commit_sha,
+            "initial_coq_version": initial_coq_version,
+            "repaired_coq_version": repaired_coq_version,
+            **change_selection.as_joined_dict()
         }
         self.cursor.execute(self._sql_get_record, record_to_get)
         records = self.cursor.fetchall()
@@ -260,17 +380,41 @@ class RepairInstanceDB:
         if len(records) > 1:
             raise RuntimeError("There are duplicate rows in the records table.")
         record = records[0]
-        return {
-            'id': record[0],
-            'project_name': record[1],
-            'commit_sha': record[2],
-            'coq_version': record[3],
-            'added_commands': record[4],
-            'affected_commands': record[5],
-            'changed_commands': record[6],
-            'dropped_commands': record[7],
-            'file_name': record[8]
-        }
+        return self._record_to_dictionary(record)
+
+    def get_record_from_file_name(self,
+                                  file_name: str) -> Optional[Dict[str,
+                                                                   Union[int,
+                                                                         str]]]:
+        """
+        Get a record from the records table for a particular file name.
+
+        Parameters
+        ----------
+        file_name : str
+            The file name to select the record for.
+
+        Returns
+        -------
+        Optional[Dict[str, Union[int, str]]]
+            The selected record, if it exists. None if not.
+
+        Raises
+        ------
+        RuntimeError
+            If there is more than one record in the table for the given
+            file name.
+        """
+        self.cursor.execute(
+            self._sql_get_record_for_filename,
+            {"file_name": file_name})
+        records = self.cursor.fetchall()
+        if not records:
+            return
+        if len(records) > 1:
+            raise RuntimeError(
+                f"There is more than 1 row for file {file_name}.")
+        return self._record_to_dictionary(records[0])
 
 
 class RepairMiningExceptionLogger:
@@ -385,13 +529,14 @@ def build_repair_instance(
     """
     try:
         with RepairInstanceDB(repair_instance_db_file) as db_instance:
-            metadata = error_instance.initial_state.project_state.project_metadata
-            cache_label = {
-                "project_name": metadata.project_name,
-                "commit_sha": metadata.commit_sha,
-                "coq_version": metadata.coq_version
-            }
-            if db_instance.get_record(cache_label,
+            initial_metadata = \
+                error_instance.initial_state.project_state.project_metadata
+            repaired_metadata = repaired_state.project_metadata
+            if db_instance.get_record(initial_metadata.project_name,
+                                      initial_metadata.commit_sha,
+                                      repaired_metadata.commit_sha,
+                                      initial_metadata.coq_version,
+                                      repaired_metadata.coq_version,
                                       change_selection) is not None:
                 result = miner(error_instance, repaired_state)
             else:
@@ -548,14 +693,16 @@ def write_repair_instance(
     """
     if isinstance(potential_diff, ProjectCommitDataRepairInstance):
         with RepairInstanceDB(repair_instance_db_file) as repair_instance_db:
-            metadata = potential_diff.error.initial_state.project_state.project_metadata
-            cache_label = {
-                "project_name": metadata.project_name,
-                "commit_sha": metadata.commit_sha,
-                "coq_version": metadata.coq_version
-            }
-            file_path = repair_instance_db.insert_record(
-                cache_label,
+            initial_metadata = \
+                potential_diff.error.initial_state.project_state.project_metadata
+            repaired_metadata = \
+                potential_diff.repaired_state_or_diff.project_state.project_metadata
+            file_path = repair_instance_db.insert_record_get_path(
+                initial_metadata.project_name,
+                initial_metadata.commit_sha,
+                repaired_metadata.commit_sha,
+                initial_metadata.coq_version,
+                repaired_metadata.coq_version,
                 change_selection,
                 repair_file_directory)
             atomic_write(file_path, potential_diff.compress())
