@@ -10,15 +10,14 @@ from typing import Dict, List, Optional, Set, Tuple, Union
 from seutil import bash
 
 from prism.project.iqr import IQR
-from prism.util.build_tools.mappings import LogicalMappings
+from prism.util.build_tools.mappings import LogicalMappings, RequiredLibrary
+from prism.util.opam import Version
 from prism.util.path import get_relative_path
 from prism.util.radpytools import PathLike
 
 _require_pattern = re.compile(
     r"(?:From\s*(?P<prefix>[^\s]+)\s*)?Require\s+(?:Import|Export)?\s(?P<suffixes>.+)\."
 )
-
-RequiredLibrary = Tuple[Optional[str], str]
 
 
 def get_required_libraries(
@@ -71,7 +70,9 @@ def guess_opam_packages(
         libraries: Union[Dict[PathLike,
                               Set[RequiredLibrary]],
                          Set[RequiredLibrary]],
-        iqr_flags: Optional[IQR] = None) -> Set[str]:
+        iqr_flags: Optional[IQR] = None,
+        coq_version: Optional[Union[str,
+                                    Version]] = None) -> Set[str]:
     r"""
     Guess opam packages that are implied by given required libraries.
 
@@ -84,6 +85,12 @@ def guess_opam_packages(
     iqr_flags : Optional[IQR], optional
         Local physical path bindings that may shadow the usual logical
         library paths for comman opam packages, by default None.
+    coq_version : Optional[Union[str, Version]], optional
+        The Coq version in which to perform the inference.
+        Standard Coq libraries may shadow opam packages for certain
+        Require statements, so this parameter is key to eliminating
+        ambiguity.
+        If not given, then
 
     Returns
     -------
@@ -94,24 +101,34 @@ def guess_opam_packages(
     """
     if isinstance(libraries, dict):
         libraries = {v for vs in libraries.values() for v in vs}
-    local_libraries = []
     if iqr_flags is not None:
         local_libraries = iqr_flags.local_libraries()
+    else:
+        local_libraries = []
+    shadowed_packages = set()
+    for local_lib in local_libraries:
+        matching_packages = LogicalMappings.opam.search(None, local_lib)
+        if len(matching_packages) == 1:
+            shadowed_packages.update(matching_packages)
+    # load Coq mappings
+    coq_libraries = None
+    if coq_version is not None:
+        coq_libraries = LogicalMappings.get_coq_mappings(coq_version)
+    local_mapping = LogicalMappings(
+        {k: "_local_project_" for k in local_libraries})
     packages = set()
     for prefix, suffix in libraries:
         # search local libraries first
-        is_local = False
-        for local_lib in local_libraries:
-            if LogicalMappings.is_match(prefix, suffix, local_lib):
-                is_local = True
-                break
-        if is_local:
+        if local_mapping.search(prefix, suffix):
             continue
-        # if no local match, try to find opam package
-        matching_packages = LogicalMappings.search(prefix, suffix)
+        # then search Coq standard libaries
+        if coq_libraries is not None and coq_libraries.search(prefix, suffix):
+            continue
+        # if no local or stdlib match, try to find opam package
+        matching_packages = LogicalMappings.opam.search(prefix, suffix)
         if len(matching_packages) == 1:
             packages.update(matching_packages)
     # special handling
-    if "coq-menhirlib" in packages:
+    if "coq-menhirlib" in packages or "coq-menhirlib" in shadowed_packages:
         packages.add("menhir")
     return packages
