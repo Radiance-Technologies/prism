@@ -16,12 +16,13 @@ class TestLogicalMappings(unittest.TestCase):
         Test common/expected searches on LogicalMappings.
         """
         self.assertEqual(
-            LM.search(prefix="mathcomp",
-                      suffix="matrix"),
+            LM.opam.search(prefix="mathcomp",
+                           suffix="matrix"),
             {"coq-mathcomp-algebra"})
-        self.assertGreater(len(LM.search(suffix="matrix")), 1)  # ambiguous
-        self.assertEqual(LM.search(suffix="stdpp.namespaces"),
-                         {"coq-stdpp"})
+        self.assertGreater(len(LM.opam.search(suffix="matrix")), 1)  # ambiguous
+        self.assertEqual(
+            LM.opam.search(suffix="stdpp.namespaces"),
+            {"coq-stdpp"})
 
 
 if __name__ == '__main__':
