@@ -1760,6 +1760,8 @@ def extract_cache_new(
                          worker_semaphore=worker_semaphore,
                          logger=extract_logger,
                          logger_stream=extract_logger_stream)
+                else:
+                    build_cache_client.clear_error_files(project.metadata)
                 finally:
                     inner_elapsed_time = time() - inner_start_time
                     build_cache_client.write_timing_log(

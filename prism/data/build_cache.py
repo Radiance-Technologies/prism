@@ -1199,6 +1199,17 @@ class CoqProjectBuildCacheProtocol(Protocol):
     """
     Default coq versions to look for when getting cache status.
     """
+    # yapf: disable
+    _error_suffixes: Dict[str,
+                          str] = {
+                              'build_error': "_build_error.txt",
+                              'cache_error': "_cache_error.txt",
+                              'misc_error': "_misc_error.txt"}
+    # yapf: enable
+    """
+    Map from error type to suffix that is applied to error log files for
+    that type.
+    """
 
     def __contains__(  # noqa: D105
             self,
@@ -1269,6 +1280,38 @@ class CoqProjectBuildCacheProtocol(Protocol):
             return "write complete"
         else:
             return None
+
+    def clear_error_files(self, metadata: ProjectMetadata) -> List[Path]:
+        """
+        Clear any existing error files for the provided data.
+
+        Parameters
+        ----------
+        metadata : ProjectMetadata
+            Metadata object for which old error logs are to be removed.
+
+        Returns
+        -------
+        List[Path]
+            A list of error log files removed, if any.
+
+        Notes
+        -----
+        This method is necessary for situations where caches files have
+        been extracted in a previous run, and now a new extraction run
+        is being attempted. In case a cache object is successfully
+        extracted on the subsequent run when it failed previously, it is
+        important that the old irrelevant error files are removed so
+        that the successful cache item is not shadowed.
+        """
+        file_path = self.get_path_from_metadata(metadata)
+        files_removed: List[Path] = []
+        for suffix in self._error_suffixes.values():
+            file_to_remove = file_path.with_suffix("") / suffix
+            if file_to_remove.exists():
+                os.remove(file_to_remove)
+                files_removed.append(file_to_remove)
+        return files_removed
 
     def contains(
         self,
@@ -1644,7 +1687,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
             metadata,
             block,
             str_to_write,
-            "_build_error.txt")
+            self._error_suffixes['build_error'])
 
     def write_cache_error_log(
             self,
@@ -1674,7 +1717,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
             metadata,
             block,
             cache_error_log,
-            "_cache_error.txt")
+            self._error_suffixes['cache_error'])
 
     def write_metadata_file(self,
                             data: ProjectCommitData,
@@ -1728,7 +1771,11 @@ class CoqProjectBuildCacheProtocol(Protocol):
             If `block`, return "write complete"; otherwise, return
             nothing
         """
-        return self._write_kernel(metadata, block, misc_log, "_misc_error.txt")
+        return self._write_kernel(
+            metadata,
+            block,
+            misc_log,
+            self._error_suffixes['misc_error'])
 
     def write_timing_log(
             self,
