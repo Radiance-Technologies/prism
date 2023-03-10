@@ -415,9 +415,9 @@ class RepairInstanceDB:
         return self._record_to_dictionary(records[0])
 
 
-class RepairMiningExceptionLogger:
+class RepairMiningLogger:
     """
-    Logger for writing exception logs during repair mining process.
+    Logger for writing logs during repair mining process.
     """
 
     def __init__(self, repair_save_directory: Path, level: int):
@@ -427,7 +427,7 @@ class RepairMiningExceptionLogger:
             self.logger.removeHandler(handler)
         self.logger.setLevel(level)
         self.handler = logging.FileHandler(
-            str(repair_save_directory / "repair_mining_error_log.txt"))
+            str(repair_save_directory / "repair_mining_log.txt"))
         self.handler.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
         self.handler.setLevel(level)
         self.logger.addHandler(self.handler)
@@ -463,28 +463,23 @@ class RepairMiningExceptionLogger:
         self.logger.debug(message)
 
 
-class RepairMiningExceptionLoggerServer(BaseManager):
+class RepairMiningLoggerServer(BaseManager):
     """
     A BaseManager-derived server for managing exception logging.
     """
 
 
-RepairMiningExceptionLoggerServer.register(
-    "RepairMiningExceptionLogger",
-    RepairMiningExceptionLogger)
+RepairMiningLoggerServer.register("RepairMiningLogger", RepairMiningLogger)
 
 
-def RepairMiningExceptionLoggerClient(
-        server: RepairMiningExceptionLoggerServer,
+def RepairMiningLoggerClient(
+        server: RepairMiningLoggerServer,
         *args,
-        **kwargs) -> RepairMiningExceptionLogger:
+        **kwargs) -> RepairMiningLogger:
     """
     Return client object for writing build cache.
     """
-    return cast(
-        RepairMiningExceptionLogger,
-        server.RepairMiningExceptionLogger(*args,
-                                           **kwargs))
+    return cast(RepairMiningLogger, server.RepairMiningLogger(*args, **kwargs))
 
 
 def build_repair_instance(
@@ -494,8 +489,7 @@ def build_repair_instance(
         repair_save_directory: Path,
         repair_instance_db_file: Path,
         miner: RepairMiner,
-        exception_logger: RepairMiningExceptionLogger
-) -> BuildRepairInstanceOutput:
+        repair_mining_logger: RepairMiningLogger) -> BuildRepairInstanceOutput:
     """
     Construct build repair instance from pairs of cache items.
 
@@ -516,8 +510,9 @@ def build_repair_instance(
         disk
     miner : RepairMiner
         Function used to mine repair instances
-    exception_logger : RepairMiningExceptionLogger
-        Object used to log errors during repair instance building
+    repair_mining_logger : RepairMiningLogger
+        Object used to log errors and other debug messages during repair
+        instance building
 
     Returns
     -------
@@ -548,7 +543,7 @@ def build_repair_instance(
                 change_selection,
                 repair_save_directory,
                 repair_instance_db_file,
-                exception_logger,
+                repair_mining_logger,
                 repaired_state.project_metadata)
     return result
 
@@ -578,7 +573,7 @@ def build_error_instances_from_label_pair(
     cache_root: Path,
     cache_fmt_extension: str,
     changeset_miner: ChangeSetMiner,
-    exception_logger: RepairMiningExceptionLogger
+    repair_mining_logger: RepairMiningLogger
 ) -> Union[List[AugmentedErrorInstance],
            Except]:
     """
@@ -599,8 +594,9 @@ def build_error_instances_from_label_pair(
         Extension to expect for the individual cache files
     changeset_miner : ChangeSetMiner
         The callable used to mine ChangeSelection objects
-    exception_logger : RepairMiningExceptionLogger
-        The object used to log error messages encountered during mining.
+    repair_mining_logger : RepairMiningLogger
+        The object used to log error messages and other debug messages
+        encountered during mining.
 
     Returns
     -------
@@ -614,14 +610,14 @@ def build_error_instances_from_label_pair(
             label_a.project,
             label_a.commit_hash,
             label_a.coq_version)
-        exception_logger.write_debug_log(
+        repair_mining_logger.write_debug_log(
             "build_error_instances_from_label_pair: Finished loading cache for"
             f" label a: {label_a}.")
         repaired_state = cache.get(
             label_b.project,
             label_b.commit_hash,
             label_b.coq_version)
-        exception_logger.write_debug_log(
+        repair_mining_logger.write_debug_log(
             "build_error_instances_from_label_pair: Finished loading cache for"
             f" label b: {label_b}.")
         initial_state.sort_commands()
@@ -641,7 +637,7 @@ def build_error_instances_from_label_pair(
         result = error_instances
     except Exception as e:
         result = Except(None, e, traceback.format_exc())
-        exception_logger.write_exception_log(result)
+        repair_mining_logger.write_exception_log(result)
     return result
 
 
@@ -669,7 +665,7 @@ def write_repair_instance(
         change_selection: ChangeSelection,
         repair_file_directory: Path,
         repair_instance_db_file: Path,
-        exception_logger: RepairMiningExceptionLogger,
+        repair_mining_logger: RepairMiningLogger,
         repaired_state_metadata: ProjectMetadata):
     """
     Write a repair instance to disk, or log an exception.
@@ -688,8 +684,8 @@ def write_repair_instance(
     repair_instance_db_file : Path
         Path to database for recording new repair instances saved to
         disk
-    exception_logger : RepairMiningExceptionLogger
-        Object used to log errors
+    repair_mining_logger : RepairMiningLogger
+        Object used to log errors and other debug messages
     repaired_state_metadata : ProjectMetadata
         Metadata for the repaired state, used to determine the
         information to record for this instance.
@@ -714,7 +710,7 @@ def write_repair_instance(
                 repair_file_directory)
             atomic_write(file_path, potential_diff.compress())
     elif isinstance(potential_diff, Except):
-        exception_logger.write_exception_log(potential_diff)
+        repair_mining_logger.write_exception_log(potential_diff)
     else:
         raise TypeError(
             f"Type {type(potential_diff)} is not recognized and can't be "
@@ -929,9 +925,9 @@ def repair_mining_loop(
         changeset_miner = ProjectCommitDataErrorInstance.default_changeset_miner
     metadata_storage = MetadataStorage.load(metadata_storage_file)
     db_file = repair_save_directory / "repair_records.sqlite3"
-    with RepairMiningExceptionLoggerServer() as exception_server:
-        exception_logger = RepairMiningExceptionLoggerClient(
-            exception_server,
+    with RepairMiningLoggerServer() as logging_server:
+        repair_mining_logger = RepairMiningLoggerClient(
+            logging_server,
             repair_save_directory,
             logging_level)
         cache_args = (cache_root, cache_format_extension)
@@ -951,7 +947,7 @@ def repair_mining_loop(
                     label_b,
                     *cache_args,
                     changeset_miner,
-                    exception_logger)
+                    repair_mining_logger)
                 if not isinstance(new_error_instances, Except):
                     error_instances.extend(new_error_instances)
         else:  # Parallel
@@ -966,7 +962,7 @@ def repair_mining_loop(
                     label_b,
                     *cache_args,
                     changeset_miner,
-                    exception_logger) for label_a,
+                    repair_mining_logger) for label_a,
                 label_b in cache_label_pairs
             ]
             error_instances_list = process_map(
@@ -991,7 +987,7 @@ def repair_mining_loop(
                     repair_save_directory,
                     db_file,
                     repair_miner,
-                    exception_logger)
+                    repair_mining_logger)
                 if isinstance(result, Except):
                     print(result.trace)
                     raise result.exception
@@ -1004,7 +1000,7 @@ def repair_mining_loop(
                     repair_save_directory,
                     db_file,
                     repair_miner,
-                    exception_logger) for error_instance,
+                    repair_mining_logger) for error_instance,
                 repaired_state,
                 change_selection in error_instances
             ]
