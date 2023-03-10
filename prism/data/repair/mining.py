@@ -465,7 +465,7 @@ class RepairMiningLogger:
 
 class RepairMiningLoggerServer(BaseManager):
     """
-    A BaseManager-derived server for managing exception logging.
+    A BaseManager-derived server for managing repair mining logs.
     """
 
 
@@ -477,7 +477,7 @@ def RepairMiningLoggerClient(
         *args,
         **kwargs) -> RepairMiningLogger:
     """
-    Return client object for writing build cache.
+    Return client object for writing repair mining logs.
     """
     return cast(RepairMiningLogger, server.RepairMiningLogger(*args, **kwargs))
 
