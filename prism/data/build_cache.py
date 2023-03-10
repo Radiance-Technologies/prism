@@ -1307,7 +1307,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
         file_path = self.get_path_from_metadata(metadata)
         files_removed: List[Path] = []
         for suffix in self._error_suffixes.values():
-            file_to_remove = file_path.with_suffix("") / suffix
+            file_to_remove = Path(str(file_path.with_suffix("")) + suffix)
             if file_to_remove.exists():
                 os.remove(file_to_remove)
                 files_removed.append(file_to_remove)

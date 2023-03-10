@@ -34,6 +34,7 @@ from prism.language.sexp.list import SexpList
 from prism.language.sexp.node import SexpNode
 from prism.language.sexp.string import SexpString
 from prism.project.base import SEM, SentenceExtractionMethod
+from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
 from prism.tests import _PROJECT_EXAMPLES_PATH
@@ -322,6 +323,75 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                 self.assertCountEqual(
                     status_list_failed,
                     expected_status_list_failed)
+
+    def test_clear_error_files(self):
+        """
+        Verify clear_error_files method works as expected.
+        """
+        with TemporaryDirectory() as temp_dir:
+            with CoqProjectBuildCacheServer() as cache_server:
+                cache: CoqProjectBuildCacheProtocol = CoqProjectBuildCacheClient(
+                    cache_server,
+                    temp_dir)
+                environment = ProjectBuildEnvironment(
+                    OpamAPI.active_switch.export())
+                metadata: ProjectMetadata = self.dataset.projects[
+                    "float"].metadata
+                float_commit_sha = metadata.commit_sha
+                assert float_commit_sha is not None
+                item1 = ProjectCommitData(
+                    metadata,
+                    {},
+                    None,
+                    environment,
+                    ProjectBuildResult(0,
+                                       "",
+                                       ""))
+                failed_build_result = ProjectBuildResult(
+                    "1",
+                    "warning",
+                    "a build error happened")
+                writers = [
+                    cache.write_cache_error_log,
+                    cache.write_misc_error_log,
+                    cache.write_build_error_log
+                ]
+                messages = [
+                    "Float cache error",
+                    "Float misc error",
+                    failed_build_result
+                ]
+                expected_statuses = [
+                    "cache error",
+                    "other error",
+                    "build error"
+                ]
+                for writer, message, expected_status in zip(
+                        writers, messages, expected_statuses):
+                    with self.subTest(expected_status):
+                        writer(metadata, True, message)
+                        status = cache.list_status()
+                        self.assertEqual(
+                            status,
+                            [
+                                CacheObjectStatus(
+                                    "float",
+                                    float_commit_sha,
+                                    "8.10.2",
+                                    expected_status)
+                            ])
+                        cache.clear_error_files(metadata)
+                        cache.write(item1, block=True)
+                        status = cache.list_status()
+                        self.assertEqual(
+                            status,
+                            [
+                                CacheObjectStatus(
+                                    "float",
+                                    float_commit_sha,
+                                    "8.10.2",
+                                    "success")
+                            ])
 
     @classmethod
     def setUpClass(cls) -> None:
