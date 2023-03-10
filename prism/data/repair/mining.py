@@ -30,6 +30,7 @@ from prism.data.repair.instance import (
     ProjectCommitDataRepairInstance,
     default_align,
 )
+from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
 from prism.util.io import atomic_write
@@ -537,7 +538,7 @@ def build_repair_instance(
                                       repaired_metadata.commit_sha,
                                       initial_metadata.coq_version,
                                       repaired_metadata.coq_version,
-                                      change_selection) is not None:
+                                      change_selection) is None:
                 result = miner(error_instance, repaired_state)
             else:
                 result = None
@@ -550,7 +551,8 @@ def build_repair_instance(
                 change_selection,
                 repair_save_directory,
                 repair_instance_db_file,
-                exception_logger)
+                exception_logger,
+                repaired_state.project_metadata)
     return result
 
 
@@ -666,7 +668,8 @@ def write_repair_instance(
         change_selection: ChangeSelection,
         repair_file_directory: Path,
         repair_instance_db_file: Path,
-        exception_logger: RepairMiningExceptionLogger):
+        exception_logger: RepairMiningExceptionLogger,
+        repaired_state_metadata: ProjectMetadata):
     """
     Write a repair instance to disk, or log an exception.
 
@@ -677,6 +680,8 @@ def write_repair_instance(
     ----------
     potential_diff : BuildRepairInstanceOutput
         A potential repair instance
+    change_selection : ChangeSelection
+        Change selection that corresponds to this repair instance
     repair_file_directory : Path
         Path to directory to store serialized repair instances
     repair_instance_db_file : Path
@@ -684,6 +689,9 @@ def write_repair_instance(
         disk
     exception_logger : RepairMiningExceptionLogger
         Object used to log errors
+    repaired_state_metadata : ProjectMetadata
+        Metadata for the repaired state, used to determine the
+        information to record for this instance.
 
     Raises
     ------
@@ -695,14 +703,12 @@ def write_repair_instance(
         with RepairInstanceDB(repair_instance_db_file) as repair_instance_db:
             initial_metadata = \
                 potential_diff.error.initial_state.project_state.project_metadata
-            repaired_metadata = \
-                potential_diff.repaired_state_or_diff.project_state.project_metadata
             file_path = repair_instance_db.insert_record_get_path(
                 initial_metadata.project_name,
                 initial_metadata.commit_sha,
-                repaired_metadata.commit_sha,
+                repaired_state_metadata.commit_sha,
                 initial_metadata.coq_version,
-                repaired_metadata.coq_version,
+                repaired_state_metadata.coq_version,
                 change_selection,
                 repair_file_directory)
             atomic_write(file_path, potential_diff.compress())
@@ -863,7 +869,7 @@ def prepare_label_pairs(
 def repair_mining_loop(
         cache_root: Path,
         repair_save_directory: Path,
-        metadata_storage_file: Path,
+        metadata_storage_file: Optional[Path] = None,
         cache_format_extension: str = "yml",
         prepare_pairs: Optional[PreparePairsFunction] = None,
         repair_miner: Optional[RepairMiner] = None,
@@ -883,7 +889,7 @@ def repair_mining_loop(
         Path to cache root to mine repair instances from
     repair_save_directory : Path
         Path to directory for saving repair instances
-    metadata_storage_file : Path
+    metadata_storage_file : Path or None, optional
         Path to metadata storage file to load for commit identification
     cache_format_extension : str, optional
         Extension of cache files, by default "yml"
@@ -917,6 +923,9 @@ def repair_mining_loop(
         Logging level for the exception logger, by default DEBUG.
     """
     os.makedirs(str(repair_save_directory), exist_ok=True)
+    if metadata_storage_file is None:
+        metadata_storage_file = Path(
+            __file__).parents[3] / "dataset/agg_coq_repos.yml"
     if prepare_pairs is None:
         prepare_pairs = prepare_label_pairs
     if repair_miner is None:
