@@ -255,19 +255,19 @@ class TestProject(unittest.TestCase):
         Test inferring opam dependencies from a project dir.
         """
         with self.subTest("standard"):
-            expected_deps = {'menhir'}
+            expected_deps = {'"menhir"'}
             self.test_infer_opam_deps_project.infer_opam_dependencies()
             deps = self.test_infer_opam_deps_project.opam_dependencies
             self.assertEqual(set(deps), expected_deps)
         with self.subTest("ignore_iqr_flags"):
             expected_deps = {
-                'coq-flocq',
-                'coq-itree',
-                'coq-bedrock2',
-                'coq-bedrock2-compiler',
-                'coq-library-undecidability',
-                'coq-menhirlib',
-                'menhir'
+                '"coq-flocq"',
+                '"coq-itree"',
+                '"coq-bedrock2"',
+                '"coq-bedrock2-compiler"',
+                '"coq-library-undecidability"',
+                '"coq-menhirlib"',
+                '"menhir"'
             }
             self.test_infer_opam_deps_project.infer_opam_dependencies(
                 ignore_iqr_flags=True)
@@ -275,10 +275,10 @@ class TestProject(unittest.TestCase):
             self.assertEqual(set(deps), expected_deps)
         with self.subTest("ignore_coq_version"):
             expected_deps = {
-                'coq-rewriter',
-                'coq-ext-lib',
-                'coq-containers',
-                'menhir'
+                '"coq-rewriter"',
+                '"coq-ext-lib"',
+                '"coq-containers"',
+                '"menhir"'
             }
             self.test_infer_opam_deps_project.infer_opam_dependencies(
                 ignore_coq_version=True)
@@ -286,16 +286,16 @@ class TestProject(unittest.TestCase):
             self.assertEqual(set(deps), expected_deps)
         with self.subTest("ignore_iqr_and_coq"):
             expected_deps = {
-                'coq-flocq',
-                'coq-itree',
-                'coq-bedrock2',
-                'coq-bedrock2-compiler',
-                'coq-library-undecidability',
-                'coq-menhirlib',
-                'coq-rewriter',
-                'coq-ext-lib',
-                'coq-containers',
-                'menhir'
+                '"coq-flocq"',
+                '"coq-itree"',
+                '"coq-bedrock2"',
+                '"coq-bedrock2-compiler"',
+                '"coq-library-undecidability"',
+                '"coq-menhirlib"',
+                '"coq-rewriter"',
+                '"coq-ext-lib"',
+                '"coq-containers"',
+                '"menhir"'
             }
             self.test_infer_opam_deps_project.infer_opam_dependencies(
                 ignore_iqr_flags=True,

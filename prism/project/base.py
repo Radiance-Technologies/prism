@@ -19,6 +19,7 @@ from pathlib import Path
 from subprocess import CalledProcessError
 from typing import (
     Any,
+    Callable,
     Dict,
     Generator,
     Iterable,
@@ -29,11 +30,13 @@ from typing import (
     Set,
     Tuple,
     Type,
+    TypeVar,
     Union,
 )
 
 import prism.util.build_tools.opamdep as opamdep
 from prism.data.document import CoqDocument
+from prism.interface.coq.re_patterns import QUALIFIED_IDENT_PATTERN
 from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.parser import (
     CoqSentence,
@@ -67,6 +70,8 @@ from prism.util.swim import SwitchManager
 
 logger: logging.Logger = logging.getLogger(__name__)
 logger.setLevel(default_log_level())
+
+_T = TypeVar('_T')
 
 
 class SentenceExtractionMethod(Enum):
@@ -130,10 +135,24 @@ class Project(ABC):
         The method by which sentences are extracted.
     """
 
-    _missing_dependency_pattern = re.compile(
-        r"[Cc]annot find a physical path bound to logical path".replace(
-            " ",
-            r"\s+"))
+    _missing_dependency_pattern = regex_from_options(
+        [
+            s.replace(" ",
+                      r"\s+")
+            for s in [
+                rf"[Cc]annot find a physical path bound to logical path "
+                rf"(?P<logical>{QUALIFIED_IDENT_PATTERN.pattern})",
+                r"[Uu]nable to locate library "
+                rf"(?P<suffix>{QUALIFIED_IDENT_PATTERN.pattern}) "
+                rf"with prefix (?P<prefix>{QUALIFIED_IDENT_PATTERN.pattern})",
+                rf"[Cc]annot load (?P<unbound>{QUALIFIED_IDENT_PATTERN.pattern}): "
+                "no physical path bound to",
+                r"[Cc]annot find library "
+                rf"(?P<library>{QUALIFIED_IDENT_PATTERN.pattern})"
+            ]
+        ],
+        False,
+        False)
 
     coq_library_exts = ["*.vio", "*.vo", "*.vos", "*.vok"]
     """
@@ -597,6 +616,67 @@ class Project(ABC):
                 for f in self.get_file_list(relative=True)
             ]
 
+    def _build(
+            self,
+            f: Callable[[],
+                        _T],
+            managed_switch_kwargs: Optional[Dict[str,
+                                                 Any]] = None) -> _T:
+        """
+        Build the project.
+
+        Parameters
+        ----------
+        f : Callable[[], _T]
+            A function that will be executed to build the project with
+            parametric artifacts.
+        managed_switch_kwargs : Optional[Dict[str, Any]], optional
+            A dictionary containing keyword arguments to
+            `managed_switch`.
+
+        Returns
+        -------
+        _T
+            The output of the build process.
+
+        Raises
+        ------
+        ProjectBuildError
+            If the command(s) for building the project encounter an
+            error.
+        """
+        if managed_switch_kwargs is None:
+            managed_switch_kwargs = {}
+        switch_manager = managed_switch_kwargs.get(
+            'switch_manager',
+            self.switch_manager)
+        original_switch = self.opam_switch
+        try:
+            with self.managed_switch(**managed_switch_kwargs):
+                result = f()
+        except ProjectBuildError as e:
+            m = self._missing_dependency_pattern.search(
+                '\n'.join([e.stdout,
+                           e.stderr]))
+            if m is not None:
+                self.infer_opam_dependencies()
+                if switch_manager is not None:
+                    # try to build again with fresh dependencies
+                    release = managed_switch_kwargs.get('release', True)
+                    if not release and original_switch != self.opam_switch:
+                        # release flawed switch if it is not already
+                        # released
+                        switch_manager.release_switch(self.opam_switch)
+                        self.opam_switch = original_switch
+                    # force reattempt build
+                    with self.managed_switch(**managed_switch_kwargs):
+                        result = f()
+                else:
+                    raise e
+            else:
+                raise e
+        return result
+
     def build(
             self,
             managed_switch_kwargs: Optional[Dict[str,
@@ -640,53 +720,40 @@ class Project(ABC):
         stderr : str
             The captured standard error of the build process.
 
+        Raises
+        ------
+        ProjectBuildError
+            If the command(s) use to build the project encounter an
+            error.
+
         See Also
         --------
         managed_switch : For valid `managed_switch_kwargs`
         """
-        if managed_switch_kwargs is None:
-            managed_switch_kwargs = {}
-        switch_manager = managed_switch_kwargs.get(
-            'switch_manager',
-            self.switch_manager)
         if not self._check_serapi_option_health_pre_build():
-            _, rcode, stdout, stderr = self.infer_serapi_options(**kwargs)
+            (_,
+             rcode,
+             stdout,
+             stderr) = self.infer_serapi_options(
+                 managed_switch_kwargs,
+                 **kwargs)
             return rcode, stdout, stderr
         else:
-            original_switch = self.opam_switch
-            try:
-                with self.managed_switch(**managed_switch_kwargs):
-                    (rcode,
-                     stdout,
-                     stderr) = self._make("build",
-                                          "Compilation",
-                                          **kwargs)
-            except ProjectBuildError as e:
-                if self._missing_dependency_pattern.search(
-                        e.stderr) is not None:
-                    self.infer_opam_dependencies()
-                    if switch_manager is not None:
-                        # try to build again with fresh dependencies
-                        release = managed_switch_kwargs.get('release', True)
-                        if not release and original_switch != self.opam_switch:
-                            # release flawed switch if it is not already
-                            # released
-                            switch_manager.release_switch(self.opam_switch)
-                            self.opam_switch = original_switch
-                        # force reattempt build
-                        with self.managed_switch(**managed_switch_kwargs):
-                            (rcode,
-                             stdout,
-                             stderr) = self._make(
-                                 "build",
-                                 "Compilation",
-                                 **kwargs)
-                else:
-                    raise e
+            (rcode,
+             stdout,
+             stderr) = self._build(
+                 lambda: self._make("build",
+                                    "Compilation",
+                                    **kwargs),
+                 managed_switch_kwargs)
         if not self._check_serapi_option_health_post_build():
             separator = "\n@@\nInferring SerAPI Options...\n@@\n"
-            _, rcode, stdout_post, stderr_post = self.infer_serapi_options(
-                **kwargs)
+            (_,
+             rcode,
+             stdout_post,
+             stderr_post) = self.infer_serapi_options(
+                 managed_switch_kwargs,
+                 **kwargs)
             stdout = "".join((stdout, separator, stdout_post))
             stderr = "".join((stderr, separator, stderr_post))
         return rcode, stdout, stderr
@@ -699,6 +766,38 @@ class Project(ABC):
         # ensure removal of Coq library files
         self._clean()
         return r
+
+    def depends_on(
+            self,
+            package_name: str,
+            package_version: Optional[Union[str,
+                                            Version]]) -> bool:
+        """
+        Return whether this project depends on the given opam package.
+
+        Parameters
+        ----------
+        package_name : str
+            The name of an opam package.
+        package_version : Optional[Union[str, Version]]
+            A specific version of the package with which to narrow the
+            check, by default None.
+
+        Returns
+        -------
+        bool
+            True if this project depends on the indicated package
+            according to existing project metadata, False otherwise.
+        """
+        formula = self.get_dependency_formula()
+        if package_version is None:
+            is_dependency = package_name in formula.packages
+        else:
+            if isinstance(package_version, str):
+                package_version = Version.parse(package_version)
+            is_dependency = bool(
+                formula.simplify({package_name: package_version}))
+        return is_dependency
 
     def filter_files(
             self,
@@ -756,7 +855,7 @@ class Project(ABC):
                 iqr.replace(",",
                             " "),
                 self.opam_switch,
-                cwd=self.path)
+                cwd=str(self.path))
         else:
             filtered = sorted(filtered)
         return filtered
@@ -848,11 +947,15 @@ class Project(ABC):
             sets of other relative filenames in the project upon which
             they depend.
         """
+        if self.coq_options is None:
+            raise RuntimeError(
+                "Cannot get file dependencies with unknown IQR flags")
         G = make_dependency_graph(
-            self.get_file_list(relative=False),
+            typing.cast(List[PathLike],
+                        self.get_file_list(relative=False)),
             self.coq_options,
             self.opam_switch,
-            self.path)
+            str(self.path))
         return {u: sorted(N.keys()) for u,
                 N in G.adjacency()}
 
@@ -1074,29 +1177,46 @@ class Project(ABC):
         try:
             formula = self.opam_switch.get_dependencies(self.path)
         except CalledProcessError:
-            # possibly prone to false positives/negatives
-            required_libraries = opamdep.get_required_libraries(
-                self.path,
-                self.path)
-            dependencies = opamdep.guess_opam_packages(
-                typing.cast(
-                    Dict[PathLike,
-                         Set[opamdep.RequiredLibrary]],
-                    required_libraries),
-                self.iqr_flags if not ignore_iqr_flags else None,
-                self.coq_version if not ignore_coq_version else None)
-            formula = list(dependencies)
+            formula = None
+        # possibly prone to false positives/negatives
+        required_libraries = opamdep.get_required_libraries(
+            self.path,
+            self.path)
+        dependencies = opamdep.guess_opam_packages(
+            typing.cast(
+                Dict[PathLike,
+                     Set[opamdep.RequiredLibrary]],
+                required_libraries),
+            self.iqr_flags if not ignore_iqr_flags else None,
+            self.coq_version if not ignore_coq_version else None)
+        if formula is not None:
+            # limit guessed dependencies to only novel ones
+            dependencies.difference_update(formula.packages)
+        # format dependencies as package constraints
+        dependencies = [f'"{dep}"' for dep in dependencies]
 
         if isinstance(formula, PackageFormula):
             if isinstance(formula, LogicalPF):
                 formula = formula.to_conjunctive_list()
             else:
                 formula = [formula]
-        formula = [str(c) for c in formula]
+        if formula is not None:
+            # extend opam file formula with guessed dependencies
+            formula = [str(c) for c in formula]
+            formula.extend(dependencies)
+        else:
+            formula = dependencies
         self._update_metadata(opam_dependencies=formula)
         return formula
 
-    def infer_serapi_options(self, **kwargs) -> Tuple[str, int, str, str]:
+    def infer_serapi_options(
+            self,
+            managed_switch_kwargs: Optional[Dict[str,
+                                                 Any]] = None,
+            **kwargs) -> Tuple[str,
+                               int,
+                               str,
+                               str]:
         """
         Build project and get IQR options, simultaneously.
 
@@ -1126,14 +1246,23 @@ class Project(ABC):
             # cleaning may fail if nothing to clean or the project has
             # not yet been configured by a prior build
             pass
-        cmd = self._prepare_command("build")
-        contexts, rcode_out, stdout, stderr = strace_build(
-            self.opam_switch,
-            cmd,
-            workdir=self.path,
-            check=False,
-            **kwargs)
-        self._process_command_output("Strace", rcode_out, stdout, stderr)
+
+        def _strace_build():
+            cmd = self._prepare_command("build")
+            contexts, rcode_out, stdout, stderr = strace_build(
+                self.opam_switch,
+                cmd,
+                workdir=self.path,
+                check=False,
+                **kwargs)
+            self._process_command_output("Strace", rcode_out, stdout, stderr)
+            return contexts, rcode_out, stdout, stderr
+
+        (contexts,
+         rcode_out,
+         stdout,
+         stderr) = self._build(_strace_build,
+                               managed_switch_kwargs)
 
         def or_(x, y):
             return x | y
@@ -1217,7 +1346,8 @@ class Project(ABC):
         Parameters
         ----------
         coq_version : Optional[Union[str, Version]], optional
-            A, by default None
+            A version of Coq that the managed switch should have
+            installed, by default None.
         variables : Optional[AssignedVariables], optional
             Optional variables that may impact interpretation of the
             project's dependency formula and override those of the

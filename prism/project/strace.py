@@ -16,6 +16,7 @@ from strace_parser.parser import get_parser
 
 from prism.util.bash import escape
 from prism.util.opam.switch import OpamSwitch
+from prism.util.radpytools import PathLike
 
 from .iqr import IQR
 
@@ -223,10 +224,8 @@ def _dehex(
     elif isinstance(d, list):
         return [_dehex(e) for e in d]
     elif isinstance(d, dict):
-        return {
-            k: _dehex(v) for k,
-            v in d.items()
-        }
+        return {k: _dehex(v) for k,
+                v in d.items()}
 
 
 def _parse_strace_line(parser: lark.Lark, line: str) -> str:
@@ -289,8 +288,8 @@ def strace_build(
         command: str,
         executable: str = _EXECUTABLE,
         regex: str = _REGEX,
-        workdir: Optional[str] = None,
-        strace_logdir: Optional[str] = None,
+        workdir: Optional[PathLike] = None,
+        strace_logdir: Optional[PathLike] = None,
         **kwargs) -> Tuple[List[CoqContext],
                            int,
                            str,
@@ -304,16 +303,18 @@ def strace_build(
 
     Parameters
     ----------
+    opam_switch : OpamSwitch
+        The switch in which to execute the build process.
     command : str
         The command to run using ``strace``.
-    executable : str
+    executable : str, optional
         The executable to watch for while `command` is running.
-    regex : str
+    regex : str, optional
         The pattern to search for while `command` is running that
         identifies the target of the executable.
-    workdir : Optional[str]
+    workdir : Optional[PathLike], optional
         The cwd to execute the `command` in, by default None.
-    strace_logdir : Optional[str]
+    strace_logdir : Optional[PathLike], optional
         The directory in which to store the temporary strace logs.
     kwargs : Dict[str, Any]
         Additional keyword arguments to `OpamSwitch.run`.
