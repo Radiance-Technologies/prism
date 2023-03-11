@@ -1181,6 +1181,7 @@ def extract_cache(
     """
     if coq_version is None:
         coq_version = project.metadata.coq_version
+    assert coq_version is not None, "coq_version must not be None"
     if (not build_cache_client.contains((project.name,
                                          commit_sha,
                                          coq_version))
