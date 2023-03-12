@@ -67,7 +67,7 @@ from prism.interface.coq.serapi import AbstractSyntaxTree, SerAPI
 from prism.language.gallina.analyze import SexpAnalyzer
 from prism.language.heuristic.parser import CoqSentence
 from prism.project.base import SEM, Project
-from prism.project.exception import ProjectBuildError
+from prism.project.exception import MissingMetadataError, ProjectBuildError
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import (
     ChangedCoqCommitIterator,
@@ -1341,9 +1341,9 @@ def extract_cache_new(
                     )
             try:
                 file_dependencies = project.get_file_dependencies()
-            except CalledProcessError:
+            except (MissingMetadataError, CalledProcessError):
                 logger.exception(
-                    "Failed to get file dependencies. Are the IQR flags correct?"
+                    "Failed to get file dependencies. Are the IQR flags set/correct?"
                 )
                 file_dependencies = None
             data = ProjectCommitData(

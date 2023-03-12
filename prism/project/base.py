@@ -43,7 +43,11 @@ from prism.language.heuristic.parser import (
     HeuristicParser,
     SerAPIParser,
 )
-from prism.project.exception import ProjectBuildError, ProjectCommandError
+from prism.project.exception import (
+    MissingMetadataError,
+    ProjectBuildError,
+    ProjectCommandError,
+)
 from prism.project.iqr import IQR
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
@@ -831,7 +835,7 @@ class Project(ABC):
 
         Raises
         ------
-        RuntimeError
+        MissingMetadataError
             If `dependency_order` is True but `serapi_options` is None.
         """
         root = self.path
@@ -846,7 +850,7 @@ class Project(ABC):
         if dependency_order:
             iqr = self.serapi_options
             if iqr is None:
-                raise RuntimeError(
+                raise MissingMetadataError(
                     f"The `serapi_options` for {self.name} are not set; "
                     "cannot return files in dependency order. "
                     "Please try rebuilding the project.")
@@ -946,9 +950,14 @@ class Project(ABC):
             A map from filenames relative to the root of the project to
             sets of other relative filenames in the project upon which
             they depend.
+
+        Raises
+        ------
+        MissingMetadataError
+            If `serapi_options` are not set.
         """
         if self.coq_options is None:
-            raise RuntimeError(
+            raise MissingMetadataError(
                 "Cannot get file dependencies with unknown IQR flags")
         G = make_dependency_graph(
             typing.cast(List[PathLike],

@@ -186,7 +186,7 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                 data = ProjectCommitData(
                     project.metadata,
                     command_data,
-                    project.get_file_dependencies(),
+                    None,
                     environment,
                     uneventful_result)
                 assert data.project_metadata.commit_sha is not None
