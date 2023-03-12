@@ -27,6 +27,11 @@ RequiredLibrary = Tuple[Optional[str], str]
 class LogicalMappings:
     """
     Cache and search logical mappings for Coq packages.
+
+    Parameters
+    ----------
+    mappings : Dict[str, str]
+        A map from logical library names to packages that define them.
     """
 
     opam: 'LogicalMappings'
@@ -34,22 +39,37 @@ class LogicalMappings:
     A cached map from logical library names to public opam packages.
     """
     coq_8_9_1: 'LogicalMappings'
+    """
+    A cached map of logical library names belonging to Coq 8.9.1.
+    """
     coq_8_10_2: 'LogicalMappings'
+    """
+    A cached map of logical library names belonging to Coq 8.10.2.
+    """
     coq_8_11_2: 'LogicalMappings'
+    """
+    A cached map of logical library names belonging to Coq 8.11.2.
+    """
     coq_8_12_2: 'LogicalMappings'
+    """
+    A cached map of logical library names belonging to Coq 8.12.2.
+    """
     coq_8_13_2: 'LogicalMappings'
+    """
+    A cached map of logical library names belonging to Coq 8.13.2.
+    """
     coq_8_14_1: 'LogicalMappings'
+    """
+    A cached map of logical library names belonging to Coq 8.14.1.
+    """
     coq_8_15_2: 'LogicalMappings'
+    """
+    A cached map of logical library names belonging to Coq 8.15.2.
+    """
 
     def __init__(self, mappings: Dict[str, str]) -> None:
         """
         Initialize a searchable map of logical library names.
-
-        Parameters
-        ----------
-        mappings : Dict[str, str]
-            A map from logical library names to packages that define
-            them.
         """
         # precompute possible mapping variants for O(1) lookups
         self.mappings: Dict[RequiredLibrary, Set[str]]
