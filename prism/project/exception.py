@@ -16,6 +16,14 @@ class DirHasNoCoqFiles(Exception):
     pass
 
 
+class MissingMetadataError(Exception):
+    """
+    Exception indicating that an operation requires unknown metadata.
+    """
+
+    pass
+
+
 class ProjectBuildError(Exception):
     """
     Exception indicating that a project has failed to build.
