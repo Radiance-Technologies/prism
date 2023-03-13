@@ -3,9 +3,10 @@ Provides quick parsing utilities relying on heuristics.
 """
 import pathlib
 import re
+import typing
 import warnings
 from dataclasses import dataclass, field
-from typing import List, Optional, Set, Tuple
+from typing import Callable, List, Optional, Set, Tuple, TypeVar, Union
 
 from seutil import io
 
@@ -24,6 +25,8 @@ from prism.util.path import get_relative_path
 from prism.util.radpytools import PathLike
 from prism.util.radpytools.dataclasses import default_field
 from prism.util.radpytools.os import pushd
+
+_T = TypeVar("_T")
 
 
 @dataclass
@@ -52,6 +55,24 @@ class CoqSentence:
 
     def __str__(self) -> str:  # noqa: D105
         return self.text
+
+
+@dataclass
+class CoqComment:
+    """
+    A comment in a Coq document.
+    """
+
+    text: str
+    """
+    The raw text of the comment.
+
+    Note that whitespace may not be preserved.
+    """
+    location: Optional[SexpInfo.Loc] = None
+    """
+    The location of the comment in the original document.
+    """
 
 
 class HeuristicParser:
@@ -433,6 +454,50 @@ class HeuristicParser:
                     self._increment_depth(0)
 
     @classmethod
+    def _complete_locations(
+        cls,
+        file_contents: str,
+        document_name: PathLike,
+        tp: Callable[[str,
+                      SexpInfo.Loc],
+                     _T],
+        items: List[StrWithLocation],
+    ) -> List[_T]:
+        """
+        Complete and package location information in located strings.
+
+        Parameters
+        ----------
+        document_name : PathLike
+            The name of the Coq document containing the located `items`.
+        file_contents : str
+            The source code of the Coq document.
+        tp : Callable[[str, SexpInfo.Loc], _T]
+            A constructor of a type that contains the raw located text
+            and its completed location.
+        items : List[StrWithLocation]
+            Located items parsed from a Coq document.
+
+        Returns
+        -------
+        List[_T]
+            A list of items with completed locations.
+        """
+        start_idx = 0
+        newlines_so_far = 0
+        located_sentences: List[_T] = []
+        for ls in items:
+            loc = ls.get_location(
+                file_contents,
+                document_name,
+                start_idx,
+                newlines_so_far)
+            located_sentences.append(tp(str(ls), loc))
+            start_idx = loc.end_charno
+            newlines_so_far = loc.lineno_last
+        return located_sentences
+
+    @classmethod
     def _compute_proof_mask(
             cls,
             depths: List[int],
@@ -591,9 +656,13 @@ class HeuristicParser:
 
     @classmethod
     def _get_sentences(
-            cls,
-            file_contents: str,
-            skip_sentence_errors: bool = False) -> List[StrWithLocation]:
+        cls,
+        file_contents: str,
+        skip_sentence_errors: bool = False,
+        return_comments: bool = False
+    ) -> Union[List[StrWithLocation],
+               Tuple[List[StrWithLocation],
+                     List[StrWithLocation]]]:
         """
         Get the sentences of the given file.
 
@@ -605,17 +674,35 @@ class HeuristicParser:
             If True, return list of sentences that were successfully
             parsed while ignoring sentences where an exception was
             raised, otherwise raise the exception.
+        return_comments : bool, optional
+            If True, then return comments in a separate list alongside
+            sentences. Otherwise, return only sentences.
 
         Returns
         -------
-        List[StrWithLocation]
+        sentences: List[StrWithLocation]
             The sentences of the Coq document.
+        comments : List[StrWithLocation], optional
+            The comments of the Coq document if `return_comments` is
+            True.
         """
         located_file_contents = StrWithLocation.create_from_file_contents(
             file_contents)
         # Remove comments
         file_contents_no_comments = ParserUtils._strip_comments(
-            located_file_contents)
+            located_file_contents,
+            return_comments)
+        comments = None
+        if return_comments:
+            file_contents_no_comments = typing.cast(
+                Tuple[StrWithLocation,
+                      List[StrWithLocation]],
+                file_contents_no_comments)
+            file_contents_no_comments, comments = file_contents_no_comments
+        else:
+            file_contents_no_comments = typing.cast(
+                StrWithLocation,
+                file_contents_no_comments)
         # Mask notations to avoid accidental splitting on quoted
         # periods.
         # TODO: Make a proper lexer/parser; rare notations could still
@@ -694,7 +781,11 @@ class HeuristicParser:
         # Lop off the final line if it's just a period, i.e., blank.
         if processed_sentences[-1] == ".":
             processed_sentences.pop()
-        return processed_sentences
+        if return_comments:
+            assert comments is not None
+            return processed_sentences, comments
+        else:
+            return processed_sentences
 
     @classmethod
     def parse_proofs(
@@ -727,13 +818,16 @@ class HeuristicParser:
 
     @classmethod
     def parse_sentences_from_file(
-            cls,
-            file_path: PathLike,
-            encoding: str = 'utf-8',
-            glom_proofs: bool = True,
-            project_path: PathLike = "",
-            return_locations: bool = False,
-            **kwargs) -> List[CoqSentence]:
+        cls,
+        file_path: PathLike,
+        encoding: str = 'utf-8',
+        glom_proofs: bool = True,
+        project_path: PathLike = "",
+        return_locations: bool = False,
+        **kwargs
+    ) -> Union[List[CoqSentence],
+               Tuple[List[CoqSentence],
+                     List[CoqComment]]]:
         """
         Split the Coq file text by sentences.
 
@@ -757,14 +851,20 @@ class HeuristicParser:
             A flag indicating whether sentence locations are returned,
             by default False. If glom_proofs is True, locations are not
             returned no matter what.
+        return_comments : bool, optional
+            If True, then return comments in a separate list alongside
+            sentences. Otherwise, return only sentences.
         kwargs : Dict[str, Any]
             Optional keyword arguments to
             `parse_sentences_from_document`.
 
         Returns
         -------
-        List[CoqSentence]
+        sentences : List[CoqSentence]
             A list of the sentences in the file.
+        comments : List[CoqComment], optional
+            The comments of the Coq document if `return_comments` is
+            True.
         """
         document = CoqDocument(
             get_relative_path(file_path,
@@ -780,13 +880,17 @@ class HeuristicParser:
 
     @classmethod
     def parse_sentences_from_document(
-            cls,
-            document: CoqDocument,
-            encoding: str = 'utf-8',
-            glom_proofs: bool = True,
-            return_locations: bool = False,
-            skip_sentence_errors: bool = False,
-            **kwargs) -> List[CoqSentence]:
+        cls,
+        document: CoqDocument,
+        encoding: str = 'utf-8',
+        glom_proofs: bool = True,
+        return_locations: bool = False,
+        return_comments: bool = False,
+        skip_sentence_errors: bool = False,
+        **kwargs
+    ) -> Union[List[CoqSentence],
+               Tuple[List[CoqSentence],
+                     List[CoqComment]]]:
         """
         Split the Coq file text by sentences.
 
@@ -795,8 +899,8 @@ class HeuristicParser:
 
         Parameters
         ----------
-        document : str
-            CoqDocument to be parsed.
+        document : CoqDocument
+            The Coq document to be parsed.
         encoding : str, optional
             The encoding to use for decoding if a bytestring is
             provided, by default 'utf-8'.
@@ -809,6 +913,9 @@ class HeuristicParser:
             A flag indicating whether sentence locations are returned,
             by default False. If glom_proofs is True, locations are not
             returned no matter what.
+        return_comments : bool, optional
+            If True, then return comments in a separate list alongside
+            sentences. Otherwise, return only sentences.
         skip_sentence_errors : bool, optional
             If True, return list of sentences that were successfully
             parsed while ignoring sentences where an exception was
@@ -818,36 +925,57 @@ class HeuristicParser:
 
         Returns
         -------
-        List[CoqSentence]
+        sentences : List[CoqSentence]
             A list of the sentences in the `document`.
+        comments : List[CoqComment], optional
+            The comments of the Coq document if `return_comments` is
+            True.
         """
         if glom_proofs and return_locations:
             raise NotImplementedError(
                 "Returning locations alongside glommed proofs "
                 "is not currently supported.")
         file_contents = document.source_code
-        sentences = cls._get_sentences(file_contents, skip_sentence_errors)
+        sentences = cls._get_sentences(
+            file_contents,
+            skip_sentence_errors,
+            return_comments)
+        comments = None
+        if return_comments:
+            sentences = typing.cast(
+                Tuple[List[StrWithLocation],
+                      List[StrWithLocation]],
+                sentences)
+            sentences, comments = sentences
+        else:
+            sentences = typing.cast(List[StrWithLocation], sentences)
         if return_locations:
-            start_idx = 0
-            newlines_so_far = 0
-            located_sentences: List[CoqSentence] = []
-            for ls in sentences:
-                loc = ls.get_location(
+            sentences = cls._complete_locations(
+                file_contents,
+                document.name,
+                CoqSentence,
+                sentences)
+            if return_comments:
+                assert comments is not None
+                comments = cls._complete_locations(
                     file_contents,
                     document.name,
-                    start_idx,
-                    newlines_so_far)
-                located_sentences.append(CoqSentence(str(ls), loc))
-                start_idx = loc.end_charno
-                newlines_so_far = loc.lineno_last
-            sentences = located_sentences
+                    CoqComment,
+                    comments)
         else:
             sentences = [str(s) for s in sentences]
             if glom_proofs:
                 stats = cls._compute_sentence_statistics(sentences)
                 sentences = cls._glom_proofs(document.index, sentences, stats)
             sentences = [CoqSentence(s) for s in sentences]
-        return sentences
+            if return_comments:
+                assert comments is not None
+                comments = [CoqComment(str(s)) for s in comments]
+        if return_comments:
+            comments = typing.cast(List[CoqComment], comments)
+            return sentences, comments
+        else:
+            return sentences
 
 
 class SerAPIParser(HeuristicParser):
@@ -892,10 +1020,13 @@ class SerAPIParser(HeuristicParser):
             The given list of locations with contiguous spans of Ltac
             sentence locations merged into one location.
         """
-        sentences = []
+        sentences: List[str] = []
         asts = []
         locs = []
         in_ltac_region = False
+        ltac_sentences: List[str] = []
+        ltac_asts: List[SexpNode] = []
+        ltac_locs: List[SexpInfo.Loc] = []
         for sentence, ast, loc in zip(vernac_sentences, sexp_asts, locations):
             if SexpAnalyzer.is_ltac(ast):
                 if not in_ltac_region:
@@ -911,17 +1042,17 @@ class SerAPIParser(HeuristicParser):
             else:
                 if in_ltac_region:
                     # Join sentences by a space
-                    ltac_sentences = ' '.join(ltac_sentences)
+                    glommed_ltac_sentence = ' '.join(ltac_sentences)
                     # Create a single node containing all
                     # contigous Ltac asts.
-                    ltac_asts = SexpList(ltac_asts)
+                    glommed_ltac_ast = SexpList(ltac_asts)
                     # Merge the contiguous sentence locations
-                    ltac_locs = SexpInfo.Loc.span(*ltac_locs)
+                    glommed_ltac_loc = SexpInfo.Loc.span(*ltac_locs)
                     # Exit ltac region
                     in_ltac_region = False
-                    sentences.append(ltac_sentences)
-                    asts.append(ltac_asts)
-                    locs.append(ltac_locs)
+                    sentences.append(glommed_ltac_sentence)
+                    asts.append(glommed_ltac_ast)
+                    locs.append(glommed_ltac_loc)
                 # pair sentence with ast node.
                 sentences.append(sentence)
                 asts.append(ast)
@@ -929,13 +1060,13 @@ class SerAPIParser(HeuristicParser):
         return sentences, asts, locs
 
     @classmethod
-    def _infer_serapi_options(cls, document: CoqDocument) -> str:
+    def _infer_serapi_options(cls, project_path: PathLike) -> str:
         """
         Try to infer SerAPI options from a _CoqProject file if present.
         """
         coq_project_files = [
-            pathlib.Path(document.project_path) / "_CoqProject",
-            pathlib.Path(document.project_path) / "Make"
+            pathlib.Path(project_path) / "_CoqProject",
+            pathlib.Path(project_path) / "Make"
         ]
         possible_serapi_options = []
         for coq_project_file in coq_project_files:
@@ -961,6 +1092,7 @@ class SerAPIParser(HeuristicParser):
             _encoding: str = "utf-8",
             glom_proofs: bool = True,
             return_locations: bool = False,
+            return_comments: bool = False,
             glom_ltac: bool = False,
             return_asts: bool = False,
             offset_locs: bool = True,
@@ -984,6 +1116,9 @@ class SerAPIParser(HeuristicParser):
             by default `False`.
         return_asts : bool, optional
             If True, then also return asts. By default `False`.
+        return_comments : bool, optional
+            If True, then return comments in a separate list alongside
+            sentences. Otherwise, return only sentences.
         offset_locs : bool, optional
             If True, then offset the locations in the returned ASTs to
             match the indices of characters in the returned sentences.
@@ -1015,13 +1150,19 @@ class SerAPIParser(HeuristicParser):
             raise NotImplementedError(
                 "Returning locations alongside glommed proofs "
                 "is not currently supported.")
+        if return_comments:
+            raise NotImplementedError(
+                "Returning comments alongside sentences is not currently supported."
+            )
         source_code = document.source_code
         unicode_offsets = gu.ParserUtils.get_unicode_offsets(source_code)
         coq_file = document.abspath
         serapi_options = kwargs.pop('serapi_options', None)
+        assert document.project_path is not None, \
+            "Document must have a project directory"
         if serapi_options is None:
             # Try to infer from _CoqProject
-            serapi_options = cls._infer_serapi_options(document)
+            serapi_options = cls._infer_serapi_options(document.project_path)
         with pushd(document.project_path):
             asts = CoqParser.parse_asts(coq_file, serapi_options, **kwargs)
         # get raw sentences

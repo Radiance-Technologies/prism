@@ -5,7 +5,7 @@ Provides internal utilities for heuristic parsing of Coq source files.
 import math
 import re
 from functools import partialmethod
-from typing import Iterable, List, Optional, Set, Tuple
+from typing import Iterable, List, Optional, Set, Tuple, Union
 
 from prism.language.heuristic.str_with_location import StrWithLocation
 from prism.util.re import regex_from_options
@@ -450,8 +450,11 @@ class ParserUtils:
 
     @staticmethod
     def _strip_comments(
-            file_contents: StrWithLocation,
-            encoding: str = 'utf-8') -> StrWithLocation:
+        file_contents: StrWithLocation,
+        return_comments: bool
+    ) -> Union[StrWithLocation,
+               Tuple[StrWithLocation,
+                     List[StrWithLocation]]]:
         # comments can be nested, so a single regex cannot be used
         # to detect this recursive structure.
         # Instead, split on comment boundaries and manually match
@@ -461,16 +464,31 @@ class ParserUtils:
             ParserUtils.comment_splitter,
             file_contents)
         str_no_comments = []
+        comments: List[StrWithLocation] = []
+        current_comment: List[StrWithLocation] = []
         for segment in comment_delimited:
             if segment == '(*':
+                if return_comments:
+                    current_comment.append(segment)
                 comment_depth += 1
             if comment_depth == 0:
                 str_no_comments.append(segment)
+            elif return_comments:
+                current_comment.append(segment)
             if segment == '*)':
                 if comment_depth > 0:
                     comment_depth -= 1
+                if return_comments:
+                    current_comment.append(segment)
+                    if comment_depth == 0:
+                        # a top-level comment just ended
+                        comments.append(StrWithLocation().join(current_comment))
+                        current_comment = []
         str_no_comments = StrWithLocation().join(str_no_comments)
-        return str_no_comments
+        if return_comments:
+            return str_no_comments, comments
+        else:
+            return str_no_comments
 
     @staticmethod
     def _mask_strings(
