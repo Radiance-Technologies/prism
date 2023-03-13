@@ -10,7 +10,7 @@ import functools
 import logging
 import re
 from dataclasses import asdict, dataclass
-from typing import Any, Callable, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, List, Optional, Set, Union
 
 from prism.language.gallina.util import ParserUtils
 from prism.language.sexp import (
@@ -561,7 +561,7 @@ class SexpInfo:
                         ])
                 ])
 
-        def union(self, *others: Tuple['SexpInfo.Loc', ...]) -> 'SexpInfo.Loc':
+        def union(self, *others: 'SexpInfo.Loc') -> 'SexpInfo.Loc':
             """
             Get the union of this location and another.
 
@@ -591,8 +591,7 @@ class SexpInfo:
         def span(
                 cls,
                 loc: 'SexpInfo.Loc',
-                *others: Tuple['SexpInfo.Loc',
-                               ...]) -> 'SexpInfo.Loc':
+                *others: 'SexpInfo.Loc') -> 'SexpInfo.Loc':
             """
             Get the union of all given locations.
 
