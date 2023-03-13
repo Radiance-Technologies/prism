@@ -797,6 +797,10 @@ class ProjectCommitData(Serializable):
     files, i.e., if file ``B`` depends on file ``A``, then ``A`` will
     appear in the iteration before ``B``.
     """
+    commit_message: Optional[str] = None
+    """
+    A description of the changes contained in this project commit.
+    """
     file_dependencies: Optional[Dict[str, List[str]]] = None
     """
     An adjacency list containing the intraproject dependencies of each

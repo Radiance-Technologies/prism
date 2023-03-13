@@ -121,6 +121,7 @@ class TestExtractCache(unittest.TestCase):
             dummy_float_data = ProjectCommitData(
                 coq_float.metadata,
                 {},
+                None,
                 {},
                 ProjectBuildEnvironment(self.test_switch.export()),
                 ProjectBuildResult(0,

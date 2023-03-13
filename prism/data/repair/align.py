@@ -447,6 +447,7 @@ def _compute_diff_alignment(
     # downselect commit data to changed commands
     a_in_diff = ProjectCommitData(
         a.project_metadata,
+        a.commit_message,
         {
             k: VernacCommandDataList([v[i] for i in a_indices_in_diff[k]])
             for k,
@@ -457,6 +458,7 @@ def _compute_diff_alignment(
         a.build_result)
     b_in_diff = ProjectCommitData(
         b.project_metadata,
+        b.commit_message,
         {
             k: VernacCommandDataList([v[i] for i in b_indices_in_diff[k]])
             for k,

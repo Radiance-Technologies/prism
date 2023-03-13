@@ -1292,6 +1292,9 @@ def extract_cache_new(
                 force_remove=True,
                 force_reset=True)
             # process the commit
+            commit_message = project.commit().message
+            if isinstance(commit_message, bytes):
+                commit_message = commit_message.decode("utf-8")
             metadata = project.metadata
             try:
                 build_result = project.build(
@@ -1349,6 +1352,7 @@ def extract_cache_new(
             data = ProjectCommitData(
                 metadata,
                 command_data,
+                commit_message,
                 file_dependencies,
                 ProjectBuildEnvironment(project.opam_switch.export()),
                 ProjectBuildResult(*build_result))

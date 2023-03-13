@@ -187,6 +187,7 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                     project.metadata,
                     command_data,
                     None,
+                    None,
                     environment,
                     uneventful_result)
                 assert data.project_metadata.commit_sha is not None
@@ -235,6 +236,7 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                     metadata,
                     {},
                     None,
+                    None,
                     environment,
                     ProjectBuildResult(0,
                                        "",
@@ -259,6 +261,7 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                 item2 = ProjectCommitData(
                     metadata,
                     {},
+                    None,
                     None,
                     environment,
                     failed_build_result)

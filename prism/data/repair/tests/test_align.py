@@ -3,7 +3,7 @@ Test module for repair tools.
 """
 import unittest
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict
 
 import numpy as np
 
@@ -27,7 +27,7 @@ class TestAlign(unittest.TestCase):
     """
 
     caches: Dict[str,
-                 List[VernacCommandData]] = {}
+                 VernacCommandDataList] = {}
     test_metadata: ProjectMetadata
 
     @classmethod
@@ -90,10 +90,12 @@ class TestAlign(unittest.TestCase):
             self.test_metadata,
             {"core_net": TestAlign.caches["verdi_core_net_a.v"]},
             None,
+            None,
             None)
         b = ProjectCommitData(
             self.test_metadata,
             {"core_net": TestAlign.caches["verdi_core_net_b.v"]},
+            None,
             None,
             None)
 
@@ -132,10 +134,12 @@ class TestAlign(unittest.TestCase):
                 "Alphabet.v": TestAlign.caches["Alphabet.v"]
             },
             None,
+            None,
             None)
         b = ProjectCommitData(
             self.test_metadata,
             {"core_net": TestAlign.caches["verdi_core_net_b.v"]},
+            None,
             None,
             None)
         alignment = align_commits_per_file(a, b)
@@ -153,10 +157,12 @@ class TestAlign(unittest.TestCase):
                 "Alphabet.v": TestAlign.caches["Alphabet.v"]
             },
             None,
+            None,
             None)
         b = ProjectCommitData(
             self.test_metadata,
             {"core_net": TestAlign.caches["verdi_core_net_b.v"]},
+            None,
             None,
             None)
         diff = GitDiff("")
