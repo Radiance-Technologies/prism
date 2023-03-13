@@ -1295,7 +1295,6 @@ def extract_cache_new(
             commit_message = project.commit().message
             if isinstance(commit_message, bytes):
                 commit_message = commit_message.decode("utf-8")
-            metadata = project.metadata
             try:
                 build_result = project.build(
                     managed_switch_kwargs=managed_switch_kwargs,
@@ -1338,7 +1337,7 @@ def extract_cache_new(
                 finally:
                     elapsed_time = time() - start_time
                     build_cache_client.write_timing_log(
-                        metadata,
+                        project.metadata,
                         block,
                         f"Elapsed time in extract_vernac_commands: {elapsed_time} s"
                     )
@@ -1350,7 +1349,7 @@ def extract_cache_new(
                 )
                 file_dependencies = None
             data = ProjectCommitData(
-                metadata,
+                project.metadata,
                 command_data,
                 commit_message,
                 file_dependencies,
