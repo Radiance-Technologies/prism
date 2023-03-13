@@ -38,6 +38,7 @@ from prism.data.repair.align import (
 )
 from prism.data.repair.diff import compute_git_diff
 from prism.language.gallina.analyze import SexpInfo
+from prism.project.metadata import ProjectMetadata
 from prism.util.diff import GitDiff
 from prism.util.io import Serializable
 from prism.util.opam import OpamSwitch, PackageFormula
@@ -1041,6 +1042,13 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
         error_state = self.change.diff.patch(initial_state.offset_state)
         error_state.sort_commands()
         return error_state
+
+    @property
+    def project_metadata(self) -> ProjectMetadata:
+        """
+        Get the initial state's project metadata.
+        """
+        return self.initial_state.project_state.project_metadata
 
     def compress(self) -> GitErrorInstance:
         """

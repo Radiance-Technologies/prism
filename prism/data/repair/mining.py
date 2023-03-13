@@ -34,7 +34,9 @@ from prism.project.repo import ProjectRepo
 from prism.util.io import atomic_write
 from prism.util.radpytools.multiprocessing import synchronizedmethod
 
-BuildRepairInstanceOutput = Union[List[ProjectCommitDataRepairInstance], Except]
+BuildRepairInstanceOutput = Optional[Union[
+    List[ProjectCommitDataRepairInstance],
+    Except]]
 """
 Type hint for the output of build_repair_instance_star.
 """
@@ -522,8 +524,7 @@ def build_repair_instance(
     """
     try:
         with RepairInstanceDB(repair_instance_db_file) as db_instance:
-            initial_metadata = \
-                error_instance.initial_state.project_state.project_metadata
+            initial_metadata = error_instance.project_metadata
             repaired_metadata = repaired_state.project_metadata
             if db_instance.get_record(initial_metadata.project_name,
                                       initial_metadata.commit_sha,
@@ -890,7 +891,7 @@ def repair_mining_loop(
     repair_miner : RepairMiner, optional
         Function to mine repair instances given an error instance and a
         repaired state, by default None
-    changest_miner : Optional[ChangeSetMiner], optional
+    changeset_miner : Optional[ChangeSetMiner], optional
         Function to mine ChangeSelection objects, by default None
     serial : bool, optional
         Flag to control parallel execution, by default False. If True,
