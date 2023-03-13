@@ -520,6 +520,8 @@ def build_repair_instance(
     -------
     BuildRepairInstanceOutput
         If a repair instance is successfully created, return that.
+        If there's an exception while building a repair instance,
+        return an Except object.
         If the instance is empty, return None.
     """
     try:
