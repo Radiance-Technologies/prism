@@ -39,6 +39,7 @@ from prism.data.document import CoqDocument
 from prism.interface.coq.re_patterns import QUALIFIED_IDENT_PATTERN
 from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.parser import (
+    CoqComment,
     CoqSentence,
     HeuristicParser,
     SerAPIParser,
@@ -462,13 +463,16 @@ class Project(ABC):
             obj = self.get_random_file(**kwargs)
         else:
             obj = self.get_file(filename, **kwargs)
-        sentences = self.extract_sentences(
-            obj,
-            'utf-8',
-            glom_proofs,
-            sentence_extraction_method=self.sentence_extraction_method,
-            serapi_options=self.serapi_options,
-            opam_switch=self.opam_switch)
+        sentences = typing.cast(
+            List[CoqSentence],
+            self.extract_sentences(
+                obj,
+                'utf-8',
+                glom_proofs,
+                sentence_extraction_method=self.sentence_extraction_method,
+                serapi_options=self.serapi_options,
+                opam_switch=self.opam_switch,
+                return_comments=False))
         return sentences
 
     def _iqr_bound_directories(
@@ -1073,11 +1077,13 @@ class Project(ABC):
         return str(first), str(second)
 
     def get_sentences(
-            self,
-            filename: PathLike,
-            sentence_extraction_method: Optional[
-                SentenceExtractionMethod] = None,
-            **kwargs) -> List[CoqSentence]:
+        self,
+        filename: PathLike,
+        sentence_extraction_method: Optional[SentenceExtractionMethod] = None,
+        **kwargs
+    ) -> Union[List[CoqSentence],
+               Tuple[List[CoqSentence],
+                     List[CoqComment]]]:
         r"""
         Get the sentences of a Coq file within the project.
 
@@ -1099,6 +1105,9 @@ class Project(ABC):
         -------
         List[CoqSentence]
             The list of sentences extracted from the indicated file.
+        List[CoqComment], optional
+            The list of comments extracted from the indicated file if
+            `return_comments` is a keyword argument and True.
 
         See Also
         --------
@@ -1412,13 +1421,16 @@ class Project(ABC):
 
     @staticmethod
     def extract_sentences(
-            document: CoqDocument,
-            encoding: str = 'utf-8',
-            glom_proofs: bool = True,
-            glom_ltac: bool = False,
-            return_asts: bool = False,
-            sentence_extraction_method: SEM = SEM.SERAPI,
-            **kwargs) -> List[CoqSentence]:
+        document: CoqDocument,
+        encoding: str = 'utf-8',
+        glom_proofs: bool = True,
+        glom_ltac: bool = False,
+        return_asts: bool = False,
+        sentence_extraction_method: SEM = SEM.SERAPI,
+        **kwargs
+    ) -> Union[List[CoqSentence],
+               Tuple[List[CoqSentence],
+                     List[CoqComment]]]:
         """
         Split the Coq file text by sentences.
 
@@ -1449,11 +1461,20 @@ class Project(ABC):
             by default `False`
         sentence_extraction_method : SentenceExtractionMethod
             Method by which sentences should be extracted
+        kwargs
+            Keyword arguments for heuristic parsing.
 
         Returns
         -------
         List[CoqSentence]
             A list of Coq sentences extracted from the given `document`.
+        List[CoqComment], optional
+            The list of comments extracted from the indicated file if
+            `return_comments` is a keyword argument and True.
+
+        See Also
+        --------
+        HeuristicParser.parse_sentences_from_document : For keyword args
         """
         return sentence_extraction_method.parser(
         ).parse_sentences_from_document(
