@@ -352,7 +352,7 @@ class RepairInstanceDB:
         * Immediately fetch the new row back with its auto-incremented
           row id.
         * Fetch all rows matching the project name and commit pair and
-          coq verison pair.
+          Coq version pair.
         * Get the row indices from each returned row, sort them, and
           get the index of the just-inserted row in that list.
         * Use this index to name the file, along with the project name,
@@ -428,10 +428,20 @@ class RepairInstanceDB:
         Parameters
         ----------
         project_name : str
+            The name of the project identifying the record being
+            inserted
         initial_commit_sha : str
+            The commit hash for the initial commit identifying the
+            record being inserted
         repaired_commit_sha : str
+            The commit hash for the repaired commit identifying the
+            record being inserted
         initial_coq_version : str
+            The Coq version for the initial cache item identifying the
+            record being inserted
         repaired_coq_version : str
+            The Coq version for the repaired cache item identifying the
+            record being inserted
         change_selection : ChangeSelection
             The selected changes that further identify the record
 
