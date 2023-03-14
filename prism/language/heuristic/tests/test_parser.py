@@ -2,16 +2,22 @@
 Test suite for heuristic parsers.
 """
 import json
+import typing
 import unittest
 from itertools import chain, repeat
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import pytest
 
 from prism.language.gallina.analyze import SexpInfo
 from prism.language.gallina.parser import CoqParser
-from prism.language.heuristic.parser import HeuristicParser, SerAPIParser
+from prism.language.heuristic.parser import (
+    CoqComment,
+    CoqSentence,
+    HeuristicParser,
+    SerAPIParser,
+)
 from prism.tests import _COQ_EXAMPLES_PATH
 from prism.util.path import get_relative_path
 
@@ -25,6 +31,7 @@ class TestHeuristicParser(unittest.TestCase):
     test_contents: Dict[str, str]
     test_list: Dict[str, List[str]]
     test_glom_list: Dict[str, List[str]]
+    test_comment_list: Dict[str, List[str]]
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -48,6 +55,7 @@ class TestHeuristicParser(unittest.TestCase):
         }
         cls.test_list = {}
         cls.test_glom_list = {}
+        cls.test_comment_list = {}
         expected_filename = _COQ_EXAMPLES_PATH / "split_by_sentence_expected.json"
         for coq_file in coq_example_files:
             test_filename = cls.test_files[coq_file]
@@ -64,24 +72,39 @@ class TestHeuristicParser(unittest.TestCase):
                         f"{coq_file}_test_glom_list"]
                 except KeyError:
                     pass
+                try:
+                    cls.test_comment_list[coq_file] = contents[
+                        f"{coq_file}_test_comment_list"]
+                except KeyError:
+                    pass
 
     def test_parsing(self) -> None:
         """
         Test accuracy of heuristic parsing on a number of examples.
         """
-        for coq_file, expected_parsed in self.test_list.items():
+        for coq_file in self.test_list.keys():
+            expected_parsed = self.test_list[coq_file] + self.test_comment_list[
+                coq_file]
             test_file_name = self.test_files[coq_file]
-            actual_parsed = [
-                str(s) for s in HeuristicParser.parse_sentences_from_file(
-                    test_file_name,
-                    glom_proofs=False)
-            ]
-            actual_parsed_with_locs = [
-                str(s) for s in HeuristicParser.parse_sentences_from_file(
-                    test_file_name,
-                    glom_proofs=False,
-                    return_locations=True)
-            ]
+            (sentences,
+             comments) = typing.cast(
+                 Tuple[List[CoqSentence],
+                       List[CoqComment]],
+                 HeuristicParser.parse_sentences_from_file(
+                     test_file_name,
+                     glom_proofs=False,
+                     return_comments=True))
+            actual_parsed = [str(s) for s in (sentences + comments)]
+            (sentences,
+             comments) = typing.cast(
+                 Tuple[List[CoqSentence],
+                       List[CoqComment]],
+                 HeuristicParser.parse_sentences_from_file(
+                     test_file_name,
+                     glom_proofs=False,
+                     return_locations=True,
+                     return_comments=True))
+            actual_parsed_with_locs = [str(s) for s in (sentences + comments)]
             self.assertEqual(actual_parsed, expected_parsed)
             self.assertEqual(actual_parsed_with_locs, expected_parsed)
 

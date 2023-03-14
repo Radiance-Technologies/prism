@@ -53,6 +53,21 @@
     "Notation \"n .+1\" := (S n)(at level 2, left associativity, format \"n .+1\"): nat_scope.",
     "Coercion b2Prop (x : bool) := x = true."
   ],
+  "simple_test_comment_list": [
+    "(* *********************************************************************)",
+    "(*                                                                     *)",
+    "(*              A simple test file                                     *)",
+    "(*                                                                     *)",
+    "(*          John Doe, XYZ Institute                                    *)",
+    "(*                                                                     *)",
+    "(*  Copyright Foo Bar Baz, Inc.                                        *)",
+    "(*  All rights reserved.  This file is distributed                     *)",
+    "(*  under the terms of a non-existent license agreement                *)",
+    "(*                                                                     *)",
+    "(* *********************************************************************)",
+    "(** Here's another comment *)",
+    "(* Additional effort may identify length_corr as instigator of proof. *)"
+  ],
   "nested_test_list": [
     "Definition idw (A : Type) := A.",
     "Lemma foobar : unit.",
@@ -94,6 +109,10 @@
     "Lemma aux : forall A : Type, A -> unit.",
     "Proof. intros. pose (foo := idw A). exact tt. Qed. apply (@aux unit tt). Qed.",
     "Check foobar'."
+  ],
+  "nested_test_comment_list": [
+    "(* Adapted from coq/test-suite/success/sideff.v*)",
+    "(** Here's a (* nested *) comment *)"
   ],
   "Alphabet_test_list": [
     "From Coq Require Import ZArith List Relations RelationClasses.",
@@ -368,6 +387,33 @@
     "Include (OrderedType_from_Alt Alt).",
     "End OrderedType_from_ComparableM."
   ],
+  "Alphabet_test_comment_list": [
+    "(****************************************************************************)",
+    "(*                                                                          *)",
+    "(*                                   Menhir                                 *)",
+    "(*                                                                          *)",
+    "(*           Jacques-Henri Jourdan, CNRS, LRI, Université Paris Sud         *)",
+    "(*                                                                          *)",
+    "(*  Copyright Inria. All rights reserved. This file is distributed under    *)",
+    "(*  the terms of the GNU Lesser General Public License as published by the  *)",
+    "(*  Free Software Foundation, either version 3 of the License, or (at your  *)",
+    "(*  option) any later version, as described in the file LICENSE.            *)",
+    "(*                                                                          *)",
+    "(****************************************************************************)",
+    "(** A comparable type is equiped with a [compare] function, that define an order\n   relation. **)",
+    "(** The corresponding order is a strict order. **)",
+    "(** nat is comparable. **)",
+    "(** A pair of comparable is comparable. **)",
+    "(** Special case of comparable, where equality is Leibniz equality. **)",
+    "(** Boolean equality for a [Comparable]. **)",
+    "(** A pair of ComparableLeibnizEq is ComparableLeibnizEq **)",
+    "(** An [Finite] type is a type with the list of all elements. **)",
+    "(** An alphabet is both [ComparableLeibnizEq] and [Finite]. **)",
+    "(** The [Numbered] class provides a conveniant way to build [Alphabet] instances,\n   with a good computationnal complexity. It is mainly a injection from it to\n   [positive] **)",
+    "(* We do not use [Pos.compare_eq_iff] directly to make sure the\n     proof is executable. *)",
+    "(* Using rewrite here leads to non-executable proofs. *)",
+    "(** Definitions of [FSet]/[FMap] from [Comparable] **)"
+  ],
   "notations_test_list": [
     "Notation \"0\" := zero_op : computable_scope.",
     "Notation \"1\" := one_op : computable_scope.",
@@ -427,5 +473,9 @@
     "Notation \"a := b\" := (a <> string_dec \"asd\" <> b) (at level 60).",
     "Notation \"a ;; b\" := (a := string_dec \"asd\" := b) (at level 50).",
     "Notation \"\"\"a\"\"\" := (string_dec \"\"\"\" <> a <> string_dec \"\\\" <> string_dec \"\") (at level 70)."
+  ],
+  "notations_test_comment_list": [
+    "(*\nTest heuristic parsing of notations.\nThese sample notations are taken from coqeal/refinements/refinements.v.\nThis file is not meaant to be executable.\n*)",
+    "(* Some extra challenging notations. *)"
   ]
 }

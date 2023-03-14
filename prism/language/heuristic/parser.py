@@ -74,6 +74,12 @@ class CoqComment:
     The location of the comment in the original document.
     """
 
+    def __len__(self) -> int:  # noqa: D105
+        return len(self.text)
+
+    def __str__(self) -> str:  # noqa: D105
+        return self.text
+
 
 class HeuristicParser:
     """

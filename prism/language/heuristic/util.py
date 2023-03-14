@@ -468,8 +468,6 @@ class ParserUtils:
         current_comment: List[StrWithLocation] = []
         for segment in comment_delimited:
             if segment == '(*':
-                if return_comments:
-                    current_comment.append(segment)
                 comment_depth += 1
             if comment_depth == 0:
                 str_no_comments.append(segment)
@@ -479,7 +477,6 @@ class ParserUtils:
                 if comment_depth > 0:
                     comment_depth -= 1
                 if return_comments:
-                    current_comment.append(segment)
                     if comment_depth == 0:
                         # a top-level comment just ended
                         comments.append(StrWithLocation().join(current_comment))
