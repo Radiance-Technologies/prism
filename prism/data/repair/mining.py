@@ -36,13 +36,9 @@ from prism.project.repo import ProjectRepo
 from prism.util.io import atomic_write
 from prism.util.radpytools.multiprocessing import synchronizedmethod
 
-BuildRepairInstanceExcept = Except[List[ProjectCommitDataRepairInstance]]
-"""
-Except object generated if repair instance build has an error.
-"""
 BuildRepairInstanceOutput = Optional[Union[
     List[ProjectCommitDataRepairInstance],
-    BuildRepairInstanceExcept]]
+    Except[None]]]
 """
 Type hint for the output of build_repair_instance_star.
 """
@@ -76,10 +72,6 @@ AugmentedErrorInstance = Tuple[ProjectCommitDataErrorInstance,
 """
 A tuple containing an error instance, with the repaired state used to
 produce it, and the corresponding change selection.
-"""
-BuildErrorInstanceExcept = Except[List[AugmentedErrorInstance]]
-"""
-Except object returned if error instance build has an error.
 """
 
 
@@ -524,7 +516,7 @@ class RepairMiningLogger:
         self.logger.addHandler(self.handler)
 
     @synchronizedmethod
-    def write_exception_log(self, exception: BuildRepairInstanceExcept):
+    def write_exception_log(self, exception: Except[None]):
         """
         Write a log entry for the given exception.
 
@@ -533,13 +525,11 @@ class RepairMiningLogger:
 
         Parameters
         ----------
-        exception : BuildRepairInstanceExcept
+        exception : Except[None]
             Exception to write a log entry for
         """
         self.logger.exception(exception.exception)
         self.logger.error(f"Traceback: {exception.trace}")
-        if exception.value is not None:
-            self.logger.error(f"Preempted result: {exception.value}")
 
     @synchronizedmethod
     def write_debug_log(self, message: str):
@@ -619,7 +609,7 @@ def build_repair_instance(
             else:
                 result = None
     except Exception as e:
-        result = BuildRepairInstanceExcept(None, e, traceback.format_exc())
+        result = Except(None, e, traceback.format_exc())
     finally:
         if result is not None:
             write_repair_instance(
@@ -651,7 +641,7 @@ def build_error_instances_from_label_pair(
     changeset_miner: ChangeSetMiner,
     repair_mining_logger: RepairMiningLogger
 ) -> Union[List[AugmentedErrorInstance],
-           BuildErrorInstanceExcept]:
+           Except[None]]:
     """
     Construct error instances from pairs of cache labels.
 
@@ -676,9 +666,9 @@ def build_error_instances_from_label_pair(
 
     Returns
     -------
-    Union[List[AugmentedErrorInstance], BuildErrorInstanceExcept]
+    Union[List[AugmentedErrorInstance], Except[None]]
         A list of augmented error instances if successful or an
-        BuildErrorInstanceExcept object if there's an error.
+        Except[None] object if there's an error.
     """
     try:
         cache = CoqProjectBuildCache(cache_root, cache_fmt_extension)
@@ -712,15 +702,14 @@ def build_error_instances_from_label_pair(
             error_instances.append((error_instance, repaired_state, changeset))
         result = error_instances
     except Exception as e:
-        result = BuildErrorInstanceExcept(None, e, traceback.format_exc())
+        result = Except(None, e, traceback.format_exc())
         repair_mining_logger.write_exception_log(result)
     return result
 
 
 def build_error_instances_from_label_pair_star(
-    args: ErrorInstanceJob
-) -> Union[List[AugmentedErrorInstance],
-           BuildErrorInstanceExcept]:
+    args: ErrorInstanceJob) -> Union[List[AugmentedErrorInstance],
+                                     Except[None]]:
     """
     Split arguments and call build_error_instances_from_label_pair.
 
@@ -731,9 +720,9 @@ def build_error_instances_from_label_pair_star(
 
     Returns
     -------
-    Union[List[AugmentedErrorInstance], BuildErrorInstanceExcept]
+    Union[List[AugmentedErrorInstance], Except[None]]
         A list of augmented error instances if successful or an
-        BuildErrorInstanceExcept object if there's an error.
+        Except[None] object if there's an error.
     """
     return build_error_instances_from_label_pair(*args)
 
@@ -772,7 +761,7 @@ def write_repair_instance(
     ------
     TypeError
         If potential_diff is neither of ProjectCommitDataRepairInstance
-        nor of BuildRepairInstanceExcept.
+        nor of Except[None].
     """
     if isinstance(potential_diff, ProjectCommitDataRepairInstance):
         with RepairInstanceDB(repair_instance_db_file) as repair_instance_db:
@@ -787,7 +776,7 @@ def write_repair_instance(
                 change_selection,
                 repair_file_directory)
             atomic_write(file_path, potential_diff.compress())
-    elif isinstance(potential_diff, BuildRepairInstanceExcept):
+    elif isinstance(potential_diff, Except[None]):
         repair_mining_logger.write_exception_log(potential_diff)
     else:
         raise TypeError(
@@ -819,7 +808,7 @@ def _get_consecutive_commit_hashes(
 
 def build_repair_instance_mining_inputs(
         error_instance_results: Union[List[AugmentedErrorInstance],
-                                      BuildErrorInstanceExcept],
+                                      Except[None]],
         repair_save_directory: Path,
         repair_instance_db_file: Path,
         repair_miner: RepairMiner,
@@ -830,7 +819,7 @@ def build_repair_instance_mining_inputs(
     Parameters
     ----------
     error_instance_results : Union[List[AugmentedErrorInstance],
-                                   BuildErrorInstanceExcept]
+                                   Except[None]]
         The output of the error instance builder
     repair_save_directory : Path
         The directory to save the repair instances in
@@ -850,7 +839,7 @@ def build_repair_instance_mining_inputs(
     """
     repair_instance_jobs: List[RepairInstanceJob] = []
     for error_instance_result in error_instance_results:
-        if isinstance(error_instance_result, BuildErrorInstanceExcept):
+        if isinstance(error_instance_result, Except[None]):
             continue
         error_instance, repaired_state, change_selection = error_instance_result
         repair_instance_job = RepairInstanceJob(
@@ -1079,7 +1068,7 @@ def _serial_work(
             *cache_args,
             changeset_miner,
             repair_mining_logger)
-        if not isinstance(new_error_instances, BuildErrorInstanceExcept):
+        if not isinstance(new_error_instances, Except[None]):
             error_instances.extend(new_error_instances)
     for error_instance, repaired_state, change_selection in tqdm(
             error_instances, desc="Repair instance mining."):
