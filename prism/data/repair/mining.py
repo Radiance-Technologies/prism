@@ -1085,7 +1085,6 @@ def _serial_work(
         repair_save_directory: Path,
         db_file: Path,
         repair_miner: RepairMiner):
-    error_instances: List[ProjectCommitDataErrorInstance] = []
     for label_a, label_b in tqdm(
             cache_label_pairs, desc="Error instance mining"):
         new_error_instances = build_error_instances_from_label_pair(
@@ -1094,18 +1093,16 @@ def _serial_work(
             *cache_args,
             changeset_miner,
             repair_mining_logger)
-        if not isinstance(new_error_instances, Except[None]):
-            error_instances.extend(new_error_instances)
-    for error_instance, repaired_state, change_selection in tqdm(
-            error_instances, desc="Repair instance mining."):
-        build_repair_instance(
-            error_instance,
-            repaired_state,
-            change_selection,
-            repair_save_directory,
-            db_file,
-            repair_miner,
-            repair_mining_logger)
+        for error_instance, repaired_state, change_selection in tqdm(
+                new_error_instances, desc="Repair instance mining."):
+            build_repair_instance(
+                error_instance,
+                repaired_state,
+                change_selection,
+                repair_save_directory,
+                db_file,
+                repair_miner,
+                repair_mining_logger)
 
 
 def repair_mining_loop(
