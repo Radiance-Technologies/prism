@@ -879,17 +879,36 @@ def mining_loop_worker(
     repair_miner : RepairMiner
         Function used to mine repairs
     """
+    # The order of the following blocks is important. We wish to keep
+    # the size of the repair_instance_job_queue small so that we don't
+    # run out of memory. Hence, our first step is to process any control
+    # messages, then we check to see if any repair instance jobs are
+    # available, do those, and only if none of those jobs are available
+    # do we process error instance creation jobs and start filling up
+    # the repair instance jobs queue again.
     while True:
+        # #######################
+        # Handle control messages
+        # #######################
+        try:
+            control_message = control_queue.get_nowait()
+        except Empty:
+            pass
+        else:
+            if isinstance(control_message, StopWork):
+                break
         # ########################
         # Repair instance creation
         # ########################
         try:
-            # Do repair mining things
             job: RepairInstanceJob = repair_instance_job_queue.get_nowait()
         except Empty:
             pass
         else:
             build_repair_instance_star(job)
+            # Don't automatically go to building error instances. Focus
+            # on clearing the repair instance queue out.
+            continue
         # #######################
         # Error instance creation
         # #######################
@@ -907,16 +926,6 @@ def mining_loop_worker(
                 job.repair_mining_logger)
             for repair_instance_job in repair_instance_jobs:
                 repair_instance_job_queue.put(repair_instance_job)
-        # #######################
-        # Handle control messages
-        # #######################
-        try:
-            control_message = control_queue.get_nowait()
-        except Empty:
-            pass
-        else:
-            if isinstance(control_message, StopWork):
-                break
 
 
 def mining_loop_worker_star(args: tuple):
