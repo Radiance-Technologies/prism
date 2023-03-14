@@ -67,6 +67,7 @@ from prism.util.opam import (
     Version,
     major_minor_version_bound,
 )
+import warnings
 from prism.util.opam.formula import LogicalPF, LogOp
 from prism.util.path import get_relative_path
 from prism.util.radpytools import PathLike
@@ -1231,6 +1232,7 @@ class Project(ABC):
 
     def infer_serapi_options(
             self,
+            use_dummy_coqc: bool = False,
             managed_switch_kwargs: Optional[Dict[str,
                                                  Any]] = None,
             **kwargs) -> Tuple[SerAPIOptions,
@@ -1245,6 +1247,10 @@ class Project(ABC):
 
         Parameters
         ----------
+        use_dummy_coqc
+            Attempt to use a stub coqc wrapper
+            that doesn't actually build anything.
+            Project is cleaned afterwards if set.
         kwargs
             Keyword arguments to `OpamSwitch.run`.
 
@@ -1259,6 +1265,7 @@ class Project(ABC):
         str
             The total stderr of all commands run
         """
+        print(kwargs)
         # ensure we are building from a clean slate
         try:
             self.clean(**kwargs)
@@ -1273,6 +1280,7 @@ class Project(ABC):
                 self.opam_switch,
                 cmd,
                 workdir=self.path,
+                use_dummy_coqc=use_dummy_coqc,
                 check=False,
                 **kwargs)
             self._process_command_output("Strace", rcode_out, stdout, stderr)
@@ -1288,6 +1296,14 @@ class Project(ABC):
             [c.serapi_options for c in contexts],
             root=self.path)
         self._update_metadata(serapi_options=serapi_options)
+
+        # clean project if we only generated empty files.
+        try:
+            self.clean(**kwargs)
+        except ProjectBuildError:
+            warnings.warn(
+                "Tried to clean a project "
+                "full of corrupt coqc files, but it failed!")
         return serapi_options, rcode_out, stdout, stderr
 
     install = partialmethod(_make, "install", "Installation")

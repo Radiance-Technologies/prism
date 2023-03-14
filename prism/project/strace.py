@@ -396,7 +396,7 @@ def strace_build(
             f' {logfname} bash -c "{command}"')
 
         if use_dummy_coqc:
-            strace_cmd = (f'PATH={DUMMY_COQC_PATH_.name}:$PATH ' + strace_cmd)
+            strace_cmd = (f'(\n export PATH={DUMMY_COQC_PATH_.name}:$PATH; ' + strace_cmd + "\n)")
 
         r = opam_switch.run(strace_cmd, cwd=workdir, **kwargs)
         if r.stdout is not None:

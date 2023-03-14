@@ -182,6 +182,15 @@ class TestProject(unittest.TestCase):
         del test_repo
         shutil.rmtree(os.path.join(repo_path))
 
+    def test_infer_serapi_options_dummy(self):
+        """
+        Test fast extraction of IQR flags using 
+        a dummy coqc wrapper on CompCert
+        """
+        self.test_infer_opam_deps_project.metadata.clean_cmd=["make clean"]
+        self.test_infer_opam_deps_project.metadata.build_cmd=["./configure x86_64-linux","make"]
+        self.test_infer_opam_deps_project.infer_serapi_options(use_dummy_coqc=True)
+
     def test_extract_sentences_serapi_simple(self):
         """
         Test method for splitting Coq code using SERAPI.
