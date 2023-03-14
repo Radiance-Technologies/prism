@@ -67,7 +67,6 @@ from prism.util.opam import (
     Version,
     major_minor_version_bound,
 )
-import warnings
 from prism.util.opam.formula import LogicalPF, LogOp
 from prism.util.path import get_relative_path
 from prism.util.radpytools import PathLike
@@ -536,12 +535,13 @@ class Project(ABC):
             returncode: int,
             stdout: str,
             stderr: str,
-            ExcType: Type[ProjectBuildError] = ProjectBuildError) -> None:
+            ExcType: Type[ProjectBuildError] = ProjectBuildError,
+            ignore_returncode: bool = False) -> None:
         status = "failed" if returncode != 0 else "finished"
         msg = (
             f"{action} {status}! Return code is {returncode}! "
             f"stdout:\n{stdout}\n; stderr:\n{stderr}")
-        if returncode != 0:
+        if not ignore_returncode and returncode != 0:
             raise ExcType(msg, returncode, stdout, stderr)
         else:
             logger.debug(msg)
@@ -747,6 +747,7 @@ class Project(ABC):
              rcode,
              stdout,
              stderr) = self.infer_serapi_options(
+                 True,
                  managed_switch_kwargs,
                  **kwargs)
             return rcode, stdout, stderr
@@ -764,6 +765,7 @@ class Project(ABC):
              rcode,
              stdout_post,
              stderr_post) = self.infer_serapi_options(
+                 False,
                  managed_switch_kwargs,
                  **kwargs)
             stdout = "".join((stdout, separator, stdout_post))
@@ -1283,7 +1285,20 @@ class Project(ABC):
                 use_dummy_coqc=use_dummy_coqc,
                 check=False,
                 **kwargs)
-            self._process_command_output("Strace", rcode_out, stdout, stderr)
+            self._process_command_output(
+                "Strace",
+                rcode_out,
+                stdout,
+                stderr,
+                ignore_returncode=use_dummy_coqc)
+            if use_dummy_coqc:
+                # clean project if we only generated empty files.
+                try:
+                    self.clean(**kwargs)
+                except ProjectBuildError:
+                    logger.debug(
+                        "Tried to clean a project "
+                        "full of corrupt coqc files, but it failed!")
             return contexts, rcode_out, stdout, stderr
 
         (contexts,
@@ -1296,14 +1311,6 @@ class Project(ABC):
             [c.serapi_options for c in contexts],
             root=self.path)
         self._update_metadata(serapi_options=serapi_options)
-
-        # clean project if we only generated empty files.
-        try:
-            self.clean(**kwargs)
-        except ProjectBuildError:
-            warnings.warn(
-                "Tried to clean a project "
-                "full of corrupt coqc files, but it failed!")
         return serapi_options, rcode_out, stdout, stderr
 
     install = partialmethod(_make, "install", "Installation")
