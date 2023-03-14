@@ -64,7 +64,7 @@ repair instance mining.
 CacheLabel = Dict[str, str]
 """
 Dictionary labeling a cache object (project name, commit sha,
-coq version).
+Coq version).
 """
 AugmentedErrorInstance = Tuple[ProjectCommitDataErrorInstance,
                                ProjectCommitData,
@@ -331,10 +331,20 @@ class RepairInstanceDB:
         Parameters
         ----------
         project_name : str
+            The name of the project identifying the record being
+            inserted
         initial_commit_sha : str
+            The commit hash for the initial commit identifying the
+            record being inserted
         repaired_commit_sha : str
+            The commit hash for the repaired commit identifying the
+            record being inserted
         initial_coq_version : str
+            The Coq version for the initial cache item identifying the
+            record being inserted
         repaired_coq_version : str
+            The Coq version for the repaired cache item identifying the
+            record being inserted
         change_selection : ChangeSelection
             The selected changes that further identify the record
         repair_save_directory : Path
@@ -356,7 +366,7 @@ class RepairInstanceDB:
         * Get the row indices from each returned row, sort them, and
           get the index of the just-inserted row in that list.
         * Use this index to name the file, along with the project name,
-          commit sha pair, and coq version pair
+          commit sha pair, and Coq version pair
         * Update the row with the newly-computed file name.
         * Return the new file name.
         """
