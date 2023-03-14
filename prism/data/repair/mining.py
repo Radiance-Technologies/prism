@@ -354,22 +354,19 @@ class RepairInstanceDB:
         -------
         Path
             The reserved path to the new repair instance file.
-
-        Notes
-        -----
-        Summary:
-        * Insert a record with a place-holder file name.
-        * Immediately fetch the new row back with its auto-incremented
-          row id.
-        * Fetch all rows matching the project name and commit pair and
-          Coq version pair.
-        * Get the row indices from each returned row, sort them, and
-          get the index of the just-inserted row in that list.
-        * Use this index to name the file, along with the project name,
-          commit sha pair, and Coq version pair
-        * Update the row with the newly-computed file name.
-        * Return the new file name.
         """
+        # Summary:
+        # * Insert a record with a place-holder file name.
+        # * Immediately fetch the new row back with its auto-incremented
+        #   row id.
+        # * Fetch all rows matching the project name and commit pair and
+        #   Coq version pair.
+        # * Get the row indices from each returned row, sort them, and
+        #   get the index of the just-inserted row in that list.
+        # * Use this index to name the file, along with the project
+        #   name, commit sha pair, and Coq version pair
+        # * Update the row with the newly-computed file name.
+        # * Return the new file name.
         cache_id_label = {
             "project_name": project_name,
             "initial_commit_sha": initial_commit_sha,
