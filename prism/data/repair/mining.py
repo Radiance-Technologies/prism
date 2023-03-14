@@ -153,6 +153,8 @@ class StopWork:
     Place on job queue to allow worker function to exit.
     """
 
+    pass
+
 
 class RepairInstanceDB:
     """
@@ -565,6 +567,8 @@ class RepairMiningLoggerServer(BaseManager):
     """
     A BaseManager-derived server for managing repair mining logs.
     """
+
+    pass
 
 
 RepairMiningLoggerServer.register("RepairMiningLogger", RepairMiningLogger)
