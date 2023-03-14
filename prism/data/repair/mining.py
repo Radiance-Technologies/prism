@@ -36,9 +36,13 @@ from prism.project.repo import ProjectRepo
 from prism.util.io import atomic_write
 from prism.util.radpytools.multiprocessing import synchronizedmethod
 
+BuildRepairInstanceExcept = Except[List[ProjectCommitDataRepairInstance]]
+"""
+Except object generated if repair instance build has an error.
+"""
 BuildRepairInstanceOutput = Optional[Union[
     List[ProjectCommitDataRepairInstance],
-    Except]]
+    BuildRepairInstanceExcept]]
 """
 Type hint for the output of build_repair_instance_star.
 """
@@ -72,6 +76,10 @@ AugmentedErrorInstance = Tuple[ProjectCommitDataErrorInstance,
 """
 A tuple containing an error instance, with the repaired state used to
 produce it, and the corresponding change selection.
+"""
+BuildErrorInstanceExcept = Except[List[AugmentedErrorInstance]]
+"""
+Except object returned if error instance build has an error.
 """
 
 
@@ -516,7 +524,7 @@ class RepairMiningLogger:
         self.logger.addHandler(self.handler)
 
     @synchronizedmethod
-    def write_exception_log(self, exception: Except):
+    def write_exception_log(self, exception: BuildRepairInstanceExcept):
         """
         Write a log entry for the given exception.
 
@@ -525,7 +533,7 @@ class RepairMiningLogger:
 
         Parameters
         ----------
-        exception : Except
+        exception : BuildRepairInstanceExcept
             Exception to write a log entry for
         """
         self.logger.exception(exception.exception)
@@ -572,7 +580,7 @@ def build_repair_instance(
         repair_save_directory: Path,
         repair_instance_db_file: Path,
         miner: RepairMiner,
-        repair_mining_logger: RepairMiningLogger) -> BuildRepairInstanceOutput:
+        repair_mining_logger: RepairMiningLogger):
     """
     Construct build repair instance from pairs of cache items.
 
@@ -596,14 +604,6 @@ def build_repair_instance(
     repair_mining_logger : RepairMiningLogger
         Object used to log errors and other debug messages during repair
         instance building
-
-    Returns
-    -------
-    BuildRepairInstanceOutput
-        If a repair instance is successfully created, return that.
-        If there's an exception while building a repair instance,
-        return an Except object.
-        If the instance is empty, return None.
     """
     try:
         with RepairInstanceDB(repair_instance_db_file) as db_instance:
@@ -619,7 +619,7 @@ def build_repair_instance(
             else:
                 result = None
     except Exception as e:
-        result = Except(None, e, traceback.format_exc())
+        result = BuildRepairInstanceExcept(None, e, traceback.format_exc())
     finally:
         if result is not None:
             write_repair_instance(
@@ -629,11 +629,9 @@ def build_repair_instance(
                 repair_instance_db_file,
                 repair_mining_logger,
                 repaired_state.project_metadata)
-    return result
 
 
-def build_repair_instance_star(
-        args: RepairInstanceJob) -> BuildRepairInstanceOutput:
+def build_repair_instance_star(args: RepairInstanceJob):
     """
     Split arguments and call build_repair_instance.
 
@@ -641,15 +639,8 @@ def build_repair_instance_star(
     ----------
     args : RepairInstanceJob
         Bundled arguments for build_repair_instance
-
-    Returns
-    -------
-    BuildRepairInstanceOutput
-        If a repair instances are successfully created, return those.
-        If build_repair_instance raises an exception, return the
-        exception annotated with its in-context traceback string.
     """
-    return build_repair_instance(*args)
+    build_repair_instance(*args)
 
 
 def build_error_instances_from_label_pair(
@@ -660,7 +651,7 @@ def build_error_instances_from_label_pair(
     changeset_miner: ChangeSetMiner,
     repair_mining_logger: RepairMiningLogger
 ) -> Union[List[AugmentedErrorInstance],
-           Except]:
+           BuildErrorInstanceExcept]:
     """
     Construct error instances from pairs of cache labels.
 
@@ -685,9 +676,9 @@ def build_error_instances_from_label_pair(
 
     Returns
     -------
-    Union[List[AugmentedErrorInstance], Except]
-        A list of augmented error instances if successful or an Except
-        object if there's an error.
+    Union[List[AugmentedErrorInstance], BuildErrorInstanceExcept]
+        A list of augmented error instances if successful or an
+        BuildErrorInstanceExcept object if there's an error.
     """
     try:
         cache = CoqProjectBuildCache(cache_root, cache_fmt_extension)
@@ -721,14 +712,15 @@ def build_error_instances_from_label_pair(
             error_instances.append((error_instance, repaired_state, changeset))
         result = error_instances
     except Exception as e:
-        result = Except(None, e, traceback.format_exc())
+        result = BuildErrorInstanceExcept(None, e, traceback.format_exc())
         repair_mining_logger.write_exception_log(result)
     return result
 
 
 def build_error_instances_from_label_pair_star(
-        args: ErrorInstanceJob) -> Union[List[AugmentedErrorInstance],
-                                         Except]:
+    args: ErrorInstanceJob
+) -> Union[List[AugmentedErrorInstance],
+           BuildErrorInstanceExcept]:
     """
     Split arguments and call build_error_instances_from_label_pair.
 
@@ -739,9 +731,9 @@ def build_error_instances_from_label_pair_star(
 
     Returns
     -------
-    Union[List[AugmentedErrorInstance], Except]
-        A list of augmented error instances if successful or an Except
-        object if there's an error.
+    Union[List[AugmentedErrorInstance], BuildErrorInstanceExcept]
+        A list of augmented error instances if successful or an
+        BuildErrorInstanceExcept object if there's an error.
     """
     return build_error_instances_from_label_pair(*args)
 
@@ -780,7 +772,7 @@ def write_repair_instance(
     ------
     TypeError
         If potential_diff is neither of ProjectCommitDataRepairInstance
-        nor of Except.
+        nor of BuildRepairInstanceExcept.
     """
     if isinstance(potential_diff, ProjectCommitDataRepairInstance):
         with RepairInstanceDB(repair_instance_db_file) as repair_instance_db:
@@ -795,7 +787,7 @@ def write_repair_instance(
                 change_selection,
                 repair_file_directory)
             atomic_write(file_path, potential_diff.compress())
-    elif isinstance(potential_diff, Except):
+    elif isinstance(potential_diff, BuildRepairInstanceExcept):
         repair_mining_logger.write_exception_log(potential_diff)
     else:
         raise TypeError(
@@ -827,7 +819,7 @@ def _get_consecutive_commit_hashes(
 
 def build_repair_instance_mining_inputs(
         error_instance_results: Union[List[AugmentedErrorInstance],
-                                      Except],
+                                      BuildErrorInstanceExcept],
         repair_save_directory: Path,
         repair_instance_db_file: Path,
         repair_miner: RepairMiner,
@@ -837,7 +829,8 @@ def build_repair_instance_mining_inputs(
 
     Parameters
     ----------
-    error_instance_results : Union[List[AugmentedErrorInstance], Except]
+    error_instance_results : Union[List[AugmentedErrorInstance],
+                                   BuildErrorInstanceExcept]
         The output of the error instance builder
     repair_save_directory : Path
         The directory to save the repair instances in
@@ -857,7 +850,7 @@ def build_repair_instance_mining_inputs(
     """
     repair_instance_jobs: List[RepairInstanceJob] = []
     for error_instance_result in error_instance_results:
-        if isinstance(error_instance_result, Except):
+        if isinstance(error_instance_result, BuildErrorInstanceExcept):
             continue
         error_instance, repaired_state, change_selection = error_instance_result
         repair_instance_job = RepairInstanceJob(
@@ -876,7 +869,6 @@ def mining_loop_worker(
         control_queue: Queue,
         error_instance_job_queue: Queue,
         repair_instance_job_queue: Queue,
-        results_queue: Queue,
         repair_save_directory: Path,
         repair_instance_db_file: Path,
         repair_miner: RepairMiner):
@@ -891,8 +883,6 @@ def mining_loop_worker(
         Queue from which to retrieve error instance creation jobs
     repair_instance_job_queue : Queue
         Queue from which to retrieve repair instance creation jobs
-    results_queue : Queue
-        Queue upon which to place results of repair mining
     repair_save_directory : Path
         Path to directory to save repair mining results in
     repair_instance_db_file : Path
@@ -910,8 +900,7 @@ def mining_loop_worker(
         except Empty:
             pass
         else:
-            result = build_repair_instance_star(job)
-            results_queue.put(result)
+            build_repair_instance_star(job)
         # #######################
         # Error instance creation
         # #######################
@@ -1090,11 +1079,11 @@ def _serial_work(
             *cache_args,
             changeset_miner,
             repair_mining_logger)
-        if not isinstance(new_error_instances, Except):
+        if not isinstance(new_error_instances, BuildErrorInstanceExcept):
             error_instances.extend(new_error_instances)
     for error_instance, repaired_state, change_selection in tqdm(
             error_instances, desc="Repair instance mining."):
-        result = build_repair_instance(
+        build_repair_instance(
             error_instance,
             repaired_state,
             change_selection,
@@ -1102,9 +1091,6 @@ def _serial_work(
             db_file,
             repair_miner,
             repair_mining_logger)
-        if isinstance(result, Except):
-            print(result.trace)
-            raise result.exception
 
 
 def repair_mining_loop(
@@ -1210,12 +1196,10 @@ def repair_mining_loop(
             control_queue = Queue()
             error_instance_job_queue = Queue()
             repair_instance_job_queue = Queue()
-            results_queue = Queue()
             proc_args = [
                 control_queue,
                 error_instance_job_queue,
                 repair_instance_job_queue,
-                results_queue,
                 repair_save_directory,
                 db_file,
                 repair_miner
