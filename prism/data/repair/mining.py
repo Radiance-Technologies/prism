@@ -669,7 +669,14 @@ def build_repair_instance_star(
         If there was no error but no repair instance was produced,
         return None
     """
-    return build_repair_instance(*args)
+    return build_repair_instance(
+        args.error_instance,
+        args.repaired_state,
+        args.change_selection,
+        args.repair_save_directory,
+        args.repair_instance_db_file,
+        args.miner,
+        args.repair_mining_logger)
 
 
 def build_error_instances_from_label_pair(
@@ -763,7 +770,13 @@ def build_error_instances_from_label_pair_star(
         A list of augmented error instances if successful or an
         Except[None] object if there's an error.
     """
-    return build_error_instances_from_label_pair(*args)
+    return build_error_instances_from_label_pair(
+        args.label_a,
+        args.label_b,
+        args.cache_root,
+        args.cache_fmt_extension,
+        args.changeset_miner,
+        args.repair_mining_logger)
 
 
 def write_repair_instance(
@@ -815,7 +828,7 @@ def write_repair_instance(
                 change_selection,
                 repair_file_directory)
             atomic_write(file_path, potential_diff.compress())
-    elif isinstance(potential_diff, Except[None]):
+    elif isinstance(potential_diff, Except):
         repair_mining_logger.write_exception_log(potential_diff)
     else:
         raise TypeError(
@@ -878,7 +891,7 @@ def build_repair_instance_mining_inputs(
     """
     repair_instance_jobs: List[RepairInstanceJob] = []
     for error_instance_result in error_instance_results:
-        if isinstance(error_instance_result, Except[None]):
+        if isinstance(error_instance_result, Except):
             continue
         error_instance, repaired_state, change_selection = error_instance_result
         repair_instance_job = RepairInstanceJob(
@@ -949,7 +962,7 @@ def mining_loop_worker(
             pass
         else:
             result = build_repair_instance_star(job)
-            if isinstance(result, Except[None]):
+            if isinstance(result, Except):
                 worker_to_parent_queue.put(result)
                 break
             # Don't automatically go to building error instances. Focus
@@ -963,13 +976,13 @@ def mining_loop_worker(
         except Empty:
             pass
         else:
-            results = build_error_instances_from_label_pair_star(job)
-            if isinstance(result, Except[None]):
+            result = build_error_instances_from_label_pair_star(job)
+            if isinstance(result, Except):
 
                 worker_to_parent_queue.put(result)
                 break
             repair_instance_jobs = build_repair_instance_mining_inputs(
-                results,
+                result,
                 repair_save_directory,
                 repair_instance_db_file,
                 repair_miner,
@@ -1127,7 +1140,7 @@ def _serial_work(
             changeset_miner,
             repair_mining_logger)
         for result in tqdm(new_error_instances, desc="Repair instance mining."):
-            if isinstance(result, Except[None]):
+            if isinstance(result, Except):
                 raise RuntimeError(
                     f"Exception: {result.exception}. {result.trace}")
             else:
@@ -1140,7 +1153,7 @@ def _serial_work(
                 db_file,
                 repair_miner,
                 repair_mining_logger)
-            if isinstance(result, Except[None]):
+            if isinstance(result, Except):
                 raise RuntimeError(
                     f"Exception: {result.exception}. {result.trace}")
 
@@ -1199,7 +1212,7 @@ def _parallel_work(
             except Empty:
                 pass
             else:
-                if isinstance(worker_msg, Except[None]):
+                if isinstance(worker_msg, Except):
                     delayed_exception = worker_msg
                     break
     except KeyboardInterrupt:

@@ -1,13 +1,12 @@
 {
-  "cache_root": "./cache_root",
-  "repair_save_directory": "./test_repairs",
+  "cache_root": "../cache_root",
+  "repair_save_directory": "../test_repairs",
   "cache_format_extension": "yml",
   "prepare_pairs": "prism.data.repair.mining.prepare_label_pairs",
   "repair_miner": "prism.data.repair.instance.ProjectCommitDataRepairInstance",
   "changeset_miner": "prism.data.repair.instance.ProjectCommitDataErrorInstance.default_changeset_miner",
   "serial": false,
-  "max_workers": 32,
-  "chunk_size": 1,
+  "max_workers": 4,
   "project_commit_hash_map": {
     "hoare-tut": [
       "bda0bc601a038ba6b65da2e3c52cc02c4d910f35",
