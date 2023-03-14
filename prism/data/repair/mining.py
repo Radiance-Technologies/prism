@@ -591,7 +591,7 @@ def build_repair_instance(
         repair_save_directory: Path,
         repair_instance_db_file: Path,
         miner: RepairMiner,
-        repair_mining_logger: RepairMiningLogger):
+        repair_mining_logger: RepairMiningLogger) -> BuildRepairInstanceOutput:
     """
     Construct build repair instance from pairs of cache items.
 
@@ -615,6 +615,14 @@ def build_repair_instance(
     repair_mining_logger : RepairMiningLogger
         Object used to log errors and other debug messages during repair
         instance building
+
+    Returns
+    -------
+    BuildRepairInstanceOutput
+        If repair mining was successful, return the output
+        If repair mining raise an error, return an Except[None]
+        If there was no error but no repair instance was produced,
+        return None
     """
     try:
         with RepairInstanceDB(repair_instance_db_file) as db_instance:
@@ -640,9 +648,11 @@ def build_repair_instance(
                 repair_instance_db_file,
                 repair_mining_logger,
                 repaired_state.project_metadata)
+    return result
 
 
-def build_repair_instance_star(args: RepairInstanceJob):
+def build_repair_instance_star(
+        args: RepairInstanceJob) -> BuildRepairInstanceOutput:
     """
     Split arguments and call build_repair_instance.
 
@@ -650,8 +660,16 @@ def build_repair_instance_star(args: RepairInstanceJob):
     ----------
     args : RepairInstanceJob
         Bundled arguments for build_repair_instance
+
+    Returns
+    -------
+    BuildRepairInstanceOutput
+        If repair mining was successful, return the output
+        If repair mining raise an error, return an Except[None]
+        If there was no error but no repair instance was produced,
+        return None
     """
-    build_repair_instance(*args)
+    return build_repair_instance(*args)
 
 
 def build_error_instances_from_label_pair(
@@ -879,6 +897,7 @@ def mining_loop_worker(
         control_queue: Queue,
         error_instance_job_queue: Queue,
         repair_instance_job_queue: Queue,
+        worker_to_parent_queue: Queue,
         repair_save_directory: Path,
         repair_instance_db_file: Path,
         repair_miner: RepairMiner):
@@ -893,6 +912,9 @@ def mining_loop_worker(
         Queue from which to retrieve error instance creation jobs
     repair_instance_job_queue : Queue
         Queue from which to retrieve repair instance creation jobs
+    worker_to_parent_queue : Queue
+        Queue for messages that need to be communicated back to the
+        parent
     repair_save_directory : Path
         Path to directory to save repair mining results in
     repair_instance_db_file : Path
@@ -926,7 +948,10 @@ def mining_loop_worker(
         except Empty:
             pass
         else:
-            build_repair_instance_star(job)
+            result = build_repair_instance_star(job)
+            if isinstance(result, Except[None]):
+                worker_to_parent_queue.put(result)
+                break
             # Don't automatically go to building error instances. Focus
             # on clearing the repair instance queue out.
             continue
@@ -939,6 +964,10 @@ def mining_loop_worker(
             pass
         else:
             results = build_error_instances_from_label_pair_star(job)
+            if isinstance(result, Except[None]):
+
+                worker_to_parent_queue.put(result)
+                break
             repair_instance_jobs = build_repair_instance_mining_inputs(
                 results,
                 repair_save_directory,
@@ -1097,9 +1126,13 @@ def _serial_work(
             *cache_args,
             changeset_miner,
             repair_mining_logger)
-        for error_instance, repaired_state, change_selection in tqdm(
-                new_error_instances, desc="Repair instance mining."):
-            build_repair_instance(
+        for result in tqdm(new_error_instances, desc="Repair instance mining."):
+            if isinstance(result, Except[None]):
+                raise RuntimeError(
+                    f"Exception: {result.exception}. {result.trace}")
+            else:
+                (error_instance, repaired_state, change_selection) = result
+            result = build_repair_instance(
                 error_instance,
                 repaired_state,
                 change_selection,
@@ -1107,6 +1140,79 @@ def _serial_work(
                 db_file,
                 repair_miner,
                 repair_mining_logger)
+            if isinstance(result, Except[None]):
+                raise RuntimeError(
+                    f"Exception: {result.exception}. {result.trace}")
+
+
+def _parallel_work(
+        cache_label_pairs: List[Tuple[CacheObjectStatus,
+                                      CacheObjectStatus]],
+        cache_args: Tuple[Path,
+                          str],
+        changeset_miner: ChangeSetMiner,
+        repair_mining_logger: RepairMiningLogger,
+        repair_save_directory: Path,
+        db_file: Path,
+        repair_miner: RepairMiner,
+        max_workers: int):
+    error_instance_jobs = [
+        ErrorInstanceJob(
+            label_a,
+            label_b,
+            *cache_args,
+            changeset_miner,
+            repair_mining_logger) for label_a,
+        label_b in cache_label_pairs
+    ]
+    control_queue = Queue()
+    error_instance_job_queue = Queue()
+    repair_instance_job_queue = Queue()
+    worker_to_parent_queue = Queue()
+    proc_args = [
+        control_queue,
+        error_instance_job_queue,
+        repair_instance_job_queue,
+        worker_to_parent_queue,
+        repair_save_directory,
+        db_file,
+        repair_miner
+    ]
+    worker_processes: List[Process] = []
+    # Start processes
+    for _ in range(max_workers):
+        worker_process = Process(target=mining_loop_worker, args=proc_args)
+        worker_process.start()
+        worker_processes.append(worker_process)
+    # Load initial job queue
+    for error_instance_job in error_instance_jobs:
+        error_instance_job_queue.put(error_instance_job)
+    # Wait until work is finished or until we get a ctrl+c
+    delayed_exception = None
+    try:
+        while True:
+            if (error_instance_job_queue.empty()
+                    and repair_instance_job_queue.empty()):
+                break
+            try:
+                worker_msg: Except[None] = worker_to_parent_queue.get_nowait()
+            except Empty:
+                pass
+            else:
+                if isinstance(worker_msg, Except[None]):
+                    delayed_exception = worker_msg
+                    break
+    except KeyboardInterrupt:
+        pass
+    # ...then stop the workers and their processes
+    for _ in range(len(worker_processes)):
+        control_queue.put(StopWork())
+    for worker_process in worker_processes:
+        worker_process.join()
+    if delayed_exception is not None:
+        raise RuntimeError(
+            f"Delayed exception: {delayed_exception.exception}."
+            f" {delayed_exception.trace}")
 
 
 def repair_mining_loop(
@@ -1200,47 +1306,12 @@ def repair_mining_loop(
         # Parallel processing
         # ##############################################################
         else:
-            error_instance_jobs = [
-                ErrorInstanceJob(
-                    label_a,
-                    label_b,
-                    *cache_args,
-                    changeset_miner,
-                    repair_mining_logger) for label_a,
-                label_b in cache_label_pairs
-            ]
-            control_queue = Queue()
-            error_instance_job_queue = Queue()
-            repair_instance_job_queue = Queue()
-            proc_args = [
-                control_queue,
-                error_instance_job_queue,
-                repair_instance_job_queue,
+            _parallel_work(
+                cache_label_pairs,
+                cache_args,
+                changeset_miner,
+                repair_mining_logger,
                 repair_save_directory,
                 db_file,
-                repair_miner
-            ]
-            worker_processes: List[Process] = []
-            # Start processes
-            for _ in range(max_workers):
-                worker_process = Process(
-                    target=mining_loop_worker,
-                    args=proc_args)
-                worker_process.start()
-                worker_processes.append(worker_process)
-            # Load initial job queue
-            for error_instance_job in error_instance_jobs:
-                error_instance_job_queue.put(error_instance_job)
-            # Wait until work is finished or until we get a ctrl+c
-            try:
-                while True:
-                    if (error_instance_job_queue.empty()
-                            and repair_instance_job_queue.empty()):
-                        break
-            except KeyboardInterrupt:
-                pass
-            # ...then stop the workers and their processes
-            for _ in range(len(worker_processes)):
-                control_queue.put(StopWork())
-            for worker_process in worker_processes:
-                worker_process.join()
+                repair_miner,
+                max_workers)
