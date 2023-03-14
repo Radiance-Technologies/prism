@@ -91,10 +91,12 @@ class TestAlign(unittest.TestCase):
             {"core_net": TestAlign.caches["verdi_core_net_a.v"]},
             None,
             None,
+            None,
             None)
         b = ProjectCommitData(
             self.test_metadata,
             {"core_net": TestAlign.caches["verdi_core_net_b.v"]},
+            None,
             None,
             None,
             None)
@@ -135,10 +137,12 @@ class TestAlign(unittest.TestCase):
             },
             None,
             None,
+            None,
             None)
         b = ProjectCommitData(
             self.test_metadata,
             {"core_net": TestAlign.caches["verdi_core_net_b.v"]},
+            None,
             None,
             None,
             None)
@@ -158,10 +162,12 @@ class TestAlign(unittest.TestCase):
             },
             None,
             None,
+            None,
             None)
         b = ProjectCommitData(
             self.test_metadata,
             {"core_net": TestAlign.caches["verdi_core_net_b.v"]},
+            None,
             None,
             None,
             None)

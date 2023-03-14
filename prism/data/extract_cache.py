@@ -38,6 +38,7 @@ from tqdm.contrib.concurrent import process_map
 
 from prism.data.build_cache import (
     CommandType,
+    CommentDict,
     CoqProjectBuildCache,
     CoqProjectBuildCacheClient,
     CoqProjectBuildCacheProtocol,
@@ -65,7 +66,7 @@ from prism.interface.coq.re_patterns import (
 )
 from prism.interface.coq.serapi import AbstractSyntaxTree, SerAPI
 from prism.language.gallina.analyze import SexpAnalyzer
-from prism.language.heuristic.parser import CoqSentence
+from prism.language.heuristic.parser import CoqComment, CoqSentence
 from prism.project.base import SEM, Project
 from prism.project.exception import MissingMetadataError, ProjectBuildError
 from prism.project.metadata.storage import MetadataStorage
@@ -968,10 +969,12 @@ class CommandExtractor:
 
 
 def extract_vernac_commands(
-        project: ProjectRepo,
-        files_to_use: Optional[Iterable[str]] = None,
-        force_serial: bool = False,
-        worker_semaphore: Optional[BoundedSemaphore] = None) -> VernacDict:
+    project: ProjectRepo,
+    files_to_use: Optional[Iterable[str]] = None,
+    force_serial: bool = False,
+    worker_semaphore: Optional[BoundedSemaphore] = None
+) -> Tuple[VernacDict,
+           CommentDict]:
     """
     Compile vernac commands from a project into a dict.
 
@@ -995,7 +998,10 @@ def extract_vernac_commands(
     VernacDict
         A map from file names to their extracted commands.
     """
-    command_data = {}
+    command_data: Dict[str,
+                       VernacCommandDataList] = {}
+    comment_data: Dict[str,
+                       List[CoqComment]] = {}
     with pushd(project.dir_abspath):
         file_list = project.get_file_list(relative=True, dependency_order=True)
         if files_to_use:
@@ -1026,7 +1032,9 @@ def extract_vernac_commands(
                         raise result from result.parent
                     else:
                         raise result
-                command_data[filename] = result
+                sentences, comments = result
+                command_data[filename] = sentences
+                comment_data[filename] = comments
         else:
             if worker_semaphore is None:
                 raise ValueError(
@@ -1043,8 +1051,10 @@ def extract_vernac_commands(
                         raise result from result.parent
                     else:
                         raise result
-                command_data[f] = result
-    return command_data
+                sentences, comments = result
+                command_data[f] = sentences
+                comment_data[f] = comments
+    return command_data, comment_data
 
 
 def _extract_vernac_commands_worker(
@@ -1052,7 +1062,8 @@ def _extract_vernac_commands_worker(
     project: ProjectRepo,
     worker_semaphore: Optional[BoundedSemaphore] = None,
     pbar: Optional[tqdm.tqdm] = None
-) -> Union[VernacCommandDataList,
+) -> Union[Tuple[VernacCommandDataList,
+                 List[CoqComment]],
            ExtractVernacCommandsError]:
     """
     Provide worker function for file-parallel cache extraction.
@@ -1062,13 +1073,19 @@ def _extract_vernac_commands_worker(
     try:
         assert project.serapi_options is not None, \
             "serapi_options must not be None"
+        (sentences,
+         comments) = typing.cast(
+             Tuple[List[CoqSentence],
+                   List[CoqComment]],
+             project.get_sentences(
+                 filename,
+                 SEM.HEURISTIC,
+                 return_locations=True,
+                 return_comments=True,
+                 glom_proofs=False))
         result = CommandExtractor(
             filename,
-            project.get_sentences(
-                filename,
-                SEM.HEURISTIC,
-                return_locations=True,
-                glom_proofs=False),
+            sentences,
             opam_switch=project.opam_switch,
             serapi_options=project.serapi_options)
     except Exception as e:
@@ -1082,12 +1099,14 @@ def _extract_vernac_commands_worker(
             worker_semaphore.release()
     if pbar is not None:
         pbar.update(1)
-    return result.extracted_commands
+    return result.extracted_commands, comments
 
 
 def _extract_vernac_commands_worker_star(
-        args) -> Union[VernacCommandDataList,
-                       ExtractVernacCommandsError]:
+    args
+) -> Union[Tuple[VernacCommandDataList,
+                 List[CoqComment]],
+           ExtractVernacCommandsError]:
     return _extract_vernac_commands_worker(*args)
 
 
@@ -1096,11 +1115,12 @@ def extract_cache(
     switch_manager: SwitchManager,
     project: ProjectRepo,
     commit_sha: str,
-    process_project_fallback: Callable[[Project],
-                                       VernacDict],
+    process_project_fallback: Callable[[ProjectRepo],
+                                       Tuple[VernacDict,
+                                             CommentDict]],
     coq_version: Optional[str] = None,
     recache: Optional[Callable[
-        [CoqProjectBuildCacheServer,
+        [CoqProjectBuildCacheProtocol,
          ProjectRepo,
          str,
          str],
@@ -1143,7 +1163,8 @@ def extract_cache(
         The project from which to extract data.
     commit_sha : str
         The commit whose data should be extracted.
-    process_project_fallback : Callable[[Project], VernacDict]
+    process_project_fallback : Callable[[ProjectRepo], \
+                                        Tuple[VernacDict, CommentDict]]
         Function that provides fallback vernacular command
         extraction for projects that do not build.
     coq_version : str or None, optional
@@ -1209,8 +1230,9 @@ def extract_cache_new(
     switch_manager: SwitchManager,
     project: ProjectRepo,
     commit_sha: str,
-    process_project_fallback: Callable[[Project],
-                                       VernacDict],
+    process_project_fallback: Callable[[ProjectRepo],
+                                       Tuple[VernacDict,
+                                             CommentDict]],
     coq_version: Optional[str],
     block: bool,
     files_to_use: Optional[Iterable[str]],
@@ -1219,7 +1241,7 @@ def extract_cache_new(
     max_memory: Optional[int],
     max_runtime: Optional[int],
 ):
-    """
+    r"""
     Extract a new cache object and insert it into the build cache.
 
     Parameters
@@ -1233,7 +1255,8 @@ def extract_cache_new(
         The project from which to extract data.
     commit_sha : str
         The commit whose data should be extracted.
-    process_project_fallback : Callable[[Project], VernacDict]
+    process_project_fallback : Callable[[ProjectRepo], \
+                                        Tuple[VernacDict, CommentDict]]
         Function that provides fallback vernacular command extraction
         for projects that do not build.
     coq_version : str or None
@@ -1309,7 +1332,7 @@ def extract_cache_new(
                     stderr = pbe.stderr.decode(
                         "utf-8") if pbe.stderr is not None else ''
                     build_result = (1, stdout, stderr)
-                command_data = process_project_fallback(project)
+                command_data, comment_data = process_project_fallback(project)
                 build_cache_client.write_build_error_log(
                     project.metadata,
                     block,
@@ -1317,7 +1340,7 @@ def extract_cache_new(
             else:
                 start_time = time()
                 try:
-                    command_data = extract_vernac_commands(
+                    command_data, comment_data = extract_vernac_commands(
                         project,
                         files_to_use,
                         force_serial,
@@ -1352,6 +1375,7 @@ def extract_cache_new(
                 project.metadata,
                 command_data,
                 commit_message,
+                comment_data,
                 file_dependencies,
                 ProjectBuildEnvironment(project.opam_switch.export()),
                 ProjectBuildResult(*build_result))
@@ -1438,15 +1462,17 @@ class CacheExtractor:
             commit_iterator_factory: Callable[[ProjectRepo,
                                                str],
                                               Iterable[str]],
-            coq_version_iterator: Optional[Callable[[Project,
+            coq_version_iterator: Optional[Callable[[ProjectRepo,
                                                      str],
                                                     Iterable[Union[
                                                         str,
                                                         Version]]]] = None,
-            process_project_fallback: Optional[Callable[[ProjectRepo],
-                                                        VernacDict]] = None,
+            process_project_fallback: Optional[Callable[
+                [ProjectRepo],
+                Tuple[VernacDict,
+                      CommentDict]]] = None,
             recache: Optional[Callable[
-                [CoqProjectBuildCacheServer,
+                [CoqProjectBuildCacheProtocol,
                  ProjectRepo,
                  str,
                  str],
@@ -1666,7 +1692,7 @@ class CacheExtractor:
                         self.md_storage,
                         n_build_workers),
                     project_list),
-                desc="Initializing Project instances",
+                desc="Initializing project instances",
                 total=len(project_list)))
         # Issue a warning if any requested projects are not present in
         # metadata.
@@ -1767,7 +1793,7 @@ class CacheExtractor:
 
     @classmethod
     def default_coq_version_iterator(cls,
-                                     _project: Project,
+                                     _project: ProjectRepo,
                                      _commit: str) -> List[str]:
         """
         Extract build caches for all Coq versions we consider.
@@ -1783,18 +1809,19 @@ class CacheExtractor:
         ]
 
     @classmethod
-    def default_process_project_fallback(
-            cls,
-            _project: ProjectRepo) -> VernacDict:
+    def default_process_project_fallback(cls,
+                                         _project: ProjectRepo
+                                         ) -> Tuple[VernacDict,
+                                                    CommentDict]:
         """
         By default, do nothing on project build failure.
         """
-        return dict()
+        return dict(), dict()
 
     @classmethod
     def default_recache(
             cls,
-            _build_cache: CoqProjectBuildCacheServer,
+            _build_cache: CoqProjectBuildCacheProtocol,
             _project: ProjectRepo,
             _commit_sha: str,
             _coq_version: str) -> bool:
@@ -1811,14 +1838,15 @@ class CacheExtractor:
         _result: None,
         build_cache_client: CoqProjectBuildCacheProtocol,
         switch_manager: SwitchManager,
-        process_project_fallback: Callable[[Project],
-                                           VernacDict],
-        recache: Callable[[CoqProjectBuildCacheServer,
+        process_project_fallback: Callable[[ProjectRepo],
+                                           Tuple[VernacDict,
+                                                 CommentDict]],
+        recache: Callable[[CoqProjectBuildCacheProtocol,
                            ProjectRepo,
                            str,
                            str],
                           bool],
-        coq_version_iterator: Callable[[Project,
+        coq_version_iterator: Callable[[ProjectRepo,
                                         str],
                                        Iterable[Union[str,
                                                       Version]]],
@@ -1845,7 +1873,9 @@ class CacheExtractor:
             write extracted cache to disk
         switch_manager : SwitchManager
             A switch manager to use during extraction
-        process_project_fallback : Callable[[Project], VernacDict]
+        process_project_fallback : Callable[[ProjectRepo], \
+                                            Tuple[VernacDict, \
+                                                  CommentDict]]
             A function that does a best-effort cache extraction when the
             project does not build
         recache : Callable[[CoqProjectBuildCache, ProjectRepo, str, \
@@ -1853,7 +1883,7 @@ class CacheExtractor:
                            bool]
             A function that for an existing entry in the cache returns
             whether it should be reprocessed or not.
-        coq_version_iterator : Callable[[Project, str],
+        coq_version_iterator : Callable[[ProjectRepo, str],
                                         Iterable[Union[str, Version]]]
             A function that returns an iterable over allowable coq
             versions

@@ -39,6 +39,7 @@ import seutil as su
 from prism.interface.coq.goals import GoalLocation, Goals, GoalsDiff
 from prism.interface.coq.ident import Identifier
 from prism.language.gallina.analyze import SexpInfo
+from prism.language.heuristic.parser import CoqComment
 from prism.language.sexp.node import SexpNode
 from prism.project.metadata import ProjectMetadata
 from prism.util.iterable import split
@@ -100,7 +101,7 @@ class VernacSentence:
 
     text: str
     """
-    Text of a sentence from a proof.
+    The text of this sentence.
     """
     ast: str
     """
@@ -529,7 +530,7 @@ class VernacCommandDataList:
     def __setitem__(self, idx: SupportsIndex, item: Any) -> None:  # noqa: D105
         if not isinstance(item, VernacCommandData):
             raise TypeError(
-                'CoqDocumentData may only contain VernacCommandData')
+                'VernacCommandDataList may only contain VernacCommandData')
         self.commands[idx] = item
 
     def __mul__(  # noqa: D105
@@ -540,7 +541,7 @@ class VernacCommandDataList:
     def append(self, item: Any) -> None:  # noqa: D102
         if not isinstance(item, VernacCommandData):
             raise TypeError(
-                'CoqDocumentData may only contain VernacCommandData')
+                'VernacCommandDataList may only contain VernacCommandData')
         self.commands.append(item)
 
     def copy(self) -> 'VernacCommandDataList':  # noqa: D102
@@ -580,7 +581,7 @@ class VernacCommandDataList:
         items = list(items)
         if any(not isinstance(item, VernacCommandData) for item in items):
             raise TypeError(
-                'CoqDocumentData may only contain VernacCommandData')
+                'VernacCommandDataList may only contain VernacCommandData')
         self.commands.extend(items)
 
     def patch_goals(self) -> None:
@@ -688,6 +689,7 @@ class VernacCommandDataList:
 
 
 VernacDict = Dict[str, VernacCommandDataList]
+CommentDict = Dict[str, List[CoqComment]]
 
 
 @dataclass
@@ -800,6 +802,11 @@ class ProjectCommitData(Serializable):
     commit_message: Optional[str] = None
     """
     A description of the changes contained in this project commit.
+    """
+    comment_data: Optional[CommentDict] = None
+    """
+    A map from file names relative to the root of the project to a set
+    of comments within each file.
     """
     file_dependencies: Optional[Dict[str, List[str]]] = None
     """

@@ -5,6 +5,7 @@ import logging
 import multiprocessing as mp
 import os
 import shutil
+import typing
 import unittest
 from copy import deepcopy
 from pathlib import Path
@@ -30,6 +31,7 @@ from prism.data.extract_cache import CommandExtractor, extract_cache
 from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.interface.coq.ident import Identifier, IdentType
 from prism.language.gallina.parser import CoqParser
+from prism.language.heuristic.parser import CoqSentence
 from prism.project.base import SEM, Project
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
@@ -122,6 +124,7 @@ class TestExtractCache(unittest.TestCase):
                 coq_float.metadata,
                 {},
                 None,
+                None,
                 {},
                 ProjectBuildEnvironment(self.test_switch.export()),
                 ProjectBuildResult(0,
@@ -158,7 +161,8 @@ class TestExtractCache(unittest.TestCase):
                     self.swim,
                     project,
                     head,
-                    lambda x: {},
+                    lambda x: ({},
+                               {}),
                     coq_version,
                     block=True,
                     worker_semaphore=semaphore,
@@ -228,14 +232,16 @@ class TestExtractCache(unittest.TestCase):
         with pushd(_COQ_EXAMPLES_PATH):
             extracted_commands = CommandExtractor(
                 "Alphabet.v",
-                Project.extract_sentences(
-                    CoqDocument(
-                        "Alphabet.v",
-                        CoqParser.parse_source("Alphabet.v"),
-                        _COQ_EXAMPLES_PATH),
-                    sentence_extraction_method=SEM.HEURISTIC,
-                    return_locations=True,
-                    glom_proofs=False),
+                typing.cast(
+                    List[CoqSentence],
+                    Project.extract_sentences(
+                        CoqDocument(
+                            "Alphabet.v",
+                            CoqParser.parse_source("Alphabet.v"),
+                            _COQ_EXAMPLES_PATH),
+                        sentence_extraction_method=SEM.HEURISTIC,
+                        return_locations=True,
+                        glom_proofs=False)),
                 serapi_options="",
                 opam_switch=self.test_switch).extracted_commands
         self.assertEqual(len(extracted_commands), 37)
@@ -244,14 +250,16 @@ class TestExtractCache(unittest.TestCase):
             with pushd(_COQ_EXAMPLES_PATH):
                 extracted_commands = CommandExtractor(
                     "delayed_proof.v",
-                    Project.extract_sentences(
-                        CoqDocument(
-                            "delayed_proof.v",
-                            CoqParser.parse_source("delayed_proof.v"),
-                            _COQ_EXAMPLES_PATH),
-                        sentence_extraction_method=SEM.HEURISTIC,
-                        return_locations=True,
-                        glom_proofs=False),
+                    typing.cast(
+                        List[CoqSentence],
+                        Project.extract_sentences(
+                            CoqDocument(
+                                "delayed_proof.v",
+                                CoqParser.parse_source("delayed_proof.v"),
+                                _COQ_EXAMPLES_PATH),
+                            sentence_extraction_method=SEM.HEURISTIC,
+                            return_locations=True,
+                            glom_proofs=False)),
                     serapi_options="",
                     opam_switch=self.test_switch).extracted_commands
             self.assertEqual(len(extracted_commands), 11)
@@ -398,14 +406,16 @@ class TestExtractCache(unittest.TestCase):
             with pushd(_COQ_EXAMPLES_PATH):
                 extracted_commands = CommandExtractor(
                     "shadowing.v",
-                    Project.extract_sentences(
-                        CoqDocument(
-                            "shadowing.v",
-                            CoqParser.parse_source("shadowing.v"),
-                            _COQ_EXAMPLES_PATH),
-                        sentence_extraction_method=SEM.HEURISTIC,
-                        return_locations=True,
-                        glom_proofs=False),
+                    typing.cast(
+                        List[CoqSentence],
+                        Project.extract_sentences(
+                            CoqDocument(
+                                "shadowing.v",
+                                CoqParser.parse_source("shadowing.v"),
+                                _COQ_EXAMPLES_PATH),
+                            sentence_extraction_method=SEM.HEURISTIC,
+                            return_locations=True,
+                            glom_proofs=False)),
                     serapi_options="",
                     opam_switch=self.test_switch).extracted_commands
             self.assertEqual(len(extracted_commands), 4)
@@ -570,14 +580,16 @@ class TestExtractCache(unittest.TestCase):
         with pushd(_COQ_EXAMPLES_PATH):
             extracted_commands = CommandExtractor(
                 "aborted.v",
-                Project.extract_sentences(
-                    CoqDocument(
-                        "aborted.v",
-                        CoqParser.parse_source("aborted.v"),
-                        _COQ_EXAMPLES_PATH),
-                    sentence_extraction_method=SEM.HEURISTIC,
-                    return_locations=True,
-                    glom_proofs=False),
+                typing.cast(
+                    List[CoqSentence],
+                    Project.extract_sentences(
+                        CoqDocument(
+                            "aborted.v",
+                            CoqParser.parse_source("aborted.v"),
+                            _COQ_EXAMPLES_PATH),
+                        sentence_extraction_method=SEM.HEURISTIC,
+                        return_locations=True,
+                        glom_proofs=False)),
                 serapi_options="",
                 opam_switch=self.test_switch).extracted_commands
         expected_commands_text = [
@@ -600,14 +612,16 @@ class TestExtractCache(unittest.TestCase):
         with pushd(_COQ_EXAMPLES_PATH):
             extracted_commands = CommandExtractor(
                 "save.v",
-                Project.extract_sentences(
-                    CoqDocument(
-                        "save.v",
-                        CoqParser.parse_source("save.v"),
-                        _COQ_EXAMPLES_PATH),
-                    sentence_extraction_method=SEM.HEURISTIC,
-                    return_locations=True,
-                    glom_proofs=False),
+                typing.cast(
+                    List[CoqSentence],
+                    Project.extract_sentences(
+                        CoqDocument(
+                            "save.v",
+                            CoqParser.parse_source("save.v"),
+                            _COQ_EXAMPLES_PATH),
+                        sentence_extraction_method=SEM.HEURISTIC,
+                        return_locations=True,
+                        glom_proofs=False)),
                 serapi_options="",
                 opam_switch=self.test_switch).extracted_commands
             self.assertTrue(
@@ -628,14 +642,16 @@ class TestExtractCache(unittest.TestCase):
         with pushd(_COQ_EXAMPLES_PATH):
             extracted_commands = CommandExtractor(
                 "save_named_theorem.v",
-                Project.extract_sentences(
-                    CoqDocument(
-                        "save_named_theorem.v",
-                        CoqParser.parse_source("save_named_theorem.v"),
-                        _COQ_EXAMPLES_PATH),
-                    sentence_extraction_method=SEM.HEURISTIC,
-                    return_locations=True,
-                    glom_proofs=False),
+                typing.cast(
+                    List[CoqSentence],
+                    Project.extract_sentences(
+                        CoqDocument(
+                            "save_named_theorem.v",
+                            CoqParser.parse_source("save_named_theorem.v"),
+                            _COQ_EXAMPLES_PATH),
+                        sentence_extraction_method=SEM.HEURISTIC,
+                        return_locations=True,
+                        glom_proofs=False)),
                 serapi_options="",
                 opam_switch=self.test_switch).extracted_commands
             self.assertTrue(
@@ -683,27 +699,31 @@ class TestExtractCache(unittest.TestCase):
         with pushd(_COQ_EXAMPLES_PATH):
             extracted_commands_no_diffs = CommandExtractor(
                 "fermat4_mwe.v",
-                Project.extract_sentences(
-                    CoqDocument(
-                        "fermat4_mwe.v",
-                        CoqParser.parse_source("fermat4_mwe.v"),
-                        _COQ_EXAMPLES_PATH),
-                    sentence_extraction_method=SEM.HEURISTIC,
-                    return_locations=True,
-                    glom_proofs=False),
+                typing.cast(
+                    List[CoqSentence],
+                    Project.extract_sentences(
+                        CoqDocument(
+                            "fermat4_mwe.v",
+                            CoqParser.parse_source("fermat4_mwe.v"),
+                            _COQ_EXAMPLES_PATH),
+                        sentence_extraction_method=SEM.HEURISTIC,
+                        return_locations=True,
+                        glom_proofs=False)),
                 serapi_options="",
                 use_goals_diff=False,
                 opam_switch=self.test_switch).extracted_commands
             extracted_commands_with_diffs = CommandExtractor(
                 "fermat4_mwe.v",
-                Project.extract_sentences(
-                    CoqDocument(
-                        "fermat4_mwe.v",
-                        CoqParser.parse_source("fermat4_mwe.v"),
-                        _COQ_EXAMPLES_PATH),
-                    sentence_extraction_method=SEM.HEURISTIC,
-                    return_locations=True,
-                    glom_proofs=False),
+                typing.cast(
+                    List[CoqSentence],
+                    Project.extract_sentences(
+                        CoqDocument(
+                            "fermat4_mwe.v",
+                            CoqParser.parse_source("fermat4_mwe.v"),
+                            _COQ_EXAMPLES_PATH),
+                        sentence_extraction_method=SEM.HEURISTIC,
+                        return_locations=True,
+                        glom_proofs=False)),
                 serapi_options="",
                 use_goals_diff=True,
                 opam_switch=self.test_switch).extracted_commands
