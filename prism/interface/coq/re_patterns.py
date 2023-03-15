@@ -140,7 +140,8 @@ PRINT_ALL_IDENT_PATTERN = regex_from_options(
      _libmodsec],
     True,
     False,
-    compile=True)
+    compile=True,
+    flags=re.MULTILINE)
 
 OBLIGATION_ID_PATTERN = re.compile(
     rf"(?P<proof_id>{IDENT_PATTERN.pattern})_obligation_\d+")

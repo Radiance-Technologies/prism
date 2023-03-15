@@ -552,11 +552,9 @@ class SerAPI:
                 f"{m} : "
                 for m in NAMED_DEF_ASSUM_PATTERN.findall(print_all_message)),
             print_all_message)
-        for line in print_all_message.splitlines():
-            match = PRINT_ALL_IDENT_PATTERN.match(line)
-            if match is not None:
-                idents.extend(
-                    v for v in match.groupdict().values() if v is not None)
+        for match in PRINT_ALL_IDENT_PATTERN.finditer(print_all_message):
+            idents.extend(
+                v for v in match.groupdict().values() if v is not None)
         return idents
 
     def get_conjecture_id(self) -> Optional[str]:
