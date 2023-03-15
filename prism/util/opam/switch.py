@@ -479,7 +479,8 @@ class OpamSwitch:
             pkg: Union[str,
                        PathLike],
             version: Optional[str] = None,
-            deps_only: bool = False) -> None:
+            deps_only: bool = False,
+            criteria: Optional[str] = None) -> None:
         """
         Install the indicated package.
 
@@ -495,6 +496,9 @@ class OpamSwitch:
         deps_only : bool, optional
             If True, then install all of the packages dependencies, but
             do not actually install it.
+        criteria : Optional[str], optional
+            Specify user preferences for dependency solving during
+            installation, by default None.
 
         Exceptions
         ----------
@@ -511,10 +515,17 @@ class OpamSwitch:
                     "Version cannot be specified for installation from file. "
                     f"Expected None, but got {version} for package {pkg}.")
             pkg = f"{pkg}.{version}"
-        cmd = f"opam install {pkg} -y {'--deps-only' if deps_only else ''}"
+        if criteria is not None:
+            criteria = f'--criteria="{criteria}"'
+        else:
+            criteria = ''
+        cmd = f"opam install {pkg} -y {'--deps-only' if deps_only else ''} {criteria}"
         self.run(cmd)
 
-    def install_formula(self, formula: PackageFormula) -> None:
+    def install_formula(
+            self,
+            formula: PackageFormula,
+            criteria: Optional[str] = None) -> None:
         """
         Install packages satisfying the given formula in this switch.
 
@@ -522,6 +533,9 @@ class OpamSwitch:
         ----------
         formula : PackageFormula
             A formula describing package constraints.
+        criteria : Optional[str], optional
+            Specify user preferences for dependency solving during
+            installation, by default None.
 
         Exceptions
         ----------
@@ -538,7 +552,7 @@ class OpamSwitch:
                         synopsis="Temporary file",
                         depends=formula)))
             # close to ensure contents are flushed
-        self.install(f.name, deps_only=True)
+        self.install(f.name, deps_only=True, criteria=criteria)
         # delete the temp file
         os.remove(f.name)
 
