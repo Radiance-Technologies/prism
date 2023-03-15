@@ -391,7 +391,8 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
         # project only affected at most its own records
         storage = MetadataStorage()
         updated_projects = {p.name for p in self.projects}
-        for p in self.projects:
+        # ensure we sort insertions for deterministic serialization
+        for p in sorted(self.projects, key=lambda p: p.name):
             result = typing.cast(
                 Union[Optional[Tuple[T,
                                      MetadataStorage]],
@@ -415,11 +416,14 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
                 else:
                     results[p.name] = value[0]
                 p_storage = value[1]
-            for metadata in p_storage.get_all(p.name):
+            for metadata in sorted(p_storage.get_all(p.name),
+                                   key=lambda m: m.key):
                 storage.insert(metadata)
             # capture non-updated metadata
-            for other_p in p_storage.projects.difference(updated_projects):
-                for metadata in p_storage.get_all(other_p):
+            for other_p in sorted(
+                    p_storage.projects.difference(updated_projects)):
+                for metadata in sorted(p_storage.get_all(other_p),
+                                       key=lambda m: m.key):
                     if metadata not in storage:
                         storage.insert(metadata)
         for p in self.projects:
