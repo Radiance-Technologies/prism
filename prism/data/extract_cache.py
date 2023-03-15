@@ -100,6 +100,11 @@ _save_pattern = re.compile(rf"Save\s+(?P<ident>{IDENT_PATTERN.pattern})\s*.")
 
 _printing_options_pattern = re.compile(r"(?:Set|Unset)\s+Printing\s+.*\.")
 
+_DEBUG_SINGLE_COMMIT = False
+"""
+Set to True to skip cleaning prior to extraction.
+"""
+
 
 class ExtractVernacCommandsError(RuntimeError):
     """
@@ -1272,7 +1277,7 @@ def extract_cache(
             max_runtime)
 
 
-def extract_cache_new(
+def extract_cache_new(  # noqa: C901
     build_cache_client: CoqProjectBuildCacheProtocol,
     switch_manager: SwitchManager,
     project: ProjectRepo,
@@ -1352,15 +1357,17 @@ def extract_cache_new(
             # Make sure there aren't any changes or uncommitted files
             # left over from previous iterations, then check out the
             # current commit
-            project.git.reset('--hard')
-            project.git.clean('-fdx')
+            if not _DEBUG_SINGLE_COMMIT:
+                project.git.reset('--hard')
+                project.git.clean('-fdx')
             project.git.checkout(commit_sha)
-            project.submodule_update(
-                init=True,
-                recursive=True,
-                keep_going=True,
-                force_remove=True,
-                force_reset=True)
+            if not _DEBUG_SINGLE_COMMIT:
+                project.submodule_update(
+                    init=True,
+                    recursive=True,
+                    keep_going=True,
+                    force_remove=True,
+                    force_reset=True)
             # process the commit
             commit_message = project.commit().message
             if isinstance(commit_message, bytes):
