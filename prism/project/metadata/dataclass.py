@@ -6,7 +6,17 @@ import os
 import warnings
 # from collections.abc import Iterable
 from dataclasses import asdict, dataclass, fields
-from typing import Any, ClassVar, Dict, Iterable, Iterator, List, Optional, Set
+from typing import (
+    Any,
+    ClassVar,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+)
 
 import seutil as su
 
@@ -302,6 +312,17 @@ class ProjectMetadata:
             self.coq_dependencies = set()
         else:
             super().__setattribute__(attr, value)
+
+    @property
+    def key(self) -> Tuple[str, str, str, str]:
+        """
+        A key that can be used for total-order sorting of metadata.
+        """
+        return (
+            self.project_name,
+            self.commit_sha if self.commit_sha is not None else "None",
+            self.coq_version if self.coq_version is not None else "None",
+            self.ocaml_version if self.ocaml_version is not None else "None")
 
     @property
     def level(self) -> int:
