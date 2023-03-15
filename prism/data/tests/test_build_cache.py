@@ -7,7 +7,7 @@ import unittest
 from copy import deepcopy
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 
 import seutil.io as io
 
@@ -28,8 +28,10 @@ from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.interface.coq.ident import Identifier, IdentType, get_all_idents
 from prism.interface.coq.serapi import SerAPI
 from prism.language.gallina.analyze import SexpInfo
+from prism.language.heuristic.parser import CoqSentence
 from prism.language.heuristic.util import ParserUtils
 from prism.language.sexp.list import SexpList
+from prism.language.sexp.node import SexpNode
 from prism.language.sexp.string import SexpString
 from prism.project.base import SEM, SentenceExtractionMethod
 from prism.project.metadata.storage import MetadataStorage
@@ -61,7 +63,14 @@ class TestVernacSentence(unittest.TestCase):
         with SerAPI() as serapi:
             goals.append(serapi.query_goals())
             for c in commands:
-                _, _, ast = serapi.execute(c, return_ast=True)
+                (_,
+                 _,
+                 ast) = typing.cast(
+                     Tuple[List[SexpNode],
+                           List[str],
+                           SexpNode],
+                     serapi.execute(c,
+                                    return_ast=True))
                 goals.append(serapi.query_goals())
                 asts.append(ast)
         # force multiple added goals
@@ -149,11 +158,13 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                     file_commands: VernacCommandDataList = command_data.setdefault(
                         filename,
                         VernacCommandDataList())
-                    for sentence in project.get_sentences(
-                            filename,
-                            sentence_extraction_method=SEM.HEURISTIC,
-                            return_locations=True,
-                            glom_proofs=False):
+                    for sentence in typing.cast(
+                            List[CoqSentence],
+                            project.get_sentences(
+                                filename,
+                                sentence_extraction_method=SEM.HEURISTIC,
+                                return_locations=True,
+                                glom_proofs=False)):
                         location = sentence.location
                         assert location is not None
                         sentence = sentence.text

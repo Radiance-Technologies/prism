@@ -103,12 +103,17 @@ class VernacSentence:
     """
     The text of this sentence.
     """
-    ast: str
+    ast_: InitVar[Union[str, SexpNode]]
+    """
+    The AST derived from this sentence.
+    """
+    ast: str = field(init=False)
     """
     The serialized AST derived from this sentence.
 
     Note that locations within this AST are not accurate with respect to
-    the source document.
+    the source document but are instead expected to be relative to the
+    sentence's whitespace-normalized `text`.
     """
     qualified_identifiers: List[Identifier]
     """
@@ -136,6 +141,12 @@ class VernacSentence:
     fully qualified identifiers in the order of their appearance in the
     AST.
     """
+    feedback: List[str] = default_field([])
+    """
+    Feedback obtained from Coq upon execution of this sentence.
+
+    Feedback may include diagnostic messages such as warnings.
+    """
     goals_qualified_identifiers: Dict[GoalLocation,
                                       GoalIdentifiers] = field(init=False)
     """
@@ -157,13 +168,16 @@ class VernacSentence:
 
     def __post_init__(
             self,
+            ast_: Union[str,
+                        SexpNode],
             get_identifiers: Optional[Callable[[str],
                                                List[Identifier]]]) -> None:
         """
         Ensure the AST is serialized and extract goal identifiers.
         """
-        if isinstance(self.ast, SexpNode):
-            self.ast = str(self.ast)
+        if isinstance(ast_, SexpNode):
+            ast_ = str(ast_)
+        self.ast = ast_
         goals_identifiers = {}
         if get_identifiers is not None and self.goals is not None:
             # get qualified goal and hypothesis identifiers
@@ -246,6 +260,8 @@ class VernacSentence:
                 else:
                     fvs = noninit_field_values
                 fvs[field_name] = value
+                if field_name == "ast":
+                    field_values["ast_"] = value
         result = cls(**field_values)
         for field_name, value in noninit_field_values.items():
             setattr(result, field_name, value)

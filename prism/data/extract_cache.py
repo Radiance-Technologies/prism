@@ -67,6 +67,7 @@ from prism.interface.coq.re_patterns import (
 from prism.interface.coq.serapi import AbstractSyntaxTree, SerAPI
 from prism.language.gallina.analyze import SexpAnalyzer
 from prism.language.heuristic.parser import CoqComment, CoqSentence
+from prism.language.sexp.node import SexpNode
 from prism.project.base import SEM, Project
 from prism.project.exception import MissingMetadataError, ProjectBuildError
 from prism.project.metadata.storage import MetadataStorage
@@ -338,7 +339,8 @@ class CommandExtractor:
         ids: List[str],
         is_proof_aborted: bool,
         get_identifiers: Callable[[str],
-                                  List[Identifier]]
+                                  List[Identifier]],
+        feedback: List[str],
     ) -> Optional[VernacCommandData]:
         r"""
         Complete accumulation of a proof/proved conjecture.
@@ -354,6 +356,8 @@ class CommandExtractor:
             A function that accepts a serialized AST and returns a list
             of fully qualified identifiers in the order of their
             appearance in the AST.
+        feedback : List[str]
+            Feedback from executing the `sentence`.
 
         Returns
         -------
@@ -374,7 +378,8 @@ class CommandExtractor:
             proof_block = self._process_proof_block(
                 self.partial_proof_stacks.pop(new_id,
                                               []),
-                get_identifiers)
+                get_identifiers,
+                feedback)
             new_proofs.append((new_id, proof_block))
         finished_proof_id = self.obligation_map.get(
             self.pre_proof_id,
@@ -393,29 +398,37 @@ class CommandExtractor:
             # show up as separate entries if it defines custom
             # proof environments.
             (ids,
-             proofs) = unzip(self.finished_proof_stacks.pop(finished_proof_id))
+             proofs) = typing.cast(
+                 Tuple[List[str],
+                       List[Proof]],
+                 unzip(self.finished_proof_stacks.pop(finished_proof_id)))
             (lemma,
              pre_goals_or_diff,
              lemma_type) = self.conjectures.pop(finished_proof_id)
+            assert lemma.ast is not None, \
+                "The lemma must have an AST"
+            assert lemma.location is not None, \
+                "The lemma should have a location"
             lemma = VernacSentence(
                 lemma.text,
                 lemma.ast,
-                lemma.identifiers,
+                lemma.identifiers,  # type: ignore
                 lemma.location,
                 lemma_type,
                 pre_goals_or_diff,
-                get_identifiers)
+                get_identifiers,
+                feedback)
             # uniquify but keep original order
-            ids = dict.fromkeys(ids)
+            uids = dict.fromkeys(ids)
             # ensure conjecture ID is last
-            ids.pop(finished_proof_id, None)
-            ids[finished_proof_id] = None
+            uids.pop(finished_proof_id, None)
+            uids[finished_proof_id] = None
             lemma = VernacCommandData(
-                list(ids),
+                list(uids),
                 None,
                 lemma,
                 [p for p in proofs if p])
-            for ident in ids:
+            for ident in uids:
                 self.defined_lemmas[ident] = lemma
             return lemma
         else:
@@ -468,15 +481,18 @@ class CommandExtractor:
         if _printing_options_pattern.match(cmd):
             # Do not allow alteration of printing options.
             # Changing them can break extraction.
-            feedback = []
+            feedback: List[str] = []
             sexp = serapi.query_ast(cmd)
         else:
             (_,
              feedback,
-             sexp) = serapi.execute(
-                 cmd,
-                 return_ast=True,
-                 verbose=True)
+             sexp) = typing.cast(
+                 Tuple[List[SexpNode],
+                       List[str],
+                       AbstractSyntaxTree],
+                 serapi.execute(cmd,
+                                return_ast=True,
+                                verbose=True))
         if admit_qed:
             serapi.pop()
             if serapi.try_execute("Admitted.",
@@ -526,12 +542,15 @@ class CommandExtractor:
         """
         with SerAPI(self.serapi_options,
                     opam_switch=self.opam_switch) as serapi:
-            get_identifiers = partial(
-                get_all_qualified_idents,
-                serapi,
-                self.modpath,
-                ordered=True,
-                id_cache=self.expanded_ids)
+            get_identifiers = typing.cast(
+                Callable[[str],
+                         List[Identifier]],
+                partial(
+                    get_all_qualified_idents,
+                    serapi,
+                    self.modpath,
+                    ordered=True,
+                    id_cache=self.expanded_ids))
             for sentence in sentences:
                 # TODO: Optionally filter queries out of results (and
                 # execution)
@@ -583,14 +602,13 @@ class CommandExtractor:
         assert location is not None, \
             "Sentences must be extracted with locations"
         text = sentence.text
-        # TODO: extract feedback
         feedback, sexp = self._execute_cmd(serapi, text)
         sentence.ast = sexp
         # Attach an undocumented extra field to the CoqSentence
         # object containing fully qualified referenced identifiers
         # NOTE: This must be done before identifiers get shadowed in
         # the `global_id_cache`
-        sentence.identifiers = get_identifiers(str(sexp))
+        sentence.identifiers = get_identifiers(str(sexp))  # type: ignore
         # get new ids and shadow redefined ones
         ids = self._update_ids(serapi)
         proof_id_changed = self.post_proof_id != self.pre_proof_id
@@ -628,7 +646,8 @@ class CommandExtractor:
                 command_type,
                 ids,
                 pre_goals_or_diff,
-                get_identifiers)
+                get_identifiers,
+                feedback)
             if program is not None:
                 self.extracted_commands.append(program)
         elif proof_id_changed:
@@ -643,7 +662,8 @@ class CommandExtractor:
                     completed_lemma = self._conclude_proof(
                         ids,
                         is_proof_aborted,
-                        get_identifiers)
+                        get_identifiers,
+                        feedback)
                     if completed_lemma is not None:
                         self.extracted_commands.append(completed_lemma)
                     return
@@ -655,11 +675,12 @@ class CommandExtractor:
                         ProofSentence(
                             text,
                             sentence.ast,
-                            sentence.identifiers,
+                            sentence.identifiers,  # type: ignore
                             location,
                             command_type,
                             pre_goals_or_diff,
-                            get_identifiers),
+                            get_identifiers,
+                            feedback),
                         self.logger)
                     if already_defined:
                         return
@@ -691,11 +712,12 @@ class CommandExtractor:
                     ProofSentence(
                         text,
                         sentence.ast,
-                        sentence.identifiers,
+                        sentence.identifiers,  # type: ignore
                         location,
                         command_type,
                         pre_goals_or_diff,
-                        get_identifiers),
+                        get_identifiers,
+                        feedback),
                     self.logger)
                 return
         else:
@@ -709,11 +731,12 @@ class CommandExtractor:
                     VernacSentence(
                         text,
                         sentence.ast,
-                        sentence.identifiers,
+                        sentence.identifiers,  # type: ignore
                         location,
                         command_type,
                         pre_goals_or_diff,
-                        get_identifiers)))
+                        get_identifiers,
+                        feedback)))
 
     def _handle_anomalous_proof(
             self,
@@ -763,7 +786,8 @@ class CommandExtractor:
             self,
             block: ProofBlock,
             get_identifiers: Callable[[str],
-                                      List[Identifier]]) -> Proof:
+                                      List[Identifier]],
+            feedback: List[str]) -> Proof:
         """
         Convert a proof block into the form expected for extraction.
 
@@ -776,6 +800,8 @@ class CommandExtractor:
             A function that accepts a serialized AST and returns a list
             of fully qualified identifiers in the order of their
             appearance in the AST.
+        feedback : List[str]
+            Feedback from executing the `sentence`.
 
         Returns
         -------
@@ -786,17 +812,28 @@ class CommandExtractor:
             return []
         proof_steps, goals, command_types = unzip(block)
         proof = []
-        for tactic, goal, command_type in zip(proof_steps, goals, command_types):
-            tactic: CoqSentence
+        tactic: CoqSentence
+        goal: Optional[Union[Goals, GoalsDiff]]
+        command_type: str
+        for (tactic,
+             goal,
+             command_type) in zip(proof_steps,
+                                  goals,
+                                  command_types):
+            assert tactic.ast is not None, \
+                "The tactic must have an AST"
+            assert tactic.location is not None, \
+                "The tactic must be located"
             proof.append(
                 ProofSentence(
                     tactic.text,
                     tactic.ast,
-                    tactic.identifiers,
+                    tactic.identifiers,  # type: ignore
                     tactic.location,
                     command_type,
                     goal,
-                    get_identifiers))
+                    get_identifiers,
+                    feedback))
         return proof
 
     def _start_program(
@@ -807,7 +844,8 @@ class CommandExtractor:
         pre_goals_or_diff: Optional[Union[Goals,
                                           GoalsDiff]],
         get_identifiers: Callable[[str],
-                                  List[Identifier]]
+                                  List[Identifier]],
+        feedback: List[str],
     ) -> Optional[VernacCommandData]:
         """
         Start accumulation of a new program.
@@ -827,6 +865,8 @@ class CommandExtractor:
             A function that accepts a serialized AST and returns a list
             of fully qualified identifiers in the order of their
             appearance in the AST.
+        feedback : List[str]
+            Feedback from executing the `sentence`.
 
         Returns
         -------
@@ -850,17 +890,22 @@ class CommandExtractor:
                     program_id = None
         if program_id is not None:
             # all obligations were resolved
+            assert sentence.ast is not None, \
+                "The sentence must have an AST"
+            assert sentence.location is not None, \
+                "The sentence must be located"
             return VernacCommandData(
                 ids,
                 None,
                 VernacSentence(
                     sentence.text,
                     sentence.ast,
-                    sentence.identifiers,
+                    sentence.identifiers,  # type: ignore
                     sentence.location,
                     command_type,
                     pre_goals_or_diff,
-                    get_identifiers))
+                    get_identifiers,
+                    feedback))
         else:
             # some obligations remain
             self.programs.append((sentence, pre_goals_or_diff, command_type))
@@ -884,8 +929,10 @@ class CommandExtractor:
             # Obligations get accumulated separately, but we
             # need to know to which lemma (program) they ultimately
             # correspond.
-            program_id = OBLIGATION_ID_PATTERN.match(
-                self.post_proof_id).groupdict()['proof_id']
+            m = OBLIGATION_ID_PATTERN.match(self.post_proof_id)
+            assert m is not None, \
+                "Cannot parse obligation ID"
+            program_id = m.groupdict()['proof_id']
             self.obligation_map[self.post_proof_id] = program_id
             proof_stack = self.partial_proof_stacks.setdefault(
                 self.post_proof_id,
