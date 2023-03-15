@@ -2,7 +2,9 @@
 A common interface for text-parseable classes.
 """
 import abc
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, Tuple, Type, TypeVar, Union
+
+_T = TypeVar("_T", bound="Parseable")
 
 
 class ParseError(Exception):
@@ -15,7 +17,7 @@ class ParseError(Exception):
         self.tp = tp
         self.parsed = parsed
 
-    def __reduce__(self) -> Union[str, Tuple[type, str]]:  # noqa: D105
+    def __reduce__(self) -> Tuple[type, Tuple[type, str]]:  # noqa: D105
         return ParseError, (self.tp, self.parsed)
 
     def __str__(self) -> str:  # noqa: D105
@@ -34,7 +36,7 @@ class Parseable(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def _chain_parse(cls, input: str, pos: int) -> Tuple['Parseable', int]:
+    def _chain_parse(cls: Type[_T], input: str, pos: int) -> Tuple[_T, int]:
         """
         Parse an instance of `cls` starting from the given position.
 
@@ -111,15 +113,15 @@ class Parseable(abc.ABC):
 
     @classmethod
     def parse(
-        cls,
-        input: str,
-        exhaustive: bool = True,
-        lstrip: bool = True,
-        pos: int = 0,
-        **kwargs: Dict[str,
-                       Any]) -> Union['Parseable',
-                                      Tuple['Parseable',
-                                            int]]:
+            cls: Type[_T],
+            input: str,
+            exhaustive: bool = True,
+            lstrip: bool = True,
+            pos: int = 0,
+            **kwargs: Dict[str,
+                           Any]) -> Union['_T',
+                                          Tuple['_T',
+                                                int]]:
         """
         Parse an instance of `cls`.
 
