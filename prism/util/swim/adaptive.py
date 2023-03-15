@@ -167,7 +167,9 @@ class AdaptiveSwitchManager(SwitchManager):
             # add a new switch to the persistent pool
             clone = self._clone_switch(closest_switch)
             try:
-                clone.install_formula(formula)
+                clone.install_formula(
+                    formula,
+                    criteria="-changed,+removed,-notuptodate")
             except CalledProcessError:
                 # This exception almost certainly means the Coq version
                 # can't be satisfied. So, clean up the clone and report
