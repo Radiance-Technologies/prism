@@ -54,6 +54,15 @@ class ProjectSource:
             repo_url_ = GitURL(repo_url_)
         object.__setattr__(self, 'repo_url', repo_url_)
 
+    def __lt__(self, other: object) -> bool:  # noqa: D105
+        if not isinstance(other, ProjectSource):
+            return NotImplemented
+        return (
+            self.project_name,
+            self.repo_url if self.repo_url is not None else "None") < (
+                other.project_name,
+                other.repo_url if other.repo_url is not None else "None")
+
     def serialize(self) -> Dict[str, Optional[str]]:  # noqa: D102
         # workaround for bug in seutil that skips custom serialization
         # for subclasses of primitive types like str
@@ -81,6 +90,15 @@ class Revision:
         if self.project_source.repo_url is None and self.commit_sha is not None:
             raise ValueError(
                 "A commit cannot be given if the project URL is not given.")
+
+    def __lt__(self, other: object) -> bool:  # noqa: D105
+        if not isinstance(other, Revision):
+            return NotImplemented
+        return (
+            self.project_source,
+            self.commit_sha if self.commit_sha is not None else "None") < (
+                other.project_source,
+                other.commit_sha if other.commit_sha is not None else "None")
 
 
 @dataclass(frozen=True)
@@ -118,6 +136,18 @@ class Context:
             raise RuntimeError(
                 f"Incompatible Coq/OCaml versions specified: coq={self.coq_version}, "
                 f"ocaml={self.ocaml_version}")
+
+    def __lt__(self, other: object) -> bool:  # noqa: D105
+        if not isinstance(other, Context):
+            return NotImplemented
+        return (
+            self.revision,
+            self.coq_version if self.coq_version is not None else "None",
+            self.ocaml_version if self.ocaml_version is not None else "None"
+        ) < (
+            other.revision,
+            other.coq_version if other.coq_version is not None else "None",
+            other.ocaml_version if other.ocaml_version is not None else "None")
 
     @property
     def commit_sha(self) -> Optional[str]:  # noqa: D102
@@ -274,10 +304,27 @@ class MetadataStorage:
     """
     The inverse map of `_bidict_attrs`.
     """
-    _attr_bidicts = {
-        v: k for k,
-        vs in _bidict_attrs.items() for v in vs
+    _attr_bidicts = {v: k for k,
+                     vs in _bidict_attrs.items() for v in vs}
+    _special_dict_fields: ClassVar[Set[str]] = {
+        'contexts',
+        'command_sequences',
+        'ocaml_packages',
+        'opam_repositories'
     }
+    """
+    Fields that cannot be serialized directly either because of
+    unsupported containers (`bidict`) or the use of non-string keys.
+    """
+    _special_set_fields: ClassVar[Set[str]] = {
+        "opam_repos",
+        "coq_dependencies",
+        "ignore_path_regex"
+    }
+    """
+    Fields that require custom serialization in order to ensure
+    determinism, namely fields that map string keys to sets.
+    """
 
     def __post_init__(self) -> None:
         """
@@ -596,9 +643,12 @@ class MetadataStorage:
                             field_value,
                             key_maker=CommandSequence)
                     else:
+                        field_values = sorted(field_value) if isinstance(
+                            field_value,
+                            set) else field_value
                         val = type(field_value)(
                             self._add_to_index(index,
-                                               val) for val in field_value)
+                                               val) for val in field_values)
                     getattr(self, field_name)[context_id] = val
                 elif field_name in ['ignore_path_regex']:
                     assert isinstance(field_value, Iterable)
@@ -790,7 +840,8 @@ class MetadataStorage:
             ocaml_version,
             coq_version,
             serapi_version=None,
-            project_url=project_url,
+            project_url=GitURL(project_url)
+            if project_url is not None else None,
             commit_sha=commit_sha)
         metadata_kwargs: Dict[str, Any]
         metadata_kwargs = {
@@ -1121,20 +1172,25 @@ class MetadataStorage:
         Dict[str, Any]
             The serialized storage.
         """
-        special_fields = {
-            'contexts',
-            'command_sequences',
-            'ocaml_packages',
-            'opam_repositories'
-        }
-        result = {
-            f.name: io.serialize(
-                getattr(self,
-                        f.name),
-                fmt) for f in fields(self) if f.name not in special_fields
-        }
-        for f in special_fields:
-            result[f] = io.serialize(list(getattr(self, f).items()))
+        special_fields = self._special_dict_fields.union(
+            self._special_set_fields)
+        result = {}
+        for f in fields(self):
+            if f.name in special_fields:
+                continue
+            field_value = getattr(self, f.name)
+            if isinstance(field_value, set):
+                field_value = sorted(field_value)
+            result[f.name] = io.serialize(field_value, fmt)
+        for f_name in self._special_dict_fields:
+            result[f_name] = io.serialize(list(getattr(self, f_name).items()))
+        for f_name in self._special_set_fields:
+            f_serialized: Dict[str,
+                               List[Any]] = {}
+            result[f_name] = f_serialized
+            field_value = getattr(self, f_name)
+            for k, vs in field_value.items():
+                f_serialized[k] = sorted(vs)
         return result
 
     def union(self, *others: 'MetadataStorage') -> 'MetadataStorage':
@@ -1237,6 +1293,7 @@ class MetadataStorage:
                 coq_version,
                 ocaml_version)
             metadata = context.as_metadata()
+            context_id = None
             try:
                 context_id = self.contexts[context]
             except KeyError:
@@ -1250,6 +1307,7 @@ class MetadataStorage:
                         break
                 if not is_implied:
                     raise
+            assert context_id is not None
             if cascade:
                 origins = self._get_field_origins(
                     self.get(
@@ -1294,16 +1352,10 @@ class MetadataStorage:
         MetadataStorage
             The deserialized storage.
         """
-        special_fields = {
-            'contexts',
-            'command_sequences',
-            'ocaml_packages',
-            'opam_repositories'
-        }
         field_values = {}
         for f in fields(cls):
             if f.name in data:
-                if f.name in special_fields:
+                if f.name in cls._special_dict_fields:
                     value = f.type.__origin__(
                         io.deserialize(
                             data[f.name],

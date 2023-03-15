@@ -396,6 +396,10 @@ class TestMetadataStorage(unittest.TestCase):
             loaded = MetadataStorage.load(storage_file)
             self.assertEqual(storage, loaded)
             os.remove(storage_file)
+        with self.subTest("deterministic"):
+            serialized_1 = io.serialize(storage, io.Fmt.json)
+            serialized_2 = io.serialize(storage, io.Fmt.json)
+            self.assertEqual(serialized_1, serialized_2)
 
 
 if __name__ == '__main__':
