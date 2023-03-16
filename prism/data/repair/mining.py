@@ -932,8 +932,7 @@ def mining_loop_worker(
         error_instance_job_queue: queue.Queue[ErrorInstanceJob],
         repair_instance_job_queue: queue.Queue[RepairInstanceJob],
         worker_to_parent_queue: queue.Queue[Except],
-        worker_status_dict: DictProxy[int,
-                                      WorkStatus],
+        worker_status_dict: DictProxy,
         repair_save_directory: Path,
         repair_instance_db_file: Path,
         repair_miner: RepairMiner):
@@ -951,7 +950,7 @@ def mining_loop_worker(
     worker_to_parent_queue : Queue
         Queue for messages that need to be communicated back to the
         parent
-    worker_status_dict : DictProxy[str, WorkStatus]
+    worker_status_dict : DictProxy
         Dictionary shared among worker processes and parent process
         indicating whether each worker is doing any work or not. Used
         to determine when workers should be shut down.
@@ -1218,7 +1217,7 @@ def _parallel_work(
     repair_instance_job_queue: queue.Queue[RepairInstanceJob] = Queue()
     worker_to_parent_queue: queue.Queue[Except] = Queue()
     with SyncManager() as manager:
-        worker_status_dict: DictProxy[int, WorkStatus] = manager.dict()
+        worker_status_dict: DictProxy = manager.dict()
         proc_args = [
             control_queue,
             error_instance_job_queue,
