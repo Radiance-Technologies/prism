@@ -178,7 +178,7 @@ class CommandExtractor:
     * No command can both end one proof and start another (this
       should be true based on the mutually exclusive ``VtStartProof``
       and ``VtQed`` Vernacular classes in
-    https://github.com/coq/coq/blob/master/vernac/vernacextend.mli).
+      https://github.com/coq/coq/blob/master/vernac/vernacextend.mli).
     * No conjecture fails to enter proof mode after its initial
       sentence is executed.
       The only known exceptions to this rule comprise ``Program``s,
@@ -196,7 +196,7 @@ class CommandExtractor:
       assumption is possible (consider a recursive function named
       after a type that takes arguments of said type as input) but not
       expected to occur frequently as it is unlikely in the first
-    place and poor practice. If it does occur, then the fully
+      place and poor practice. If it does occur, then the fully
       qualified identifiers in the cache will erroneously interpret
       the shadowed ID as its shadower (i.e., as the recursive function
       in the example above).
@@ -438,6 +438,28 @@ class CommandExtractor:
             return lemma
         else:
             return None
+
+    def _ensure_program_is_conjecture(self, program_id: str) -> None:
+        """
+        Ensure that the given program ID is recorded as a conjecture.
+        """
+        if program_id not in self.conjectures:
+            # Programs unfortunately do not open proof
+            # mode until an obligation's proof has been
+            # started.
+            # Consequently, we cannot rely upon
+            # get_conjecture_id to catch the ID
+            # of the program.
+            for i, program in enumerate(reversed(self.programs)):
+                # XXX: This check is quite brittle and prone to false
+                # positives if the program_id is very short.
+                # However, usual naming conventions in real developments
+                # make this possibility unlikely.
+                if program_id in program[0].text.split():
+                    self.conjectures[program_id] = program
+                    self.programs.pop(len(self.programs) - i - 1)
+                    break
+            assert program_id in self.conjectures
 
     def _execute_cmd(self,
                      serapi: SerAPI,
@@ -728,9 +750,16 @@ class CommandExtractor:
         else:
             # We are either not in a proof
             # OR we just defined something new as a side-effect.
-            # We let the previous goals persist.
-            self.extracted_commands.append(
-                VernacCommandData(
+            # Check to see if we advanced any programs
+            command = self._process_defined_obligations(
+                sentence,
+                pre_goals_or_diff,
+                command_type,
+                ids,
+                get_identifiers,
+                feedback)
+            if command is None:
+                command = VernacCommandData(
                     ids,
                     None,
                     VernacSentence(
@@ -741,7 +770,8 @@ class CommandExtractor:
                         command_type,
                         pre_goals_or_diff,
                         get_identifiers,
-                        feedback)))
+                        feedback))
+            self.extracted_commands.append(command)
 
     def _handle_anomalous_proof(
             self,
@@ -786,6 +816,76 @@ class CommandExtractor:
             lemma.proofs.append([proof_sentence])
             return True
         return False
+
+    def _process_defined_obligations(
+        self,
+        sentence: CoqSentence,
+        pre_goals_or_diff: Optional[Union[Goals,
+                                          GoalsDiff]],
+        command_type: str,
+        ids: List[str],
+        get_identifiers: Callable[[str],
+                                  List[Identifier]],
+        feedback: List[str],
+    ) -> Optional[VernacCommandData]:
+        """
+        Process any obligations defined as a side-effect of a command.
+
+        Parameters
+        ----------
+        sentence : CoqSentence
+            An executed sentence.
+        pre_goals_or_diff : Optional[Union[Goals, GoalsDiff]]
+            The goals prior to execution of the `sentence`.
+        command_type : str
+            The type of command represented by the `sentence`.
+        ids : List[str]
+            The identifiers introduced after the `sentence`'s execution.
+        get_identifiers : Callable[[str], List[Identifier]]
+            A function that accepts a serialized AST and returns a list
+            of fully qualified identifiers in the order of their
+            appearance in the AST.
+        feedback : List[str]
+            Feedback from executing the `sentence`.
+
+        Returns
+        -------
+        Optional[VernacCommandData]
+            If a program was defined as a side-effect, then the
+            completed program is returned. Otherwise, nothing is
+            returned.
+        """
+        program_id = None
+        program = None
+        for identifier in ids:
+            # Obligations get accumulated separately, but we
+            # need to know to which lemma (program) they ultimately
+            # correspond.
+            m = OBLIGATION_ID_PATTERN.match(identifier)
+            if m is not None:
+                if program_id is None:
+                    # only capture the first obligation as a proof block
+                    proof_stack = self.partial_proof_stacks.setdefault(
+                        identifier,
+                        [])
+                    proof_stack.append(
+                        (sentence,
+                         pre_goals_or_diff,
+                         command_type))
+                program_id = typing.cast(str, m['proof_id'])
+                self.obligation_map[identifier] = program_id
+        if program_id is not None:
+            self._ensure_program_is_conjecture(program_id)
+            if program_id in ids:
+                # we completed the program
+                if self.pre_proof_id is None:
+                    self.pre_proof_id = program_id
+                program = self._conclude_proof(
+                    ids,
+                    False,
+                    get_identifiers,
+                    feedback)
+        return program
 
     def _process_proof_block(
             self,
@@ -943,19 +1043,7 @@ class CommandExtractor:
                 self.post_proof_id,
                 [])
             proof_stack.append(sentence)
-            if program_id not in self.conjectures:
-                # Programs unfortunately do not open proof
-                # mode until an obligation's proof has been
-                # started.
-                # Consequently, we cannot rely upon
-                # get_conjecture_id to catch the ID
-                # of the program.
-                for i, program in enumerate(reversed(self.programs)):
-                    if program_id in program[0].text:
-                        self.conjectures[program_id] = program
-                        self.programs.pop(len(self.programs) - i - 1)
-                        break
-                assert program_id in self.conjectures
+            self._ensure_program_is_conjecture(program_id)
         else:
             assert self.post_proof_id not in self.conjectures, \
                 f"The proof of {self.post_proof_id} has already been started"

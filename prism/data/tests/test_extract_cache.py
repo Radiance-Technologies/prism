@@ -660,6 +660,41 @@ class TestExtractCache(unittest.TestCase):
                 any("foobat" in ec.identifier for ec in extracted_commands))
 
     @pytest.mark.coq_all
+    def test_extract_solve_all_obligations(self):
+        """
+        Verify that programs are extracted when defined by side-effect.
+
+        An example command that causes this is `Solve All Obligations`.
+        """
+        with pushd(_COQ_EXAMPLES_PATH):
+            extracted_commands = CommandExtractor(
+                "solve_all_obligations.v",
+                Project.extract_sentences(
+                    CoqDocument(
+                        "solve_all_obligations.v",
+                        CoqParser.parse_source("solve_all_obligations.v"),
+                        _COQ_EXAMPLES_PATH),
+                    sentence_extraction_method=SEM.HEURISTIC,
+                    return_locations=True,
+                    glom_proofs=False),
+                serapi_options="",
+                opam_switch=self.test_switch).extracted_commands
+            self.assertEqual(len(extracted_commands), 2)
+            self.assertEqual(
+                set(['foo_obligation_1',
+                     'foo_obligation_2',
+                     'foo']),
+                set(extracted_commands[1].identifier))
+            self.assertEqual(
+                extracted_commands[1].all_text(),
+                '\n'.join(
+                    [
+                        "Program Definition foo := let x := _ : unit in _ : x = tt.",
+                        "Solve All Obligations with try exact tt; simpl; "
+                        "match goal with |- ?a = _ => now destruct a end."
+                    ]))
+
+    @pytest.mark.coq_all
     def test_goals_reconstruction(self):
         """
         Test the reconstruction of Goals from GoalsDiff.
