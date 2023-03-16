@@ -3,6 +3,7 @@ Mine repair instances by looping over existing project build cache.
 """
 import logging
 import os
+import queue
 import sqlite3
 import traceback
 from dataclasses import dataclass
@@ -34,17 +35,15 @@ from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
 from prism.util.io import atomic_write
-from prism.util.radpytools.multiprocessing import synchronizedmethod
 
-BuildRepairInstanceOutput = Optional[Union[
-    List[ProjectCommitDataRepairInstance],
-    Except[None]]]
+BuildRepairInstanceOutput = Optional[Union[ProjectCommitDataRepairInstance,
+                                           Except[None]]]
 """
 Type hint for the output of build_repair_instance_star.
 """
 RepairMiner = Callable[[ProjectCommitDataErrorInstance,
                         ProjectCommitData],
-                       List[ProjectCommitDataRepairInstance]]
+                       ProjectCommitDataRepairInstance]
 """
 Signature of the function used to create repair instances.
 """
@@ -476,7 +475,7 @@ class RepairInstanceDB:
         self.cursor.execute(self._sql_get_record, record_to_get)
         records = self.cursor.fetchall()
         if not records:
-            return
+            return None
         if len(records) > 1:
             raise RuntimeError("There are duplicate rows in the records table.")
         record = records[0]
@@ -510,7 +509,7 @@ class RepairInstanceDB:
             {"file_name": file_name})
         records = self.cursor.fetchall()
         if not records:
-            return
+            return None
         if len(records) > 1:
             raise RuntimeError(
                 f"There is more than 1 row for file {file_name}.")
@@ -534,7 +533,6 @@ class RepairMiningLogger:
         self.handler.setLevel(level)
         self.logger.addHandler(self.handler)
 
-    @synchronizedmethod
     def write_exception_log(self, exception: Except[None]):
         """
         Write a log entry for the given exception.
@@ -550,7 +548,6 @@ class RepairMiningLogger:
         self.logger.exception(exception.exception)
         self.logger.error(f"Traceback: {exception.trace}")
 
-    @synchronizedmethod
     def write_debug_log(self, message: str):
         """
         Write a debug message.
@@ -581,7 +578,10 @@ def RepairMiningLoggerClient(
     """
     Return client object for writing repair mining logs.
     """
-    return cast(RepairMiningLogger, server.RepairMiningLogger(*args, **kwargs))
+    return cast(
+        RepairMiningLogger,
+        server.RepairMiningLogger(*args,  # type: ignore
+                                  **kwargs))
 
 
 def build_repair_instance(
@@ -624,10 +624,15 @@ def build_repair_instance(
         If there was no error but no repair instance was produced,
         return None
     """
+    result = None
     try:
         with RepairInstanceDB(repair_instance_db_file) as db_instance:
             initial_metadata = error_instance.project_metadata
+            assert initial_metadata.commit_sha is not None
+            assert initial_metadata.coq_version is not None
             repaired_metadata = repaired_state.project_metadata
+            assert repaired_metadata.commit_sha is not None
+            assert repaired_metadata.coq_version is not None
             if db_instance.get_record(initial_metadata.project_name,
                                       initial_metadata.commit_sha,
                                       repaired_metadata.commit_sha,
@@ -819,6 +824,10 @@ def write_repair_instance(
         with RepairInstanceDB(repair_instance_db_file) as repair_instance_db:
             initial_metadata = \
                 potential_diff.error.initial_state.project_state.project_metadata
+            assert initial_metadata.commit_sha is not None
+            assert initial_metadata.coq_version is not None
+            assert repaired_state_metadata.commit_sha is not None
+            assert repaired_state_metadata.coq_version is not None
             file_path = repair_instance_db.insert_record_get_path(
                 initial_metadata.project_name,
                 initial_metadata.commit_sha,
@@ -890,6 +899,8 @@ def build_repair_instance_mining_inputs(
         worker functions
     """
     repair_instance_jobs: List[RepairInstanceJob] = []
+    if isinstance(error_instance_results, Except):
+        return []
     for error_instance_result in error_instance_results:
         if isinstance(error_instance_result, Except):
             continue
@@ -907,10 +918,10 @@ def build_repair_instance_mining_inputs(
 
 
 def mining_loop_worker(
-        control_queue: Queue,
-        error_instance_job_queue: Queue,
-        repair_instance_job_queue: Queue,
-        worker_to_parent_queue: Queue,
+        control_queue: queue.Queue[StopWork],
+        error_instance_job_queue: queue.Queue[ErrorInstanceJob],
+        repair_instance_job_queue: queue.Queue[RepairInstanceJob],
+        worker_to_parent_queue: queue.Queue[Except],
         repair_save_directory: Path,
         repair_instance_db_file: Path,
         repair_miner: RepairMiner):
@@ -957,11 +968,11 @@ def mining_loop_worker(
         # Repair instance creation
         # ########################
         try:
-            job: RepairInstanceJob = repair_instance_job_queue.get_nowait()
+            repair_job = repair_instance_job_queue.get_nowait()
         except Empty:
             pass
         else:
-            result = build_repair_instance_star(job)
+            result = build_repair_instance_star(repair_job)
             if isinstance(result, Except):
                 worker_to_parent_queue.put(result)
                 break
@@ -972,11 +983,12 @@ def mining_loop_worker(
         # Error instance creation
         # #######################
         try:
-            job: ErrorInstanceJob = error_instance_job_queue.get_nowait()
+            error_instance_job = error_instance_job_queue.get_nowait()
         except Empty:
             pass
         else:
-            result = build_error_instances_from_label_pair_star(job)
+            result = build_error_instances_from_label_pair_star(
+                error_instance_job)
             if isinstance(result, Except):
 
                 worker_to_parent_queue.put(result)
@@ -986,7 +998,7 @@ def mining_loop_worker(
                 repair_save_directory,
                 repair_instance_db_file,
                 repair_miner,
-                job.repair_mining_logger)
+                error_instance_job.repair_mining_logger)
             for repair_instance_job in repair_instance_jobs:
                 repair_instance_job_queue.put(repair_instance_job)
 
@@ -1139,12 +1151,12 @@ def _serial_work(
             *cache_args,
             changeset_miner,
             repair_mining_logger)
+        if isinstance(new_error_instances, Except):
+            raise RuntimeError(
+                f"Exception: {new_error_instances.exception}. "
+                f"{new_error_instances.trace}")
         for result in tqdm(new_error_instances, desc="Repair instance mining."):
-            if isinstance(result, Except):
-                raise RuntimeError(
-                    f"Exception: {result.exception}. {result.trace}")
-            else:
-                (error_instance, repaired_state, change_selection) = result
+            (error_instance, repaired_state, change_selection) = result
             result = build_repair_instance(
                 error_instance,
                 repaired_state,
@@ -1178,10 +1190,10 @@ def _parallel_work(
             repair_mining_logger) for label_a,
         label_b in cache_label_pairs
     ]
-    control_queue = Queue()
-    error_instance_job_queue = Queue()
-    repair_instance_job_queue = Queue()
-    worker_to_parent_queue = Queue()
+    control_queue: queue.Queue[StopWork] = Queue()
+    error_instance_job_queue: queue.Queue[ErrorInstanceJob] = Queue()
+    repair_instance_job_queue: queue.Queue[RepairInstanceJob] = Queue()
+    worker_to_parent_queue: queue.Queue[Except] = Queue()
     proc_args = [
         control_queue,
         error_instance_job_queue,
@@ -1237,7 +1249,7 @@ def repair_mining_loop(
         repair_miner: Optional[RepairMiner] = None,
         changeset_miner: Optional[ChangeSetMiner] = None,
         serial: bool = False,
-        max_workers: Optional[int] = None,
+        max_workers: int = 1,
         project_commit_hash_map: Optional[Dict[str,
                                                Optional[List[str]]]] = None,
         logging_level: int = logging.DEBUG):

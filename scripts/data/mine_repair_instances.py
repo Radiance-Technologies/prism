@@ -71,7 +71,7 @@ def _process_config(config: Dict[str,
     return config
 
 
-def load_config_json(config_file_path: Optional[str],
+def load_config_json(config_file_str: Optional[str],
                      logger: logging.Logger) -> Dict[str,
                                                      Any]:
     """
@@ -90,11 +90,11 @@ def load_config_json(config_file_path: Optional[str],
         Arguments for repair_mining_loop with any Python object args
         resolved to their actual Python objects.
     """
-    if config_file_path is None:
+    if config_file_str is None:
         config_file_path = Path(
             __file__).parent / "mine_repair_instances_default_config.json"
     else:
-        config_file_path = Path(config_file_path)
+        config_file_path = Path(config_file_str)
     with open(config_file_path, "r") as f:
         config = _process_config(json.load(f), logger)
     return config
