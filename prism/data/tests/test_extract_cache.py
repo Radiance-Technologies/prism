@@ -669,14 +669,16 @@ class TestExtractCache(unittest.TestCase):
         with pushd(_COQ_EXAMPLES_PATH):
             extracted_commands = CommandExtractor(
                 "solve_all_obligations.v",
-                Project.extract_sentences(
-                    CoqDocument(
-                        "solve_all_obligations.v",
-                        CoqParser.parse_source("solve_all_obligations.v"),
-                        _COQ_EXAMPLES_PATH),
-                    sentence_extraction_method=SEM.HEURISTIC,
-                    return_locations=True,
-                    glom_proofs=False),
+                typing.cast(
+                    List[CoqSentence],
+                    Project.extract_sentences(
+                        CoqDocument(
+                            "solve_all_obligations.v",
+                            CoqParser.parse_source("solve_all_obligations.v"),
+                            _COQ_EXAMPLES_PATH),
+                        sentence_extraction_method=SEM.HEURISTIC,
+                        return_locations=True,
+                        glom_proofs=False)),
                 serapi_options="",
                 opam_switch=self.test_switch).extracted_commands
             self.assertEqual(len(extracted_commands), 2)
@@ -693,6 +695,31 @@ class TestExtractCache(unittest.TestCase):
                         "Solve All Obligations with try exact tt; simpl; "
                         "match goal with |- ?a = _ => now destruct a end."
                     ]))
+
+    @pytest.mark.coq_all
+    def test_bug_396(self):
+        """
+        Verify that certain character-escaped goals can be extracted.
+
+        Otherwise, one obtained a lexer error because a value was
+        escaped twice.
+        """
+        with pushd(_COQ_EXAMPLES_PATH):
+            extracted_commands = CommandExtractor(
+                "bug-396.v",
+                typing.cast(
+                    List[CoqSentence],
+                    Project.extract_sentences(
+                        CoqDocument(
+                            "bug-396.v",
+                            CoqParser.parse_source("bug-396.v"),
+                            _COQ_EXAMPLES_PATH),
+                        sentence_extraction_method=SEM.HEURISTIC,
+                        return_locations=True,
+                        glom_proofs=False)),
+                serapi_options="",
+                opam_switch=self.test_switch).extracted_commands
+            self.assertEqual(len(extracted_commands), 2)
 
     @pytest.mark.coq_all
     def test_goals_reconstruction(self):

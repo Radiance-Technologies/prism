@@ -710,7 +710,10 @@ class SerAPI:
         """
         self.frame_stack.append([])
 
-    def query_ast(self, cmd: str) -> AbstractSyntaxTree:
+    def query_ast(
+            self,
+            cmd: str,
+            is_escaped: bool = False) -> AbstractSyntaxTree:
         """
         Query the AST of the given Vernacular command.
 
@@ -718,6 +721,10 @@ class SerAPI:
         ----------
         cmd : str
             A Vernacular command.
+        is_escaped : bool, optional
+            Whether special characters in the given command are already
+            escaped (True) or need to be escaped within this function
+            (False).
 
         Returns
         -------
@@ -728,7 +735,10 @@ class SerAPI:
             ast = self.ast_cache[cmd]
         except KeyError:
             try:
-                responses, _, _ = self.send(f'(Parse () "{escape(cmd)}")')
+                (responses,
+                 _,
+                 _) = self.send(
+                     f'(Parse () "{cmd if is_escaped else escape(cmd)}")')
             except CoqExn as e:
                 ast = self._handle_identifier_reserved_coqexn(
                     e,
@@ -1028,10 +1038,14 @@ class SerAPI:
                         hypothesis_type = self.print_constr(
                             hypothesis_kernel_sexp)
                         assert hypothesis_type is not None
-                        type_sexp = self.query_ast(f"Check {hypothesis_type}.")
+                        type_sexp = self.query_ast(
+                            f"Check {hypothesis_type}.",
+                            is_escaped=True)
                         hypothesis_term_sexp = None
                         if term is not None:
-                            term_sexp = self.query_ast(f"Check {term}.")
+                            term_sexp = self.query_ast(
+                                f"Check {term}.",
+                                is_escaped=True)
                             hypothesis_term_sexp = str(term_sexp)
                         hypothesis = Hypothesis(
                             idents=[str(ident[1]) for ident in h[0][::-1]],
@@ -1061,7 +1075,9 @@ class SerAPI:
                         type_sexp=type_sexp,
                         hypotheses=hypotheses[::-1],
                     )
-                    sexp = self.query_ast(f"Check {goal.type}.")
+                    sexp = self.query_ast(
+                        f"Check {goal.type}.",
+                        is_escaped=True)
                     goal.sexp = str(sexp)
                     goals.append(goal)
                 return goals
