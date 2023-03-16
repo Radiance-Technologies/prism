@@ -1099,9 +1099,12 @@ def prepare_label_pairs(
 
         Modifies cache_item_pairs in-place.
         """
+        project_commit_hashes = None
+        if project_commit_hash_map is not None:
+            project_commit_hashes = project_commit_hash_map[project]
         for cache_item_b in cache_items:
-            if (project_commit_hash_map is None or cache_item_b.commit_hash
-                    in project_commit_hash_map[project]):
+            if (project_commit_hash_map is None or project_commit_hashes is None
+                    or cache_item_b.commit_hash in project_commit_hashes):
                 _append_if_labels_differ(
                     cache_item_a,
                     cache_item_b,
@@ -1120,9 +1123,12 @@ def prepare_label_pairs(
 
         Modifies cache_item_pairs in-place.
         """
+        project_commit_hashes = None
+        if project_commit_hash_map is not None:
+            project_commit_hashes = project_commit_hash_map[project]
         for cache_item_a in cache_items:
-            if (project_commit_hash_map is None or cache_item_a.commit_hash
-                    in project_commit_hash_map[project]):
+            if (project_commit_hash_map is None or project_commit_hashes is None
+                    or cache_item_a.commit_hash in project_commit_hashes):
                 _loop_over_second_label(
                     cache_item_a,
                     cache_items,
