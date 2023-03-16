@@ -7,7 +7,6 @@ import queue
 import sqlite3
 import traceback
 from dataclasses import dataclass
-from enum import IntEnum, auto
 from multiprocessing import Process, Queue
 from multiprocessing.managers import BaseManager
 from pathlib import Path
@@ -162,15 +161,6 @@ class ErrorInstanceEndSentinel:
     """
 
     pass
-
-
-class WorkStatus(IntEnum):
-    """
-    Enum indicating whether a process is doing work or not.
-    """
-
-    WORKING = auto()
-    WAITING = auto()
 
 
 class RepairInstanceDB:
@@ -1013,7 +1003,6 @@ def mining_loop_worker(
             result = build_error_instances_from_label_pair_star(
                 error_instance_job)
             if isinstance(result, Except):
-
                 worker_to_parent_queue.put(result)
                 break
             repair_instance_jobs = build_repair_instance_mining_inputs(
