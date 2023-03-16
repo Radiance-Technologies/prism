@@ -8,8 +8,8 @@ import sqlite3
 import traceback
 from dataclasses import dataclass
 from enum import IntEnum, auto
-from multiprocessing import Process, Queue, current_process
-from multiprocessing.managers import BaseManager, DictProxy, SyncManager
+from multiprocessing import Process, Queue
+from multiprocessing.managers import BaseManager
 from pathlib import Path
 from queue import Empty
 from tempfile import TemporaryDirectory
@@ -148,9 +148,17 @@ class RepairInstanceJob:
     """
 
 
-class StopWork:
+class StopWorkSentinel:
     """
     Place on job queue to allow worker function to exit.
+    """
+
+    pass
+
+
+class ErrorInstanceEndSentinel:
+    """
+    Place on repair job queue to indicate the end of the job group.
     """
 
     pass
@@ -928,11 +936,12 @@ def build_repair_instance_mining_inputs(
 
 
 def mining_loop_worker(
-        control_queue: queue.Queue[StopWork],
+        control_queue: queue.Queue[StopWorkSentinel],
         error_instance_job_queue: queue.Queue[ErrorInstanceJob],
-        repair_instance_job_queue: queue.Queue[RepairInstanceJob],
-        worker_to_parent_queue: queue.Queue[Except],
-        worker_status_dict: DictProxy,
+        repair_instance_job_queue: queue.Queue[Union[RepairInstanceJob,
+                                                     ErrorInstanceEndSentinel]],
+        worker_to_parent_queue: queue.Queue[Union[Except,
+                                                  ErrorInstanceEndSentinel]],
         repair_save_directory: Path,
         repair_instance_db_file: Path,
         repair_miner: RepairMiner):
@@ -950,10 +959,6 @@ def mining_loop_worker(
     worker_to_parent_queue : Queue
         Queue for messages that need to be communicated back to the
         parent
-    worker_status_dict : DictProxy
-        Dictionary shared among worker processes and parent process
-        indicating whether each worker is doing any work or not. Used
-        to determine when workers should be shut down.
     repair_save_directory : Path
         Path to directory to save repair mining results in
     repair_instance_db_file : Path
@@ -968,9 +973,6 @@ def mining_loop_worker(
     # available, do those, and only if none of those jobs are available
     # do we process error instance creation jobs and start filling up
     # the repair instance jobs queue again.
-    pid = current_process().pid
-    assert pid is not None
-    worker_status_dict[pid] = WorkStatus.WAITING
     while True:
         # #######################
         # Handle control messages
@@ -980,7 +982,7 @@ def mining_loop_worker(
         except Empty:
             pass
         else:
-            if isinstance(control_message, StopWork):
+            if isinstance(control_message, StopWorkSentinel):
                 break
         # ########################
         # Repair instance creation
@@ -990,12 +992,13 @@ def mining_loop_worker(
         except Empty:
             pass
         else:
-            worker_status_dict[pid] = WorkStatus.WORKING
-            result = build_repair_instance_star(repair_job)
-            worker_status_dict[pid] = WorkStatus.WAITING
-            if isinstance(result, Except):
-                worker_to_parent_queue.put(result)
-                break
+            if isinstance(repair_job, RepairInstanceJob):
+                result = build_repair_instance_star(repair_job)
+                if isinstance(result, Except):
+                    worker_to_parent_queue.put(result)
+                    break
+            else:
+                worker_to_parent_queue.put(repair_job)
             # Don't automatically go to building error instances. Focus
             # on clearing the repair instance queue out.
             continue
@@ -1007,7 +1010,6 @@ def mining_loop_worker(
         except Empty:
             pass
         else:
-            worker_status_dict[pid] = WorkStatus.WORKING
             result = build_error_instances_from_label_pair_star(
                 error_instance_job)
             if isinstance(result, Except):
@@ -1022,7 +1024,7 @@ def mining_loop_worker(
                 error_instance_job.repair_mining_logger)
             for repair_instance_job in repair_instance_jobs:
                 repair_instance_job_queue.put(repair_instance_job)
-            worker_status_dict[pid] = WorkStatus.WAITING
+            repair_instance_job_queue.put(ErrorInstanceEndSentinel())
 
 
 def mining_loop_worker_star(args: tuple):
@@ -1218,61 +1220,59 @@ def _parallel_work(
             repair_mining_logger) for label_a,
         label_b in cache_label_pairs
     ]
-    control_queue: queue.Queue[StopWork] = Queue()
+    control_queue: queue.Queue[StopWorkSentinel] = Queue()
     error_instance_job_queue: queue.Queue[ErrorInstanceJob] = Queue()
-    repair_instance_job_queue: queue.Queue[RepairInstanceJob] = Queue()
-    worker_to_parent_queue: queue.Queue[Except] = Queue()
-    with SyncManager() as manager:
-        worker_status_dict: DictProxy = manager.dict()
-        proc_args = [
-            control_queue,
-            error_instance_job_queue,
-            repair_instance_job_queue,
-            worker_to_parent_queue,
-            worker_status_dict,
-            repair_save_directory,
-            db_file,
-            repair_miner
-        ]
-        worker_processes: List[Process] = []
-        # Start processes
-        for _ in range(max_workers):
-            worker_process = Process(target=mining_loop_worker, args=proc_args)
-            worker_process.start()
-            worker_processes.append(worker_process)
-        # Load initial job queue
-        for error_instance_job in error_instance_jobs:
-            error_instance_job_queue.put(error_instance_job)
-        # Wait until work is finished or until we get a ctrl+c
-        delayed_exception = None
-        try:
-            while True:
-                if (error_instance_job_queue.empty()
-                        and repair_instance_job_queue.empty()):
-                    if WorkStatus.WORKING not in worker_status_dict.values():
-                        # If there are no jobs in the queues and no
-                        # workers are working, break.
-                        break
-                try:
-                    worker_msg: Except[
-                        None] = worker_to_parent_queue.get_nowait()
-                except Empty:
-                    pass
+    repair_instance_job_queue: queue.Queue[Union[
+        RepairInstanceJob,
+        ErrorInstanceEndSentinel]] = Queue()
+    worker_to_parent_queue: queue.Queue[Union[
+        Except,
+        ErrorInstanceEndSentinel]] = Queue()
+    proc_args = [
+        control_queue,
+        error_instance_job_queue,
+        repair_instance_job_queue,
+        worker_to_parent_queue,
+        repair_save_directory,
+        db_file,
+        repair_miner
+    ]
+    worker_processes: List[Process] = []
+    # Start processes
+    for _ in range(max_workers):
+        worker_process = Process(target=mining_loop_worker, args=proc_args)
+        worker_process.start()
+        worker_processes.append(worker_process)
+    # Load initial job queue
+    for error_instance_job in error_instance_jobs:
+        error_instance_job_queue.put(error_instance_job)
+    expected_sentinels = len(error_instance_jobs)
+    observed_sentinels = 0
+    # Wait until work is finished or until we get a ctrl+c
+    delayed_exception = None
+    try:
+        while observed_sentinels < expected_sentinels:
+            try:
+                worker_msg = worker_to_parent_queue.get_nowait()
+            except Empty:
+                pass
+            else:
+                if isinstance(worker_msg, Except):
+                    delayed_exception = worker_msg
+                    break
                 else:
-                    if isinstance(worker_msg, Except):
-                        delayed_exception = worker_msg
-                        break
-        except KeyboardInterrupt:
-            pass
-        # ...then stop the workers and their processes
-        for _ in range(len(worker_processes)):
-            control_queue.put(StopWork())
-        for worker_process in worker_processes:
-            worker_process.join()
-        if delayed_exception is not None:
-            raise RuntimeError(
-                f"Delayed exception: {delayed_exception.exception}."
-                f" {delayed_exception.trace}")
+                    observed_sentinels += 1
+    except KeyboardInterrupt:
+        pass
+    # ...then stop the workers and their processes
+    for _ in range(len(worker_processes)):
+        control_queue.put(StopWorkSentinel())
+    for worker_process in worker_processes:
+        worker_process.join()
+    if delayed_exception is not None:
+        raise RuntimeError(
+            f"Delayed exception: {delayed_exception.exception}."
+            f" {delayed_exception.trace}")
 
 
 def repair_mining_loop(
