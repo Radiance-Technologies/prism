@@ -1424,6 +1424,8 @@ def extract_cache_new(  # noqa: C901
     max_runtime : Optional[ResourceLimits]
         Maximum cpu time (seconds) allowed to build project
     """
+    # Get start time
+    start_time = time()
     # Construct a logger local to this function and unique to this PID
     pid = os.getpid()
     logger = logging.getLogger(f"extract_vernac_commands-{pid}")
@@ -1489,11 +1491,12 @@ def extract_cache_new(  # noqa: C901
                 # in case in raises an exception.
                 build_cache_client.write_build_error_log(
                     project.metadata,
+                    start_time,
                     block,
                     ProjectBuildResult(*build_result))
                 command_data, comment_data = process_project_fallback(project)
             else:
-                start_time = time()
+                inner_start_time = time()
                 try:
                     command_data, comment_data = extract_vernac_commands(
                         project,
@@ -1509,16 +1512,18 @@ def extract_cache_new(  # noqa: C901
                     logged_text = logger_stream.getvalue()
                     build_cache_client.write_cache_error_log(
                         project.metadata,
+                        start_time,
                         block,
                         logged_text)
                     raise
                 finally:
-                    elapsed_time = time() - start_time
+                    inner_elapsed_time = time() - inner_start_time
                     build_cache_client.write_timing_log(
                         project.metadata,
+                        start_time,
                         block,
-                        f"Elapsed time in extract_vernac_commands: {elapsed_time} s"
-                    )
+                        "Elapsed time in extract_vernac_commands:"
+                        f" {inner_elapsed_time} s")
             try:
                 file_dependencies = project.get_file_dependencies()
             except (MissingMetadataError, CalledProcessError):
@@ -1534,7 +1539,7 @@ def extract_cache_new(  # noqa: C901
                 file_dependencies,
                 ProjectBuildEnvironment(project.opam_switch.export()),
                 ProjectBuildResult(*build_result))
-            build_cache_client.write(data, block)
+            build_cache_client.write(data, start_time, block)
         except ExtractVernacCommandsError:
             # Don't re-log extract_vernac_commands errors
             pass
@@ -1556,6 +1561,7 @@ def extract_cache_new(  # noqa: C901
             logged_text = logger_stream.getvalue()
             build_cache_client.write_misc_error_log(
                 project_metadata,
+                start_time,
                 block,
                 logged_text)
         finally:
@@ -1570,7 +1576,10 @@ def extract_cache_new(  # noqa: C901
                     file_dependencies,
                     ProjectBuildEnvironment(project.opam_switch.export()),
                     ProjectBuildResult(*build_result))
-                build_cache_client.write_metadata_file(fallback_data, False)
+                build_cache_client.write_metadata_file(
+                    fallback_data,
+                    start_time,
+                    False)
             finally:
                 # Nested `finally` because this **must** happen
                 # Release the switch

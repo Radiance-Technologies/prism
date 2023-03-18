@@ -4,7 +4,7 @@ Provides utility functions for serialized data files.
 import os
 import tempfile
 from pathlib import Path
-from typing import Optional, Union
+from typing import Union
 
 import seutil as su
 
@@ -57,9 +57,7 @@ def infer_format(filepath: os.PathLike) -> su.io.Fmt:
     return formatter
 
 
-def atomic_write(full_file_path: Path,
-                 file_contents: Union[str,
-                                      Serializable]) -> Optional[str]:
+def atomic_write(full_file_path: Path, file_contents: Union[str, Serializable]):
     r"""
     Write a message or object to a text file.
 
