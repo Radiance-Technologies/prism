@@ -1446,6 +1446,12 @@ def extract_cache_new(  # noqa: C901
             'release': False,
             'switch_manager': switch_manager,
         }
+        # Initialize these variables so fallback data can definitely
+        # be written later.
+        commit_message = None
+        comment_data = None
+        file_dependencies = None
+        build_result = (1, "", "")
         try:
             # Make sure there aren't any changes or uncommitted files
             # left over from previous iterations, then check out the
@@ -1479,11 +1485,13 @@ def extract_cache_new(  # noqa: C901
                     stderr = pbe.stderr.decode(
                         "utf-8") if pbe.stderr is not None else ''
                     build_result = (1, stdout, stderr)
-                command_data, comment_data = process_project_fallback(project)
+                # Write the log before calling process_project_fallback
+                # in case in raises an exception.
                 build_cache_client.write_build_error_log(
                     project.metadata,
                     block,
                     ProjectBuildResult(*build_result))
+                command_data, comment_data = process_project_fallback(project)
             else:
                 start_time = time()
                 try:
@@ -1551,9 +1559,23 @@ def extract_cache_new(  # noqa: C901
                 block,
                 logged_text)
         finally:
-            # release the switch
-            switch_manager.release_switch(project.opam_switch)
-            project.opam_switch = original_switch
+            try:
+                if isinstance(commit_message, bytes):
+                    commit_message = commit_message.decode("utf-8")
+                fallback_data = ProjectCommitData(
+                    project.metadata,
+                    {},
+                    commit_message,
+                    comment_data,
+                    file_dependencies,
+                    ProjectBuildEnvironment(project.opam_switch.export()),
+                    ProjectBuildResult(*build_result))
+                build_cache_client.write_metadata_file(fallback_data, False)
+            finally:
+                # Nested `finally` because this **must** happen
+                # Release the switch
+                switch_manager.release_switch(project.opam_switch)
+                project.opam_switch = original_switch
 
 
 # Abbreviation defined to satisfy conflicting autoformatting and style
@@ -1963,7 +1985,7 @@ class CacheExtractor:
         """
         By default, do nothing on project build failure.
         """
-        return dict(), dict()
+        raise NotImplementedError()
 
     @classmethod
     def default_recache(
