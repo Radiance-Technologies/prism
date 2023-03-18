@@ -1150,7 +1150,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
         if not data_path.exists():
             raise ValueError(f"No cache file exists at {data_path}.")
         else:
-            data = ProjectCommitData.load(data_path)
+            data = cast(ProjectCommitData, ProjectCommitData.load(data_path))
             return data
 
     def get_path(self, *args, **kwargs):
@@ -1460,6 +1460,34 @@ class CoqProjectBuildCacheProtocol(Protocol):
             block,
             cache_error_log,
             "_cache_error.txt")
+
+    def write_metadata_file(self,
+                            data: ProjectCommitData,
+                            block: bool,
+                            _=None) -> Optional[str]:
+        """
+        Write metadata-focused file to build cache directory.
+
+        Parameters
+        ----------
+        data : ProjectCommitData
+            Data to write to metadata file. Any data in `command_data`
+            field is removed first
+        block : bool
+            If True, return a ``"write complete"`` message
+        _ : _type_, optional
+            Unused. Present only to maintain a uniform signature across
+            write methods, by default None
+
+        Returns
+        -------
+        str or None
+            If `block`, return ``"write complete"``; otherwise, return
+            nothing
+        """
+        data.command_data = dict()
+        suffix = ".".join(["_extraction_info", self.fmt_ext])
+        return self._write_kernel(data, block, data, suffix)
 
     def write_misc_error_log(
             self,
