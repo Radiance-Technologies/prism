@@ -36,12 +36,6 @@ class IQR:
     The working directory to which all of the options are assumed to be
     relative.
     """
-    delim: str = ","
-    """
-    The delimiter used between relative and logical paths, by default a
-    comma for compatibility with SerAPI.
-    A space should be used for compatibility with Coq.
-    """
     _i_regex: ClassVar[re.Pattern] = re.compile(r"-I\s+(?P<phy>\S+)")
     _q_regex: ClassVar[re.Pattern] = re.compile(
         r"-Q\s+(?P<phy>\S+)(?:\s+|,)(?!-I|-Q|-R)(?P<log>[^,\s]+)")
@@ -61,16 +55,30 @@ class IQR:
                 self.I | other.I,
                 self.Q | other.Q,
                 self.R | other.R,
-                self.pwd,
-                self.delim)
+                self.pwd)
 
     def __str__(self) -> str:
         """
         Get the options as they would appear on the command line.
         """
+        return self.as_coq_args()
+
+    def as_coq_args(self) -> str:
+        """
+        Get the options as they would be given to the Coq compiler.
+        """
         options = [f"-I {i}" for i in self.I]
-        options.extend([f"-Q {p}{self.delim}{q}" for p, q in self.Q])
-        options.extend([f"-R {p}{self.delim}{r}" for p, r in self.R])
+        options.extend([f"-Q {p} {q}" for p, q in self.Q])
+        options.extend([f"-R {p} {r}" for p, r in self.R])
+        return " ".join(options)
+
+    def as_serapi_args(self) -> str:
+        """
+        Get the options as they would be given to SerAPI executables.
+        """
+        options = [f"-I {i}" for i in self.I]
+        options.extend([f"-Q {p},{q}" for p, q in self.Q])
+        options.extend([f"-R {p},{r}" for p, r in self.R])
         return " ".join(options)
 
     def bindings_iter(
@@ -206,8 +214,7 @@ class IQR:
             {(str(prefix / p),
               r) for p,
              r in self.R},
-            pwd,
-            self.delim)
+            pwd)
 
     @classmethod
     def extract_iqr(
