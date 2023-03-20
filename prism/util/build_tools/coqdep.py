@@ -45,10 +45,8 @@ def is_valid_topological_sort(
     # Memoize sorted indices for constant-time verification of edge
     # order instead of linear in the number of vertices.
     # Final algorithmic complexity is O(V + E)
-    node_indices = {
-        v: i for (i,
-                  v) in enumerate(dep_list)
-    }
+    node_indices = {v: i for (i,
+                              v) in enumerate(dep_list)}
     for u, v in G.edges():
         if (reverse and node_indices[v] > node_indices[u]) or (
                 not reverse and node_indices[v] < node_indices[u]):
@@ -200,14 +198,14 @@ def order_dependencies(
     --------
     prism.project.iqr : For more about `IQR` flags.
     """
-    files = ' '.join([str(f) for f in files])
+    file_args = ' '.join([str(f) for f in files])
     if boot:
-        boot = '-boot'
+        boot_arg = '-boot'
     else:
-        boot = ''
+        boot_arg = ''
     if switch is None:
         switch = OpamAPI.active_switch
-    command = "coqdep {0} -sort {1} {2}".format(files, IQR, boot)
+    command = "coqdep {0} -sort {1} {2}".format(file_args, IQR, boot_arg)
     file_deps = switch.run(command, cwd=cwd)
     file_deps = file_deps.stdout.strip().split()
     file_deps = [_coq_file_regex.match(x).groups()[0] for x in file_deps]
