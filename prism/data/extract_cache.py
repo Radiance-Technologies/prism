@@ -105,6 +105,8 @@ _DEBUG_SINGLE_COMMIT = False
 """
 Set to True to skip cleaning prior to extraction.
 """
+FALLBACK_EXCEPTION_MSG = (
+    "Fallback extraction in the case of a failed build is not yet implemented.")
 
 
 class ExtractVernacCommandsError(RuntimeError):
@@ -1543,6 +1545,13 @@ def extract_cache_new(  # noqa: C901
         except ExtractVernacCommandsError:
             # Don't re-log extract_vernac_commands errors
             pass
+        except NotImplementedError as e:
+            # Also don't re-log the not-implemented error from build
+            # errors
+            if e.args == (FALLBACK_EXCEPTION_MSG,):
+                pass
+            else:
+                raise
         except Exception as e:
             logger.critical(
                 "An exception occurred outside of extracting vernacular commands.\n"
@@ -1994,9 +2003,7 @@ class CacheExtractor:
         """
         By default, do nothing on project build failure.
         """
-        raise NotImplementedError(
-            "Fallback extraction in the case of a failed build is not "
-            "yet implemented.")
+        raise NotImplementedError(FALLBACK_EXCEPTION_MSG)
 
     @classmethod
     def default_recache(

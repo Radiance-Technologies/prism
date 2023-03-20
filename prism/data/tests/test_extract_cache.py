@@ -10,11 +10,12 @@ import unittest
 from copy import deepcopy
 from pathlib import Path
 from time import time
-from typing import List
+from typing import List, Tuple
 
 import pytest
 
 from prism.data.build_cache import (
+    CommentDict,
     CoqProjectBuildCacheClient,
     CoqProjectBuildCacheProtocol,
     CoqProjectBuildCacheServer,
@@ -24,11 +25,16 @@ from prism.data.build_cache import (
     ProjectBuildResult,
     ProjectCommitData,
     VernacCommandDataList,
+    VernacDict,
     VernacSentence,
 )
 from prism.data.dataset import CoqProjectBaseDataset
 from prism.data.document import CoqDocument
-from prism.data.extract_cache import CommandExtractor, extract_cache
+from prism.data.extract_cache import (
+    FALLBACK_EXCEPTION_MSG,
+    CommandExtractor,
+    extract_cache,
+)
 from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.interface.coq.ident import Identifier, IdentType
 from prism.interface.coq.options import SerAPIOptions
@@ -51,7 +57,7 @@ class TestExtractCache(unittest.TestCase):
     TEST_DIR = Path(__file__).parent
     CACHE_DIR = TEST_DIR / "project_build_cache"
     dir_list: List[Path]
-    test_switch: OpamSwitch = OpamSwitch()
+    test_switch: OpamSwitch = OpamSwitch("prism-8.10.2")
     serapi_version: str
     update_8_14: bool
     """
@@ -159,13 +165,18 @@ class TestExtractCache(unittest.TestCase):
                     continue
                 project: ProjectRepo
                 semaphore = manager.BoundedSemaphore(4)
+
+                def _fallback(
+                        project: ProjectRepo) -> Tuple[VernacDict,
+                                                       CommentDict]:
+                    raise NotImplementedError(FALLBACK_EXCEPTION_MSG)
+
                 extract_cache(
                     cache_client,
                     self.swim,
                     project,
                     head,
-                    lambda x: ({},
-                               {}),
+                    _fallback,
                     coq_version,
                     block=True,
                     worker_semaphore=semaphore,
@@ -180,12 +191,13 @@ class TestExtractCache(unittest.TestCase):
                                  coq_version),
                 dummy_float_data)
             # assert that lambda was cached
-            self.assertTrue(
-                cache_client.contains(
-                    ('lambda',
-                     self.lambda_head,
-                     coq_version)))
-            if build_error_expected:
+            if not build_error_expected:
+                self.assertTrue(
+                    cache_client.contains(
+                        ('lambda',
+                         self.lambda_head,
+                         coq_version)))
+            else:
                 self.assertEqual(
                     cache_client.get_status(
                         'lambda',
