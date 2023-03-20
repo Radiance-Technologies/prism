@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Set, Tuple, Union
 
 from seutil import bash
 
-from prism.project.iqr import IQR
+from prism.interface.coq.iqr import IQR
 from prism.util.build_tools.mappings import LogicalMappings, RequiredLibrary
 from prism.util.opam import Version
 from prism.util.path import get_relative_path

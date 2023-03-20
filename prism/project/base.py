@@ -36,6 +36,7 @@ from typing import (
 
 import prism.util.build_tools.opamdep as opamdep
 from prism.data.document import CoqDocument
+from prism.interface.coq.iqr import IQR
 from prism.interface.coq.options import SerAPIOptions
 from prism.interface.coq.re_patterns import QUALIFIED_IDENT_PATTERN
 from prism.language.gallina.parser import CoqParser
@@ -50,7 +51,6 @@ from prism.project.exception import (
     ProjectBuildError,
     ProjectCommandError,
 )
-from prism.project.iqr import IQR
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.strace import strace_build

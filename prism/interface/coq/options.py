@@ -11,7 +11,7 @@ from functools import reduce
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple, Union
 
-from prism.project.iqr import IQR
+from prism.interface.coq.iqr import IQR
 from prism.util.opam import OpamVersion, Version
 from prism.util.radpytools import PathLike
 
