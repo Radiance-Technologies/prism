@@ -150,8 +150,8 @@ class CoqDocument:
             The command-line options for invoking SerAPI tools, e.g.,
             ``f"sercomp {serapi_options} {self.name}"``.
         """
-        # TODO: Get from project metadata.
-        return ""
+        # TODO: Cache on object creation
+        raise NotImplementedError("Use Project.serapi_options instead")
 
     @cached_property
     def unicode_offsets(self) -> List[int]:
