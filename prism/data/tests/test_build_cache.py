@@ -7,6 +7,7 @@ import unittest
 from copy import deepcopy
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
+from time import time
 from typing import List, Optional, Tuple, Union
 
 import seutil.io as io
@@ -141,6 +142,7 @@ class TestCoqProjectBuildCache(unittest.TestCase):
         """
         Test all aspects of the cache with subtests.
         """
+        start_time = time()
         projects = typing.cast(
             List[ProjectRepo],
             list(self.dataset.projects.values()))
@@ -220,7 +222,7 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                     self.assertFalse(
                         Path(cache_client.get_path_from_data(data)).exists())
                 with self.subTest(f"write_{project.name}"):
-                    cache_client.write(data, block=True)
+                    cache_client.write(data, start_time, block=True)
                     self.assertTrue(
                         Path(cache_client.get_path_from_data(data)).exists())
                 with self.subTest(f"get_{project.name}"):
@@ -234,6 +236,7 @@ class TestCoqProjectBuildCache(unittest.TestCase):
         """
         Test methods in cache class to get information from cache.
         """
+        start_time = time()
         with TemporaryDirectory() as temp_dir:
             with CoqProjectBuildCacheServer() as cache_server:
                 cache: CoqProjectBuildCacheProtocol = CoqProjectBuildCacheClient(
@@ -254,33 +257,33 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                     ProjectBuildResult(0,
                                        "",
                                        ""))
-                cache.write(item1, block=True)
+                cache.write(item1, start_time, block=True)
                 metadata = self.dataset.projects["lambda"].metadata
                 lambda_commit_sha = metadata.commit_sha
                 assert lambda_commit_sha is not None
                 cache.write_cache_error_log(
                     metadata,
+                    start_time,
                     True,
                     "Lambda cache error")
                 metadata = self.dataset.projects["float"].metadata
                 metadata.commit_sha = 40 * "a"
-                cache.write_misc_error_log(metadata, True, "float misc error")
+                cache.write_misc_error_log(
+                    metadata,
+                    start_time,
+                    True,
+                    "float misc error")
                 metadata = self.dataset.projects["float"].metadata
                 metadata.commit_sha = 40 * "b"
                 failed_build_result = ProjectBuildResult(
                     1,
                     "build error",
                     "build_error")
-                item2 = ProjectCommitData(
+                cache.write_build_error_log(
                     metadata,
-                    {},
-                    None,
-                    None,
-                    None,
-                    environment,
+                    start_time,
+                    True,
                     failed_build_result)
-                cache.write_build_error_log(metadata, True, failed_build_result)
-                cache.write(item2, block=True)
                 expected_project_list = ["float", "lambda"]
                 expected_commit_lists = {
                     "float": [40 * "a",

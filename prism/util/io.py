@@ -80,7 +80,6 @@ def atomic_write(full_file_path: Path, file_contents: Union[str, Serializable]):
         raise TypeError(
             f"Cannot write object of type {type(file_contents)} to file")
     fmt_ext = full_file_path.suffix  # contains leading period
-    fmt = su.io.infer_fmt_from_ext(fmt_ext)
     directory = full_file_path.parent
     if not directory.exists():
         os.makedirs(str(directory))
@@ -94,6 +93,7 @@ def atomic_write(full_file_path: Path, file_contents: Union[str, Serializable]):
         if isinstance(file_contents, str):
             f.write(file_contents)
     if isinstance(file_contents, Serializable):
+        fmt = su.io.infer_fmt_from_ext(fmt_ext)
         file_contents.dump(f.name, fmt)
     # Then, we atomically move the file to the correct, final
     # path.

@@ -9,6 +9,7 @@ import typing
 import unittest
 from copy import deepcopy
 from pathlib import Path
+from time import time
 from typing import List
 
 import pytest
@@ -112,6 +113,7 @@ class TestExtractCache(unittest.TestCase):
         """
         Test the function to extract cache from a project.
         """
+        start_time = time()
         manager = mp.Manager()
         with CoqProjectBuildCacheServer() as cache_server:
             cache_client: CoqProjectBuildCacheProtocol = CoqProjectBuildCacheClient(
@@ -131,7 +133,7 @@ class TestExtractCache(unittest.TestCase):
                 ProjectBuildResult(0,
                                    "",
                                    ""))
-            cache_client.write(dummy_float_data)
+            cache_client.write(dummy_float_data, start_time)
             coq_float.git.checkout(coq_float.reset_head)
             self.assertEqual(coq_float.commit_sha, coq_float.reset_head)
             # assert that lambda is not already cached
