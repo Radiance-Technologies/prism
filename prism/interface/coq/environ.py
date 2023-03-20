@@ -1,12 +1,14 @@
 """
 Abstractions of Coq contexts and global environments.
 """
-import os
+
+import typing
 from dataclasses import dataclass
 from itertools import chain
 from typing import Dict, List, Optional, Tuple, Union
 
 from prism.interface.coq.names import interpolate_names
+from prism.util.radpytools import PathLike
 
 
 @dataclass
@@ -20,7 +22,7 @@ class Constant:
     in ``coq/kernel/declarations.ml``.
     """
 
-    physical_path: os.PathLike
+    physical_path: PathLike
     """
     The physical path to the file in which the constant is defined.
     """
@@ -99,7 +101,7 @@ class MutualInductive:
     in ``coq/kernel/declarations.ml``.
     """  # noqa: W505
 
-    physical_path: os.PathLike
+    physical_path: PathLike
     """
     The physical path to the file in which the mutually inductive type
     is defined.
@@ -168,6 +170,7 @@ class Environment:
         """
         env = {}
         for decl in chain(self.constants, self.inductives):
+            decl = typing.cast(Union[Constant, MutualInductive], decl)
             for qualid in interpolate_names(decl.short_id, decl.full_id):
                 env[qualid] = decl
         return env
