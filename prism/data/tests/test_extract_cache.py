@@ -14,7 +14,6 @@ from typing import List
 import pytest
 
 from prism.data.build_cache import (
-    CoqProjectBuildCacheClient,
     CoqProjectBuildCacheProtocol,
     CoqProjectBuildCacheServer,
     GoalIdentifiers,
@@ -113,9 +112,9 @@ class TestExtractCache(unittest.TestCase):
         """
         manager = mp.Manager()
         with CoqProjectBuildCacheServer() as cache_server:
-            cache_client: CoqProjectBuildCacheProtocol = CoqProjectBuildCacheClient(
-                cache_server,
-                self.CACHE_DIR)
+            cache_client: CoqProjectBuildCacheProtocol = cache_server.getClient(
+                self.CACHE_DIR,
+            )
             # fake pre-existing cached data for float
             coq_float = self.dataset.projects['float']
             coq_float.git.checkout(self.float_head)
@@ -182,6 +181,13 @@ class TestExtractCache(unittest.TestCase):
                     ('lambda',
                      self.lambda_head,
                      coq_version)))
+            # assert that log file was created
+            self.assertTrue(
+                cache_client.contains(
+                    ('lambda',
+                     self.lambda_head,
+                     coq_version,
+                     'txt')))
             if build_error_expected:
                 self.assertEqual(
                     cache_client.get_status(

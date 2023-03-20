@@ -227,6 +227,12 @@ class TestProjectRepo(unittest.TestCase):
             metadata_storage=cls.meta_storage,
             sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
 
+    def test_logger(self):
+        """
+        Test iterator basic functionality.
+        """
+        self.assertTrue(hasattr(self.project, 'logger'))
+
     def test_get_file(self):
         """
         Ensure get_file method returns a file as expected.
