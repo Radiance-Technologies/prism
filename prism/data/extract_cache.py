@@ -1994,7 +1994,9 @@ class CacheExtractor:
         """
         By default, do nothing on project build failure.
         """
-        raise NotImplementedError()
+        raise NotImplementedError(
+            "Fallback extraction in the case of a failed build is not "
+            "yet implemented.")
 
     @classmethod
     def default_recache(

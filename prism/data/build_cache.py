@@ -1022,15 +1022,6 @@ class CoqProjectBuildCacheProtocol(Protocol):
         """
         return su.io.infer_fmt_from_ext(self.fmt_ext)
 
-    def _contains_data(self, data: ProjectCommitData) -> bool:
-        return self.get_path_from_data(data).exists()
-
-    def _contains_fields(self, *fields: str) -> bool:
-        return self.get_path_from_fields(*fields).exists()
-
-    def _contains_metadata(self, metadata: ProjectMetadata) -> bool:
-        return self.get_path_from_metadata(metadata).exists()
-
     def _write_kernel(
             self,
             cache_id: Union[ProjectCommitData,
@@ -1118,14 +1109,15 @@ class CoqProjectBuildCacheProtocol(Protocol):
             If the object is not a `ProjectCommitData`,
             `ProjeceMetadata`, or iterable of fields.
         """
-        if isinstance(obj, ProjectCommitData):
-            return self._contains_data(obj)
-        elif isinstance(obj, ProjectMetadata):
-            return self._contains_metadata(obj)
+        if isinstance(obj,
+                      ProjectCommitData) or isinstance(obj,
+                                                       ProjectMetadata):
+            status = self.get_status(obj)
         elif isinstance(obj, Iterable):
-            return self._contains_fields(*obj)
+            status = self.get_status(*obj)
         else:
             raise TypeError(f"Arguments of type {type(obj)} not supported.")
+        return status == "success"
 
     def get(
             self,
@@ -1232,17 +1224,31 @@ class CoqProjectBuildCacheProtocol(Protocol):
         """
         path = self.get_path(*args, **kwargs)
         prefix = str(path.with_suffix(''))
+        timestamps: Dict[str,
+                         float] = {}
+        if path.exists():
+            with open(str(path) + ".timestamp", "rt") as f:
+                timestamps['success'] = float(f.read())
         if Path(prefix + "_cache_error.txt").exists():
-            status_msg = "cache error"
-        elif Path(prefix + "_build_error.txt").exists():
-            status_msg = "build error"
-        elif Path(prefix + "_misc_error.txt").exists():
-            status_msg = "other error"
-        elif path.exists():
-            status_msg = "success"
-        else:
-            status_msg = None
-        return status_msg
+            with open(prefix + "_cache_error.txt.timestamp", "rt") as f:
+                timestamps['cache error'] = float(f.read())
+        if Path(prefix + "_build_error.txt").exists():
+            with open(prefix + "_build_error.txt.timestamp", "rt") as f:
+                timestamps['build error'] = float(f.read())
+        if Path(prefix + "_misc_error.txt").exists():
+            with open(prefix + "_misc_error.txt.timestamp", "rt") as f:
+                timestamps['other error'] = float(f.read())
+        if not timestamps:
+            # No files were found
+            return None
+        # Return the status with the latest timestamp. If two match
+        # somehow (shouldn't be possible) return the first.
+        latest_timestamp = max(timestamps.values())
+        for key in timestamps.keys():
+            if timestamps[key] == latest_timestamp:
+                return key
+        raise RuntimeError(
+            "Unable to get a max timestamp value. This shouldn't happen.")
 
     def list_projects(self) -> List[str]:
         """
