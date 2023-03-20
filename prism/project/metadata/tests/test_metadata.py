@@ -3,13 +3,16 @@ Test suite for `prism.project.metadata`.
 """
 
 import os
+import typing
 import unittest
 from dataclasses import fields
 from pathlib import Path
+from typing import Any, Dict, List
 
 from seutil import io
 
 from prism.project.metadata import ProjectMetadata
+from prism.project.util import GitURL
 
 TEST_DIR = Path(__file__).parent
 
@@ -33,7 +36,10 @@ class TestProjectMetadata(unittest.TestCase):
         Ensure import .yaml file can be deserialized properly.
         """
         # assert complete yaml is in fact complete
-        yaml_fields = io.load(self.yaml_path_complete)[0]
+        yaml_fields = typing.cast(
+            List[Dict[str,
+                      Any]],
+            io.load(self.yaml_path_complete))[0]
         fs = fields(ProjectMetadata)
         for f in fs:
             self.assertIn(f.name, yaml_fields)
@@ -109,7 +115,7 @@ class TestProjectMetadata(unittest.TestCase):
             [],
             ocaml_version,
             coq_version,
-            project_url=project_url,
+            project_url=GitURL(project_url),
             commit_sha=commit_sha)
         y = ProjectMetadata(
             "y",
@@ -118,7 +124,7 @@ class TestProjectMetadata(unittest.TestCase):
             [],
             ocaml_version,
             coq_version,
-            project_url=project_url,
+            project_url=GitURL(project_url),
             commit_sha=commit_sha)
         with self.subTest("different projects"):
             self.assertFalse(x < y)
@@ -133,10 +139,10 @@ class TestProjectMetadata(unittest.TestCase):
             self.assertFalse(y < x)
             y.commit_sha = commit_sha
         with self.subTest("different repos"):
-            y.project_url = "https://made/up/url/y.git"
+            y.project_url = GitURL("https://made/up/url/y.git")
             self.assertFalse(x < y)
             self.assertFalse(y < x)
-            y.project_url = project_url
+            y.project_url = GitURL(project_url)
         with self.subTest("different Coq versions"):
             y.coq_version = "8.15"
             self.assertFalse(x < y)
@@ -170,7 +176,7 @@ class TestProjectMetadata(unittest.TestCase):
             self.assertFalse(y < x)
             x.ocaml_version = coq_version
             x.commit_sha = commit_sha
-            x.project_url = project_url
+            x.project_url = GitURL(project_url)
         # disable versions to ensure any overriding does not use them
         x.ocaml_version = None
         y.ocaml_version = None
@@ -197,7 +203,7 @@ class TestProjectMetadata(unittest.TestCase):
             self.assertFalse(y < x)
             x.coq_version = coq_version
             x.commit_sha = commit_sha
-            x.project_url = project_url
+            x.project_url = GitURL(project_url)
         # disable versions to ensure any overriding does not use them
         x.coq_version = None
         y.coq_version = None
@@ -225,7 +231,7 @@ class TestProjectMetadata(unittest.TestCase):
             [],
             ocaml_version,
             coq_version,
-            project_url=project_url,
+            project_url=GitURL(project_url),
             commit_sha=commit_sha)
         # test bounds
         self.assertEqual(x.level, 15)

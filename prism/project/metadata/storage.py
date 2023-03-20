@@ -25,6 +25,7 @@ from typing import (
 import seutil.io as io
 from bidict import bidict
 
+from prism.interface.coq.options import SerAPIOptions
 from prism.project.metadata.dataclass import ProjectMetadata
 from prism.project.util import GitURL
 from prism.util.opam import OCamlVersion, Version
@@ -248,7 +249,7 @@ class MetadataStorage:
     contexts: Dict[Context, ContextID] = default_field(dict())
     # one-to-one overridable fields
     # match metadata field names exactly
-    serapi_options: Dict[ContextID, str] = default_field(dict())
+    serapi_options: Dict[ContextID, SerAPIOptions] = default_field(dict())
     build_cmd: Dict[ContextID, CommandSequenceID] = default_field(dict())
     install_cmd: Dict[ContextID, CommandSequenceID] = default_field(dict())
     clean_cmd: Dict[ContextID, CommandSequenceID] = default_field(dict())
@@ -654,7 +655,7 @@ class MetadataStorage:
                     assert isinstance(field_value, Iterable)
                     getattr(self, field_name)[context_id] = set(field_value)
                 elif field_name == "serapi_options":
-                    assert isinstance(field_value, str)
+                    assert isinstance(field_value, SerAPIOptions)
                     self.serapi_options[context_id] = field_value
 
     def _process_record_args(

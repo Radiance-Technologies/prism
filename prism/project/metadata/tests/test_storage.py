@@ -10,6 +10,7 @@ from pathlib import Path
 import seutil.io as io
 from bidict import bidict
 
+from prism.interface.coq.options import SerAPIOptions
 from prism.project.metadata.dataclass import ProjectMetadata
 from prism.project.metadata.storage import (
     CommandSequence,
@@ -179,7 +180,7 @@ class TestMetadataStorage(unittest.TestCase):
                     1)
             ])
         expected.serapi_options = {
-            0: '-R .,Games'
+            0: SerAPIOptions.parse_args('-R .,Games')
         }
         expected.build_cmd = {
             0: 0

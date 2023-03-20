@@ -8,6 +8,7 @@ import logging
 from typing import List, Optional, Set, Tuple, Union
 
 from prism.data.document import CoqDocument, VernacularSentence
+from prism.interface.coq.options import SerAPIOptions
 from prism.language.gallina.analyze import SexpAnalyzer, SexpInfo
 from prism.language.gallina.util import ParserUtils
 from prism.language.id import LanguageId
@@ -16,6 +17,7 @@ from prism.language.token import Token, TokenConsts
 from prism.language.types import SourceCode
 from prism.util.debug import Debug
 from prism.util.opam.switch import OpamSwitch
+from prism.util.opam.version import Version
 from prism.util.radpytools import PathLike
 
 
@@ -876,10 +878,12 @@ class CoqParser:
     @classmethod
     def parse_all(
         cls,
-        file_path: str,
+        file_path: PathLike,
         source_code: SourceCode,
-        serapi_options: str = "",
-        opam_switch: Optional[OpamSwitch] = None
+        serapi_options: Optional[SerAPIOptions] = None,
+        opam_switch: Optional[OpamSwitch] = None,
+        serapi_version: Optional[Union[str,
+                                       Version]] = None
     ) -> Tuple[List[VernacularSentence],
                List[SexpNode],
                List[SexpNode]]:
@@ -892,8 +896,16 @@ class CoqParser:
         """
         unicode_offsets = ParserUtils.get_unicode_offsets(source_code)
 
-        ast_sexp_list = cls.parse_asts(file_path, serapi_options, opam_switch)
-        tok_sexp_list = cls.parse_tokens(file_path, serapi_options, opam_switch)
+        ast_sexp_list = cls.parse_asts(
+            file_path,
+            serapi_options,
+            opam_switch,
+            serapi_version)
+        tok_sexp_list = cls.parse_tokens(
+            file_path,
+            serapi_options,
+            opam_switch,
+            serapi_version)
 
         sentences = cls.parse_sentences_from_sexps(
             source_code,
@@ -906,15 +918,17 @@ class CoqParser:
     @classmethod
     def parse_asts(
             cls,
-            file_path: str,
-            sercomp_options: str = "",
-            opam_switch: Optional[OpamSwitch] = None) -> List[SexpNode]:
+            file_path: PathLike,
+            sercomp_options: Optional[SerAPIOptions] = None,
+            opam_switch: Optional[OpamSwitch] = None,
+            serapi_version: Optional[Union[str,
+                                           Version]] = None) -> List[SexpNode]:
         """
         Parse the abstract syntax trees of sentences in the given file.
 
         Parameters
         ----------
-        file_path : str
+        file_path : PathLike
             The absolute or relative path of a Coq file.
         sercomp_options : str, optional
             Options to control the output of ``sercomp``, which is used
@@ -922,6 +936,9 @@ class CoqParser:
         opam_switch : Optional[OpamSwitch], optional
             The switch in which to execute the `sercomp` SerAPI
             executable, by default the global "default" switch.
+        serapi_version : Optional[Union[str, Version]], optional
+            The version of `coq-serapi` installed in the `opam_switch`.
+            If not provided, then it will be retrieved automatically.
 
         Returns
         -------
@@ -931,8 +948,15 @@ class CoqParser:
         """
         if opam_switch is None:
             opam_switch = OpamSwitch()
+        if sercomp_options is None:
+            sercomp_options = SerAPIOptions.empty()
+        if serapi_version is None:
+            serapi_version = opam_switch.get_installed_version('coq-serapi')
+            assert serapi_version is not None, \
+                f"coq-serapi is not installed in {opam_switch}"
         ast_sexp_str: str = opam_switch.run(
-            f"sercomp {sercomp_options} --mode=sexp -- {file_path}").stdout
+            f"sercomp {sercomp_options.as_serapi_args(serapi_version)} "
+            f"--mode=sexp -- {file_path}").stdout
         ast_sexp_list: List[SexpNode] = SexpParser.parse_list(ast_sexp_str)
         return ast_sexp_list
 
@@ -940,8 +964,10 @@ class CoqParser:
     def parse_document(
             cls,
             file_path: PathLike,
-            serapi_options: str = "",
-            opam_switch: Optional[OpamSwitch] = None) -> CoqDocument:
+            serapi_options: Optional[SerAPIOptions] = None,
+            opam_switch: Optional[OpamSwitch] = None,
+            serapi_version: Optional[Union[str,
+                                           Version]] = None) -> CoqDocument:
         """
         Parse the indicated Coq document.
 
@@ -949,12 +975,15 @@ class CoqParser:
         ----------
         file_name : PathLike
             The absolute or relative path of a Coq file.
-        serapi_options : str, optional
+        serapi_options : Optional[SerAPIOptions], optional
             Options to control the output of SerAPI, which is used to
-            parse the document. By default the empty string.
+            parse the document. By default None.
         opam_switch : Optional[OpamSwitch], optional
             The switch in which to execute the `sercomp` SerAPI
             executable, by default the global "default" switch.
+        serapi_version : Optional[Union[str, Version]], optional
+            The version of `coq-serapi` installed in the `opam_switch`.
+            If not provided, then it will be retrieved automatically.
 
         Returns
         -------
@@ -969,7 +998,8 @@ class CoqParser:
              file_path,
              source_code,
              serapi_options,
-             opam_switch)
+             opam_switch,
+             serapi_version)
 
         return CoqDocument(
             str(file_path),
@@ -981,10 +1011,12 @@ class CoqParser:
 
     @classmethod
     def parse_sentences(
-            cls,
-            file_path: PathLike,
-            serapi_options: str = "",
-            opam_switch: Optional[OpamSwitch] = None
+        cls,
+        file_path: PathLike,
+        serapi_options: Optional[SerAPIOptions] = None,
+        opam_switch: Optional[OpamSwitch] = None,
+        serapi_version: Optional[Union[str,
+                                       Version]] = None
     ) -> List[VernacularSentence]:
         """
         Parse the sentences of the indicated Coq document.
@@ -999,6 +1031,9 @@ class CoqParser:
         opam_switch : Optional[OpamSwitch], optional
             The switch in which to execute the `sercomp` SerAPI
             executable, by default the global "default" switch.
+        serapi_version : Optional[Union[str, Version]], optional
+            The version of `coq-serapi` installed in the `opam_switch`.
+            If not provided, then it will be retrieved automatically.
 
         Returns
         -------
@@ -1010,7 +1045,8 @@ class CoqParser:
             file_path,
             source_code,
             serapi_options,
-            opam_switch)[0]
+            opam_switch,
+            serapi_version)[0]
 
     @classmethod
     def parse_sentences_from_sexps(  # noqa: C901
@@ -1218,8 +1254,10 @@ class CoqParser:
     def parse_tokens(
             cls,
             file_path: PathLike,
-            sertok_options: str = "",
-            opam_switch: Optional[OpamSwitch] = None) -> List[SexpNode]:
+            sertok_options: Optional[SerAPIOptions] = None,
+            opam_switch: Optional[OpamSwitch] = None,
+            serapi_version: Optional[Union[str,
+                                           Version]] = None) -> List[SexpNode]:
         """
         Parse the lexical tokens of sentences in the given file.
 
@@ -1227,12 +1265,15 @@ class CoqParser:
         ----------
         file_path : PathLike
             The absolute or relative path of a Coq file.
-        sertok_options : str, optional
+        sertok_options : Optional[SerAPIOptions], optional
             Options to control the output of ``sertok``, which is used
             to parse the document. By default the empty string.
         opam_switch : Optional[OpamSwitch], optional
             The switch in which to execute the `sertok` SerAPI
             executable, by default the global "default" switch.
+        serapi_version : Optional[Union[str, Version]], optional
+            The version of `coq-serapi` installed in the `opam_switch`.
+            If not provided, then it will be retrieved automatically.
 
         Returns
         -------
@@ -1243,7 +1284,14 @@ class CoqParser:
         """
         if opam_switch is None:
             opam_switch = OpamSwitch()
+        if sertok_options is None:
+            sertok_options = SerAPIOptions.empty()
+        if serapi_version is None:
+            serapi_version = opam_switch.get_installed_version('coq-serapi')
+            assert serapi_version is not None, \
+                f"coq-serapi is not installed in {opam_switch}"
         tok_sexp_str: str = opam_switch.run(
-            f"sertok {sertok_options} -- {file_path}").stdout
+            f"sertok {sertok_options.as_serapi_args(serapi_version)} "
+            f"-- {file_path}").stdout
         tok_sexp_list: List[SexpNode] = SexpParser.parse_list(tok_sexp_str)
         return tok_sexp_list

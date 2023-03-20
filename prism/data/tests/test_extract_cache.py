@@ -30,6 +30,7 @@ from prism.data.document import CoqDocument
 from prism.data.extract_cache import CommandExtractor, extract_cache
 from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.interface.coq.ident import Identifier, IdentType
+from prism.interface.coq.options import SerAPIOptions
 from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.parser import CoqSentence
 from prism.project.base import SEM, Project
@@ -242,7 +243,7 @@ class TestExtractCache(unittest.TestCase):
                         sentence_extraction_method=SEM.HEURISTIC,
                         return_locations=True,
                         glom_proofs=False)),
-                serapi_options="",
+                serapi_options=SerAPIOptions.empty(),
                 opam_switch=self.test_switch).extracted_commands
         self.assertEqual(len(extracted_commands), 37)
         self.assertEqual(len([c for c in extracted_commands if c.proofs]), 9)
@@ -260,7 +261,7 @@ class TestExtractCache(unittest.TestCase):
                             sentence_extraction_method=SEM.HEURISTIC,
                             return_locations=True,
                             glom_proofs=False)),
-                    serapi_options="",
+                    serapi_options=SerAPIOptions.empty(),
                     opam_switch=self.test_switch).extracted_commands
             self.assertEqual(len(extracted_commands), 11)
             expected_ids = [
@@ -335,18 +336,20 @@ class TestExtractCache(unittest.TestCase):
                 expected_program)
         with self.subTest("bullets, braces, and other subproofs"):
             with pushd(_COQ_EXAMPLES_PATH):
-                sentences = Project.extract_sentences(
-                    CoqDocument(
-                        "fermat4_mwe.v",
-                        CoqParser.parse_source("fermat4_mwe.v"),
-                        _COQ_EXAMPLES_PATH),
-                    glom_proofs=False,
-                    return_locations=True,
-                    sentence_extraction_method=SEM.HEURISTIC)
+                sentences = typing.cast(
+                    List[CoqSentence],
+                    Project.extract_sentences(
+                        CoqDocument(
+                            "fermat4_mwe.v",
+                            CoqParser.parse_source("fermat4_mwe.v"),
+                            _COQ_EXAMPLES_PATH),
+                        glom_proofs=False,
+                        return_locations=True,
+                        sentence_extraction_method=SEM.HEURISTIC))
                 actual_vernac_commands = CommandExtractor(
                     'fermat4_mwe.v',
                     sentences,
-                    serapi_options="",
+                    serapi_options=SerAPIOptions.empty(),
                     opam_switch=self.test_switch).extracted_commands
                 actual_vernac_commands_text = {
                     avc.command.text for avc in actual_vernac_commands
@@ -416,7 +419,7 @@ class TestExtractCache(unittest.TestCase):
                             sentence_extraction_method=SEM.HEURISTIC,
                             return_locations=True,
                             glom_proofs=False)),
-                    serapi_options="",
+                    serapi_options=SerAPIOptions.empty(),
                     opam_switch=self.test_switch).extracted_commands
             self.assertEqual(len(extracted_commands), 4)
             expected_ids = [
@@ -590,7 +593,7 @@ class TestExtractCache(unittest.TestCase):
                         sentence_extraction_method=SEM.HEURISTIC,
                         return_locations=True,
                         glom_proofs=False)),
-                serapi_options="",
+                serapi_options=SerAPIOptions.empty(),
                 opam_switch=self.test_switch).extracted_commands
         expected_commands_text = [
             "Definition idw (A : Type) := A.",
@@ -622,7 +625,7 @@ class TestExtractCache(unittest.TestCase):
                         sentence_extraction_method=SEM.HEURISTIC,
                         return_locations=True,
                         glom_proofs=False)),
-                serapi_options="",
+                serapi_options=SerAPIOptions.empty(),
                 opam_switch=self.test_switch).extracted_commands
             self.assertTrue(
                 any("foobaz" in ec.identifier for ec in extracted_commands))
@@ -652,7 +655,7 @@ class TestExtractCache(unittest.TestCase):
                         sentence_extraction_method=SEM.HEURISTIC,
                         return_locations=True,
                         glom_proofs=False)),
-                serapi_options="",
+                serapi_options=SerAPIOptions.empty(),
                 opam_switch=self.test_switch).extracted_commands
             self.assertTrue(
                 any("foobaz" in ec.identifier for ec in extracted_commands))
@@ -679,7 +682,7 @@ class TestExtractCache(unittest.TestCase):
                         sentence_extraction_method=SEM.HEURISTIC,
                         return_locations=True,
                         glom_proofs=False)),
-                serapi_options="",
+                serapi_options=SerAPIOptions.empty(),
                 opam_switch=self.test_switch).extracted_commands
             self.assertEqual(len(extracted_commands), 2)
             self.assertEqual(
@@ -717,7 +720,7 @@ class TestExtractCache(unittest.TestCase):
                         sentence_extraction_method=SEM.HEURISTIC,
                         return_locations=True,
                         glom_proofs=False)),
-                serapi_options="",
+                serapi_options=SerAPIOptions.empty(),
                 opam_switch=self.test_switch).extracted_commands
             self.assertEqual(len(extracted_commands), 2)
 
@@ -771,7 +774,7 @@ class TestExtractCache(unittest.TestCase):
                         sentence_extraction_method=SEM.HEURISTIC,
                         return_locations=True,
                         glom_proofs=False)),
-                serapi_options="",
+                serapi_options=SerAPIOptions.empty(),
                 use_goals_diff=False,
                 opam_switch=self.test_switch).extracted_commands
             extracted_commands_with_diffs = CommandExtractor(
@@ -786,7 +789,7 @@ class TestExtractCache(unittest.TestCase):
                         sentence_extraction_method=SEM.HEURISTIC,
                         return_locations=True,
                         glom_proofs=False)),
-                serapi_options="",
+                serapi_options=SerAPIOptions.empty(),
                 use_goals_diff=True,
                 opam_switch=self.test_switch).extracted_commands
             sentences_no_diffs = _sort(extracted_commands_no_diffs)

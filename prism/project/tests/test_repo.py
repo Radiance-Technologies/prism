@@ -6,12 +6,15 @@ Test module for prism.data.project module.
 import itertools
 import os
 import shutil
+import typing
 import unittest
+from typing import Hashable, List
 
 import git
 import networkx as nx
 
 import prism.util.radpytools.os
+from prism.interface.coq.options import SerAPIOptions
 from prism.project import ProjectRepo, SentenceExtractionMethod
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
@@ -25,6 +28,7 @@ from prism.util.build_tools.coqdep import (
     is_valid_topological_sort,
     make_dependency_graph,
 )
+from prism.util.radpytools.path import PathLike
 
 TEST_DIR = os.path.dirname(__file__)
 PROJECT_DIR = os.path.dirname(TEST_DIR)
@@ -316,7 +320,9 @@ class TestProjectRepoLambda(unittest.TestCase):
             sentence_extraction_method=SentenceExtractionMethod.HEURISTIC)
         # HACK: stick some filler metadata in the storage for `lambda`
         cls.meta_storage.insert(cls.project.metadata)
-        cls.meta_storage.update(cls.project.metadata, serapi_options="")
+        cls.meta_storage.update(
+            cls.project.metadata,
+            serapi_options=SerAPIOptions.empty(cls.repo_path))
         cls.project._metadata = cls.project._get_fresh_metadata()
 
     def test_get_ordered_files(self):
@@ -332,15 +338,20 @@ class TestProjectRepoLambda(unittest.TestCase):
                 os.path.join(self.repo_path,
                              x) for x in files if x.endswith('.v')
             ]
+            self.assertIsNotNone(self.project.serapi_options)
+            assert self.project.iqr_flags is not None
             graph = make_dependency_graph(
-                files,
-                self.project.coq_options,
+                typing.cast(List[PathLike],
+                            files),
+                self.project.iqr_flags.as_coq_args(),
                 self.project.opam_switch)
             self.assertTrue(len(list(nx.simple_cycles(graph))) == 0)
             self.assertTrue(
-                is_valid_topological_sort(graph,
-                                          ordered,
-                                          reverse=True))
+                is_valid_topological_sort(
+                    graph,
+                    typing.cast(List[Hashable],
+                                ordered),
+                    reverse=True))
 
     @classmethod
     def tearDownClass(cls):

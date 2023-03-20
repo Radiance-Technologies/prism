@@ -322,7 +322,8 @@ class TestProject(unittest.TestCase):
         self.assertEqual(output, self.test_iqr_project.serapi_options)
         self.assertEqual(output, original_metadata.serapi_options)
         actual_result = set()
-        for match in re.finditer(r"(-R|-Q|-I) [^\s]+", output):
+        for match in re.finditer(r"(-R|-Q|-I) [^\s]+",
+                                 output.iqr.as_serapi_args()):
             actual_result.add(match.group())
         expected_result = {
             '-R vendor/array/src,Array',

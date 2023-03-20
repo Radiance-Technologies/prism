@@ -10,6 +10,7 @@ import re
 import signal
 import sys
 import typing
+from contextlib import contextmanager
 from dataclasses import InitVar, dataclass, field
 from functools import cached_property
 from pathlib import Path
@@ -17,6 +18,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Generator,
     Iterable,
     List,
     NoReturn,
@@ -37,6 +39,7 @@ from prism.interface.coq.environ import (
 from prism.interface.coq.exception import CoqExn, CoqTimeout
 from prism.interface.coq.goals import Goal, Goals, Hypothesis
 from prism.interface.coq.names import mod_path_file, print_ker_name
+from prism.interface.coq.options import CoqSetting, SerAPIOptions
 from prism.interface.coq.re_patterns import (
     ADDED_STATE_PATTERN,
     NAMED_DEF_ASSUM_PATTERN,
@@ -52,6 +55,7 @@ from prism.util.iterable import CallableIterator, uniquify
 from prism.util.logging import default_log_level
 from prism.util.opam import OpamSwitch
 from prism.util.opam.version import OpamVersion, Version
+from prism.util.radpytools import PathLike
 from prism.util.radpytools.dataclasses import default_field
 from prism.util.string import escape, normalize_spaces, unquote
 
@@ -73,7 +77,7 @@ class SerAPI:
     ...     serapi.execute('Locate "_ ∘ _".')
     """
 
-    sertop_options: InitVar[str] = ""
+    sertop_options: InitVar[SerAPIOptions] = SerAPIOptions.empty()
     """
     Optional command-line options to `sertop`, especially IQR flags for
     linking logical and physical library paths.
@@ -130,10 +134,14 @@ class SerAPI:
     """
     The switch in which `sertop` is being executed.
     """
+    _allow_sprop: bool = True
+    """
+    Whether this session allows use of the `SProp` sort.
+    """
 
     def __post_init__(
             self,
-            sertop_options: str,
+            sertop_options: SerAPIOptions,
             opam_switch: Optional[OpamSwitch],
             omit_loc: bool,
             timeout: int,
@@ -147,8 +155,11 @@ class SerAPI:
             cwd = os.getcwd()
         self._switch = opam_switch
         self._cwd = cwd
+        sertop_args = sertop_options.as_serapi_args(self.serapi_version)
+        if sertop_options.disallow_sprop:
+            self._allow_sprop = False
         try:
-            cmd = f"sertop --implicit --print0 {sertop_options}"
+            cmd = f"sertop --implicit --print0 {sertop_args}"
             if omit_loc:
                 cmd = cmd + " --omit_loc"
             if opam_switch.is_clone:
@@ -182,6 +193,15 @@ class SerAPI:
                 f"Debug information: {self.debug_information()}") from e
         self.send("Noop")
 
+        # reflect the rest of the arguments
+        for (do_send,
+             command) in sertop_options.get_sertop_commands(
+                 self.serapi_version):
+            if do_send:
+                self.send(command)
+            else:
+                self.execute(command, verbose=False)
+
         # global printing options
         self.execute("Unset Printing Notations.")
         self.execute("Unset Printing Wildcard.")
@@ -192,7 +212,8 @@ class SerAPI:
         self.execute("Set Printing Implicit.")
         self.execute("Set Printing Depth 999999.")
         self.execute("Unset Printing Records.")
-        if not OpamVersion.less_than(self.serapi_version, '8.10.0'):
+        if (not OpamVersion.less_than(self.serapi_version,
+                                      '8.10.0') and self._allow_sprop):
             # required for query_env to get the types/sorts of all
             # constants
             self.execute("Set Allow StrictProp.")
@@ -571,9 +592,9 @@ class SerAPI:
             ids = self.query_vernac("Show Conjectures.")
         except CoqExn:
             return None
-        ids = '\n'.join(ids)
+        ids_str = '\n'.join(ids)
         try:
-            return ids.split()[0]
+            return ids_str.split()[0]
         except IndexError:
             return None
 
@@ -755,15 +776,15 @@ class SerAPI:
                 self.ast_cache[cmd] = ast
         return ast
 
-    def query_env(
+    def _query_env(
             self,
-            current_file: Optional[os.PathLike] = None) -> Environment:
+            current_file: Optional[PathLike] = None) -> Environment:
         """
         Query the global environment.
 
         Parameters
         ----------
-        current_file : Optional[os.PathLike], optional
+        current_file : Optional[PathLike], optional
             The file from which commands for the current SerAPI session
             are drawn, by default None.
 
@@ -925,6 +946,34 @@ class SerAPI:
                 ))
 
         return Environment(constants, inductives)
+
+    def query_env(self, current_file: Optional[PathLike] = None) -> Environment:
+        """
+        Query the global environment.
+
+        Parameters
+        ----------
+        current_file : Optional[PathLike], optional
+            The file from which commands for the current SerAPI session
+            are drawn, by default None.
+
+        Returns
+        -------
+        Environment
+            The global environment.
+
+        Raises
+        ------
+        RuntimeError
+            If this operation is not supported by the current session's
+            version of SerAPI.
+        """
+        if not self._allow_sprop:
+            with self.settings([CoqSetting(True, "Allow StrictProp")]):
+                env = self._query_env(current_file)
+        else:
+            env = self._query_env(current_file)
+        return env
 
     def query_full_qualid(self, qualid: str) -> Optional[str]:
         """
@@ -1419,6 +1468,23 @@ class SerAPI:
         if not verbose:
             feedback = []
         return state_id, ast, feedback
+
+    @contextmanager
+    def settings(self,
+                 flags: Iterable[CoqSetting]) -> Generator[None,
+                                                           None,
+                                                           None]:
+        """
+        Create a context in which given Coq flags are set/unset.
+        """
+        negated_flags = [CoqSetting(not f.is_set, f.name) for f in flags]
+        try:
+            for flag in flags:
+                self.try_execute(flag.as_command())
+            yield
+        finally:
+            for flag in negated_flags:
+                self.try_execute(flag.as_command())
 
     def shutdown(self) -> None:
         """

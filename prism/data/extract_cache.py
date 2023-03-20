@@ -58,6 +58,7 @@ from prism.data.util import get_project_func
 from prism.interface.coq.exception import CoqExn
 from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.interface.coq.ident import Identifier, get_all_qualified_idents
+from prism.interface.coq.options import SerAPIOptions
 from prism.interface.coq.re_patterns import (
     ABORT_COMMAND_PATTERN,
     IDENT_PATTERN,
@@ -221,9 +222,13 @@ class CommandExtractor:
     Otherwise, one may initiate the extraction by calling the
     constructed object with the sentences as argument.
     """
-    serapi_options: str = ""
+    serapi_options: SerAPIOptions = default_field(SerAPIOptions.empty())
     """
     The options given to `sertop` with which to perform extraction.
+
+    Some options may not be given directly to `sertop` but have
+    Vernacular command equivalents that can be performed as part of
+    initialization of the SerAPI session.
     """
     opam_switch: Optional[OpamSwitch] = None
     """
@@ -327,7 +332,7 @@ class CommandExtractor:
         """
         self.modpath = Project.get_local_modpath(
             self.filename,
-            self.serapi_options)
+            self.serapi_options.iqr)
         if sentences is not None:
             self(sentences)
 

@@ -36,6 +36,7 @@ from typing import (
 
 import prism.util.build_tools.opamdep as opamdep
 from prism.data.document import CoqDocument
+from prism.interface.coq.options import SerAPIOptions
 from prism.interface.coq.re_patterns import QUALIFIED_IDENT_PATTERN
 from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.parser import (
@@ -230,9 +231,8 @@ class Project(ABC):
             The command-line options for invoking Coq tools, e.g.,
             ``f"coqc {coq_options} file.v"``.
         """
-        iqr = self.iqr_flags
-        if iqr is not None:
-            coq_options = str(iqr)
+        if self.serapi_options is not None:
+            coq_options = self.serapi_options.as_coq_args()
         else:
             coq_options = None
         return coq_options
@@ -266,9 +266,7 @@ class Project(ABC):
         """
         iqr = None
         if self.serapi_options is not None:
-            iqr = IQR.extract_iqr(self.serapi_options)
-            iqr.pwd = self.path
-            iqr.delim = " "
+            iqr = self.serapi_options.iqr
         return iqr
 
     @property
@@ -352,7 +350,7 @@ class Project(ABC):
         pass
 
     @property
-    def serapi_options(self) -> Optional[str]:
+    def serapi_options(self) -> Optional[SerAPIOptions]:
         """
         Get the SerAPI options for parsing this project's files.
 
@@ -364,7 +362,7 @@ class Project(ABC):
         -------
         Optional[str]
             The command-line options for invoking SerAPI tools, e.g.,
-            ``f"sercomp {serapi_options} file.v"``.
+            ``f"sertop {serapi_options.get_sertop_args()}"``.
         """
         return self.metadata.serapi_options
 
@@ -507,7 +505,7 @@ class Project(ABC):
         if self.serapi_options is None:
             yield from []
         else:
-            iqr = IQR.extract_iqr(self.serapi_options)
+            iqr = self.serapi_options.iqr
             for p in chain(iqr.I if return_I else (),
                            (p for p,
                             _ in iqr.Q) if return_Q else (),
@@ -852,16 +850,14 @@ class Project(ABC):
                 # file should be kept
                 filtered.append(str(root / file) if not relative else file_str)
         if dependency_order:
-            iqr = self.serapi_options
-            if iqr is None:
+            if self.serapi_options is None:
                 raise MissingMetadataError(
                     f"The `serapi_options` for {self.name} are not set; "
                     "cannot return files in dependency order. "
                     "Please try rebuilding the project.")
             filtered = order_dependencies(
                 filtered,
-                iqr.replace(",",
-                            " "),
+                str(self.serapi_options.iqr),
                 self.opam_switch,
                 cwd=str(self.path))
         else:
@@ -1231,12 +1227,12 @@ class Project(ABC):
             self,
             managed_switch_kwargs: Optional[Dict[str,
                                                  Any]] = None,
-            **kwargs) -> Tuple[str,
+            **kwargs) -> Tuple[SerAPIOptions,
                                int,
                                str,
                                str]:
         """
-        Build project and get IQR options, simultaneously.
+        Build project and get SerAPI options, simultaneously.
 
         Invoking this function will replace any serapi_options already
         present in the metadata.
@@ -1248,8 +1244,8 @@ class Project(ABC):
 
         Returns
         -------
-        str
-            The IQR flags string that should be stored in serapi_options
+        SerAPIOptions
+            The inferred SerAPI options.
         int
             The return code of the last-executed command
         str
@@ -1282,17 +1278,9 @@ class Project(ABC):
          stderr) = self._build(_strace_build,
                                managed_switch_kwargs)
 
-        def or_(x, y):
-            return x | y
-
-        serapi_options = str(
-            reduce(
-                or_,
-                [c.iqr for c in contexts],
-                IQR(set(),
-                    set(),
-                    set(),
-                    self.path)))
+        serapi_options = SerAPIOptions.merge(
+            [c.serapi_options for c in contexts],
+            root=self.path)
         self._update_metadata(serapi_options=serapi_options)
         return serapi_options, rcode_out, stdout, stderr
 
@@ -1486,7 +1474,7 @@ class Project(ABC):
             **kwargs)
 
     @staticmethod
-    def get_local_modpath(filename: PathLike, serapi_options: str) -> str:
+    def get_local_modpath(filename: PathLike, iqr: IQR) -> str:
         """
         Infer the module path for the given file.
 
@@ -1495,7 +1483,7 @@ class Project(ABC):
         filename : PathLike
             The physical path to a project file relative to the project
             root.
-        serapi_options : str
+        iqr : IQR
             Arguments with which to initialize `sertop`, namely IQR
             flags.
 
@@ -1509,7 +1497,6 @@ class Project(ABC):
         if not isinstance(filename, pathlib.Path):
             filename = pathlib.Path(filename)
         filename = str(filename.with_suffix(''))
-        iqr = IQR.extract_iqr(serapi_options)
         # identify the correct logical library prefix for this filename
         matched = False
         dot_log = None

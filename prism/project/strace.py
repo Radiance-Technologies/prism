@@ -8,20 +8,22 @@ import logging
 import os
 import re
 import tempfile
+import typing
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import lark
 from strace_parser.parser import get_parser
 
+from prism.interface.coq.options import SerAPIOptions
 from prism.util.bash import escape
 from prism.util.opam.switch import OpamSwitch
 from prism.util.radpytools import PathLike
 
-from .iqr import IQR
-
 _EXECUTABLE = 'coqc'
 _REGEX = r'.*\.v$'
+
+RecursiveStrList = Union[str, List['RecursiveStrList']]
 
 
 @dataclass
@@ -63,16 +65,16 @@ class CoqContext:
     The environment variables at the time of the invocation (which
     implicitly contains the working directory).
     """
-    iqr: IQR = field(init=False)
+    serapi_options: SerAPIOptions = field(init=False)
     """
-    The IQR options contained in the given `args`.
+    The Coq compiler options contained in the given `args`.
     """
 
     def __post_init__(self):
         """
-        Grab the internal IQR args, if any.
+        Grab the internal Coq compiler args, if any.
         """
-        self.iqr = IQR.extract_iqr(self.args, self.pwd)
+        self.serapi_options = SerAPIOptions.parse_args(self.args, self.pwd)
 
     def __str__(self) -> str:
         """
@@ -128,11 +130,22 @@ def _record_context(line: str,
     Creates and writes to a file a pycoq_context record for each
     argument matching regex in a call of executable.
     """
-    record = _parse_strace_line(parser, line)
+    record = typing.cast(
+        List[RecursiveStrList],
+        _parse_strace_line(parser,
+                           line))
+    executable = record[0]
+    args = record[1]
+    env = record[2]
+    assert isinstance(executable, str)
+    assert isinstance(args, list)
+    assert isinstance(env, list)
     p_context = ProcContext(
-        executable=record[0],
-        args=record[1],
-        env=_dict_of_list(record[2]))
+        executable=executable,
+        args=typing.cast(List[str],
+                         args),
+        env=_dict_of_list(typing.cast(List[str],
+                                      env)))
     res = []
     for target in p_context.args:
         if re.compile(regex).fullmatch(target):
@@ -187,8 +200,8 @@ def _dehex_str(s: str) -> str:
         Original string
     """
     if len(s) > 2 and s[0] == '"' and s[-1] == '"':
+        temp = 'b' + s
         try:
-            temp = 'b' + s
             return ast.literal_eval(temp).decode('utf8')
         except Exception as exc:
             print("pycoq: ERROR DECODING", temp)
@@ -222,22 +235,25 @@ def _dehex(
     if isinstance(d, str):
         return _dehex_str(d)
     elif isinstance(d, list):
-        return [_dehex(e) for e in d]
+        return [typing.cast(str, _dehex(e)) for e in d]
     elif isinstance(d, dict):
-        return {k: _dehex(v) for k,
+        return {k: typing.cast(str,
+                               _dehex(v)) for k,
                 v in d.items()}
 
 
-def _parse_strace_line(parser: lark.Lark, line: str) -> str:
+def _parse_strace_line(parser: lark.Lark, line: str) -> RecursiveStrList:
     """
     Parse a line of the strace output.
     """
 
-    def _conv(a):
+    def _conv(a: Union[str, lark.Tree, lark.Token]) -> RecursiveStrList:
         if isinstance(a, lark.tree.Tree) and a.data == 'other':
             return _conv(a.children[0])
         elif isinstance(a, lark.tree.Tree) and a.data == 'bracketed':
-            return [_conv(c) for c in a.children[0].children]
+            child = a.children[0]
+            assert isinstance(child, lark.Tree)
+            return [_conv(c) for c in child.children]
         elif isinstance(a, lark.tree.Tree) and a.data == 'args':
             return [_conv(c) for c in a.children]
         elif isinstance(a, lark.lexer.Token):
@@ -246,14 +262,17 @@ def _parse_strace_line(parser: lark.Lark, line: str) -> str:
             raise ValueError(f"'can't parse lark object {a}")
 
     p = parser.parse(line)
-    if (p.data == 'start' and len(p.children) == 1
+    if (p.data == 'start' and len(p.children) == 1 and isinstance(p.children[0],
+                                                                  lark.Tree)
             and p.children[0].data == 'line'):
         _, body = p.children[0].children
-        if (len(body.children) == 1 and body.children[0].data == 'syscall'):
+        if (isinstance(body, lark.Tree) and len(body.children) == 1):
             syscall = body.children[0]
-            name, args, _ = syscall.children
-            name = str(name.children[0])
-            return _conv(args)
+            if (isinstance(syscall, lark.Tree) and syscall.data == 'syscall'):
+                name, args, _ = syscall.children
+                if isinstance(name, lark.Tree):
+                    name = str(name.children[0])
+                    return _conv(args)
 
     raise ValueError(f"can't parse lark object {p}")
 
@@ -323,7 +342,7 @@ def strace_build(
     -------
     List[CoqContext]
         These `CoqContext` objects contain the information gleaned from
-        strace. If there are any IQR args present, they will be within
+        strace. If there are any Coq args present, they will be within
         these objects.
     int
         The return code of the strace command
@@ -336,7 +355,7 @@ def strace_build(
     def _strace_build(
             executable: str,
             regex: str,
-            workdir: Optional[str],
+            workdir: Optional[PathLike],
             command: str,
             logdir: str) -> Tuple[List[CoqContext],
                                   int,

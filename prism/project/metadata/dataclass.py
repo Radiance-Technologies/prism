@@ -20,6 +20,7 @@ from typing import (
 
 import seutil as su
 
+from prism.interface.coq.options import SerAPIOptions
 from prism.project.util import GitURL
 from prism.util.radpytools.dataclasses import default_field
 
@@ -102,7 +103,7 @@ class ProjectMetadata:
     `coq_version`.
     This field is not null if and only if `coq_version` is not null.
     """
-    serapi_options: Optional[str] = None
+    serapi_options: Optional[SerAPIOptions] = None
     """
     Flags or options passed to SerAPI command line executables (e.g.,
     `sercomp`, `sertok`, `sertop`, `sername`, etc.).

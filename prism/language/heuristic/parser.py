@@ -12,6 +12,7 @@ from seutil import io
 
 import prism.language.gallina.util as gu
 from prism.data.document import CoqDocument
+from prism.interface.coq.options import SerAPIOptions
 from prism.language.gallina.analyze import SexpAnalyzer, SexpInfo
 from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.assertion import Assertion
@@ -1070,6 +1071,9 @@ class SerAPIParser(HeuristicParser):
         """
         Try to infer SerAPI options from a _CoqProject file if present.
         """
+        warnings.warn(
+            "Use SerAPIOptions.from_coq_project_files instead",
+            DeprecationWarning)
         coq_project_files = [
             pathlib.Path(project_path) / "_CoqProject",
             pathlib.Path(project_path) / "Make"
@@ -1163,12 +1167,19 @@ class SerAPIParser(HeuristicParser):
         source_code = document.source_code
         unicode_offsets = gu.ParserUtils.get_unicode_offsets(source_code)
         coq_file = document.abspath
-        serapi_options = kwargs.pop('serapi_options', None)
+        serapi_options: Optional[SerAPIOptions] = kwargs.pop(
+            'serapi_options',
+            None)
         assert document.project_path is not None, \
             "Document must have a project directory"
         if serapi_options is None:
             # Try to infer from _CoqProject
-            serapi_options = cls._infer_serapi_options(document.project_path)
+            serapi_options = SerAPIOptions.from_coq_project_files(
+                document.project_path)
+            if serapi_options is None:
+                serapi_options = SerAPIOptions.empty()
+        else:
+            assert isinstance(serapi_options, SerAPIOptions)
         with pushd(document.project_path):
             asts = CoqParser.parse_asts(coq_file, serapi_options, **kwargs)
         # get raw sentences
