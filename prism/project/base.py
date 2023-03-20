@@ -139,6 +139,8 @@ class Project(ABC):
         Object for tracking OpamSwitch relevant for this project
     sentence_extraction_method : SentenceExtractionMethod
         The method by which sentences are extracted.
+    project_logger : logging.Logger
+        Logger used to send log messages.
     """
 
     _missing_dependency_pattern = regex_from_options(
@@ -172,7 +174,8 @@ class Project(ABC):
             opam_switch: Optional[OpamSwitch] = None,
             sentence_extraction_method: SEM = SentenceExtractionMethod.SERAPI,
             num_cores: Optional[int] = None,
-            switch_manager: Optional[SwitchManager] = None):
+            switch_manager: Optional[SwitchManager] = None,
+            project_logger: Optional[logging.Logger] = None):
         """
         Initialize Project object.
         """
@@ -189,6 +192,11 @@ class Project(ABC):
         """
         The method by which sentences are extracted.
         """
+        try:
+            name = self.name.replace('.', '_')
+        except NotImplementedError:
+            name = 'project'
+        self.logger = (project_logger or logger).getChild(f"{name}")
         if opam_switch is not None:
             self.opam_switch = opam_switch
         else:
@@ -340,6 +348,11 @@ class Project(ABC):
         self._opam_switch = switch
         self._coq_version = switch.get_installed_version("coq")
         self._ocaml_version = switch.get_installed_version("ocaml")
+        logger = self.logger.getChild('opam_switch.setter')
+        logger.debug(
+            "Setting switch to "
+            f" {switch.name}(coq={self._coq_version}, ocaml={self._ocaml_version})"
+        )
 
     @property
     @abstractmethod
@@ -390,11 +403,15 @@ class Project(ABC):
         Verify `serapi_options` exists and corresponds to existing
         paths.
         """
+        logger = self.logger.getChild('_check_serapi_option_health_pre_build')
         if self.serapi_options is None:
+            logger.debug("No serapi options")
             return False
         # Check if current IQR flags map to current directories.
         for physical_path in self._iqr_bound_directories(False):
             if not physical_path.exists():
+                logger.debug(
+                    f"Missing physical path for iqr flag: {physical_path}")
                 return False
         return True
 
@@ -408,6 +425,7 @@ class Project(ABC):
         2. All *.vo files' paths start with a physical path in
            serapi_options.
         """
+        logger = self.logger.getChild('_check_serapi_option_health_post_build')
         full_q_paths = list(
             self._iqr_bound_directories(
                 False,
@@ -422,17 +440,23 @@ class Project(ABC):
                 return_R=True))
         for full_path in full_q_paths:
             if not glob.glob(f"{full_path}/*.vo", recursive=False):
+                logger.debug(f"Q path has no *.vo files: {full_path}")
                 return False
         for full_path in full_r_paths:
             if not glob.glob(f"{full_path}/**/*.vo", recursive=True):
+                logger.debug(f"R path has no *.vo files: {full_path}")
                 return False
         for vo_file in glob.glob(f"{self.path}/**/*.vo", recursive=True):
             vo_file_path = Path(vo_file)
             if full_r_paths and not any(full_path in vo_file_path.parents
                                         for full_path in full_r_paths):
+                logger.debug(
+                    f"A .vo file ({vo_file_path}): has no matching R path")
                 return False
             if full_q_paths and not any(full_path == vo_file_path.parent
                                         for full_path in full_q_paths):
+                logger.debug(
+                    f"A .vo file ({vo_file_path}): has no matching Q path")
                 return False
         return True
 
@@ -543,7 +567,7 @@ class Project(ABC):
         if returncode != 0:
             raise ExcType(msg, returncode, stdout, stderr)
         else:
-            logger.debug(msg)
+            self.logger.debug(msg)
 
     def _make(
             self,
@@ -611,6 +635,7 @@ class Project(ABC):
         self.metadata_storage.update(self.metadata, **kwargs)
         # update local copy separately to avoid redundant retrieval
         for name, value in kwargs.items():
+            self.logger.debug(f"Updating {name}: {value}")
             setattr(self.metadata, name, value)
 
     def _traverse_file_tree(self) -> List[CoqDocument]:
@@ -656,6 +681,8 @@ class Project(ABC):
             If the command(s) for building the project encounter an
             error.
         """
+        # EVENT: <>.build
+        self.logger.debug("Performing Project Build")
         if managed_switch_kwargs is None:
             managed_switch_kwargs = {}
         switch_manager = managed_switch_kwargs.get(
@@ -670,6 +697,8 @@ class Project(ABC):
                 '\n'.join([e.stdout,
                            e.stderr]))
             if m is not None:
+                # EVENT: <>.build
+                self.logger.debug("Missing dependencies prevented build")
                 self.infer_opam_dependencies()
                 if switch_manager is not None:
                     # try to build again with fresh dependencies
@@ -680,8 +709,11 @@ class Project(ABC):
                         switch_manager.release_switch(self.opam_switch)
                         self.opam_switch = original_switch
                     # force reattempt build
-                    with self.managed_switch(**managed_switch_kwargs):
-                        result = f()
+                    with self.project_logger(logger.getChild('force-rebuild')):
+                        # EVENT: <>.build.force-rebuild
+                        self.logger.debug("Forcing Rebuild")
+                        with self.managed_switch(**managed_switch_kwargs):
+                            result = f()
                 else:
                     raise e
             else:
@@ -741,30 +773,41 @@ class Project(ABC):
         --------
         managed_switch : For valid `managed_switch_kwargs`
         """
+        logger = self.logger.getChild('build')
         if not self._check_serapi_option_health_pre_build():
-            (_,
-             rcode,
-             stdout,
-             stderr) = self.infer_serapi_options(
-                 managed_switch_kwargs,
-                 **kwargs)
+            # EVENT: <>.build
+            logger.debug("Pre-Build Health Check Fail")
+            with self.project_logger(logger.getChild('pre-build')):
+                # logs will have name <>.build.pre-build
+                (_,
+                 rcode,
+                 stdout,
+                 stderr) = self.infer_serapi_options(
+                     managed_switch_kwargs,
+                     **kwargs)
             return rcode, stdout, stderr
         else:
-            (rcode,
-             stdout,
-             stderr) = self._build(
-                 lambda: self._make("build",
-                                    "Compilation",
-                                    **kwargs),
-                 managed_switch_kwargs)
+            with self.project_logger(logger):
+                # logs will have name <>.build
+                (rcode,
+                 stdout,
+                 stderr) = self._build(
+                     lambda: self._make("build",
+                                        "Compilation",
+                                        **kwargs),
+                     managed_switch_kwargs)
         if not self._check_serapi_option_health_post_build():
+            # EVENT: <>.build
+            logger.debug("Post-Build Health Check Fail")
             separator = "\n@@\nInferring SerAPI Options...\n@@\n"
-            (_,
-             rcode,
-             stdout_post,
-             stderr_post) = self.infer_serapi_options(
-                 managed_switch_kwargs,
-                 **kwargs)
+            with self.project_logger(logger.getChild('post-build')):
+                # logs will have name <>.build.post-build
+                (_,
+                 rcode,
+                 stdout_post,
+                 stderr_post) = self.infer_serapi_options(
+                     managed_switch_kwargs,
+                     **kwargs)
             stdout = "".join((stdout, separator, stdout_post))
             stderr = "".join((stderr, separator, stderr_post))
         return rcode, stdout, stderr
@@ -1194,6 +1237,7 @@ class Project(ABC):
         --------
         PackageFormula : For more information about package formulas.
         """
+        logger = self.logger.getChild('infer_opam_dependencies')
         try:
             formula = self.opam_switch.get_dependencies(self.path)
         except CalledProcessError:
@@ -1211,6 +1255,8 @@ class Project(ABC):
             self.coq_version if not ignore_coq_version else None)
         if formula is not None:
             # limit guessed dependencies to only novel ones
+            changed = formula.packages.difference(dependencies)
+            logger.debug(f"Inferred new dependencies: {changed}")
             dependencies.difference_update(formula.packages)
         # format dependencies as package constraints
         dependencies = [f'"{dep}"' for dep in dependencies]
@@ -1226,7 +1272,9 @@ class Project(ABC):
             formula.extend(dependencies)
         else:
             formula = dependencies
-        self._update_metadata(opam_dependencies=formula)
+        with self.project_logger(logger):
+            # logs will have <>.infer_serapi_options
+            self._update_metadata(opam_dependencies=formula)
         return formula
 
     def infer_serapi_options(
@@ -1260,11 +1308,14 @@ class Project(ABC):
             The total stderr of all commands run
         """
         # ensure we are building from a clean slate
+        logger = self.logger.getChild('infer_serapi_options')
+        logger.debug('Inferring serapi options')
         try:
             self.clean(**kwargs)
         except ProjectBuildError:
             # cleaning may fail if nothing to clean or the project has
             # not yet been configured by a prior build
+            logger.debug("cleaning failed")
             pass
 
         def _strace_build():
@@ -1278,11 +1329,15 @@ class Project(ABC):
             self._process_command_output("Strace", rcode_out, stdout, stderr)
             return contexts, rcode_out, stdout, stderr
 
-        (contexts,
-         rcode_out,
-         stdout,
-         stderr) = self._build(_strace_build,
-                               managed_switch_kwargs)
+        # Event
+        logger.debug('Performing strace build')
+        with self.project_logger(logger.getChild('strace')):
+            # logs will have <>.infer_serapi_options.strace
+            (contexts,
+             rcode_out,
+             stdout,
+             stderr) = self._build(_strace_build,
+                                   managed_switch_kwargs)
 
         serapi_options = SerAPIOptions.merge(
             [c.serapi_options for c in contexts],
@@ -1344,7 +1399,7 @@ class Project(ABC):
                                     Version]] = None,
         variables: Optional[AssignedVariables] = None,
         release: bool = True,
-        switch_manager: Optional[SwitchManager] = None
+        switch_manager: Optional[SwitchManager] = None,
     ) -> Generator[OpamSwitch,
                    None,
                    None]:
@@ -1402,16 +1457,46 @@ class Project(ABC):
             raise RuntimeError(
                 "Cannot use managed switch without a switch manager")
         original_switch = self.opam_switch
+        logger = self.logger.getChild('managed_switch')
         try:
             if managed_switch_requested and switch_manager is not None:
                 self.opam_switch = switch_manager.get_switch(
                     dependency_formula,
                     variables)
+            logger.debug("Using Managed Switch Context")
             yield original_switch
         finally:
             if managed_switch_requested and switch_manager is not None and release:
                 switch_manager.release_switch(self.opam_switch)
                 self.opam_switch = original_switch
+            logger.debug("Exiting Managed Switch Context")
+
+    @contextmanager
+    def project_logger(
+        self,
+        logger: logging.Logger,
+    ) -> Generator[logging.Logger,
+                   None,
+                   None]:
+        """
+        Yield context is specific logger for project.
+
+        Parameters
+        ----------
+        logger : logging.Logger
+            Logger to use to send logging messages.
+
+        Yields
+        ------
+        logging.Logger
+            The original logger used before this context.
+        """
+        original_logger = self.logger
+        try:
+            self.logger = logger
+            yield original_logger
+        finally:
+            self.logger = original_logger
 
     @staticmethod
     def extract_sentences(

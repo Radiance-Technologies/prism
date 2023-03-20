@@ -126,9 +126,9 @@ class TestExtractCache(unittest.TestCase):
         """
         manager = mp.Manager()
         with CoqProjectBuildCacheServer() as cache_server:
-            cache_client: CoqProjectBuildCacheProtocol = CoqProjectBuildCacheClient(
-                cache_server,
-                self.CACHE_DIR)
+            cache_client: CoqProjectBuildCacheProtocol = cache_server.getClient(
+                self.CACHE_DIR,
+            )
             # fake pre-existing cached data for float
             coq_float = self.dataset.projects['float']
             coq_float.git.checkout(self.float_head)

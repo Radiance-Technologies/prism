@@ -2,6 +2,7 @@
 Tools for handling repair mining cache.
 """
 import glob
+import logging
 import os
 import re
 import subprocess
@@ -10,7 +11,6 @@ from dataclasses import InitVar, dataclass, field, fields
 from enum import IntEnum, auto
 from functools import reduce
 from itertools import chain
-from multiprocessing.managers import BaseManager
 from pathlib import Path
 from time import time
 from typing import (
@@ -45,6 +45,7 @@ from prism.language.sexp.node import SexpNode
 from prism.project.metadata import ProjectMetadata
 from prism.util.io import atomic_write
 from prism.util.iterable import split
+from prism.util.logging import SpecialLogger, SpecialLoggerServer
 from prism.util.opam.switch import OpamSwitch
 from prism.util.opam.version import Version, VersionString
 from prism.util.radpytools import PathLike
@@ -1093,6 +1094,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
             If `block`, return ``"write complete"``; otherwise, return
             nothing
         """
+        change_suffix = suffix == '.log'
         # standardize inputs to get_path
         cache_id_tuple: Union[Tuple[ProjectCommitData],
                               Tuple[ProjectMetadata],
@@ -1106,6 +1108,8 @@ class CoqProjectBuildCacheProtocol(Protocol):
         else:
             cache_id_tuple = cache_id
         if suffix is not None:
+            if change_suffix:
+                suffix = 'txt'
             file_path = Path(
                 str(self.get_path(*cache_id_tuple).with_suffix("")) + suffix)
         else:
@@ -1125,6 +1129,10 @@ class CoqProjectBuildCacheProtocol(Protocol):
         obj: Union[ProjectCommitData,
                    ProjectMetadata,
                    Tuple[str,
+                         str,
+                         str],
+                   Tuple[str,
+                         str,
                          str,
                          str]]
     ) -> bool:
@@ -1215,6 +1223,15 @@ class CoqProjectBuildCacheProtocol(Protocol):
             path = self.get_path_from_fields(*args, **kwargs)
         return path
 
+    def get_log_path(self, project: str, commit: str, coq_version: str) -> Path:
+        """
+        Return path to log file that is unique to tuple.
+        """
+        return self.root / project / commit / '.'.join(
+            [coq_version.replace(".",
+                                 "_"),
+             'log'])
+
     def get_path_from_data(self, data: ProjectCommitData) -> Path:
         """
         Get the file path for a given project commit cache.
@@ -1225,14 +1242,17 @@ class CoqProjectBuildCacheProtocol(Protocol):
             self,
             project: str,
             commit: str,
-            coq_version: str) -> Path:
+            coq_version: str,
+            ext: Optional[str] = None) -> Path:
         """
         Get the file path for identifying fields of a cache.
         """
+        if ext is None:
+            ext = self.fmt_ext
         return self.root / project / commit / '.'.join(
             [coq_version.replace(".",
                                  "_"),
-             self.fmt_ext])
+             ext])
 
     def get_path_from_metadata(self, metadata: ProjectMetadata) -> Path:
         """
@@ -1594,6 +1614,22 @@ class CoqProjectBuildCacheProtocol(Protocol):
         """
         return self._write_kernel(metadata, block, timing_log, "_timing.txt")
 
+    def write_log(
+            self,
+            project: str,
+            commit_sha: str,
+            coq_version: str,
+            block: bool,
+            log: str) -> Optional[str]:
+        """
+        Write timing log to build cache directory.
+
+        Parameters
+        ----------
+        block : bool
+            If true, return a "write complete" message
+        log : str
+            log string to write to file.
 
 class CoqProjectBuildCache(CoqProjectBuildCacheProtocol):  # type: ignore
     """
@@ -1612,17 +1648,13 @@ class CoqProjectBuildCache(CoqProjectBuildCacheProtocol):  # type: ignore
         self.start_time = start_time
         if not self.root.exists():
             os.makedirs(self.root)
+        SpecialLogger.__init__(self, __name__)
 
 
-class CoqProjectBuildCacheServer(BaseManager):
+class CoqProjectBuildCacheServer(SpecialLoggerServer[CoqProjectBuildCache]):
     """
     A BaseManager-derived server for managing build cache.
     """
-
-
-CoqProjectBuildCacheServer.register(
-    "CoqProjectBuildCache",
-    CoqProjectBuildCache)
 
 
 def CoqProjectBuildCacheClient(
