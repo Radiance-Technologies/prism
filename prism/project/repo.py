@@ -229,6 +229,10 @@ class ProjectRepo(Repo, Project):
             storage = [a for a in args if isinstance(a, MetadataStorage)]
             if not storage:
                 storage = kwargs.get('metadata_storage')
+                if not isinstance(storage, MetadataStorage):
+                    raise TypeError(
+                        "Expected object of type MetadataStorage for keyword "
+                        f"'metadata_storage', got {type(storage)}")
             else:
                 storage = storage[0]
             try:
