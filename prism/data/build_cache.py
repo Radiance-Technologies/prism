@@ -7,6 +7,7 @@ import re
 import subprocess
 import warnings
 from dataclasses import InitVar, dataclass, field, fields
+from enum import IntEnum, auto
 from functools import reduce
 from itertools import chain
 from multiprocessing.managers import BaseManager
@@ -52,6 +53,17 @@ from prism.util.serialize import Serializable
 
 CommandType = str
 _T = TypeVar('_T')
+
+
+class CacheStatus(IntEnum):
+    """
+    Enum indicating status of cache object.
+    """
+
+    SUCCESS = auto()
+    BUILD_ERROR = auto()
+    CACHE_ERROR = auto()
+    OTHER_ERROR = auto()
 
 
 @dataclass
@@ -957,7 +969,7 @@ class CacheObjectStatus:
     """
     Coq version that partially identifies this cache object
     """
-    status: str
+    status: CacheStatus
     """
     Status of the (project, commit_hash, coq_version) cache object. This
     string can take one of the following values:
@@ -1128,7 +1140,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
             status = self.get_status(*obj)
         else:
             raise TypeError(f"Arguments of type {type(obj)} not supported.")
-        return status == "success"
+        return status == CacheStatus.SUCCESS
 
     def get(
             self,
@@ -1218,7 +1230,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
             metadata.commit_sha,
             metadata.coq_version)
 
-    def get_status(self, *args, **kwargs) -> Optional[str]:
+    def get_status(self, *args, **kwargs) -> Optional[CacheStatus]:
         """
         Get the status of an indicated cache object.
 
@@ -1237,19 +1249,19 @@ class CoqProjectBuildCacheProtocol(Protocol):
         """
         path = self.get_path(*args, **kwargs)
         prefix = str(path.with_suffix(''))
-        timestamps: Dict[str,
+        timestamps: Dict[CacheStatus,
                          float] = {}
         if path.exists():
-            return "success"
+            return CacheStatus.SUCCESS
         if Path(prefix + "_cache_error.txt").exists():
             with open(prefix + "_cache_error.txt.timestamp", "rt") as f:
-                timestamps['cache error'] = float(f.read())
+                timestamps[CacheStatus.CACHE_ERROR] = float(f.read())
         if Path(prefix + "_build_error.txt").exists():
             with open(prefix + "_build_error.txt.timestamp", "rt") as f:
-                timestamps['build error'] = float(f.read())
+                timestamps[CacheStatus.BUILD_ERROR] = float(f.read())
         if Path(prefix + "_misc_error.txt").exists():
             with open(prefix + "_misc_error.txt.timestamp", "rt") as f:
-                timestamps['other error'] = float(f.read())
+                timestamps[CacheStatus.OTHER_ERROR] = float(f.read())
         if not timestamps:
             # No files were found
             return None
@@ -1372,7 +1384,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
         """
         return list(
             filter(
-                lambda x: x.status != "success",
+                lambda x: x.status != CacheStatus.SUCCESS,
                 self.list_status(*args,
                                  **kwargs)))
 
@@ -1389,7 +1401,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
         """
         return list(
             filter(
-                lambda x: x.status == "success",
+                lambda x: x.status == CacheStatus.SUCCESS,
                 self.list_status(*args,
                                  **kwargs)))
 

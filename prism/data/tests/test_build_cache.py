@@ -13,6 +13,7 @@ import seutil.io as io
 
 from prism.data.build_cache import (
     CacheObjectStatus,
+    CacheStatus,
     CoqProjectBuildCacheClient,
     CoqProjectBuildCacheProtocol,
     CoqProjectBuildCacheServer,
@@ -284,30 +285,30 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                         "float",
                         float_commit_sha,
                         "8.10.2",
-                        "success"),
+                        CacheStatus.SUCCESS),
                     CacheObjectStatus(
                         "float",
                         40 * "a",
                         "8.10.2",
-                        "other error"),
+                        CacheStatus.OTHER_ERROR),
                     CacheObjectStatus(
                         "float",
                         40 * "b",
                         "8.10.2",
-                        "build error"),
+                        CacheStatus.BUILD_ERROR),
                     CacheObjectStatus(
                         "lambda",
                         lambda_commit_sha,
                         "8.10.2",
-                        "cache error")
+                        CacheStatus.CACHE_ERROR)
                 ]
                 expected_status_list_success = list(
                     filter(
-                        lambda x: x.status == "success",
+                        lambda x: x.status == CacheStatus.SUCCESS,
                         expected_status_list))
                 expected_status_list_failed = list(
                     filter(
-                        lambda x: x.status != "success",
+                        lambda x: x.status != CacheStatus.SUCCESS,
                         expected_status_list))
                 project_list = cache.list_projects()
                 commit_lists = cache.list_commits()

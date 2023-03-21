@@ -14,6 +14,7 @@ from typing import List, Tuple
 import pytest
 
 from prism.data.build_cache import (
+    CacheStatus,
     CommentDict,
     CoqProjectBuildCacheClient,
     CoqProjectBuildCacheProtocol,
@@ -206,7 +207,7 @@ class TestExtractCache(unittest.TestCase):
                         'lambda',
                         self.lambda_head,
                         coq_version),
-                    "build error")
+                    CacheStatus.BUILD_ERROR)
         return cache_client, cache_server
 
     @pytest.mark.coq_8_10_2
