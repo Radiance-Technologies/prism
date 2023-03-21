@@ -281,11 +281,7 @@ class SexpInfo:
         The ending character offset from the start of the file.
         """
 
-        def __contains__(
-                self,
-                other: Union['SexpInfo.Loc',
-                             int,
-                             float]) -> bool:
+        def __contains__(self, other: object) -> bool:
             """
             Return whether this location contains another.
 
