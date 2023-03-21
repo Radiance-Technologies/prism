@@ -61,9 +61,24 @@ class CacheStatus(IntEnum):
     """
 
     SUCCESS = auto()
+    """
+    Full command data was successfully extracted for this cache tuple.
+    """
     BUILD_ERROR = auto()
+    """
+    A build error was encountered for this cache tuple, and no command
+    data was extracted.
+    """
     CACHE_ERROR = auto()
+    """
+    An error was encountered during command data extraction, so no
+    command data was saved for this cache tuple.
+    """
     OTHER_ERROR = auto()
+    """
+    An uncategorized error occurred that caused command data extraction
+    for this cache tuple to fail.
+    """
 
 
 @dataclass
