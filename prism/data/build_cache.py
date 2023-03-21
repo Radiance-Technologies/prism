@@ -1240,8 +1240,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
         timestamps: Dict[str,
                          float] = {}
         if path.exists():
-            with open(str(path) + ".timestamp", "rt") as f:
-                timestamps['success'] = float(f.read())
+            return "success"
         if Path(prefix + "_cache_error.txt").exists():
             with open(prefix + "_cache_error.txt.timestamp", "rt") as f:
                 timestamps['cache error'] = float(f.read())
