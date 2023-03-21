@@ -45,7 +45,7 @@ from prism.language.sexp.node import SexpNode
 from prism.project.metadata import ProjectMetadata
 from prism.util.io import atomic_write
 from prism.util.iterable import split
-from prism.util.logging import SpecialLogger, SpecialLoggerServer
+from prism.util.logging import ManagedClient, ManagedServer
 from prism.util.opam.switch import OpamSwitch
 from prism.util.opam.version import Version, VersionString
 from prism.util.radpytools import PathLike
@@ -1631,7 +1631,22 @@ class CoqProjectBuildCacheProtocol(Protocol):
         log : str
             log string to write to file.
 
-class CoqProjectBuildCache(CoqProjectBuildCacheProtocol):  # type: ignore
+        Returns
+        -------
+        str or None
+            If `block`, return "write complete"; otherwise, return
+            nothing
+        """
+        return self._write_kernel(
+            (project,
+             commit_sha,
+             coq_version),
+            block,
+            log,
+            ".txt")
+
+
+class CoqProjectBuildCache(CoqProjectBuildCacheProtocol, ManagedClient):
     """
     Implementation of CoqProjectBuildCacheProtocol with added __init__.
     """
@@ -1648,10 +1663,39 @@ class CoqProjectBuildCache(CoqProjectBuildCacheProtocol):  # type: ignore
         self.start_time = start_time
         if not self.root.exists():
             os.makedirs(self.root)
-        SpecialLogger.__init__(self, __name__)
+        self.project_name = project_name
+        self.commit_sha = commit_sha
+        self.coq_version = coq_version
+        self.logger_name = logger_name
+        self.logger: logging.Logger
+        ManagedClient.__init__(self, logger_name)
+
+    def addHandler(self, handler: logging.Handler):
+        """
+        Add Handler to logger.
+        """
+        self.logger.addHandler(handler)
+
+    def setLevel(self, level: int):
+        """
+        Set Logger Level.
+        """
+        self.logger.setLevel(level)
+
+    def init_logger(self, logger: Union[str, logging.Logger]):
+        """
+        Create logger.
+        """
+        if isinstance(logger, str):
+            logger = logging.getLogger(logger)
+        logger.propagate = False
+        # Clear any default handlers
+        for h in logger.handlers:
+            logger.removeHandler(h)
+        return logger
 
 
-class CoqProjectBuildCacheServer(SpecialLoggerServer[CoqProjectBuildCache]):
+class CoqProjectBuildCacheServer(ManagedServer[CoqProjectBuildCache]):
     """
     A BaseManager-derived server for managing build cache.
     """
