@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from prism.data.document import CoqDocument
+from prism.interface.coq.options import SerAPIOptions
 from prism.language.gallina.analyze import SexpInfo
 from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.str_with_location import StrWithLocation
@@ -25,7 +26,8 @@ class TestStrWithLocation(unittest.TestCase):
         cls.simple_doc = CoqDocument(
             cls.simple_file,
             CoqParser.parse_source(cls.simple_file),
-            project_path=_COQ_EXAMPLES_PATH)
+            project_path=_COQ_EXAMPLES_PATH,
+            serapi_options=SerAPIOptions.empty(_COQ_EXAMPLES_PATH))
         cls.located_str_simple = \
             StrWithLocation.create_from_file_contents(
                 cls.simple_doc.source_code)

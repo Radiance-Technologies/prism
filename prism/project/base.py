@@ -618,7 +618,8 @@ class Project(ABC):
                 CoqDocument(
                     f,
                     project_path=self.path,
-                    source_code=CoqParser.parse_source(f))
+                    source_code=CoqParser.parse_source(f),
+                    serapi_options=self.serapi_options)
                 for f in self.get_file_list(relative=True)
             ]
 
@@ -934,7 +935,8 @@ class Project(ABC):
             get_relative_path(filename,
                               self.path),
             project_path=self.path,
-            source_code=CoqParser.parse_source(filename))
+            source_code=CoqParser.parse_source(filename),
+            serapi_options=self.serapi_options)
 
     def get_file_dependencies(self) -> Dict[str, List[str]]:
         """

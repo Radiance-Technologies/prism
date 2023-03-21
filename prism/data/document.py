@@ -11,12 +11,12 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import List, Optional
 
+from prism.data.vernac_sentence import VernacularSentence
+from prism.interface.coq.options import SerAPIOptions
 from prism.language.gallina.util import ParserUtils
 from prism.language.sexp import SexpNode
 from prism.language.token import Token
 from prism.util.radpytools import PathLike
-
-from .vernac_sentence import VernacularSentence
 
 
 @dataclass
@@ -59,6 +59,10 @@ class CoqDocument:
     A list of s-expression nodes representing the sequences of
     lexical tokens in each sentence in the order of their
     definition in the document.
+    """
+    serapi_options: Optional[SerAPIOptions] = None
+    """
+    The SerAPI options for parsing this file.
     """
 
     def __post_init__(self) -> None:
@@ -140,20 +144,6 @@ class CoqDocument:
         return pathlib.Path(self.project_path_).stem
 
     @cached_property
-    def serapi_options(self) -> str:
-        """
-        Get the SerAPI options for parsing this file.
-
-        Returns
-        -------
-        str
-            The command-line options for invoking SerAPI tools, e.g.,
-            ``f"sercomp {serapi_options} {self.name}"``.
-        """
-        # TODO: Cache on object creation
-        raise NotImplementedError("Use Project.serapi_options instead")
-
-    @cached_property
     def unicode_offsets(self) -> List[int]:
         """
         Get offsets of unicode characters from the start of the file.
@@ -195,7 +185,8 @@ class CoqDocument:
             name=self.name,
             project_path=self.project_path,
             revision=self.revision,
-            source_code=self.source_code)
+            source_code=self.source_code,
+            serapi_options=copy.deepcopy(self.serapi_options))
 
     def str_with_space(self) -> str:
         """

@@ -1007,7 +1007,7 @@ class CoqParser:
             sentences=sentences,
             ast_sexp_list=ast_sexp_list,
             tok_sexp_list=tok_sexp_list,
-        )
+            serapi_options=serapi_options)
 
     @classmethod
     def parse_sentences(

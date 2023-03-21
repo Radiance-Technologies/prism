@@ -16,6 +16,7 @@ import git
 import pytest
 
 from prism.data.document import CoqDocument
+from prism.interface.coq.options import SerAPIOptions
 from prism.project.base import SEM, Project, SentenceExtractionMethod
 from prism.project.metadata.dataclass import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
@@ -52,7 +53,8 @@ class TestProject(unittest.TestCase):
             cls.document[coq_file] = CoqDocument(
                 test_filename,
                 cls.test_contents[coq_file],
-                project_path=_COQ_EXAMPLES_PATH)
+                project_path=_COQ_EXAMPLES_PATH,
+                serapi_options=SerAPIOptions.empty(_COQ_EXAMPLES_PATH))
             with open(expected_filename, "rt") as f:
                 contents = json.load(f)
                 cls.test_list[coq_file] = contents[f"{coq_file}_test_list"]
@@ -159,7 +161,10 @@ class TestProject(unittest.TestCase):
         old_dir = os.path.abspath(os.curdir)
         os.chdir(repo_path)
         subprocess.run("make")
-        document = CoqDocument(name="ADDER/Adder.v", project_path=repo_path)
+        document = CoqDocument(
+            name="ADDER/Adder.v",
+            project_path=repo_path,
+            serapi_options=SerAPIOptions.empty(repo_path))
         with open(document.abspath, "rt") as f:
             document.source_code = f.read()
         sentences = Project.extract_sentences(
@@ -235,7 +240,8 @@ class TestProject(unittest.TestCase):
         subprocess.run("make")
         document = CoqDocument(
             name="Tactics/Coinc/CoincR.v",
-            project_path=repo_path)
+            project_path=repo_path,
+            serapi_options=SerAPIOptions.empty(repo_path))
         with open(document.abspath, "rt") as f:
             document.source_code = f.read()
         actual_outcome = Project.extract_sentences(
