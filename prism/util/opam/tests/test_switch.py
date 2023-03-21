@@ -4,6 +4,7 @@ Test suite for prism.util.opam.
 import re
 import tempfile
 import unittest
+from functools import partial
 from pathlib import Path
 from subprocess import CalledProcessError, TimeoutExpired
 
@@ -167,31 +168,35 @@ class TestOpamSwitch(unittest.TestCase):
         """
         repo_name = 'coq-released'
         repo_addr = 'https://coq.inria.fr/opam/released'
+        first_op = partial(self.test_switch.add_repo, repo_addr=repo_addr)
+        second_op = self.test_switch.remove_repo
+        first_assert = self.assertIn
+        second_assert = self.assertNotIn
 
         r = self.test_switch.run("opam repo list")
         r.check_returncode()
         returned = r.stdout
-        self.assertFalse(
-            "coq-released "
-            "https://coq.inria.fr/opam/released" in returned)
+        if ("coq-released https://coq.inria.fr/opam/released" in returned):
+            first_op, second_op = second_op, first_op
+            first_assert, second_assert = second_assert, first_assert
 
-        self.test_switch.add_repo(repo_name, repo_addr)
-
-        r = self.test_switch.run("opam repo list")
-        r.check_returncode()
-        returned = r.stdout
-        self.assertTrue(
-            "coq-released "
-            "https://coq.inria.fr/opam/released" in returned)
-
-        self.test_switch.remove_repo(repo_name)
+        first_op(repo_name)
 
         r = self.test_switch.run("opam repo list")
         r.check_returncode()
         returned = r.stdout
-        self.assertFalse(
-            "coq-released "
-            "https://coq.inria.fr/opam/released" in returned)
+        first_assert(
+            "coq-released https://coq.inria.fr/opam/released",
+            returned)
+
+        second_op(repo_name)
+
+        r = self.test_switch.run("opam repo list")
+        r.check_returncode()
+        returned = r.stdout
+        second_assert(
+            "coq-released https://coq.inria.fr/opam/released",
+            returned)
 
     def test_limits(self):
         """
