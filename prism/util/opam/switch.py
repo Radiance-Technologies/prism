@@ -269,7 +269,7 @@ class OpamSwitch:
         command = f'bwrap --dev-bind / / --bind {src} {dest} -- bash -c "{command}"'
         return command, src, dest
 
-    def export(
+    def export(  # noqa: C901
             self,
             include_id: bool = True,
             include_metadata: bool = False) -> 'OpamSwitch.Configuration':
@@ -305,8 +305,10 @@ class OpamSwitch:
         package_metadata = contents[1 :]
         contents = contents[0]
         tokens = contents.split()
-        kwargs = {}
+        kwargs: Dict[str,
+                     Any] = {}
         field = None
+        depth = 0
         # identify fields and their raw values
         for token in tokens:
             if token.endswith(":"):
@@ -315,19 +317,37 @@ class OpamSwitch:
             else:
                 assert field is not None
                 if token.startswith("["):
-                    kwargs[field] = []
+                    if field not in kwargs:
+                        kwargs[field] = []
+                    else:
+                        kwarg = kwargs[field]
+                        for _ in range(depth - 1):
+                            kwarg = kwarg[-1]
+                        kwarg.append([])
+                    depth += 1
                     token = token[1 :]
                 if field in kwargs:
+                    kwarg = kwargs[field]
+                    for _ in range(depth - 1):
+                        kwarg = kwarg[-1]
                     if token.endswith("]"):
+                        depth -= 1
                         token = token[:-1]
                         if token:
-                            kwargs[field].append(token)
-                        field = None
+                            kwarg.append(token)
+                        if depth == 0:
+                            field = None
                     elif token:
-                        kwargs[field].append(token)
+                        kwarg.append(token)
                 else:
                     kwargs[field] = token
                     field = None
+        # drop extra fields
+        kwargs = {
+            f.name: kwargs[f.name]
+            for f in fields(OpamSwitch.Configuration)
+            if f.name in kwargs
+        }
         # process fields
         for field, value in kwargs.items():
             # safe to modify dict since keys are not added or removed
@@ -338,8 +358,9 @@ class OpamSwitch:
                 if not isinstance(value, list):
                     value = [value]
                 for package in value:
-                    package: PackageConstraint = PackageConstraint.parse(
-                        package)
+                    package = typing.cast(
+                        PackageConstraint,
+                        PackageConstraint.parse(package))
                     packages.append(
                         (package.package_name,
                          package.version_constraint))
