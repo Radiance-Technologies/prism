@@ -365,7 +365,7 @@ class SerAPIOptions:
             options = ['--no_init'] if self.noinit else []
         else:
             options = ['--no_prelude'] if self.noinit else []
-        options.extend(self.iqr.as_serapi_args())
+        options.append(self.iqr.as_serapi_args())
         if not is_pre_8_11:
             options.extend(["-disallow-sprop"] if self.disallow_sprop else [])
             options.extend(["-indices-matter"] if self.indices_matter else [])
@@ -475,7 +475,6 @@ class SerAPIOptions:
             '-nois',
             action='store_true',
             default=False,
-            type=bool,
             help='start without loading the Init library')
         parser.add_argument(
             '-load-vernac-source',
