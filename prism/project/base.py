@@ -450,7 +450,11 @@ class Project(ABC):
         """
         metadata_args = self.metadata_args
         self._last_metadata_args = metadata_args
-        return self.metadata_storage.get(self.name, *metadata_args)
+        metadata = self.metadata_storage.get(self.name, *metadata_args)
+        # apply dynamic metadata touchups
+        if metadata.serapi_options is not None:
+            metadata.serapi_options.iqr.pwd = self.path
+        return metadata
 
     def _get_random_sentence_internal(
             self,

@@ -105,6 +105,7 @@ class CoqWarning:
         """
         Parse the warning from a string.
         """
+        data = data.strip()
         state = CoqWarningState.parse_state(data)
         name = data
         if state != CoqWarningState.ENABLED:
@@ -204,6 +205,8 @@ class SerAPIOptions:
     See https://coq.inria.fr/refman/practical-tools/coq-commands.html#by-command-line-options
     for a complete list of Coq command-line options.
     """  # noqa: W505, B950
+
+    # NOTE: more options can be added as needed
 
     noinit: bool
     """
@@ -450,6 +453,16 @@ class SerAPIOptions:
             # written this way for type checking
             is_string = True
             args = shlex.split(args)
+        # preprocess warning args to avoid leading dashes
+        is_warning_arg = False
+        for i in range(len(args)):
+            arg = args[i]
+            if is_warning_arg:
+                if arg.startswith('-'):
+                    args[i] = ' ' + arg
+                is_warning_arg = False
+            elif arg == "-w":
+                is_warning_arg = True
         parser = argparse.ArgumentParser()
         parser.add_argument(
             '-w',
@@ -524,20 +537,21 @@ class SerAPIOptions:
         iqr = IQR.extract_iqr(args, pwd)
         warnings = []
         for warning_option in parsed_args.w:
-            warns = warning_option.split(',')
+            warns = warning_option[0].split(',')
             for warning in warns:
                 warnings.append(CoqWarning.deserialize(warning))
-        settings = [CoqSetting(True, setting) for setting in parsed_args.set]
+        settings = [CoqSetting(True, setting[0]) for setting in parsed_args.set]
         settings.extend(
             CoqSetting(False,
-                       setting) for setting in parsed_args.unset)
+                       setting[0]) for setting in parsed_args.unset)
         loaded_files = [
             LoadedFile(False,
-                       filename) for filename in parsed_args.load_vernac_source
+                       filename[0])
+            for filename in parsed_args.load_vernac_source
         ]
         loaded_files.extend(
             LoadedFile(True,
-                       filename)
+                       filename[0])
             for filename in parsed_args.load_vernac_source_verbose)
         return SerAPIOptions(
             noinit,
@@ -610,8 +624,12 @@ class SerAPIOptions:
         Infer options from ``_CoqProject`` files within a directory.
         """
         serapi_options = []
-        for coq_project_file in glob.glob(f"{project_root}/**/_CoqProject"):
-            coq_project_path = Path(coq_project_file)
+        for coq_project_file in itertools.chain(
+                glob.glob(f"{project_root}/**/_CoqProject",
+                          recursive=True),
+                glob.glob(f"{project_root}/**/Make",
+                          recursive=True)):
+            coq_project_path = Path(coq_project_file).parent
             with open(coq_project_file, "r") as f:
                 lines = f.readlines()
             serapi_options.append(
