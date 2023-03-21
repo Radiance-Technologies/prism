@@ -126,6 +126,14 @@ class ExtractVernacCommandsError(RuntimeError):
         self.parent_stacktrace = parent_stacktrace
 
 
+class DefaultProcessProjectFallbackError(NotImplementedError):
+    """
+    A special case of parent raised by default_process_project_fallback.
+    """
+
+    pass
+
+
 serapi_id_align_ = align_factory(
     lambda x,
     y: 0. if x == y else 1.,
@@ -1540,13 +1548,10 @@ def extract_cache_new(  # noqa: C901
         except ExtractVernacCommandsError:
             # Don't re-log extract_vernac_commands errors
             pass
-        except NotImplementedError as e:
+        except DefaultProcessProjectFallbackError:
             # Also don't re-log the not-implemented error from build
             # errors
-            if e.args == (FALLBACK_EXCEPTION_MSG,):
-                pass
-            else:
-                raise
+            pass
         except Exception as e:
             logger.critical(
                 "An exception occurred outside of extracting vernacular commands.\n"
@@ -1994,7 +1999,7 @@ class CacheExtractor:
         """
         By default, do nothing on project build failure.
         """
-        raise NotImplementedError(FALLBACK_EXCEPTION_MSG)
+        raise DefaultProcessProjectFallbackError(FALLBACK_EXCEPTION_MSG)
 
     @classmethod
     def default_recache(
