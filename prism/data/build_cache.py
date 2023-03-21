@@ -11,6 +11,7 @@ from functools import reduce
 from itertools import chain
 from multiprocessing.managers import BaseManager
 from pathlib import Path
+from time import time
 from typing import (
     Any,
     Callable,
@@ -995,6 +996,11 @@ class CoqProjectBuildCacheProtocol(Protocol):
     """
     The extension for the cache files that defines their format.
     """
+    start_time: float
+    """
+    The time in seconds since the Unix epoch that the current cache
+    extraction process or script started.
+    """
     _default_coq_versions: Set[str] = {
         '8.9.1',
         '8.10.2',
@@ -1032,7 +1038,6 @@ class CoqProjectBuildCacheProtocol(Protocol):
             block: bool,
             file_contents: Union[str,
                                  Serializable],
-            start_time: float,
             suffix: Optional[str] = None) -> Optional[str]:
         r"""
         Write a message or object to a text file.
@@ -1050,9 +1055,6 @@ class CoqProjectBuildCacheProtocol(Protocol):
             If true, return a ``"write complete"`` message.
         file_contents : Union[str, Serializable]
             The contents to write or serialized to the file.
-        start_time : float
-            The time at which cache extraction was started. Write this
-            to a separate file.
         suffix : Optional[str], optional
             An optional suffix (including file extension) that uniquely
             identifies the written file, by default None, which
@@ -1065,17 +1067,26 @@ class CoqProjectBuildCacheProtocol(Protocol):
             nothing
         """
         # standardize inputs to get_path
-        if not isinstance(cache_id, tuple):
-            cache_id = (cache_id,)
+        cache_id_tuple: Union[Tuple[ProjectCommitData],
+                              Tuple[ProjectMetadata],
+                              Tuple[str,
+                                    str,
+                                    str]]
+        if isinstance(cache_id, ProjectCommitData):
+            cache_id_tuple = (cache_id,)
+        elif isinstance(cache_id, ProjectMetadata):
+            cache_id_tuple = (cache_id,)
+        else:
+            cache_id_tuple = cache_id
         if suffix is not None:
             file_path = Path(
-                str(self.get_path(*cache_id).with_suffix("")) + suffix)
+                str(self.get_path(*cache_id_tuple).with_suffix("")) + suffix)
         else:
-            file_path = self.get_path(*cache_id)
+            file_path = self.get_path(*cache_id_tuple)
         atomic_write(file_path, file_contents)
         # Write timestamp file
         timestamp_file_path = Path(str(file_path) + ".timestamp")
-        timestamp = str(start_time)
+        timestamp = str(self.start_time)
         atomic_write(timestamp_file_path, timestamp)
         if block:
             return "write complete"
@@ -1200,6 +1211,8 @@ class CoqProjectBuildCacheProtocol(Protocol):
         """
         Get the file path for a given metadata.
         """
+        assert metadata.commit_sha is not None
+        assert metadata.coq_version is not None
         return self.get_path_from_fields(
             metadata.project_name,
             metadata.commit_sha,
@@ -1381,12 +1394,10 @@ class CoqProjectBuildCacheProtocol(Protocol):
                 self.list_status(*args,
                                  **kwargs)))
 
-    def write(
-            self,
-            data: ProjectCommitData,
-            start_time: float,
-            block: bool = True,
-            _=None) -> Optional[str]:
+    def write(self,
+              data: ProjectCommitData,
+              block: bool = True,
+              _=None) -> Optional[str]:
         """
         Write to build cache.
 
@@ -1394,9 +1405,6 @@ class CoqProjectBuildCacheProtocol(Protocol):
         ----------
         data : ProjectCommitData
             Data to write to build cache
-        start_time : float
-            The time at which cache extraction was started. Write this
-            to a separate file.
         block : bool
             If true, return a ``"write complete"`` message.
 
@@ -1411,12 +1419,11 @@ class CoqProjectBuildCacheProtocol(Protocol):
         The final `_` parameter in the definition is provided for
         compatibility with the other write methods.
         """
-        return self._write_kernel(data, block, data, start_time)
+        return self._write_kernel(data, block, data)
 
     def write_build_error_log(
             self,
             metadata: ProjectMetadata,
-            start_time: float,
             block: bool,
             build_result: ProjectBuildResult) -> Optional[str]:
         """
@@ -1427,9 +1434,6 @@ class CoqProjectBuildCacheProtocol(Protocol):
         metadata : ProjectMetadata
             Metadata for the project that had an error. Used by this
             method to get the correct path to write to.
-        start_time : float
-            The time at which cache extraction was started. Write this
-            to a separate file.
         block : bool
             If true, return a ``"write complete"`` message.
         build_result : str
@@ -1452,13 +1456,11 @@ class CoqProjectBuildCacheProtocol(Protocol):
             metadata,
             block,
             str_to_write,
-            start_time,
             "_build_error.txt")
 
     def write_cache_error_log(
             self,
             metadata: ProjectMetadata,
-            start_time: float,
             block: bool,
             cache_error_log: str) -> Optional[str]:
         """
@@ -1469,9 +1471,6 @@ class CoqProjectBuildCacheProtocol(Protocol):
         metadata : ProjectMetadata
             Metadata for the project that had an error. Used by this
             method to get the correct path to write to.
-        start_time : float
-            The time at which cache extraction was started. Write this
-            to a separate file.
         block : bool
             If true, return a ``"write complete"`` message.
         cache_error_log : str
@@ -1487,15 +1486,12 @@ class CoqProjectBuildCacheProtocol(Protocol):
             metadata,
             block,
             cache_error_log,
-            start_time,
             "_cache_error.txt")
 
-    def write_metadata_file(
-            self,
-            data: ProjectCommitData,
-            start_time: float,
-            block: bool,
-            _=None) -> Optional[str]:
+    def write_metadata_file(self,
+                            data: ProjectCommitData,
+                            block: bool,
+                            _=None) -> Optional[str]:
         """
         Write metadata-focused file to build cache directory.
 
@@ -1504,9 +1500,6 @@ class CoqProjectBuildCacheProtocol(Protocol):
         data : ProjectCommitData
             Data to write to metadata file. Any data in `command_data`
             field is removed first
-        start_time : float
-            The time at which cache extraction was started. Write this
-            to a separate file.
         block : bool
             If True, return a ``"write complete"`` message
         _ : _type_, optional
@@ -1521,12 +1514,11 @@ class CoqProjectBuildCacheProtocol(Protocol):
         """
         data.command_data = dict()
         suffix = ".".join(["_extraction_info", self.fmt_ext])
-        return self._write_kernel(data, block, data, start_time, suffix)
+        return self._write_kernel(data, block, data, suffix)
 
     def write_misc_error_log(
             self,
             metadata: ProjectMetadata,
-            start_time: float,
             block: bool,
             misc_log: str) -> Optional[str]:
         """
@@ -1537,9 +1529,6 @@ class CoqProjectBuildCacheProtocol(Protocol):
         metadata : ProjectMetadata
             Metadata for the project that had an error. Used by this
             method to get the correct path to write to.
-        start_time : float
-            The time at which cache extraction was started. Write this
-            to a separate file.
         block : bool
             If true, return a "write complete" message
         misc_log : str
@@ -1551,17 +1540,11 @@ class CoqProjectBuildCacheProtocol(Protocol):
             If `block`, return "write complete"; otherwise, return
             nothing
         """
-        return self._write_kernel(
-            metadata,
-            block,
-            misc_log,
-            start_time,
-            "_misc_error.txt")
+        return self._write_kernel(metadata, block, misc_log, "_misc_error.txt")
 
     def write_timing_log(
             self,
             metadata: ProjectMetadata,
-            start_time: float,
             block: bool,
             timing_log: str) -> Optional[str]:
         """
@@ -1572,9 +1555,6 @@ class CoqProjectBuildCacheProtocol(Protocol):
         metadata : ProjectMetadata
             Metadata for the project that had an error. Used by this
             method to get the correct path to write to.
-        start_time : float
-            The time at which cache extraction was started. Write this
-            to a separate file.
         block : bool
             If true, return a "write complete" message
         timing_log : str
@@ -1586,22 +1566,24 @@ class CoqProjectBuildCacheProtocol(Protocol):
             If `block`, return "write complete"; otherwise, return
             nothing
         """
-        return self._write_kernel(
-            metadata,
-            block,
-            timing_log,
-            start_time,
-            "_timing.txt")
+        return self._write_kernel(metadata, block, timing_log, "_timing.txt")
 
 
-class CoqProjectBuildCache(CoqProjectBuildCacheProtocol):
+class CoqProjectBuildCache(CoqProjectBuildCacheProtocol):  # type: ignore
     """
     Implementation of CoqProjectBuildCacheProtocol with added __init__.
     """
 
-    def __init__(self, root: PathLike, fmt_ext: str = "yml"):
+    def __init__(
+            self,
+            root: PathLike,
+            fmt_ext: str = "yml",
+            start_time: Optional[float] = None):
         self.root = Path(root)
         self.fmt_ext = fmt_ext
+        if start_time is None:
+            start_time = time()
+        self.start_time = start_time
         if not self.root.exists():
             os.makedirs(self.root)
 
