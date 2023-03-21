@@ -1882,12 +1882,12 @@ class CacheExtractor:
         with CoqProjectBuildCacheServer() as cache_server:
             if force_serial:
                 factory = CoqProjectBuildCache
-                self.cache_client = CoqProjectBuildCache(
-                    self.cache_dir,
-                    **self.cache_kwargs)
             else:
                 factory = cache_server.getClient
-            self.cache_client = factory(self.cache_dir, **self.cache_kwargs)
+            self.cache_client = factory(
+                self.cache_dir,
+                logger_name='cache-extraction',
+                **self.cache_kwargs)
             # Create semaphore for controlling file-level workers
             if manager is not None:
                 nprocs = os.cpu_count(

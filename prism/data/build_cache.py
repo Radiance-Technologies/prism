@@ -1619,6 +1619,24 @@ class CoqProjectBuildCache(CoqProjectBuildCacheProtocol, ManagedClient):
             logger.removeHandler(h)
         return logger
 
+    def getChild(self, name: str, *args, **kwargs) -> 'CoqProjectBuildCache':
+        """
+        Create a child client.
+        """
+        client = super().getChild(name, *args, **kwargs)
+        assert client.logger is not None
+        client.logger.propagate = False
+        return client
+
+    def getLogger(self, name: str, *args, **kwargs) -> 'CoqProjectBuildCache':
+        """
+        Create a client with a logger that has the given name.
+        """
+        client = super().getLogger(name, *args, **kwargs)
+        assert client.logger is not None
+        client.logger.propagate = False
+        return client
+
 
 class CoqProjectBuildCacheServer(ManagedServer[CoqProjectBuildCache]):
     """
