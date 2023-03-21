@@ -1422,30 +1422,36 @@ def extract_cache_new(  # noqa: C901
     pname = project.name
     sha = commit_sha or project.commit_sha
     coq = coq_version or project.coq_version
-    pid = os.getpid()
-    lname = f"{__name__}-{pid}"
-    build_logger = build_cache_client.get_logger().getChild(lname)
-    assert build_logger is not None
-    build_logger.propagate = False
-    for h in build_logger.handlers:
-        build_logger.removeHandler(h)
+    pid: int = os.getpid()
+
+    # Construct project build logger.
+    build_logger = typing.cast(
+        CoqProjectBuildCache,
+        typing.cast(CoqProjectBuildCache,
+                    build_cache_client).getChild(f"{pid}"),
+    )
     build_logger.setLevel(logging.DEBUG)
     build_logger_stream = StringIO()
     build_handler = logging.StreamHandler(build_logger_stream)
     build_handler.addFilter(
         lambda record: not record.name.endswith('extract_vernac_commands'))
     build_logger.addHandler(build_handler)
-    # Clear any default handlers
-    error_logger = build_logger.getChild("extract_vernac_commands")
+
+    # Construct error logger.
+    error_logger = typing.cast(
+        CoqProjectBuildCache,
+        typing.cast(CoqProjectBuildCache,
+                    build_logger).getChild("extract_vernac_commands"),
+    )
     error_logger_stream = StringIO()
     error_handler = logging.StreamHandler(error_logger_stream)
     error_handler.addFilter(
         lambda record: record.name.endswith('extract_vernac_commands'))
     error_logger.addHandler(error_handler)
 
-    # logger.setLevel(logging.DEBUG)
-    # Tell the logger to log to a text stream
-    with project.project_logger(build_logger) as _:
+    # Peform extraction using build_logger to log internal project log
+    # messages.
+    with project.project_logger(typing.cast(logging.Logger, build_logger)) as _:
         original_switch = project.opam_switch
         managed_switch_kwargs = {
             'coq_version': coq_version,
@@ -1477,11 +1483,10 @@ def extract_cache_new(  # noqa: C901
             if isinstance(commit_message, bytes):
                 commit_message = commit_message.decode("utf-8")
             try:
-                with project.project_logger(build_logger):
-                    build_result = project.build(
-                        managed_switch_kwargs=managed_switch_kwargs,
-                        max_runtime=max_runtime,
-                        max_memory=max_memory)
+                build_result = project.build(
+                    managed_switch_kwargs=managed_switch_kwargs,
+                    max_runtime=max_runtime,
+                    max_memory=max_memory)
             except (ProjectBuildError, TimeoutExpired) as pbe:
                 if isinstance(pbe, ProjectBuildError):
                     build_result = (pbe.return_code, pbe.stdout, pbe.stderr)
@@ -1492,7 +1497,7 @@ def extract_cache_new(  # noqa: C901
                         "utf-8") if pbe.stderr is not None else ''
                     build_result = (1, stdout, stderr)
                 command_data, comment_data = process_project_fallback(project)
-                build_cache_client.write_build_error_log(
+                error_logger.write_build_error_log(
                     project.metadata,
                     block,
                     ProjectBuildResult(*build_result))
@@ -1511,14 +1516,14 @@ def extract_cache_new(  # noqa: C901
                     error_logger.exception(e)
                     error_logger_stream.flush()
                     logged_text = error_logger_stream.getvalue()
-                    build_cache_client.write_cache_error_log(
+                    error_logger.write_cache_error_log(
                         project.metadata,
                         block,
                         logged_text)
                     raise
                 finally:
                     elapsed_time = time() - start_time
-                    build_cache_client.write_timing_log(
+                    error_logger.write_timing_log(
                         project.metadata,
                         block,
                         f"Elapsed time in extract_vernac_commands: {elapsed_time} s"
@@ -1538,7 +1543,7 @@ def extract_cache_new(  # noqa: C901
                 file_dependencies,
                 ProjectBuildEnvironment(project.opam_switch.export()),
                 ProjectBuildResult(*build_result))
-            build_cache_client.write(data, block)
+            error_logger.write(data, block)
         except ExtractVernacCommandsError:
             # Don't re-log extract_vernac_commands errors
             pass
@@ -1558,7 +1563,7 @@ def extract_cache_new(  # noqa: C901
             error_logger.exception(e)
             error_logger_stream.flush()
             logged_text = error_logger_stream.getvalue()
-            build_cache_client.write_misc_error_log(
+            error_logger.write_misc_error_log(
                 project_metadata,
                 block,
                 logged_text)
@@ -1567,7 +1572,7 @@ def extract_cache_new(  # noqa: C901
             switch_manager.release_switch(project.opam_switch)
             project.opam_switch = original_switch
             logged_text = build_logger_stream.getvalue()
-            build_cache_client.write_log(pname, sha, coq, block, logged_text)
+            build_logger.write_log(pname, sha, coq, block, logged_text)
 
 
 # Abbreviation defined to satisfy conflicting autoformatting and style
