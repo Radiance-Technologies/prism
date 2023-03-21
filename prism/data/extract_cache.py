@@ -1496,7 +1496,7 @@ def extract_cache_new(  # noqa: C901
                         "utf-8") if pbe.stderr is not None else ''
                     build_result = (1, stdout, stderr)
                 # Write the log before calling process_project_fallback
-                # in case in raises an exception.
+                # in case it raises an exception.
                 build_cache_client.write_build_error_log(
                     project.metadata,
                     block,
