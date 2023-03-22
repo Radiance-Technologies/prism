@@ -217,7 +217,7 @@ class IQR:
             pwd)
 
     @classmethod
-    def extract_iqr(
+    def parse_args(
             cls,
             args: Union[str,
                         List[str]],

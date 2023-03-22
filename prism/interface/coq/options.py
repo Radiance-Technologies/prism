@@ -534,7 +534,7 @@ class SerAPIOptions:
         if is_string:
             # make robust to parsing serialized IQR flags with commas
             args = ' '.join(args)
-        iqr = IQR.extract_iqr(args, pwd)
+        iqr = IQR.parse_args(args, pwd)
         warnings = []
         for warning_option in parsed_args.w:
             warns = warning_option[0].split(',')
