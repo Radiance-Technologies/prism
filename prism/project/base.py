@@ -13,7 +13,7 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import fields
 from enum import Enum, auto
-from functools import partialmethod, reduce
+from functools import partial, partialmethod, reduce
 from itertools import chain
 from pathlib import Path
 from subprocess import CalledProcessError
@@ -53,7 +53,7 @@ from prism.project.exception import (
 )
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
-from prism.project.strace import strace_build
+from prism.project.strace import CoqContext, strace_build
 from prism.util.bash import escape
 from prism.util.build_tools.coqdep import (
     make_dependency_graph,
@@ -686,6 +686,65 @@ class Project(ABC):
                 raise e
         return result
 
+    def _strace_build(
+            self,
+            use_dummy_coqc: bool,
+            cleanup: bool = True,
+            **kwargs) -> Tuple[List[CoqContext],
+                               int,
+                               str,
+                               str]:
+        """
+        Build the project and parse `strace` logs to capture arguments.
+
+        Parameters
+        ----------
+        use_dummy_coqc : bool
+            Attempt to use a stub coqc wrapper that doesn't actually
+            build anything.
+        cleanup : bool, optional
+            If True and `use_dummy_coqc` is True, then clean the project
+            after building.
+            Otherwise, do not clean the project.
+        kwargs
+            Keyword arguments to `OpamSwitch.run`.
+
+        Returns
+        -------
+        List[CoqContext]
+            Captured contexts for each invocation of `coqc` including
+            captured arguments.
+        int
+            The return code of the last-executed command
+        str
+            The total stdout of all commands run
+        str
+            The total stderr of all commands run
+        """
+        cmd = self._prepare_command("build")
+        contexts, rcode_out, stdout, stderr = strace_build(
+            self.opam_switch,
+            cmd,
+            workdir=self.path,
+            use_dummy_coqc=use_dummy_coqc,
+            check=False,
+            **kwargs)
+        self._process_command_output(
+            "Strace",
+            rcode_out,
+            stdout,
+            stderr,
+            ignore_returncode=use_dummy_coqc)
+        if use_dummy_coqc and cleanup:
+            # clean project if we only generated empty files.
+            try:
+                self.clean(**kwargs)
+            except ProjectBuildError:
+                logger.debug(
+                    "Tried to clean a project "
+                    "full of corrupt coqc files, but it failed!")
+        return contexts, rcode_out, stdout, stderr
+
     def build(
             self,
             managed_switch_kwargs: Optional[Dict[str,
@@ -1272,36 +1331,14 @@ class Project(ABC):
             # not yet been configured by a prior build
             pass
 
-        def _strace_build():
-            cmd = self._prepare_command("build")
-            contexts, rcode_out, stdout, stderr = strace_build(
-                self.opam_switch,
-                cmd,
-                workdir=self.path,
-                use_dummy_coqc=use_dummy_coqc,
-                check=False,
-                **kwargs)
-            self._process_command_output(
-                "Strace",
-                rcode_out,
-                stdout,
-                stderr,
-                ignore_returncode=use_dummy_coqc)
-            if use_dummy_coqc:
-                # clean project if we only generated empty files.
-                try:
-                    self.clean(**kwargs)
-                except ProjectBuildError:
-                    logger.debug(
-                        "Tried to clean a project "
-                        "full of corrupt coqc files, but it failed!")
-            return contexts, rcode_out, stdout, stderr
-
         (contexts,
          rcode_out,
          stdout,
-         stderr) = self._build(_strace_build,
-                               managed_switch_kwargs)
+         stderr) = self._build(
+             partial(self._strace_build,
+                     use_dummy_coqc,
+                     **kwargs),
+             managed_switch_kwargs)
 
         serapi_options = SerAPIOptions.merge(
             [c.serapi_options for c in contexts],
