@@ -11,6 +11,7 @@ import stat
 import tempfile
 import typing
 from dataclasses import dataclass, field
+from textwrap import dedent
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import lark
@@ -307,15 +308,48 @@ DUMMY_COQC_PATH_ = tempfile.TemporaryDirectory()
 
 with open(f"{DUMMY_COQC_PATH_.name}/coqc", "w") as f:
     f.write(
-        """#!/bin/bash
+        dedent(
+            """
+            #!/bin/bash
 
-for last; do true; done
+            function FALLBACK {
+                PATH=$OPAM_SWITCH_PREFIX/bin:$PATH coqc $@
+                exit $?
+            }
 
-test -f $last &&
-touch "${last%.v}.vo" &&
-touch "${last%.v}.glob" ||
-PATH=$OPAM_SWITCH_PREFIX/bin:$PATH coqc $@
-    """)
+            # Parse arguments for the Coq file and build artifacts
+            for last; do
+                if [[ $last == *".v" ]]; then
+                    TARGET=$last
+                elif [[ $last ==  *".vo" ]]  && [ -n ${O_ARG+x} ]; then
+                    VO_FILE=$last
+                    unset O_ARG
+                elif [[ $last == "-o" ]]; then
+                    O_ARG=$last
+                fi
+            done
+
+            if [ -z ${TARGET+x} ] || test ! -f $TARGET; then
+                # no target Coq file given or the target does not exist
+                FALLBACK $@
+            elif [ -n ${O_ARG+x} ]; then
+                # malformed argument
+                FALLBACK $@
+            fi
+
+            if [ -z ${VO_FILE+x} ]; then
+                # no target output file given
+                VO_FILE="${TARGET%.v}.vo";
+                GLOB_FILE="${TARGET%.v}.glob"
+            else
+                GLOB_FILE="${VO_FILE%.vo}.glob"
+            fi
+
+            # create fake build artifacts
+            touch $VO_FILE &&
+            touch $GLOB_FILE ||
+            FALLBACK $@
+            """).strip())
 
 os.chmod(
     f"{DUMMY_COQC_PATH_.name}/coqc",
