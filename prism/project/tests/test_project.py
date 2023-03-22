@@ -16,6 +16,7 @@ import git
 import pytest
 
 from prism.data.document import CoqDocument
+from prism.interface.coq.iqr import IQR
 from prism.interface.coq.options import SerAPIOptions
 from prism.project.base import SEM, Project, SentenceExtractionMethod
 from prism.project.metadata.dataclass import ProjectMetadata
@@ -182,31 +183,6 @@ class TestProject(unittest.TestCase):
         del test_repo
         shutil.rmtree(os.path.join(repo_path))
 
-    def test_infer_serapi_options_dummy(self):
-        """
-        Test fast extraction of IQR flags using a dummy coqc wrapper on
-        CompCert.
-        """
-        # test disabled for running too long.
-        return
-
-        project = self.test_infer_opam_deps_project
-
-        project.metadata.clean_cmd = ["make clean"]
-        project.metadata.build_cmd = [
-            "./configure x86_64-linux",
-            "make"
-        ]
-        project.metadata.opam_dependencies=[]
-        project.metadata.coq_dependencie=set()
-        project.num_cores = 15
-        iqr_flags = project.infer_serapi_options(
-            use_dummy_coqc=False)
-        rcode,*_ = project._build(lambda: project._make("build","Compilation"))
-        self.assertEqual(rcode,0)
-        self.assertTrue(project._check_serapi_option_health_post_build())
-
-
     def test_extract_sentences_serapi_simple(self):
         """
         Test method for splitting Coq code using SERAPI.
@@ -285,11 +261,6 @@ class TestProject(unittest.TestCase):
         """
         Test inferring opam dependencies from a project dir.
         """
-        with self.subTest("standard"):
-            expected_deps = {'"menhir"'}
-            self.test_infer_opam_deps_project.infer_opam_dependencies()
-            deps = self.test_infer_opam_deps_project.opam_dependencies
-            self.assertEqual(set(deps), expected_deps)
         with self.subTest("ignore_iqr_flags"):
             expected_deps = {
                 '"coq-flocq"',
@@ -333,6 +304,11 @@ class TestProject(unittest.TestCase):
                 ignore_coq_version=True)
             deps = self.test_infer_opam_deps_project.opam_dependencies
             self.assertEqual(set(deps), expected_deps)
+        with self.subTest("standard"):
+            expected_deps = {'"menhir"'}
+            self.test_infer_opam_deps_project.infer_opam_dependencies()
+            deps = self.test_infer_opam_deps_project.opam_dependencies
+            self.assertEqual(set(deps), expected_deps)
 
     @pytest.mark.dependency()
     def test_build_and_get_iqr(self):
@@ -373,6 +349,32 @@ class TestProject(unittest.TestCase):
         self.assertTrue(
             set(stdout.splitlines()).issuperset(expected_output.splitlines()))
         self.assertTrue(stderr.endswith(expected_err))
+
+    def test_infer_serapi_options_dummy(self):
+        """
+        Test fast extraction of IQR flags using a dummy `coqc` wrapper.
+
+        Show that IQR options can be extracted without performing a full
+        build and that the options are considered healthy afterwards.
+        """
+        project = self.test_iqr_project
+        project.clean()
+        contexts, rcode, _, _ = project._strace_build(True, False)
+        serapi_options = SerAPIOptions.merge(
+            [c.serapi_options for c in contexts],
+            root=project.path)
+        expected_iqr_flags = IQR.parse_args(
+            ' '.join(
+                [
+                    '-R vendor/array/src,Array',
+                    '-R src,SepLogic',
+                    '-R vendor/simple-classes/src,Classes',
+                    '-R vendor/tactical/src,Tactical'
+                ]),
+            pwd=project.path)
+        self.assertEqual(serapi_options.iqr, expected_iqr_flags)
+        self.assertEqual(rcode, 0)
+        self.assertTrue(project._check_serapi_option_health_post_build())
 
     @pytest.mark.dependency(depends=["TestProject::test_build_and_get_iqr"])
     def test_get_file_dependencies(self):
