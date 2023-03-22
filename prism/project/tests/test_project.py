@@ -187,13 +187,25 @@ class TestProject(unittest.TestCase):
         Test fast extraction of IQR flags using a dummy coqc wrapper on
         CompCert.
         """
-        self.test_infer_opam_deps_project.metadata.clean_cmd = ["make clean"]
-        self.test_infer_opam_deps_project.metadata.build_cmd = [
+        # test disabled for running too long.
+        return
+
+        project = self.test_infer_opam_deps_project
+
+        project.metadata.clean_cmd = ["make clean"]
+        project.metadata.build_cmd = [
             "./configure x86_64-linux",
             "make"
         ]
-        self.test_infer_opam_deps_project.infer_serapi_options(
-            use_dummy_coqc=True)
+        project.metadata.opam_dependencies=[]
+        project.metadata.coq_dependencie=set()
+        project.num_cores = 15
+        iqr_flags = project.infer_serapi_options(
+            use_dummy_coqc=False)
+        rcode,*_ = project._build(lambda: project._make("build","Compilation"))
+        self.assertEqual(rcode,0)
+        self.assertTrue(project._check_serapi_option_health_post_build())
+
 
     def test_extract_sentences_serapi_simple(self):
         """

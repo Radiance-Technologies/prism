@@ -423,9 +423,6 @@ class Project(ABC):
         for full_path in full_q_paths:
             if not glob.glob(f"{full_path}/*.vo", recursive=False):
                 return False
-        for full_path in full_r_paths:
-            if not glob.glob(f"{full_path}/**/*.vo", recursive=True):
-                return False
         for vo_file in glob.glob(f"{self.path}/**/*.vo", recursive=True):
             vo_file_path = Path(vo_file)
             if full_r_paths and not any(full_path in vo_file_path.parents
@@ -1267,7 +1264,6 @@ class Project(ABC):
         str
             The total stderr of all commands run
         """
-        print(kwargs)
         # ensure we are building from a clean slate
         try:
             self.clean(**kwargs)
