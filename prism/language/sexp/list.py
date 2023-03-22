@@ -38,7 +38,7 @@ class SexpList(SexpNode):
 
     def __str__(self) -> str:  # noqa: D105
         # perform in-order traversal
-        nodes = [self]
+        nodes: List[Optional[SexpNode]] = [self]
         s = []
         while nodes:
             node = nodes.pop()
@@ -48,6 +48,7 @@ class SexpList(SexpNode):
                 if s and not s[-1] == "(":
                     s.append(" ")
                 if node.is_list():
+                    assert isinstance(node, SexpList)
                     s.append("(")
                     nodes.append(None)
                     nodes.extend(reversed(node.children))
@@ -76,15 +77,11 @@ class SexpList(SexpNode):
         if recur_action == SexpNode.RecurAction.ContinueRecursion:
             for child in self.children:
                 child.apply_recur(func)
-            # end for
-        # end if
 
     def contains_str(self, s: str) -> bool:  # noqa: D102
         for c in self.children:
             if c.contains_str(s):
                 return True
-            # end if
-        # end for
         return False
 
     def forward_depth_first_sequence(  # noqa: D102
@@ -133,7 +130,7 @@ class SexpList(SexpNode):
     def is_list(self):  # noqa: D102
         return True
 
-    def modify_recur(
+    def modify_recur(  # noqa: D102
         self,
         pre_children_modify: Callable[["SexpNode"],
                                       Tuple[Optional["SexpNode"],
@@ -142,7 +139,7 @@ class SexpList(SexpNode):
          SexpNode.RecurAction.ContinueRecursion),
         post_children_modify: Callable[["SexpNode"],
                                        Optional["SexpNode"]] = lambda x: x,
-    ) -> Optional["SexpNode"]:  # noqa: D102
+    ) -> Optional["SexpNode"]:
         sexp, recur_action = pre_children_modify(self)
 
         if sexp is None:
@@ -167,11 +164,11 @@ class SexpList(SexpNode):
         sexp = post_children_modify(sexp)
         return sexp
 
-    def pretty_format(
+    def pretty_format(  # noqa: D102
             self,
             max_depth: int = np.PINF,
             depth: int = 0,
-            strip: bool = True) -> str:  # noqa: D102
+            strip: bool = True) -> str:
         formatted = self.pretty_format_recur(self, max_depth, depth)
         if strip:
             formatted = formatted.strip()
@@ -207,9 +204,7 @@ class SexpList(SexpNode):
         """
         if sexp.is_string():
             return sexp.pretty_format()
-        # end if
 
-        sexp: SexpList
         if len(sexp.children) == 0:
             return "()"
         else:
@@ -224,5 +219,3 @@ class SexpList(SexpNode):
                                             depth + 1,
                                             False) for c in sexp.children
                         ]) + ")")
-            # end if
-        # end if

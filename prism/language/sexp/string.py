@@ -4,8 +4,9 @@ Defines leaf s-expression nodes with string content.
 Adapted from `roosterize.sexp.SexpString`
 at https://github.com/EngineeringSoftware/roosterize/.
 """
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, Iterator, List, Optional, Tuple
 
+from prism.language.sexp.exception import IllegalSexpOperationException
 from prism.language.sexp.node import SexpNode
 
 
@@ -25,6 +26,10 @@ class SexpString(SexpNode):
             return NotImplemented
         else:
             return other.is_string() and other._content == self._content
+
+    def __iter__(self) -> Iterator['SexpNode']:  # noqa: D105
+        raise IllegalSexpOperationException(
+            "Cannot iterate over children of an s-exp string")
 
     def __str__(self) -> str:  # noqa: D105
         content = self.content
@@ -69,7 +74,7 @@ class SexpString(SexpNode):
     def is_string(self) -> bool:  # noqa: D102
         return True
 
-    def modify_recur(
+    def modify_recur(  # noqa: D102
         self,
         pre_children_modify: Callable[["SexpNode"],
                                       Tuple[Optional["SexpNode"],
@@ -78,7 +83,7 @@ class SexpString(SexpNode):
          SexpNode.RecurAction.ContinueRecursion),
         post_children_modify: Callable[["SexpNode"],
                                        Optional["SexpNode"]] = lambda x: x,
-    ) -> Optional["SexpNode"]:  # noqa: D102
+    ) -> Optional["SexpNode"]:
         sexp, _recur_action = pre_children_modify(self)
         if sexp is None:
             return None

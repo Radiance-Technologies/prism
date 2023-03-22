@@ -24,6 +24,7 @@ from typing import (
     NoReturn,
     Optional,
     Tuple,
+    TypeAlias,
     Union,
 )
 
@@ -62,7 +63,7 @@ from prism.util.string import escape, normalize_spaces, unquote
 logger = logging.getLogger(__file__)
 logger.setLevel(default_log_level())
 
-AbstractSyntaxTree = SexpNode
+AbstractSyntaxTree: TypeAlias = SexpNode
 
 
 @dataclass
@@ -564,16 +565,16 @@ class SerAPI:
         the ``Print All.`` Vernacular command.
         """
         print_all_message = self.query_vernac("Print All.")
-        print_all_message = '\n'.join(print_all_message)
+        print_all_message_str = '\n'.join(print_all_message)
         idents: List[str] = []
         # replace each span covered by a named def or assumption
         # by a constant-parseable equivalent
-        print_all_message = NAMED_DEF_ASSUM_PATTERN.sub(
+        print_all_message_str = NAMED_DEF_ASSUM_PATTERN.sub(
             CallableIterator(
-                f"{m} : "
-                for m in NAMED_DEF_ASSUM_PATTERN.findall(print_all_message)),
-            print_all_message)
-        for match in PRINT_ALL_IDENT_PATTERN.finditer(print_all_message):
+                f"{m} : " for m in NAMED_DEF_ASSUM_PATTERN.findall(
+                    print_all_message_str)),
+            print_all_message_str)
+        for match in PRINT_ALL_IDENT_PATTERN.finditer(print_all_message_str):
             idents.extend(
                 v for v in match.groupdict().values() if v is not None)
         return idents
@@ -766,7 +767,7 @@ class SerAPI:
                     self.query_ast,
                     cmd)
             else:
-                ast: AbstractSyntaxTree = responses[1][2][1][0]
+                ast = responses[1][2][1][0]
                 assert ast[0] == SexpString("CoqAst")
                 if OpamVersion.less_than("8.10.2", self.serapi_version):
                     # vernac_control data structure changed in Coq 8.11
@@ -1028,7 +1029,7 @@ class SerAPI:
         if qualid.startswith('"') or qualid.endswith('"'):
             raise ValueError(f"Cannot qualify notation {qualid}.")
         try:
-            feedback = self.query_vernac(f"Locate {qualid}.")
+            feedback_list = self.query_vernac(f"Locate {qualid}.")
         except CoqExn as e:
             try:
                 qualids = self._handle_identifier_reserved_coqexn(
@@ -1038,8 +1039,8 @@ class SerAPI:
             except CoqExn:
                 qualids = []
         else:
-            assert feedback
-            feedback = feedback[0]
+            assert feedback_list
+            feedback = feedback_list[0]
             if feedback.startswith("No object of basename"):
                 return []
             qualids = []
@@ -1186,9 +1187,9 @@ class SerAPI:
         # SerAPI surprisingly does not appear to have a means to query
         # the physical path of a library, and the CoqGym LocateLibrary
         # query is not present.
-        feedback = self.query_vernac(f"Locate Library {lib}.")
-        assert feedback
-        feedback = feedback[0]
+        feedback_list = self.query_vernac(f"Locate Library {lib}.")
+        assert feedback_list
+        feedback = feedback_list[0]
         # The following two branches
         try:
             physical_path = feedback.split("has been loaded from file")[-1]
@@ -1297,17 +1298,17 @@ class SerAPI:
                 # fall back to vernacular query
                 try:
                     # About query is easier to parse
-                    result = self.query_vernac(f"About {term}.")
+                    result_list = self.query_vernac(f"About {term}.")
                 except CoqExn as e:
                     smart_global_msg = "[smart_global]"
                     if not OpamVersion.less_than(self.serapi_version, "8.10"):
                         smart_global_msg = f"Syntax error: {smart_global_msg}"
                     if e.msg.startswith(smart_global_msg):
-                        result = self.query_vernac(f"Check {term}.")
+                        result_list = self.query_vernac(f"Check {term}.")
                     else:
                         raise e
-                assert len(result) == 1
-                result = result[0].split("\n\n")[0]
+                assert len(result_list) == 1
+                result = result_list[0].split("\n\n")[0]
                 pattern = f"({term}" + r"\s+:)"
                 match = re.match(pattern, result)
                 assert match is not None
@@ -1385,10 +1386,14 @@ class SerAPI:
                     r"\(Of_sexp_error.*\)\x00"
                 ])
         except pexpect.TIMEOUT:
+            assert self._proc.before is not None, \
+                "A pending response should have been received from sertop"
             print(
                 self._proc.before[: 500]
                 + "..." if len(self._proc.before) > 500 else "")
             raise CoqTimeout
+        assert self._proc.after is not None, \
+            "A complete response should have been received from sertop"
         raw_responses: str = self._proc.after
         ack_num_match = re.search(r"^\(Answer (?P<num>\d+)", raw_responses)
         if ack_num_match is not None:
@@ -1494,7 +1499,8 @@ class SerAPI:
         """
         self._proc.sendeof()
         # pexpect doesn't close everything it should
-        self._proc.proc.stdout.close()
+        if self._proc.proc.stdout is not None:
+            self._proc.proc.stdout.close()
         try:
             self._proc.kill(signal.SIGKILL)
         except ProcessLookupError:

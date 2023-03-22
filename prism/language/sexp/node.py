@@ -13,11 +13,14 @@ from typing import (
     Callable,
     Deque,
     Iterable,
+    Iterator,
     List,
     Optional,
     Sequence,
+    SupportsIndex,
     Tuple,
     Union,
+    overload,
 )
 
 import numpy as np
@@ -42,13 +45,23 @@ class SexpNode(abc.ABC):
     def __deepcopy__(self, memodict=None) -> 'SexpNode':  # noqa: D105
         ...
 
-    def __getitem__(self, index: int) -> 'SexpNode':
+    @overload
+    def __getitem__(self, index: SupportsIndex) -> 'SexpNode':  # noqa: D105
+        ...
+
+    @overload
+    def __getitem__(self, index: slice) -> List['SexpNode']:  # noqa: D105
+        ...
+
+    def __getitem__(
+            self,
+            index: SupportsIndex | slice) -> 'SexpNode' | List['SexpNode']:
         """
         Get the `index`-th child of this node.
 
         Parameters
         ----------
-        index : int
+        index : SupportsIndex | slice
             The index of the requested child.
 
         Returns
@@ -65,18 +78,23 @@ class SexpNode(abc.ABC):
         if children is None:
             raise IllegalSexpOperationException(
                 "Cannot get the children of an s-exp string.")
-        elif isinstance(index, int):
-            if index < -len(children) or index >= len(children):
-                raise IllegalSexpOperationException(
-                    f"Cannot get child ({index}), "
-                    f"this list only has {len(children)} children.")
-            # end if
-        # end if
 
-        return children[index]
+        try:
+            return children[index]
+        except IndexError as e:
+            raise IllegalSexpOperationException(
+                f"Cannot get child ({index}), "
+                f"this list only has {len(children)} children.") from e
 
     @abc.abstractmethod
-    def __eq__(self, other: 'SexpNode') -> bool:  # noqa: D105
+    def __eq__(self, other: object) -> bool:  # noqa: D105
+        ...
+
+    @abc.abstractmethod
+    def __iter__(self) -> Iterator['SexpNode']:
+        """
+        Get an iterator over this node's children.
+        """
         ...
 
     def __len__(self) -> int:
@@ -89,7 +107,9 @@ class SexpNode(abc.ABC):
             The number of immediate children of this node.
         """
         if self.is_list():
-            return len(self.get_children())
+            children = self.get_children()
+            assert children is not None
+            return len(children)
         else:
             return 0
 
@@ -221,7 +241,7 @@ class SexpNode(abc.ABC):
         SexpNode.forward_depth_first_sequence
         """
         return self.forward_depth_first_sequence(
-            lambda x: children_filtering_func(reversed(x)),
+            lambda x: children_filtering_func(reversed[SexpNode](x)),
             use_parenthesis)
 
     def dot(self) -> str:
@@ -241,20 +261,22 @@ class SexpNode(abc.ABC):
         toVisit: Deque[SexpNode] = deque()
         toVisit.append(self)
         while len(toVisit) > 0:
-            currentSexp: SexpNode = toVisit.popleft()
-            if currentSexp.is_string():
-                label = currentSexp.content.replace('"', '\'')
+            current_sexp: SexpNode = toVisit.popleft()
+            if current_sexp.is_string():
+                label = current_sexp.content.replace('"', '\'')
                 out += (
-                    f"n{hash(currentSexp)% ((sys.maxsize + 1) * 2)} "
+                    f"n{hash(current_sexp)% ((sys.maxsize + 1) * 2)} "
                     f"[label=\"{label}\" shape=none];\n")
             else:
                 out += (
-                    f"n{hash(currentSexp)% ((sys.maxsize + 1) * 2)} "
+                    f"n{hash(current_sexp)% ((sys.maxsize + 1) * 2)} "
                     "[shape=point];\n")
-                for child in currentSexp.get_children():
+                current_children = current_sexp.get_children()
+                assert current_children is not None
+                for child in current_children:
                     toVisit.append(child)
                     out += (
-                        f"n{hash(currentSexp)% ((sys.maxsize + 1) * 2)} "
+                        f"n{hash(current_sexp)% ((sys.maxsize + 1) * 2)} "
                         f"-> n{hash(child)% ((sys.maxsize + 1) * 2)};\n")
                 # end for
             # end if
@@ -304,9 +326,11 @@ class SexpNode(abc.ABC):
             The nodes contained in this s-expression tree in preorder
             (each node appears before any children).
         """
-        node_list = [self]
+        node_list: List[SexpNode] = [self]
         if self.is_list():
-            for c in self.get_children():
+            children = self.get_children()
+            assert children is not None
+            for c in children:
                 node_list.extend(c.flatten())
         return node_list
 
@@ -337,7 +361,10 @@ class SexpNode(abc.ABC):
         Get the first piece of content in this node's subtree.
         """
         # default implementation works for string subclass
-        return self.get_content()
+        content = self.get_content()
+        assert content is not None, \
+            "Head can only be retrieved for string nodes."
+        return content
 
     def tail(self) -> Optional['SexpNode']:
         """
