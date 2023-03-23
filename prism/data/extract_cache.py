@@ -1601,6 +1601,13 @@ def extract_cache_new(  # noqa: C901
                 # Release the switch
                 switch_manager.release_switch(project.opam_switch)
                 project.opam_switch = original_switch
+                logged_text = build_logger_stream.getvalue()
+                build_cache_client.write_worker_log(
+                    pname,
+                    sha,
+                    coq,
+                    block,
+                    logged_text)
 
 
 # Abbreviation defined to satisfy conflicting autoformatting and style
