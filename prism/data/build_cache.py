@@ -2,7 +2,6 @@
 Tools for handling repair mining cache.
 """
 import glob
-import logging
 import os
 import re
 import subprocess
@@ -45,7 +44,7 @@ from prism.language.sexp.node import SexpNode
 from prism.project.metadata import ProjectMetadata
 from prism.util.io import atomic_write
 from prism.util.iterable import split
-from prism.util.logging import ManagedClient, ManagedServer
+from prism.util.manager import ManagedServer
 from prism.util.opam.switch import OpamSwitch
 from prism.util.opam.version import Version, VersionString
 from prism.util.radpytools import PathLike
@@ -1094,26 +1093,14 @@ class CoqProjectBuildCacheProtocol(Protocol):
             If `block`, return ``"write complete"``; otherwise, return
             nothing
         """
-        change_suffix = suffix == '.log'
         # standardize inputs to get_path
-        cache_id_tuple: Union[Tuple[ProjectCommitData],
-                              Tuple[ProjectMetadata],
-                              Tuple[str,
-                                    str,
-                                    str]]
-        if isinstance(cache_id, ProjectCommitData):
-            cache_id_tuple = (cache_id,)
-        elif isinstance(cache_id, ProjectMetadata):
-            cache_id_tuple = (cache_id,)
+        if isinstance(cache_id, tuple):
+            file_path = self.get_path(*cache_id)
         else:
-            cache_id_tuple = cache_id
+            file_path = self.get_path(cache_id)
+
         if suffix is not None:
-            if change_suffix:
-                suffix = 'txt'
-            file_path = Path(
-                str(self.get_path(*cache_id_tuple).with_suffix("")) + suffix)
-        else:
-            file_path = self.get_path(*cache_id_tuple)
+            file_path = Path(str(file_path.with_suffix("")) + suffix)
         atomic_write(file_path, file_contents)
         # Write timestamp file
         timestamp_file_path = Path(str(file_path) + ".timestamp")
@@ -1222,15 +1209,6 @@ class CoqProjectBuildCacheProtocol(Protocol):
         else:
             path = self.get_path_from_fields(*args, **kwargs)
         return path
-
-    def get_log_path(self, project: str, commit: str, coq_version: str) -> Path:
-        """
-        Return path to log file that is unique to tuple.
-        """
-        return self.root / project / commit / '.'.join(
-            [coq_version.replace(".",
-                                 "_"),
-             'log'])
 
     def get_path_from_data(self, data: ProjectCommitData) -> Path:
         """
@@ -1614,7 +1592,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
         """
         return self._write_kernel(metadata, block, timing_log, "_timing.txt")
 
-    def write_log(
+    def write_worker_log(
             self,
             project: str,
             commit_sha: str,
@@ -1646,7 +1624,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
             ".txt")
 
 
-class CoqProjectBuildCache(CoqProjectBuildCacheProtocol, ManagedClient):
+class CoqProjectBuildCache(CoqProjectBuildCacheProtocol):
     """
     Implementation of CoqProjectBuildCacheProtocol with added __init__.
     """
@@ -1663,67 +1641,9 @@ class CoqProjectBuildCache(CoqProjectBuildCacheProtocol, ManagedClient):
         self.start_time = start_time
         if not self.root.exists():
             os.makedirs(self.root)
-        self.project_name = project_name
-        self.commit_sha = commit_sha
-        self.coq_version = coq_version
-        self.logger_name = logger_name
-        self.logger: logging.Logger
-        ManagedClient.__init__(self, logger_name)
-
-    def addHandler(self, handler: logging.Handler):
-        """
-        Add Handler to logger.
-        """
-        self.logger.addHandler(handler)
-
-    def setLevel(self, level: int):
-        """
-        Set Logger Level.
-        """
-        self.logger.setLevel(level)
-
-    def init_logger(self, logger: Union[str, logging.Logger]):
-        """
-        Create logger.
-        """
-        if isinstance(logger, str):
-            logger = logging.getLogger(logger)
-        logger.propagate = False
-        # Clear any default handlers
-        for h in logger.handlers:
-            logger.removeHandler(h)
-        return logger
-
-    def getChild(self, name: str, *args, **kwargs) -> 'CoqProjectBuildCache':
-        """
-        Create a child client.
-        """
-        client = super().getChild(name, *args, **kwargs)
-        assert client.logger is not None
-        client.logger.propagate = False
-        return client
-
-    def getLogger(self, name: str, *args, **kwargs) -> 'CoqProjectBuildCache':
-        """
-        Create a client with a logger that has the given name.
-        """
-        client = super().getLogger(name, *args, **kwargs)
-        assert client.logger is not None
-        client.logger.propagate = False
-        return client
 
 
 class CoqProjectBuildCacheServer(ManagedServer[CoqProjectBuildCache]):
     """
     A BaseManager-derived server for managing build cache.
     """
-
-
-def CoqProjectBuildCacheClient(
-        server: CoqProjectBuildCacheServer,
-        *args,
-        **kwargs):
-    """
-    Return client object for writing build cache.
-    """
-    return server.CoqProjectBuildCache(*args, **kwargs)  # type: ignore
