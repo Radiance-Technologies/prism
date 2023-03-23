@@ -24,7 +24,7 @@ import tqdm
 
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
-from prism.util.exceptions import Except
+from prism.util.exception import Except
 from prism.util.logging import default_log_level
 
 __all__ = ['Except', 'ProjectCommitMapper', 'ProjectCommitUpdateMapper']
