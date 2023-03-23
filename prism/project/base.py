@@ -53,12 +53,12 @@ from prism.project.exception import (
 )
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
-from prism.project.strace import CoqContext, strace_build
 from prism.util.bash import escape
 from prism.util.build_tools.coqdep import (
     make_dependency_graph,
     order_dependencies,
 )
+from prism.util.build_tools.strace import CoqContext, strace_build
 from prism.util.logging import default_log_level
 from prism.util.opam import (
     AssignedVariables,
@@ -801,6 +801,8 @@ class Project(ABC):
         if not self._check_serapi_option_health_pre_build():
             # try to quickly infer with dummy Coq compiler
             self.infer_serapi_options(True, managed_switch_kwargs, **kwargs)
+            # If we get here, then the managed switch has been obtained
+            managed_switch_kwargs = {}
         (rcode,
          stdout,
          stderr) = self._build(
@@ -809,14 +811,14 @@ class Project(ABC):
                                 **kwargs),
              managed_switch_kwargs)
         if not self._check_serapi_option_health_post_build():
-            # do a more thorough inference
+            # Do a more thorough inference.
             separator = "\n@@\nInferring SerAPI Options...\n@@\n"
             (_,
              rcode,
              stdout_post,
              stderr_post) = self.infer_serapi_options(
                  False,
-                 managed_switch_kwargs,
+                 managed_switch_kwargs={},
                  **kwargs)
             stdout = "".join((stdout, separator, stdout_post))
             stderr = "".join((stderr, separator, stderr_post))
@@ -1433,6 +1435,9 @@ class Project(ABC):
         RuntimeError
             If `coq_version` or `variables` is not None and both
             `switch_manager` and ``self.switch_manager`` are None.
+        UnsatisfiableConstraints
+            If a switch cannot be obtained that satisfies the project's
+            dependencies.
         """
         dependency_formula = self.get_dependency_formula(coq_version)
         managed_switch_requested = (
