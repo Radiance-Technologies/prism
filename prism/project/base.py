@@ -420,9 +420,6 @@ class Project(ABC):
                 return_I=False,
                 return_Q=False,
                 return_R=True))
-        for full_path in full_q_paths:
-            if not glob.glob(f"{full_path}/*.vo", recursive=False):
-                return False
         for vo_file in glob.glob(f"{self.path}/**/*.vo", recursive=True):
             vo_file_path = Path(vo_file)
             if full_r_paths and not any(full_path in vo_file_path.parents
