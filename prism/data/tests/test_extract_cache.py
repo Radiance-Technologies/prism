@@ -112,7 +112,7 @@ class TestExtractCache(unittest.TestCase):
         """
         manager = mp.Manager()
         with CoqProjectBuildCacheServer() as cache_server:
-            cache_client: CoqProjectBuildCacheProtocol = cache_server.getClient(
+            cache_client: CoqProjectBuildCacheProtocol = cache_server.Client(
                 self.CACHE_DIR,
             )
             # fake pre-existing cached data for float

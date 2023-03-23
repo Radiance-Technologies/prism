@@ -1425,33 +1425,21 @@ def extract_cache_new(  # noqa: C901
     pid: int = os.getpid()
 
     # Construct project build logger.
-    build_logger = typing.cast(
-        CoqProjectBuildCache,
-        typing.cast(CoqProjectBuildCache,
-                    build_cache_client).getChild(f"{pid}"),
-    )
+    build_logger = logging.getLogger(f'extract_cache_new-{pid}')
     build_logger.setLevel(logging.DEBUG)
     build_logger_stream = StringIO()
     build_handler = logging.StreamHandler(build_logger_stream)
-    build_handler.addFilter(
-        lambda record: not record.name.endswith('extract_vernac_commands'))
     build_logger.addHandler(build_handler)
 
     # Construct error logger.
-    error_logger = typing.cast(
-        CoqProjectBuildCache,
-        typing.cast(CoqProjectBuildCache,
-                    build_logger).getChild("extract_vernac_commands"),
-    )
-    error_logger_stream = StringIO()
-    error_handler = logging.StreamHandler(error_logger_stream)
-    error_handler.addFilter(
-        lambda record: record.name.endswith('extract_vernac_commands'))
-    error_logger.addHandler(error_handler)
+    extract_logger = logging.getLogger(f'extract_vernac_commands-{pid}')
+    extract_logger_stream = StringIO()
+    extract_handler = logging.StreamHandler(extract_logger_stream)
+    extract_logger.addHandler(extract_handler)
 
     # Peform extraction using build_logger to log internal project log
     # messages.
-    with project.project_logger(typing.cast(logging.Logger, build_logger)) as _:
+    with project.project_logger(build_logger) as _:
         original_switch = project.opam_switch
         managed_switch_kwargs = {
             'coq_version': coq_version,
@@ -1497,7 +1485,7 @@ def extract_cache_new(  # noqa: C901
                         "utf-8") if pbe.stderr is not None else ''
                     build_result = (1, stdout, stderr)
                 command_data, comment_data = process_project_fallback(project)
-                error_logger.write_build_error_log(
+                build_cache_client.write_build_error_log(
                     project.metadata,
                     block,
                     ProjectBuildResult(*build_result))
@@ -1510,20 +1498,20 @@ def extract_cache_new(  # noqa: C901
                         force_serial,
                         worker_semaphore)
                 except ExtractVernacCommandsError as e:
-                    error_logger.critical(f"Filename: {e.filename}\n")
-                    error_logger.critical(
+                    extract_logger.critical(f"Filename: {e.filename}\n")
+                    extract_logger.critical(
                         f"Parent stack trace:\n{e.parent_stacktrace}\n")
-                    error_logger.exception(e)
-                    error_logger_stream.flush()
-                    logged_text = error_logger_stream.getvalue()
-                    error_logger.write_cache_error_log(
+                    extract_logger.exception(e)
+                    extract_logger_stream.flush()
+                    logged_text = extract_logger_stream.getvalue()
+                    build_cache_client.write_cache_error_log(
                         project.metadata,
                         block,
                         logged_text)
                     raise
                 finally:
                     elapsed_time = time() - start_time
-                    error_logger.write_timing_log(
+                    build_cache_client.write_timing_log(
                         project.metadata,
                         block,
                         f"Elapsed time in extract_vernac_commands: {elapsed_time} s"
@@ -1531,7 +1519,7 @@ def extract_cache_new(  # noqa: C901
             try:
                 file_dependencies = project.get_file_dependencies()
             except (MissingMetadataError, CalledProcessError):
-                error_logger.exception(
+                extract_logger.exception(
                     "Failed to get file dependencies. Are the IQR flags set/correct?"
                 )
                 file_dependencies = None
@@ -1543,27 +1531,27 @@ def extract_cache_new(  # noqa: C901
                 file_dependencies,
                 ProjectBuildEnvironment(project.opam_switch.export()),
                 ProjectBuildResult(*build_result))
-            error_logger.write(data, block)
+            build_cache_client.write(data, block)
         except ExtractVernacCommandsError:
             # Don't re-log extract_vernac_commands errors
             pass
         except Exception as e:
-            error_logger.critical(
+            extract_logger.critical(
                 "An exception occurred outside of extracting vernacular commands.\n"
             )
             # If a subprocess command failed, capture the standard
             # output and error
             if isinstance(e, CalledProcessError):
-                error_logger.critical(f"stdout:\n{e.stdout}\n")
-                error_logger.critical(f"stderr:\n{e.stderr}\n")
+                extract_logger.critical(f"stdout:\n{e.stdout}\n")
+                extract_logger.critical(f"stderr:\n{e.stderr}\n")
             project_metadata = project.metadata
             if isinstance(e, UnsatisfiableConstraints):
                 project_metadata = copy.copy(project_metadata)
                 project_metadata.coq_version = coq_version
-            error_logger.exception(e)
-            error_logger_stream.flush()
-            logged_text = error_logger_stream.getvalue()
-            error_logger.write_misc_error_log(
+            extract_logger.exception(e)
+            extract_logger_stream.flush()
+            logged_text = extract_logger_stream.getvalue()
+            build_cache_client.write_misc_error_log(
                 project_metadata,
                 block,
                 logged_text)
@@ -1572,7 +1560,12 @@ def extract_cache_new(  # noqa: C901
             switch_manager.release_switch(project.opam_switch)
             project.opam_switch = original_switch
             logged_text = build_logger_stream.getvalue()
-            build_logger.write_log(pname, sha, coq, block, logged_text)
+            build_cache_client.write_worker_log(
+                pname,
+                sha,
+                coq,
+                block,
+                logged_text)
 
 
 # Abbreviation defined to satisfy conflicting autoformatting and style
@@ -1883,11 +1876,8 @@ class CacheExtractor:
             if force_serial:
                 factory = CoqProjectBuildCache
             else:
-                factory = cache_server.getClient
-            self.cache_client = factory(
-                self.cache_dir,
-                logger_name='cache-extraction',
-                **self.cache_kwargs)
+                factory = cache_server.Client
+            self.cache_client = factory(self.cache_dir, **self.cache_kwargs)
             # Create semaphore for controlling file-level workers
             if manager is not None:
                 nprocs = os.cpu_count(

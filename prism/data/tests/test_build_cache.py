@@ -13,7 +13,6 @@ import seutil.io as io
 
 from prism.data.build_cache import (
     CacheObjectStatus,
-    CoqProjectBuildCacheClient,
     CoqProjectBuildCacheProtocol,
     CoqProjectBuildCacheServer,
     ProjectBuildEnvironment,
@@ -145,8 +144,7 @@ class TestCoqProjectBuildCache(unittest.TestCase):
             List[ProjectRepo],
             list(self.dataset.projects.values()))
         with CoqProjectBuildCacheServer() as cache_server:
-            cache_client: CoqProjectBuildCacheProtocol = CoqProjectBuildCacheClient(
-                cache_server,
+            cache_client: CoqProjectBuildCacheProtocol = cache_server.Client(
                 self.cache_dir)
             uneventful_result = ProjectBuildResult(0, "", "")
             environment = ProjectBuildEnvironment(
@@ -236,8 +234,7 @@ class TestCoqProjectBuildCache(unittest.TestCase):
         """
         with TemporaryDirectory() as temp_dir:
             with CoqProjectBuildCacheServer() as cache_server:
-                cache: CoqProjectBuildCacheProtocol = CoqProjectBuildCacheClient(
-                    cache_server,
+                cache: CoqProjectBuildCacheProtocol = cache_server.Client(
                     temp_dir)
                 environment = ProjectBuildEnvironment(
                     OpamAPI.active_switch.export())

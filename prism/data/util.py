@@ -5,16 +5,17 @@ import logging
 import traceback
 from functools import partial
 from pathlib import Path
-from typing import Callable, Dict, List, Set
+from typing import Callable, Dict, List
 
 from prism.project.base import SentenceExtractionMethod
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
+from prism.util.radpytools import PathLike
 from prism.util.swim import SwitchManager
 
 
 def get_project(
-        root_path: str,
+        root_path: PathLike,
         metadata_storage: MetadataStorage,
         n_build_workers: int,
         project_name: str) -> ProjectRepo:
@@ -30,7 +31,7 @@ def get_project(
 
 
 def get_project_func(  # noqa: D103
-        root_path: str,
+        root_path: PathLike,
         metadata_storage: MetadataStorage,
         n_build_workers: int = 1) -> Callable[[str],
                                               ProjectRepo]:
@@ -40,7 +41,7 @@ def get_project_func(  # noqa: D103
 def get_default_commit_iterator(
         default_commits: Dict[str,
                               List[str]],
-        project: ProjectRepo) -> Set[str]:
+        project: ProjectRepo) -> List[str]:
     """
     Get an iterator over a project's default commits.
     """
@@ -54,6 +55,7 @@ def get_default_commit_iterator_func(  # noqa: D103
     return partial(get_default_commit_iterator, default_commits)
 
 
+# TODO: Fix this function
 def build_commit(
         switch_manager: SwitchManager,
         project: ProjectRepo,

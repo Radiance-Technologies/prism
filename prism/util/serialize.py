@@ -5,6 +5,7 @@ Supply a protocol for serializable data.
 import copy
 import typing
 from dataclasses import dataclass, fields, is_dataclass
+from pathlib import Path
 from typing import (
     Any,
     Dict,
@@ -29,6 +30,13 @@ _dmp = diff_match_patch()
 # Produce smaller diffs
 _dmp.Patch_Margin = 1
 
+T = TypeVar('T', bound='Serializable')
+"""
+A TypeVar to help type checkers identify that
+Serializable.load returns a specific type
+and not just a `Serializable`
+"""
+
 
 @runtime_checkable
 class Serializable(Protocol):
@@ -51,13 +59,19 @@ class Serializable(Protocol):
             Designated format of the output file,
             by default `su.io.Fmt.yaml`.
         """
-        su.io.dump(output_filepath, self, fmt=fmt)
+        su.io.dump(
+            typing.cast(Union[str,
+                              Path],
+                        output_filepath),
+            self,
+            fmt=fmt)
 
     @classmethod
     def load(
-            cls,
+            # Tell type check that return type is same type as `cls`.
+            cls: Type[T],
             filepath: PathLike,
-            fmt: Optional[su.io.Fmt] = None) -> 'Serializable':
+            fmt: Optional[su.io.Fmt] = None) -> T:
         """
         Load a serialized object from file..
 
@@ -74,7 +88,13 @@ class Serializable(Protocol):
         Serializable
             The deserialized object.
         """
-        return typing.cast(Serializable, su.io.load(filepath, fmt, clz=cls))
+        return typing.cast(
+            T,
+            su.io.load(typing.cast(Union[str,
+                                         Path],
+                                   filepath),
+                       fmt,
+                       clz=cls))
 
 
 _S = TypeVar('_S')

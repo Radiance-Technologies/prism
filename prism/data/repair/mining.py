@@ -8,12 +8,11 @@ import sqlite3
 import traceback
 from dataclasses import dataclass
 from multiprocessing import Process, Queue
-from multiprocessing.managers import BaseManager
 from pathlib import Path
 from queue import Empty
 from tempfile import TemporaryDirectory
 from types import TracebackType
-from typing import Callable, Dict, List, Optional, Tuple, Type, Union, cast
+from typing import Callable, Dict, List, Optional, Tuple, Type, Union
 
 from tqdm import tqdm
 
@@ -35,6 +34,7 @@ from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
 from prism.util.io import atomic_write
+from prism.util.manager import ManagedServer
 
 BuildRepairInstanceOutput = Optional[Union[ProjectCommitDataRepairInstance,
                                            Except[None]]]
@@ -568,28 +568,12 @@ class RepairMiningLogger:
         self.logger.debug(message)
 
 
-class RepairMiningLoggerServer(BaseManager):
+class RepairMiningLoggerServer(ManagedServer[RepairMiningLogger]):
     """
     A BaseManager-derived server for managing repair mining logs.
     """
 
     pass
-
-
-RepairMiningLoggerServer.register("RepairMiningLogger", RepairMiningLogger)
-
-
-def RepairMiningLoggerClient(
-        server: RepairMiningLoggerServer,
-        *args,
-        **kwargs) -> RepairMiningLogger:
-    """
-    Return client object for writing repair mining logs.
-    """
-    return cast(
-        RepairMiningLogger,
-        server.RepairMiningLogger(*args,  # type: ignore
-                                  **kwargs))
 
 
 def build_repair_instance(
@@ -1330,10 +1314,10 @@ def repair_mining_loop(
     metadata_storage = MetadataStorage.load(metadata_storage_file)
     db_file = repair_save_directory / "repair_records.sqlite3"
     with RepairMiningLoggerServer() as logging_server:
-        repair_mining_logger = RepairMiningLoggerClient(
-            logging_server,
+        repair_mining_logger = logging_server.Client(
             repair_save_directory,
-            logging_level)
+            logging_level,
+        )
         cache_args = (cache_root, cache_format_extension)
         cache_label_pairs = prepare_pairs(
             *cache_args,
