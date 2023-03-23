@@ -1,5 +1,5 @@
 """
-Module for Exceptions.
+Provides general-purpose exception utilities.
 """
 
 from dataclasses import dataclass
