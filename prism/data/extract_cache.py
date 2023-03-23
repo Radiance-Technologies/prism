@@ -1444,6 +1444,8 @@ def extract_cache_new(  # noqa: C901
     build_logger.setLevel(logging.DEBUG)
     build_logger_stream = StringIO()
     build_handler = logging.StreamHandler(build_logger_stream)
+    build_handler.setFormatter(
+        logging.Formatter('%(name)-12s: %(levelname)-8s %(message)s'))
     build_logger.addHandler(build_handler)
 
     # Construct error logger.
