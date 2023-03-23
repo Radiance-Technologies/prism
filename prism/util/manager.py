@@ -3,17 +3,9 @@ Module for Manager based Client/Server.
 """
 import typing
 from multiprocessing.managers import BaseManager
-from typing import Generic, Type, TypeVar
+from typing import Generic, GenericAlias, Type, TypeVar
 
 from typing_extensions import Protocol, TypeGuard
-
-
-class _GenericAlias(Protocol):
-    """
-    Alias for Generic.
-    """
-
-    __origin__: type[object]
 
 
 class IndirectGenericSubclass(Protocol):
@@ -21,7 +13,7 @@ class IndirectGenericSubclass(Protocol):
     Type hint for generic subclass.
     """
 
-    __orig_bases__: tuple[_GenericAlias]
+    __orig_bases__: tuple[GenericAlias]
 
 
 def is_indirect_generic_subclass(
