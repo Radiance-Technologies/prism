@@ -1,6 +1,7 @@
 """
 Test module for prism.data.project module.
 """
+import glob
 import json
 import logging
 import os
@@ -372,6 +373,13 @@ class TestProject(unittest.TestCase):
                     '-R vendor/tactical/src,Tactical'
                 ]),
             pwd=project.path)
+        # assert that all glob and vo files are empty
+        for dummy_artifact in chain(glob.glob(f"{project.path}/**/*.vo",
+                                              recursive=True),
+                                    glob.glob(f"{project.path}/**/*.glob",
+                                              recursive=True)):
+            with open(dummy_artifact, "r") as f:
+                self.assertEqual(f.read(), "")
         self.assertEqual(serapi_options.iqr, expected_iqr_flags)
         self.assertEqual(rcode, 0)
         self.assertTrue(project._check_serapi_option_health_post_build())
