@@ -1594,16 +1594,22 @@ class CoqProjectBuildCacheProtocol(Protocol):
 
     def write_worker_log(
             self,
-            project: str,
+            project_name: str,
             commit_sha: str,
             coq_version: str,
             block: bool,
             log: str) -> Optional[str]:
         """
-        Write timing log to build cache directory.
+        Write worker log to build cache directory.
 
         Parameters
         ----------
+        project_name : str
+            Name of the project built by worker.
+        commit_sha : str
+            Name of the project commit built by worker.
+        coq_version : str
+            Name of the coq version initially targeted during building.
         block : bool
             If true, return a "write complete" message
         log : str
@@ -1616,7 +1622,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
             nothing
         """
         return self._write_kernel(
-            (project,
+            (project_name,
              commit_sha,
              coq_version),
             block,
