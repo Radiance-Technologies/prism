@@ -6,12 +6,13 @@ Adapted from IBM's pycoq: https://github.com/IBM/pycoq
 import ast
 import logging
 import os
+import pathlib
 import re
+import shutil
 import stat
 import tempfile
 import typing
 from dataclasses import dataclass, field
-from textwrap import dedent
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import lark
@@ -24,6 +25,14 @@ from prism.util.radpytools import PathLike
 
 _EXECUTABLE = 'coqc'
 _REGEX = r'.*\.v$'
+
+_DUMMY_COQC_PARENT_PATH = tempfile.TemporaryDirectory()
+_DUMMY_COQC_PATH = pathlib.Path(_DUMMY_COQC_PARENT_PATH.name) / "coqc"
+_DUMMY_COQC_SH_PATH = pathlib.Path(__file__).parent / "dummy_coqc.sh"
+
+shutil.copy(_DUMMY_COQC_SH_PATH, _DUMMY_COQC_PATH)
+
+os.chmod(_DUMMY_COQC_PATH, stat.S_IRWXO | stat.S_IRWXG | stat.S_IRWXU)
 
 RecursiveStrList = Union[str, List['RecursiveStrList']]
 
@@ -304,58 +313,6 @@ def _parse_strace_logdir(logdir: str,
     return res
 
 
-DUMMY_COQC_PATH_ = tempfile.TemporaryDirectory()
-
-with open(f"{DUMMY_COQC_PATH_.name}/coqc", "w") as f:
-    f.write(
-        dedent(
-            """
-            #!/bin/bash
-
-            function FALLBACK {
-                PATH=$OPAM_SWITCH_PREFIX/bin:$PATH coqc $@
-                exit $?
-            }
-
-            # Parse arguments for the Coq file and build artifacts
-            for last; do
-                if [[ $last == *".v" ]]; then
-                    TARGET=$last
-                elif [[ $last ==  *".vo" ]]  && [ -n ${O_ARG+x} ]; then
-                    VO_FILE=$last
-                    unset O_ARG
-                elif [[ $last == "-o" ]]; then
-                    O_ARG=$last
-                fi
-            done
-
-            if [ -z ${TARGET+x} ] || test ! -f $TARGET; then
-                # no target Coq file given or the target does not exist
-                FALLBACK $@
-            elif [ -n ${O_ARG+x} ]; then
-                # malformed argument
-                FALLBACK $@
-            fi
-
-            if [ -z ${VO_FILE+x} ]; then
-                # no target output file given
-                VO_FILE="${TARGET%.v}.vo";
-                GLOB_FILE="${TARGET%.v}.glob"
-            else
-                GLOB_FILE="${VO_FILE%.vo}.glob"
-            fi
-
-            # create fake build artifacts
-            touch $VO_FILE &&
-            touch $GLOB_FILE ||
-            FALLBACK $@
-            """).strip())
-
-os.chmod(
-    f"{DUMMY_COQC_PATH_.name}/coqc",
-    stat.S_IRWXO | stat.S_IRWXG | stat.S_IRWXU)
-
-
 def strace_build(
         opam_switch: OpamSwitch,
         command: str,
@@ -431,8 +388,8 @@ def strace_build(
 
         if use_dummy_coqc:
             strace_cmd = (
-                f'(\n export PATH={DUMMY_COQC_PATH_.name}:$PATH; ' + strace_cmd
-                + "\n)")
+                f'(\n export PATH={_DUMMY_COQC_PARENT_PATH.name}:$PATH; '
+                + strace_cmd + "\n)")
 
         r = opam_switch.run(strace_cmd, cwd=workdir, **kwargs)
         if r.stdout is not None:
