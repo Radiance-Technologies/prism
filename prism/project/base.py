@@ -567,7 +567,10 @@ class Project(ABC):
         if returncode != 0:
             raise ExcType(msg, returncode, stdout, stderr)
         else:
-            self.logger.debug(msg)
+            # Use root logger instead of
+            # self.logger for error message
+            logger.debug(msg)
+            self.logger.debug(f"Action ({action}) return code: {returncode}")
 
     def _make(
             self,
