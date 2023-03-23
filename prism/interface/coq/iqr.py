@@ -270,7 +270,7 @@ class IQR:
                 help='recursively append filesystem dir mapped '
                 'to coqdir to coq load path')
             parsed_args, _ = parser.parse_known_args(args)
-            I_ = set(parsed_args.I)
+            I_ = {i[0] for i in parsed_args.I}
             Q = typing.cast(
                 Set[Tuple[str,
                           str]],
