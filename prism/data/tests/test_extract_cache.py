@@ -16,7 +16,6 @@ import pytest
 from prism.data.build_cache import (
     CacheStatus,
     CommentDict,
-    CoqProjectBuildCacheClient,
     CoqProjectBuildCacheProtocol,
     CoqProjectBuildCacheServer,
     GoalIdentifiers,
@@ -208,6 +207,13 @@ class TestExtractCache(unittest.TestCase):
                         self.lambda_head,
                         coq_version),
                     CacheStatus.BUILD_ERROR)
+            self.assertTrue(
+                cache_client.contains(
+                    ('lambda',
+                     self.lambda_head,
+                     coq_version,
+                     'txt')))
+
         return cache_client, cache_server
 
     @pytest.mark.coq_8_10_2

@@ -275,6 +275,8 @@ class Project(ABC):
         iqr = None
         if self.serapi_options is not None:
             iqr = self.serapi_options.iqr
+            logger = self.logger.getChild('iqr_flags')
+            logger.debug(f"{iqr}")
         return iqr
 
     @property
@@ -1345,7 +1347,10 @@ class Project(ABC):
         serapi_options = SerAPIOptions.merge(
             [c.serapi_options for c in contexts],
             root=self.path)
-        self._update_metadata(serapi_options=serapi_options)
+        logger.debug(f'Found serapi options: {serapi_options}')
+        with self.project_logger(logger):
+            # logs will have <>.infer_serapi_options
+            self._update_metadata(serapi_options=serapi_options)
         return serapi_options, rcode_out, stdout, stderr
 
     install = partialmethod(_make, "install", "Installation")
