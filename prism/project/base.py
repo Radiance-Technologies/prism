@@ -799,23 +799,17 @@ class Project(ABC):
         managed_switch : For valid `managed_switch_kwargs`
         """
         if not self._check_serapi_option_health_pre_build():
-            (_,
-             rcode,
-             stdout,
-             stderr) = self.infer_serapi_options(
-                 True,
-                 managed_switch_kwargs,
-                 **kwargs)
-            return rcode, stdout, stderr
-        else:
-            (rcode,
-             stdout,
-             stderr) = self._build(
-                 lambda: self._make("build",
-                                    "Compilation",
-                                    **kwargs),
-                 managed_switch_kwargs)
+            # try to quickly infer with dummy Coq compiler
+            self.infer_serapi_options(True, managed_switch_kwargs, **kwargs)
+        (rcode,
+         stdout,
+         stderr) = self._build(
+             lambda: self._make("build",
+                                "Compilation",
+                                **kwargs),
+             managed_switch_kwargs)
         if not self._check_serapi_option_health_post_build():
+            # do a more thorough inference
             separator = "\n@@\nInferring SerAPI Options...\n@@\n"
             (_,
              rcode,
