@@ -116,6 +116,11 @@ if __name__ == "__main__":
         type=str,
         help="The directory to read cache from and write new cache to.")
     parser.add_argument(
+        "--opam-root",
+        default=None,
+        type=str,
+        help="The root for opam switches.")
+    parser.add_argument(
         "--mds-file",
         default=str(ROOT / "prism/pearls/dataset/agg_coq_repos.yml"),
         type=str,
@@ -299,7 +304,7 @@ if __name__ == "__main__":
         log_dir.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(filename=log_file_path, force=True)
     # Do things
-    create_default_switches(num_switches)
+    create_default_switches(num_switches, args.opam_root)
     if force_serial:
         swim = AutoSwitchManager()
     else:
