@@ -1149,7 +1149,7 @@ class Project(ABC):
             A pair of adjacent sentences from the project, with the
             first sentence chosen at random.
         """
-        sentences: List[str] = []
+        sentences: List[CoqSentence] = []
         counter = 0
         THRESHOLD = 100
         while len(sentences) < 2:
@@ -1244,14 +1244,14 @@ class Project(ABC):
         # if the order of field inference matters, manually pop such
         # fields and infer them first before looping over the rest
         inferred_fields = {}
-        for f in fields_to_infer:
+        for f_name in fields_to_infer:
             # force an attribute error for non-existent fields
-            getattr(current_metadata, f)
+            getattr(current_metadata, f_name)
             try:
-                inferred_fields[f] = getattr(self, f'infer_{f}')()
+                inferred_fields[f_name] = getattr(self, f'infer_{f_name}')()
             except AttributeError:
                 raise NotImplementedError(
-                    f"Cannot infer metadata field named '{f}'")
+                    f"Cannot infer metadata field named '{f_name}'")
         return inferred_fields
 
     def infer_opam_dependencies(
