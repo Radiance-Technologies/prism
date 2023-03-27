@@ -1130,6 +1130,12 @@ class CoqProjectBuildCacheProtocol(Protocol):
         ----------
         obj : Union[ProjectCommitData, ProjectMetadata, Tuple[str]]
             An object that identifies a project commit's cache.
+            When a tuple is given the different strings correspond to
+            project name, commit hash, and coq version. When a fourth
+            string is given in the tuple, it corresponds to specific
+            file extension.  If only three strings are given, the 
+            file extension is assumed to be `.yml` corresponding
+            to output cache file.
 
         Returns
         -------
