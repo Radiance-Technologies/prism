@@ -192,10 +192,7 @@ class Project(ABC):
         """
         The method by which sentences are extracted.
         """
-        try:
-            name = self.name.replace('.', '_')
-        except NotImplementedError:
-            name = 'project'
+        name = self.name.replace('.', '_')
         self.logger = (project_logger or logger).getChild(f"{name}")
         if opam_switch is not None:
             self.opam_switch = opam_switch
@@ -275,8 +272,6 @@ class Project(ABC):
         iqr = None
         if self.serapi_options is not None:
             iqr = self.serapi_options.iqr
-            logger = self.logger.getChild('iqr_flags')
-            logger.debug(f"{iqr}")
         return iqr
 
     @property
@@ -1289,10 +1284,16 @@ class Project(ABC):
         PackageFormula : For more information about package formulas.
         """
         logger = self.logger.getChild('infer_opam_dependencies')
+        if not ignore_iqr_flags:
+            logger.debug(f"IQR flags: {self.iqr_flags}")
+        if not ignore_coq_version:
+            logger.debug(f"Coq version: {self.coq_version}")
         try:
             formula = self.opam_switch.get_dependencies(self.path)
         except CalledProcessError:
             formula = None
+        else:
+            logger.debug(f"Inferred formula: {formula}")
         # possibly prone to false positives/negatives
         required_libraries = opamdep.get_required_libraries(
             self.path,
@@ -1307,7 +1308,7 @@ class Project(ABC):
         if formula is not None:
             # limit guessed dependencies to only novel ones
             changed = formula.packages.difference(dependencies)
-            logger.debug(f"Inferred new dependencies: {changed}")
+            logger.debug(f"Inferred additional dependencies: {changed}")
             dependencies.difference_update(formula.packages)
         # format dependencies as package constraints
         dependencies = [f'"{dep}"' for dep in dependencies]
