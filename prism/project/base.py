@@ -13,7 +13,7 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import fields
 from enum import Enum, auto
-from functools import partialmethod, reduce
+from functools import partial, partialmethod, reduce
 from itertools import chain
 from pathlib import Path
 from subprocess import CalledProcessError
@@ -53,12 +53,12 @@ from prism.project.exception import (
 )
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
-from prism.project.strace import strace_build
 from prism.util.bash import escape
 from prism.util.build_tools.coqdep import (
     make_dependency_graph,
     order_dependencies,
 )
+from prism.util.build_tools.strace import CoqContext, strace_build
 from prism.util.logging import default_log_level
 from prism.util.opam import (
     AssignedVariables,
@@ -440,14 +440,6 @@ class Project(ABC):
                 return_I=False,
                 return_Q=False,
                 return_R=True))
-        for full_path in full_q_paths:
-            if not glob.glob(f"{full_path}/*.vo", recursive=False):
-                logger.debug(f"Q path has no *.vo files: {full_path}")
-                return False
-        for full_path in full_r_paths:
-            if not glob.glob(f"{full_path}/**/*.vo", recursive=True):
-                logger.debug(f"R path has no *.vo files: {full_path}")
-                return False
         for vo_file in glob.glob(f"{self.path}/**/*.vo", recursive=True):
             vo_file_path = Path(vo_file)
             if full_r_paths and not any(full_path in vo_file_path.parents
@@ -561,12 +553,13 @@ class Project(ABC):
             returncode: int,
             stdout: str,
             stderr: str,
-            ExcType: Type[ProjectBuildError] = ProjectBuildError) -> None:
+            ExcType: Type[ProjectBuildError] = ProjectBuildError,
+            ignore_returncode: bool = False) -> None:
         status = "failed" if returncode != 0 else "finished"
         msg = (
             f"{action} {status}! Return code is {returncode}! "
             f"stdout:\n{stdout}\n; stderr:\n{stderr}")
-        if returncode != 0:
+        if not ignore_returncode and returncode != 0:
             raise ExcType(msg, returncode, stdout, stderr)
         else:
             # Use root logger instead of
@@ -725,6 +718,65 @@ class Project(ABC):
                 raise e
         return result
 
+    def _strace_build(
+            self,
+            use_dummy_coqc: bool,
+            cleanup: bool = True,
+            **kwargs) -> Tuple[List[CoqContext],
+                               int,
+                               str,
+                               str]:
+        """
+        Build the project and parse `strace` logs to capture arguments.
+
+        Parameters
+        ----------
+        use_dummy_coqc : bool
+            Attempt to use a stub coqc wrapper that doesn't actually
+            build anything.
+        cleanup : bool, optional
+            If True and `use_dummy_coqc` is True, then clean the project
+            after building.
+            Otherwise, do not clean the project.
+        kwargs
+            Keyword arguments to `OpamSwitch.run`.
+
+        Returns
+        -------
+        List[CoqContext]
+            Captured contexts for each invocation of `coqc` including
+            captured arguments.
+        int
+            The return code of the last-executed command
+        str
+            The total stdout of all commands run
+        str
+            The total stderr of all commands run
+        """
+        cmd = self._prepare_command("build")
+        contexts, rcode_out, stdout, stderr = strace_build(
+            self.opam_switch,
+            cmd,
+            workdir=self.path,
+            use_dummy_coqc=use_dummy_coqc,
+            check=False,
+            **kwargs)
+        self._process_command_output(
+            "Strace",
+            rcode_out,
+            stdout,
+            stderr,
+            ignore_returncode=use_dummy_coqc)
+        if use_dummy_coqc and cleanup:
+            # clean project if we only generated empty files.
+            try:
+                self.clean(**kwargs)
+            except ProjectBuildError:
+                logger.debug(
+                    "Tried to clean a project "
+                    "full of corrupt coqc files, but it failed!")
+        return contexts, rcode_out, stdout, stderr
+
     def build(
             self,
             managed_switch_kwargs: Optional[Dict[str,
@@ -780,38 +832,31 @@ class Project(ABC):
         """
         logger = self.logger.getChild('build')
         if not self._check_serapi_option_health_pre_build():
-            # EVENT: <>.build
             logger.debug("Pre-Build Health Check Fail")
+            # try to quickly infer with dummy Coq compiler
             with self.project_logger(logger.getChild('pre-build')):
-                # logs will have name <>.build.pre-build
-                (_,
-                 rcode,
-                 stdout,
-                 stderr) = self.infer_serapi_options(
-                     managed_switch_kwargs,
-                     **kwargs)
-            return rcode, stdout, stderr
-        else:
-            with self.project_logger(logger):
-                # logs will have name <>.build
-                (rcode,
-                 stdout,
-                 stderr) = self._build(
-                     lambda: self._make("build",
-                                        "Compilation",
-                                        **kwargs),
-                     managed_switch_kwargs)
+                self.infer_serapi_options(True, managed_switch_kwargs, **kwargs)
+                # If we get here, then the managed switch has been obtained
+                managed_switch_kwargs = {}
+        with self.project_logger(logger):
+            (rcode,
+             stdout,
+             stderr) = self._build(
+                 lambda: self._make("build",
+                                    "Compilation",
+                                    **kwargs),
+                 managed_switch_kwargs)
         if not self._check_serapi_option_health_post_build():
-            # EVENT: <>.build
             logger.debug("Post-Build Health Check Fail")
+            # Do a more thorough inference.
             separator = "\n@@\nInferring SerAPI Options...\n@@\n"
             with self.project_logger(logger.getChild('post-build')):
-                # logs will have name <>.build.post-build
                 (_,
                  rcode,
                  stdout_post,
                  stderr_post) = self.infer_serapi_options(
-                     managed_switch_kwargs,
+                     False,
+                     managed_switch_kwargs={},
                      **kwargs)
             stdout = "".join((stdout, separator, stdout_post))
             stderr = "".join((stderr, separator, stderr_post))
@@ -1284,6 +1329,7 @@ class Project(ABC):
 
     def infer_serapi_options(
             self,
+            use_dummy_coqc: bool = False,
             managed_switch_kwargs: Optional[Dict[str,
                                                  Any]] = None,
             **kwargs) -> Tuple[SerAPIOptions,
@@ -1298,6 +1344,10 @@ class Project(ABC):
 
         Parameters
         ----------
+        use_dummy_coqc
+            Attempt to use a stub coqc wrapper
+            that doesn't actually build anything.
+            Project is cleaned afterwards if set.
         kwargs
             Keyword arguments to `OpamSwitch.run`.
 
@@ -1323,26 +1373,16 @@ class Project(ABC):
             logger.debug("cleaning failed")
             pass
 
-        def _strace_build():
-            cmd = self._prepare_command("build")
-            contexts, rcode_out, stdout, stderr = strace_build(
-                self.opam_switch,
-                cmd,
-                workdir=self.path,
-                check=False,
-                **kwargs)
-            self._process_command_output("Strace", rcode_out, stdout, stderr)
-            return contexts, rcode_out, stdout, stderr
-
-        # Event
         logger.debug('Performing strace build')
         with self.project_logger(logger.getChild('strace')):
-            # logs will have <>.infer_serapi_options.strace
             (contexts,
              rcode_out,
              stdout,
-             stderr) = self._build(_strace_build,
-                                   managed_switch_kwargs)
+             stderr) = self._build(
+                 partial(self._strace_build,
+                         use_dummy_coqc,
+                         **kwargs),
+                 managed_switch_kwargs)
 
         serapi_options = SerAPIOptions.merge(
             [c.serapi_options for c in contexts],
@@ -1446,6 +1486,9 @@ class Project(ABC):
         RuntimeError
             If `coq_version` or `variables` is not None and both
             `switch_manager` and ``self.switch_manager`` are None.
+        UnsatisfiableConstraints
+            If a switch cannot be obtained that satisfies the project's
+            dependencies.
         """
         dependency_formula = self.get_dependency_formula(coq_version)
         managed_switch_requested = (

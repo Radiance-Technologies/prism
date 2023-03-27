@@ -126,7 +126,11 @@ def create_switches(
     return switches
 
 
-def create_default_switches(n_procs: int = 1) -> List[OpamSwitch]:
+def create_default_switches(
+    n_procs: int = 1,
+    opam_root: Union[Optional[PathLike],
+                     List[Optional[PathLike]]] = None,
+) -> List[OpamSwitch]:
     """
     Create list of OPAM switches based on default Coq versions.
 
@@ -136,6 +140,9 @@ def create_default_switches(n_procs: int = 1) -> List[OpamSwitch]:
     ----------
     n_procs : int, optional
         Number of processors to use, defaults to 1.
+    opam_root : PathLike | List[PathLike | None]] | None, optional
+        The OPAM roots of the desired switches, by default the current
+        globally set root.
 
     Returns
     -------
@@ -152,7 +159,7 @@ def create_default_switches(n_procs: int = 1) -> List[OpamSwitch]:
         '8.15.2'
     ]
     compilers = ['4.09.1' for _ in switches]
-    switch_list = create_switches(switches, compilers, None, n_procs)
+    switch_list = create_switches(switches, compilers, opam_root, n_procs)
     return switch_list
 
 

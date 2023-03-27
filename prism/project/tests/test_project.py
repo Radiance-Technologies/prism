@@ -1,6 +1,7 @@
 """
 Test module for prism.data.project module.
 """
+import glob
 import json
 import logging
 import os
@@ -16,6 +17,7 @@ import git
 import pytest
 
 from prism.data.document import CoqDocument
+from prism.interface.coq.iqr import IQR
 from prism.interface.coq.options import SerAPIOptions
 from prism.project.base import SEM, Project, SentenceExtractionMethod
 from prism.project.metadata.dataclass import ProjectMetadata
@@ -260,11 +262,6 @@ class TestProject(unittest.TestCase):
         """
         Test inferring opam dependencies from a project dir.
         """
-        with self.subTest("standard"):
-            expected_deps = {'"menhir"'}
-            self.test_infer_opam_deps_project.infer_opam_dependencies()
-            deps = self.test_infer_opam_deps_project.opam_dependencies
-            self.assertEqual(set(deps), expected_deps)
         with self.subTest("ignore_iqr_flags"):
             expected_deps = {
                 '"coq-flocq"',
@@ -308,6 +305,11 @@ class TestProject(unittest.TestCase):
                 ignore_coq_version=True)
             deps = self.test_infer_opam_deps_project.opam_dependencies
             self.assertEqual(set(deps), expected_deps)
+        with self.subTest("standard"):
+            expected_deps = {'"menhir"'}
+            self.test_infer_opam_deps_project.infer_opam_dependencies()
+            deps = self.test_infer_opam_deps_project.opam_dependencies
+            self.assertEqual(set(deps), expected_deps)
 
     @pytest.mark.dependency()
     def test_build_and_get_iqr(self):
@@ -348,6 +350,39 @@ class TestProject(unittest.TestCase):
         self.assertTrue(
             set(stdout.splitlines()).issuperset(expected_output.splitlines()))
         self.assertTrue(stderr.endswith(expected_err))
+
+    def test_infer_serapi_options_dummy(self):
+        """
+        Test fast extraction of IQR flags using a dummy `coqc` wrapper.
+
+        Show that IQR options can be extracted without performing a full
+        build and that the options are considered healthy afterwards.
+        """
+        project = self.test_iqr_project
+        project.clean()
+        contexts, rcode, _, _ = project._strace_build(True, False)
+        serapi_options = SerAPIOptions.merge(
+            [c.serapi_options for c in contexts],
+            root=project.path)
+        expected_iqr_flags = IQR.parse_args(
+            ' '.join(
+                [
+                    '-R vendor/array/src,Array',
+                    '-R src,SepLogic',
+                    '-R vendor/simple-classes/src,Classes',
+                    '-R vendor/tactical/src,Tactical'
+                ]),
+            pwd=project.path)
+        # assert that all glob and vo files are empty
+        for dummy_artifact in chain(glob.glob(f"{project.path}/**/*.vo",
+                                              recursive=True),
+                                    glob.glob(f"{project.path}/**/*.glob",
+                                              recursive=True)):
+            with open(dummy_artifact, "r") as f:
+                self.assertEqual(f.read(), "")
+        self.assertEqual(serapi_options.iqr, expected_iqr_flags)
+        self.assertEqual(rcode, 0)
+        self.assertTrue(project._check_serapi_option_health_post_build())
 
     @pytest.mark.dependency(depends=["TestProject::test_build_and_get_iqr"])
     def test_get_file_dependencies(self):

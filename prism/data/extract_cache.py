@@ -62,6 +62,7 @@ from prism.interface.coq.re_patterns import (
     ABORT_COMMAND_PATTERN,
     IDENT_PATTERN,
     OBLIGATION_ID_PATTERN,
+    QUALIFIED_IDENT_PATTERN,
     SUBPROOF_ID_PATTERN,
 )
 from prism.interface.coq.serapi import AbstractSyntaxTree, SerAPI
@@ -82,6 +83,7 @@ from prism.util.opam.version import OpamVersion, Version
 from prism.util.radpytools import PathLike, unzip
 from prism.util.radpytools.dataclasses import default_field
 from prism.util.radpytools.os import pushd
+from prism.util.re import regex_from_options
 from prism.util.swim import SwitchManager, UnsatisfiableConstraints
 
 SentenceState = Tuple[CoqSentence,
@@ -99,6 +101,20 @@ _program_regex = re.compile("[Pp]rogram")
 _save_pattern = re.compile(rf"Save\s+(?P<ident>{IDENT_PATTERN.pattern})\s*.")
 
 _printing_options_pattern = re.compile(r"(?:Set|Unset)\s+Printing\s+.*\.")
+
+_loadpath_problem_pattern = regex_from_options(
+    [
+        s.replace(" ",
+                  r"\s+")
+        for s in [
+            "[Ff]ile not found on loadpath",
+            f"Can(?:'|no)t find file {QUALIFIED_IDENT_PATTERN.pattern}",
+            r"[Cc]annot find library "
+            rf"(?P<library>{QUALIFIED_IDENT_PATTERN.pattern})",
+        ]
+    ],
+    False,
+    False)
 
 _DEBUG_SINGLE_COMMIT = False
 """
@@ -1379,7 +1395,193 @@ def extract_cache(
             max_runtime)
 
 
-def extract_cache_new(  # noqa: C901
+def _handle_build_error(
+    build_error: Union[ProjectBuildError,
+                       TimeoutExpired],
+    build_cache_client: CoqProjectBuildCacheProtocol,
+    project: ProjectRepo,
+    block: bool,
+    process_project_fallback: Callable[[ProjectRepo],
+                                       Tuple[VernacDict,
+                                             CommentDict]]
+) -> Tuple[VernacDict,
+           CommentDict]:
+    r"""
+    Handle and log a build error during cache extraction.
+
+    Parameters
+    ----------
+    build_error : Union[ProjectBuildError, TimeoutExpired]
+        The error thrown during the build process.
+    build_cache_client : CoqProjectBuildCacheProtocol
+        The cache.
+    project : ProjectRepo
+        The project checked out at the commit to be extracted.
+    block : bool
+        Whether to use blocking cache writes
+    process_project_fallback : Callable[[ProjectRepo], \
+                                        Tuple[VernacDict, CommentDict]]
+        Function that provides fallback Vernacular command extraction
+        for projects that do not build.
+
+    Returns
+    -------
+    command_data : VernacDict
+        Extracted commands from the `process_project_fallback`.
+    comment_data : CommentDict]
+        Extracted comments from the `process_project_fallback`.
+    """
+    if isinstance(build_error, ProjectBuildError):
+        build_result = (
+            build_error.return_code,
+            build_error.stdout,
+            build_error.stderr)
+    else:
+        stdout = build_error.stdout.decode(
+            "utf-8") if build_error.stdout is not None else ''
+        stderr = build_error.stderr.decode(
+            "utf-8") if build_error.stderr is not None else ''
+        build_result = (1, stdout, stderr)
+    # Write the log before calling process_project_fallback
+    # in case it raises an exception.
+    build_cache_client.write_build_error_log(
+        project.metadata,
+        block,
+        ProjectBuildResult(*build_result))
+    return process_project_fallback(project)
+
+
+def _handle_cache_error(
+        cache_error: ExtractVernacCommandsError,
+        build_cache_client: CoqProjectBuildCacheProtocol,
+        project: ProjectRepo,
+        block: bool,
+        files_to_use: Optional[Iterable[str]],
+        force_serial: bool,
+        worker_semaphore: Optional[BoundedSemaphore],
+        logger: logging.Logger,
+        logger_stream: StringIO) -> Tuple[VernacDict,
+                                          CommentDict]:
+    """
+    Handle and log errors during cache extraction proper.
+
+    Parameters
+    ----------
+    cache_error : ExtractVernacCommandsError
+        An error raised when extracting individual commands from a Coq
+        file.
+    build_cache_client : CoqProjectBuildCacheProtocol
+        The cache.
+    project : ProjectRepo
+        The project checked out at the commit to be extracted.
+    block : bool
+        Whether to use blocking cache writes
+    files_to_use : Iterable[str] | None
+        An iterable of files to use from this project; or None. If None,
+        all files are used. By default, None.
+        This argument is especially useful for profiling.
+    force_serial : bool
+        If this argument is true, disable parallel execution. Useful for
+        debugging.
+    worker_semaphore : Optional[BoundedSemaphore]
+        Semaphore used to control the number of file workers that can
+        run at once. If None, ignore.
+    logger : logging.Logger
+        A logger with which to record the error.
+    logger_stream : StringIO
+        A flushable stream for the `logger`.
+
+    Returns
+    -------
+    command_data : VernacDict
+        Extracted commands from a repeated attempt at
+        `extract_vernac_commands` if the error can be handled.
+    comment_data : CommentDict]
+        Extracted comments from a repeated attempt at
+        `extract_vernac_commands` if the error can be handled.
+
+    Raises
+    ------
+    ExtractVernacCommandsError
+        If the given `cache_error` could not be handled
+    """
+    if isinstance(cache_error.parent, CoqExn):
+        m = _loadpath_problem_pattern.search(cache_error.parent.msg)
+        if m is not None:
+            # problem with loadpath implies likely
+            # IQR flag issue
+            project.infer_serapi_options()
+            try:
+                return extract_vernac_commands(
+                    project,
+                    files_to_use,
+                    force_serial,
+                    worker_semaphore)
+            except ExtractVernacCommandsError as e2:
+                # replace error
+                cache_error = e2
+    logger.critical(f"Filename: {cache_error.filename}\n")
+    logger.critical(f"Parent stack trace:\n{cache_error.parent_stacktrace}\n")
+    logger.exception(cache_error)
+    logger_stream.flush()
+    logged_text = logger_stream.getvalue()
+    build_cache_client.write_cache_error_log(
+        project.metadata,
+        block,
+        logged_text)
+    raise
+
+
+def _handle_misc_error(
+        misc_error: Exception,
+        build_cache_client: CoqProjectBuildCacheProtocol,
+        project: ProjectRepo,
+        coq_version: str,
+        block: bool,
+        logger: logging.Logger,
+        logger_stream: StringIO) -> None:
+    """
+    Log any unexpected errors in the cache extraction process.
+
+    Parameters
+    ----------
+    misc_error : Exception
+        An unhandled error raised during cache extraction.
+    build_cache_client : CoqProjectBuildCacheProtocol
+        The cache.
+    project : ProjectRepo
+        The project checked out at the commit to be extracted.
+    coq_version : str
+        The version of Coq under which the `project` is built and its
+        commands extracted.
+    block : bool
+        Whether to use blocking cache writes
+    logger : logging.Logger
+        A logger with which to record the error.
+    logger_stream : StringIO
+        A flushable stream for the `logger`.
+    """
+    logger.critical(
+        "An exception occurred outside of extracting vernacular commands.\n")
+    # If a subprocess command failed, capture the standard
+    # output and error
+    if isinstance(misc_error, CalledProcessError):
+        logger.critical(f"stdout:\n{misc_error.stdout}\n")
+        logger.critical(f"stderr:\n{misc_error.stderr}\n")
+    project_metadata = project.metadata
+    if isinstance(misc_error, UnsatisfiableConstraints):
+        project_metadata = copy.copy(project_metadata)
+        project_metadata.coq_version = coq_version
+    logger.exception(misc_error)
+    logger_stream.flush()
+    logged_text = logger_stream.getvalue()
+    build_cache_client.write_misc_error_log(
+        project_metadata,
+        block,
+        logged_text)
+
+
+def extract_cache_new(
     build_cache_client: CoqProjectBuildCacheProtocol,
     switch_manager: SwitchManager,
     project: ProjectRepo,
@@ -1387,7 +1589,7 @@ def extract_cache_new(  # noqa: C901
     process_project_fallback: Callable[[ProjectRepo],
                                        Tuple[VernacDict,
                                              CommentDict]],
-    coq_version: Optional[str],
+    coq_version: str,
     block: bool,
     files_to_use: Optional[Iterable[str]],
     force_serial: bool,
@@ -1411,11 +1613,10 @@ def extract_cache_new(  # noqa: C901
         The commit whose data should be extracted.
     process_project_fallback : Callable[[ProjectRepo], \
                                         Tuple[VernacDict, CommentDict]]
-        Function that provides fallback vernacular command extraction
+        Function that provides fallback Vernacular command extraction
         for projects that do not build.
-    coq_version : str or None
-        The version of Coq in which to build the project, by default
-        None.
+    coq_version : str
+        The version of Coq in which to build the project.
     block : bool
         Whether to use blocking cache writes
     files_to_use : Iterable[str] | None
@@ -1425,7 +1626,7 @@ def extract_cache_new(  # noqa: C901
     force_serial : bool
         If this argument is true, disable parallel execution. Useful for
         debugging.
-    worker_semaphore : Semaphore or None
+    worker_semaphore : BoundedSemaphore or None
         Semaphore used to control the number of file workers that can
         run at once. If None, ignore.
     max_memory : Optional[ResourceLimits]
@@ -1498,21 +1699,13 @@ def extract_cache_new(  # noqa: C901
                     max_runtime=max_runtime,
                     max_memory=max_memory)
             except (ProjectBuildError, TimeoutExpired) as pbe:
-                if isinstance(pbe, ProjectBuildError):
-                    build_result = (pbe.return_code, pbe.stdout, pbe.stderr)
-                else:
-                    stdout = pbe.stdout.decode(
-                        "utf-8") if pbe.stdout is not None else ''
-                    stderr = pbe.stderr.decode(
-                        "utf-8") if pbe.stderr is not None else ''
-                    build_result = (1, stdout, stderr)
-                # Write the log before calling process_project_fallback
-                # in case it raises an exception.
-                build_cache_client.write_build_error_log(
-                    project.metadata,
-                    block,
-                    ProjectBuildResult(*build_result))
-                command_data, comment_data = process_project_fallback(project)
+                (command_data,
+                 comment_data) = _handle_build_error(
+                     build_error=pbe,
+                     build_cache_client=build_cache_client,
+                     project=project,
+                     block=block,
+                     process_project_fallback=process_project_fallback)
             else:
                 inner_start_time = time()
                 try:
@@ -1522,17 +1715,17 @@ def extract_cache_new(  # noqa: C901
                         force_serial,
                         worker_semaphore)
                 except ExtractVernacCommandsError as e:
-                    extract_logger.critical(f"Filename: {e.filename}\n")
-                    extract_logger.critical(
-                        f"Parent stack trace:\n{e.parent_stacktrace}\n")
-                    extract_logger.exception(e)
-                    extract_logger_stream.flush()
-                    logged_text = extract_logger_stream.getvalue()
-                    build_cache_client.write_cache_error_log(
-                        project.metadata,
-                        block,
-                        logged_text)
-                    raise
+                    (command_data,
+                     comment_data) = _handle_cache_error(
+                         cache_error=e,
+                         build_cache_client=build_cache_client,
+                         project=project,
+                         block=block,
+                         files_to_use=files_to_use,
+                         force_serial=force_serial,
+                         worker_semaphore=worker_semaphore,
+                         logger=extract_logger,
+                         logger_stream=extract_logger_stream)
                 finally:
                     inner_elapsed_time = time() - inner_start_time
                     build_cache_client.write_timing_log(
@@ -1564,25 +1757,14 @@ def extract_cache_new(  # noqa: C901
             # errors
             pass
         except Exception as e:
-            extract_logger.critical(
-                "An exception occurred outside of extracting vernacular commands.\n"
-            )
-            # If a subprocess command failed, capture the standard
-            # output and error
-            if isinstance(e, CalledProcessError):
-                extract_logger.critical(f"stdout:\n{e.stdout}\n")
-                extract_logger.critical(f"stderr:\n{e.stderr}\n")
-            project_metadata = project.metadata
-            if isinstance(e, UnsatisfiableConstraints):
-                project_metadata = copy.copy(project_metadata)
-                project_metadata.coq_version = coq_version
-            extract_logger.exception(e)
-            extract_logger_stream.flush()
-            logged_text = extract_logger_stream.getvalue()
-            build_cache_client.write_misc_error_log(
-                project_metadata,
-                block,
-                logged_text)
+            _handle_misc_error(
+                misc_error=e,
+                build_cache_client=build_cache_client,
+                project=project,
+                block=block,
+                coq_version=coq_version,
+                logger=extract_logger,
+                logger_stream=extract_logger_stream)
         finally:
             try:
                 if isinstance(commit_message, bytes):

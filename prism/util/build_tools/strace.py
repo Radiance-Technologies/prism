@@ -6,7 +6,10 @@ Adapted from IBM's pycoq: https://github.com/IBM/pycoq
 import ast
 import logging
 import os
+import pathlib
 import re
+import shutil
+import stat
 import tempfile
 import typing
 from dataclasses import dataclass, field
@@ -22,6 +25,14 @@ from prism.util.radpytools import PathLike
 
 _EXECUTABLE = 'coqc'
 _REGEX = r'.*\.v$'
+
+_DUMMY_COQC_PARENT_PATH = tempfile.TemporaryDirectory()
+_DUMMY_COQC_PATH = pathlib.Path(_DUMMY_COQC_PARENT_PATH.name) / "coqc"
+_DUMMY_COQC_SH_PATH = pathlib.Path(__file__).parent / "dummy_coqc.sh"
+
+shutil.copy(_DUMMY_COQC_SH_PATH, _DUMMY_COQC_PATH)
+
+os.chmod(_DUMMY_COQC_PATH, stat.S_IRWXO | stat.S_IRWXG | stat.S_IRWXU)
 
 RecursiveStrList = Union[str, List['RecursiveStrList']]
 
@@ -309,6 +320,7 @@ def strace_build(
         regex: str = _REGEX,
         workdir: Optional[PathLike] = None,
         strace_logdir: Optional[PathLike] = None,
+        use_dummy_coqc: Optional[bool] = False,
         **kwargs) -> Tuple[List[CoqContext],
                            int,
                            str,
@@ -335,6 +347,9 @@ def strace_build(
         The cwd to execute the `command` in, by default None.
     strace_logdir : Optional[PathLike], optional
         The directory in which to store the temporary strace logs.
+    use_dummy_coqc : Optional[bool]
+        Attempt to use a stub coqc that doesn't actually
+        build anything.
     kwargs : Dict[str, Any]
         Additional keyword arguments to `OpamSwitch.run`.
 
@@ -370,6 +385,12 @@ def strace_build(
         strace_cmd = (
             'strace -e trace=execve -v -ff -s 100000000 -xx -ttt -o'
             f' {logfname} bash -c "{command}"')
+
+        if use_dummy_coqc:
+            strace_cmd = (
+                f'(\n export PATH={_DUMMY_COQC_PARENT_PATH.name}:$PATH; '
+                + strace_cmd + "\n)")
+
         r = opam_switch.run(strace_cmd, cwd=workdir, **kwargs)
         if r.stdout is not None:
             for line in r.stdout.splitlines():
