@@ -836,7 +836,8 @@ class Project(ABC):
             # try to quickly infer with dummy Coq compiler
             with self.project_logger(logger.getChild('pre-build')):
                 self.infer_serapi_options(True, managed_switch_kwargs, **kwargs)
-                # If we get here, then the managed switch has been obtained
+                # If we get here, then the managed switch has been
+                # obtained
                 managed_switch_kwargs = {}
         with self.project_logger(logger):
             (rcode,
