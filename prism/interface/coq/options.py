@@ -323,6 +323,28 @@ class SerAPIOptions:
         options.extend([f"-load-vernac-source {f}" for f in self.loaded_files])
         return ' '.join(options)
 
+    @property
+    def settings_dict(self) -> Dict[str, bool]:
+        """
+        A dictionary mapping setting names to whether they are enabled.
+        """
+        setting_states: Dict[str,
+                             bool] = {}
+        for s in self.settings:
+            setting_states[s.name] = s.is_set
+        return setting_states
+
+    @property
+    def warnings_dict(self) -> Dict[str, CoqWarningState]:
+        """
+        A dictionary mapping warning names to whether their states.
+        """
+        warning_states: Dict[str,
+                             CoqWarningState] = {}
+        for w in self.warnings:
+            warning_states[w.name] = w.state
+        return warning_states
+
     def _check_option_validity(
             self,
             serapi_version: Union[str,
