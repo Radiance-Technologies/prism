@@ -23,6 +23,7 @@ from typing import (
 )
 
 import numpy as np
+from bidict import bidict
 
 from prism.data.build_cache import (
     ProjectCommitData,
@@ -37,6 +38,7 @@ from prism.data.repair.align import (
     get_aligned_commands,
 )
 from prism.data.repair.diff import compute_git_diff
+from prism.interface.coq.options import CoqWarningState, SerAPIOptions
 from prism.language.gallina.analyze import SexpInfo
 from prism.project.metadata import ProjectMetadata
 from prism.util.diff import GitDiff
@@ -541,6 +543,49 @@ class ProjectCommitDataDiff:
         return cls.from_alignment(a, b, alignment)
 
 
+@dataclass
+class BuildProcess:
+    """
+    Metadata that enables functionality in an implicit environment.
+    """
+
+    build_cmd: List[str]
+    """
+    A list of commands for building the project.
+    """
+    install_cmd: List[str]
+    """
+    A list of commands for installing the project in a user environment.
+    """
+    clean_cmd: List[str]
+    """
+    A list of commands for cleaning build artifacts.
+    """
+    serapi_options: Optional[SerAPIOptions]
+    """
+    Flags or options passed to SerAPI command-line executables.
+    """
+
+    def embed(self, metadata: ProjectMetadata) -> None:
+        """
+        Embed the build process in the given metadata.
+        """
+        for f in fields(self):
+            f_name = f.name
+            setattr(metadata, f_name, getattr(self, f_name))
+
+    @classmethod
+    def from_metadata(cls, metadata: ProjectMetadata) -> 'BuildProcess':
+        """
+        Extract the build process from given project metadata.
+        """
+        return BuildProcess(
+            metadata.build_cmd,
+            metadata.install_cmd,
+            metadata.clean_cmd,
+            metadata.serapi_options)
+
+
 T = TypeVar('T', bound=Dataclass)
 
 
@@ -555,11 +600,12 @@ def cast_from_base_cls(cls: Type[T], obj: T, base_cls: Type[T]) -> T:
 
 
 _State = TypeVar("_State")
-_Diff = TypeVar("_Diff")
+_StateDiff = TypeVar("_StateDiff")
+_Process = TypeVar("_Process")
 
 
 @dataclass
-class ProjectState(Generic[_State, _Diff]):
+class ProjectState(Generic[_State, _StateDiff, _Process]):
     """
     The state of a project.
     """
@@ -568,11 +614,15 @@ class ProjectState(Generic[_State, _Diff]):
     """
     A representation of the state of the project.
     """
-    offset: Optional[_Diff] = None
+    offset: Optional[_StateDiff] = None
     """
     A set of changes relative to the `project_state`.
 
     This field is useful for representing working tree changes.
+    """
+    _build_process: Optional[_Process] = None
+    """
+    The build process and/or compiler flags.
     """
     _environment: Optional[OpamSwitch.Configuration] = None
     """
@@ -581,6 +631,13 @@ class ProjectState(Generic[_State, _Diff]):
     This field identifies other installed package versions including the
     Coq compiler.
     """
+
+    @property
+    def build_process(self) -> Optional[_Process]:
+        """
+        The build process for the state.
+        """
+        return self._build_process
 
     @property
     def environment(self) -> Optional[OpamSwitch.Configuration]:
@@ -600,21 +657,28 @@ class ProjectState(Generic[_State, _Diff]):
 
 
 @dataclass
-class ProjectStateDiff(Generic[_Diff]):
+class ProjectStateDiff(Generic[_StateDiff, _Process]):
     """
     A change in some implicit project's state.
     """
 
-    diff: _Diff
+    diff: _StateDiff
     """
     A refactor or other change to some implicit state.
+    """
+    build_process: Optional[_Process] = None
+    """
+    A change in the build process or compiler flags.
+
+    If None, then it is understood to be the same build process as the
+    process associated with the implicit state.
     """
     environment: Optional[OpamSwitch.Configuration] = None
     """
     The changed environment.
 
     If None, then it is understood to be the same environment as the
-    environment associatd with implicit state.
+    environment associated with implicit state.
     """
 
     @classmethod
@@ -628,7 +692,7 @@ class ProjectStateDiff(Generic[_Diff]):
 
 
 @dataclass
-class ErrorInstance(Generic[_State, _Diff]):
+class ErrorInstance(Generic[_State, _StateDiff, _Process]):
     """
     A concise example of an error.
 
@@ -641,14 +705,14 @@ class ErrorInstance(Generic[_State, _Diff]):
     An identifier that uniquely determines the project and is implicitly
     linked to a Git repository through some external correspondence.
     """
-    initial_state: ProjectState[_State, _Diff]
+    initial_state: ProjectState[_State, _StateDiff, _Process]
     """
     An initial project state.
 
     A state of the project, nominally taken to be prior to a change that
     introduced a broken proof or other bug.
     """
-    change: ProjectStateDiff[_Diff]
+    change: ProjectStateDiff[_StateDiff, _Process]
     """
     A refactor or other change that introduces an error when applied to
     the `initial_state`.
@@ -677,6 +741,16 @@ class ErrorInstance(Generic[_State, _Diff]):
     """
 
     @property
+    def build_process(self) -> Optional[_Process]:
+        """
+        Get the build process for the error state, if specified.
+        """
+        build_process = self.change.build_process
+        if build_process is None:
+            build_process = self.initial_state.build_process
+        return build_process
+
+    @property
     def environment(self) -> Optional[OpamSwitch.Configuration]:
         """
         Get the environment of the error state, if specified.
@@ -697,7 +771,7 @@ class ErrorInstance(Generic[_State, _Diff]):
 
 
 @dataclass
-class RepairInstance(Serializable, Generic[_State, _Diff]):
+class RepairInstance(Serializable, Generic[_State, _StateDiff, _Process]):
     """
     A concise example of a repair.
 
@@ -706,13 +780,15 @@ class RepairInstance(Serializable, Generic[_State, _Diff]):
     environment.
     """
 
-    error: ErrorInstance[_State, _Diff]
+    error: ErrorInstance[_State, _StateDiff, _Process]
     """
     An erroneous project state.
     """
     repaired_state_or_diff: Union[ProjectState[_State,
-                                               _Diff],
-                                  ProjectStateDiff[_Diff]]
+                                               _StateDiff,
+                                               _Process],
+                                  ProjectStateDiff[_StateDiff,
+                                                   _Process]]
     """
     A repaired proof state.
 
@@ -721,6 +797,16 @@ class RepairInstance(Serializable, Generic[_State, _Diff]):
     If the environment is None, then it is understood to be the same
     environment in which the error occurs.
     """
+
+    @property
+    def build_process(self) -> Optional[_Process]:
+        """
+        Get the build process of the repaired state, if specified.
+        """
+        build_process = self.repaired_state_or_diff.build_process
+        if build_process is None:
+            build_process = self.error.build_process
+        return build_process
 
     @property
     def environment(self) -> Optional[OpamSwitch.Configuration]:
@@ -743,7 +829,7 @@ class RepairInstance(Serializable, Generic[_State, _Diff]):
 
 
 @dataclass
-class GitProjectState(ProjectState[str, GitDiff]):
+class GitProjectState(ProjectState[str, GitDiff, BuildProcess]):
     """
     The state of a project in terms of Git commits and diffs.
     """
@@ -757,14 +843,16 @@ class GitProjectState(ProjectState[str, GitDiff]):
 
 
 @dataclass
-class GitProjectStateDiff(ProjectStateDiff[GitDiff]):
+class GitProjectStateDiff(ProjectStateDiff[GitDiff, BuildProcess]):
     """
     A change in some implicit Git repository's state.
     """
 
+    pass
+
 
 @dataclass
-class GitErrorInstance(ErrorInstance[str, GitDiff]):
+class GitErrorInstance(ErrorInstance[str, GitDiff, BuildProcess]):
     """
     A concise example of an error in its most raw and unprocessed form.
 
@@ -780,15 +868,17 @@ class GitErrorInstance(ErrorInstance[str, GitDiff]):
             self.initial_state = GitProjectState(
                 self.initial_state.project_state,
                 self.initial_state.offset,
+                self.initial_state._build_process,
                 self.initial_state._environment)
         if not isinstance(self.change, GitProjectStateDiff):
             self.change = GitProjectStateDiff(
                 self.change.diff,
+                self.change.build_process,
                 self.change.environment)
 
 
 @dataclass
-class GitRepairInstance(RepairInstance[str, GitDiff]):
+class GitRepairInstance(RepairInstance[str, GitDiff, BuildProcess]):
     """
     A concise example of a repair in its most raw and unprocessed form.
 
@@ -813,11 +903,13 @@ class GitRepairInstance(RepairInstance[str, GitDiff]):
                 self.repaired_state_or_diff = GitProjectState(
                     self.repaired_state_or_diff.project_state,
                     self.repaired_state_or_diff.offset,
+                    self.repaired_state_or_diff._build_process,
                     self.repaired_state_or_diff._environment)
         elif isinstance(self.repaired_state_or_diff, ProjectStateDiff):
             if not isinstance(self.repaired_state_or_diff, GitProjectStateDiff):
                 self.repaired_state_or_diff = GitProjectStateDiff(
                     self.repaired_state_or_diff.diff,
+                    self.repaired_state_or_diff.build_process,
                     self.repaired_state_or_diff.environment)
         else:
             raise TypeError(
@@ -827,10 +919,22 @@ class GitRepairInstance(RepairInstance[str, GitDiff]):
 
 @dataclass
 class ProjectCommitDataState(ProjectState[ProjectCommitData,
-                                          ProjectCommitDataDiff]):
+                                          ProjectCommitDataDiff,
+                                          BuildProcess]):
     """
     The state of a project in terms of extracted commit data.
     """
+
+    @property
+    def build_process(self) -> Optional[BuildProcess]:
+        """
+        Get the environment from the project commit data.
+        """
+        build_process = self._build_process
+        if build_process is None:
+            build_process = BuildProcess.from_metadata(
+                self.project_state.project_metadata)
+        return build_process
 
     @property
     def commit_data(self) -> ProjectCommitData:
@@ -857,10 +961,13 @@ class ProjectCommitDataState(ProjectState[ProjectCommitData,
         state = self.project_state
         if self.offset is not None:
             state = self.offset.patch(state)
+        if self.build_process is not None:
+            self.build_process.embed(state.project_metadata)
         return state
 
     def compress(
         self,
+        reference_build_process: Optional[BuildProcess] = None,
         reference_environment: Optional[OpamSwitch.Configuration] = None
     ) -> GitProjectState:
         r"""
@@ -868,6 +975,10 @@ class ProjectCommitDataState(ProjectState[ProjectCommitData,
 
         Parameters
         ----------
+        reference_build_process : Optional[BuildProcess], optional
+            The build process corresponding to a prior reference point.
+            For example, `self` may be a repaired state with
+            `reference_build_process` taken from a broken state.
         reference_environment : Optional[OpamSwitch.Configuration], \
                 optional
             The environment corresponding to a prior reference point.
@@ -885,6 +996,10 @@ class ProjectCommitDataState(ProjectState[ProjectCommitData,
         offset = typing.cast(Optional[GitDiff], offset)
         if self.project_state.project_metadata.commit_sha is None:
             raise RuntimeError("Commit SHA must be known")
+        build_process = None
+        if (reference_build_process is None
+                or reference_build_process != self.build_process):
+            build_process = self.build_process
         environment = None
         if (reference_environment is None
                 or reference_environment != self.environment):
@@ -892,11 +1007,13 @@ class ProjectCommitDataState(ProjectState[ProjectCommitData,
         return GitProjectState(
             self.project_state.project_metadata.commit_sha,
             offset,
+            build_process,
             environment)
 
 
 @dataclass
-class ProjectCommitDataStateDiff(ProjectStateDiff[ProjectCommitDataDiff]):
+class ProjectCommitDataStateDiff(ProjectStateDiff[ProjectCommitDataDiff,
+                                                  BuildProcess]):
     """
     A change in some implicit commit's extracted state.
     """
@@ -904,6 +1021,7 @@ class ProjectCommitDataStateDiff(ProjectStateDiff[ProjectCommitDataDiff]):
     def compress(
         self,
         reference: ProjectCommitData,
+        reference_build_process: Optional[BuildProcess],
         reference_environment: Optional[OpamSwitch.Configuration]
     ) -> GitProjectStateDiff:
         """
@@ -921,6 +1039,10 @@ class ProjectCommitDataStateDiff(ProjectStateDiff[ProjectCommitDataDiff]):
         GitProjectStateDiff
             A concise representation of this diff.
         """
+        build_process = None
+        if (reference_build_process is None
+                or reference_build_process != self.build_process):
+            build_process = self.build_process
         environment = None
         if (reference_environment is None
                 or reference_environment != self.environment):
@@ -928,6 +1050,7 @@ class ProjectCommitDataStateDiff(ProjectStateDiff[ProjectCommitDataDiff]):
         return GitProjectStateDiff(
             compute_git_diff(reference,
                              self.diff.patch(reference)),
+            build_process,
             environment)
 
 
@@ -935,6 +1058,7 @@ ErrorAnnotator = Callable[[
     VernacCommandData,
     ProjectCommitData,
     ProjectCommitDataDiff,
+    Optional[BuildProcess],
     Optional[OpamSwitch.Configuration],
     Optional[Iterable[str]]
 ],
@@ -1007,7 +1131,8 @@ returns a set of changesets derived from the diff.
 
 @dataclass
 class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
-                                                   ProjectCommitDataDiff]):
+                                                   ProjectCommitDataDiff,
+                                                   BuildProcess]):
     """
     An example of an error in a standalone, precomputed offline format.
 
@@ -1023,10 +1148,12 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
             self.initial_state = ProjectCommitDataState(
                 self.initial_state.project_state,
                 self.initial_state.offset,
+                self.initial_state._build_process,
                 self.initial_state._environment)
         if not isinstance(self.change, ProjectCommitDataStateDiff):
             self.change = ProjectCommitDataStateDiff(
                 self.change.diff,
+                self.change.build_process,
                 self.change.environment)
 
     @property
@@ -1041,6 +1168,8 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
         initial_state = typing.cast(ProjectCommitDataState, initial_state)
         error_state = self.change.diff.patch(initial_state.offset_state)
         error_state.sort_commands()
+        if self.change.build_process is not None:
+            self.change.build_process.embed(error_state.project_metadata)
         return error_state
 
     @property
@@ -1069,6 +1198,7 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
             initial_state.compress(),
             change.compress(
                 initial_state.project_state,
+                initial_state._build_process,
                 initial_state._environment),
             self.error_location,
             set(self.tags))
@@ -1078,6 +1208,7 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
             cls,
             initial_state: ProjectCommitData,
             broken_state_diff: ProjectCommitDataDiff,
+            broken_build_process: Optional[BuildProcess],
             broken_environment: Optional[OpamSwitch.Configuration],
             broken_dependencies: Optional[Iterable[str]],
             broken_commands: Iterable[VernacCommandData],
@@ -1085,6 +1216,13 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
         """
         Create the actual error instance.
         """
+        error_build_process = None
+        if broken_build_process is not None:
+            error_build_process = broken_build_process
+            initial_build_process = BuildProcess.from_metadata(
+                initial_state.project_metadata)
+            if error_build_process == initial_build_process:
+                error_build_process = None
         error_environment = None
         if broken_environment is not None:
             error_environment = broken_environment
@@ -1099,6 +1237,7 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
                     broken_command,
                     initial_state,
                     broken_state_diff,
+                    broken_build_process,
                     broken_environment,
                     broken_dependencies))
         error_instance = cls(
@@ -1108,6 +1247,7 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
                                                  None),
             change=ProjectCommitDataStateDiff(
                 broken_state_diff,
+                error_build_process,
                 error_environment),
             error_location={bc.command.location for bc in broken_commands},
             tags=tags)
@@ -1180,11 +1320,168 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
         return selected_changes
 
     @classmethod
+    def get_build_process_tags(
+            cls,
+            initial_build_process: BuildProcess,
+            broken_build_process: Optional[BuildProcess]) -> Set[str]:
+        """
+        Update tags for an error given before/after build processes.
+        """
+        tags = set()
+        initial_options = initial_build_process.serapi_options
+        broken_options = None
+        if broken_build_process is not None:
+            broken_options = broken_build_process.serapi_options
+        if initial_options is not None and broken_options is not None:
+            initial_iqr = initial_options.iqr
+            broken_iqr = broken_options.iqr
+            tags.update(
+                {
+                    f"dropped-I-path:{p}" for p in initial_iqr.I
+                    if p not in broken_iqr.I
+                })
+            tags.update(
+                {
+                    f"added-I-path:{p}" for p in broken_iqr.I
+                    if p not in initial_iqr.I
+                })
+            tags.update(
+                cls.get_qr_tags(
+                    initial_iqr.Q,
+                    broken_iqr.Q,
+                    broken_iqr.R,
+                    True))
+            tags.update(
+                cls.get_qr_tags(
+                    initial_iqr.R,
+                    broken_iqr.R,
+                    broken_iqr.Q,
+                    False))
+            initial_settings = initial_options.settings_dict
+            broken_settings = broken_options.settings_dict
+            for setting_name, setting_enabled in broken_settings.items():
+                if (setting_name not in initial_settings
+                        or setting_enabled != initial_settings[setting_name]):
+                    tags.add(
+                        f"{'Set' if setting_enabled else 'Unset'}:{setting_name}"
+                    )
+            initial_warnings = initial_options.warnings_dict
+            broken_warnings = broken_options.warnings_dict
+            for warning_name, warning_state in broken_warnings.items():
+                if (warning_name not in initial_warnings
+                        or warning_state != initial_settings[warning_name]):
+                    if warning_state == CoqWarningState.DISABLED:
+                        tags.add(f"warning-disabled:{warning_name}")
+                    elif warning_state == CoqWarningState.ENABLED:
+                        tags.add(f"warning-enabled:{warning_name}")
+                    else:
+                        tags.add(f"warning-elevated:{warning_name}")
+            for f in fields(initial_options):
+                f_name = f.name
+                if f.type == bool:
+                    initial_flag = getattr(initial_options, f_name)
+                    broken_flag = getattr(broken_options, f_name)
+                    if initial_flag != broken_flag:
+                        if broken_flag != f.default:
+                            tags.add(f"added-flag:{f_name}")
+                        else:
+                            tags.add(f"removed-flag:{f_name}")
+        return tags
+
+    @classmethod
+    def get_environment_tags(
+            cls,
+            initial_environment: Optional[OpamSwitch.Configuration],
+            initial_opam_dependencies: Optional[List[str]],
+            final_environment: Optional[OpamSwitch.Configuration],
+            final_opam_dependencies: Optional[Iterable[str]]) -> Set[str]:
+        """
+        Get tags for an error given the environment before and after.
+        """
+        tags = set()
+        if (initial_environment is not None and final_environment is not None
+                and initial_opam_dependencies is not None
+                and final_opam_dependencies is not None):
+            initial_dependencies = set()
+            for dep in initial_opam_dependencies:
+                initial_dependencies.update(
+                    typing.cast(PackageFormula,
+                                PackageFormula.parse(dep)).packages)
+            repaired_dependencies = set()
+            for dep in final_opam_dependencies:
+                repaired_dependencies.update(
+                    typing.cast(PackageFormula,
+                                PackageFormula.parse(dep)).packages)
+            initial_packages = dict(initial_environment.installed)
+            final_packages = dict(final_environment.installed)
+            tags.update(
+                {
+                    f"dropped-dependency:{p}" for p in final_packages if
+                    p in initial_dependencies and p not in repaired_dependencies
+                })
+            tags.update(
+                {
+                    f"new-dependency:{p}" for p in final_packages if
+                    p not in initial_dependencies and p in repaired_dependencies
+                })
+            tags.update(
+                {
+                    f"updated-dependency:{p}" for p in final_packages
+                    if p in initial_dependencies and p in repaired_dependencies
+                    and initial_packages[p] != final_packages[p]
+                })
+        return tags
+
+    @classmethod
+    def get_qr_tags(
+            cls,
+            initial_qr: Set[Tuple[str,
+                                  str]],
+            broken_qr: Set[Tuple[str,
+                                 str]],
+            broken_rq: Set[Tuple[str,
+                                 str]],
+            is_Q: bool) -> Set[str]:
+        """
+        Update tags for an error instance given before/after QR flags.
+        """
+        tags = set()
+        initial_qr_dict = bidict(initial_qr)
+        broken_qr_dict = bidict(broken_qr)
+        for physical, logical in initial_qr:
+            if physical in broken_qr_dict:
+                new_logical = broken_qr_dict[physical] != logical
+                if new_logical != logical:
+                    tags.add(
+                        f"changed-logical-{'Q' if is_Q else 'R'}-path:"
+                        f"{physical}({logical} -> {new_logical})")
+            elif logical not in broken_qr_dict.inv:
+                tags.add(
+                    f"dropped-{'Q' if is_Q else 'R'}-path:{physical},{logical}")
+            if logical in broken_qr_dict.inv:
+                new_physical = broken_qr_dict.inv[logical]
+                if new_physical != physical:
+                    tags.add(
+                        f"changed-physical-{'Q' if is_Q else 'R'}-path:"
+                        f"{logical}({physical} -> {new_physical})")
+            if (physical, logical) in broken_rq:
+                tags.add(
+                    f"changed-{'Q' if is_Q else 'R'}-to-{'R' if is_Q else 'Q'}:"
+                    f"{physical},{logical}")
+        for physical, logical in broken_qr.difference(initial_qr):
+            if (physical not in initial_qr_dict
+                    and logical not in initial_qr_dict.inv):
+                tags.add(
+                    f"added-{'Q' if is_Q else 'R'}-path:{physical},{logical}")
+        return tags
+
+    @classmethod
     def default_get_error_tags(
             cls,
             broken_command: VernacCommandData,
             initial_state: ProjectCommitData,
             broken_state_diff: ProjectCommitDataDiff,
+            broken_build_process: Optional[BuildProcess],
             broken_environment: Optional[OpamSwitch.Configuration],
             broken_dependencies: Optional[Iterable[str]]) -> Set[str]:
         """
@@ -1205,6 +1502,8 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
         broken_state_diff : ProjectCommitDataDiff
             A diff that can be applied the the `initial_state` to
             retrieve the entire broken state.
+        broken_build_process : Optional[BuildProcess]
+            The build process in which the command is broken.
         broken_environment : Optional[OpamSwitch.Configuration]
             The installed environment in which the command is broken.
         broken_dependencies : Optional[Iterable[str]]
@@ -1223,39 +1522,19 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
             "one-command",
             "one-file"
         }
-        if (initial_state.environment is not None
-                and broken_environment is not None
-                and initial_state.project_metadata.opam_dependencies is not None
-                and broken_dependencies is not None):
-            initial_dependencies = set()
-            for dep in initial_state.project_metadata.opam_dependencies:
-                initial_dependencies.update(
-                    typing.cast(PackageFormula,
-                                PackageFormula.parse(dep)).packages)
-            changed_dependencies = set()
-            for dep in broken_dependencies:
-                changed_dependencies.update(
-                    typing.cast(PackageFormula,
-                                PackageFormula.parse(dep)).packages)
-            initial_packages = dict(
-                initial_state.environment.switch_config.installed)
-            repair_packages = dict(broken_environment.installed)
-            tags.update(
-                {
-                    f"dropped-dependency:{p}" for p in repair_packages if
-                    p in initial_dependencies and p not in changed_dependencies
-                })
-            tags.update(
-                {
-                    f"new-dependency:{p}" for p in repair_packages if
-                    p not in initial_dependencies and p in changed_dependencies
-                })
-            tags.update(
-                {
-                    f"updated-dependency:{p}" for p in repair_packages
-                    if p in initial_dependencies and p in changed_dependencies
-                    and initial_packages[p] != repair_packages[p]
-                })
+        tags.update(
+            cls.get_environment_tags(
+                initial_state.environment.switch_config
+                if initial_state.environment is not None else None,
+                initial_state.project_metadata.opam_dependencies,
+                broken_environment,
+                broken_dependencies))
+        initial_build_process = BuildProcess.from_metadata(
+            initial_state.project_metadata)
+        tags.update(
+            cls.get_build_process_tags(
+                initial_build_process,
+                broken_build_process))
         return {f"error:{t}" for t in tags}
 
     @classmethod
@@ -1349,6 +1628,7 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
         error_instance = cls._make_error_instance(
             initial_state,
             broken_state_diff,
+            BuildProcess.from_metadata(final_state.project_metadata),
             final_state.environment.switch_config
             if final_state.environment is not None else None,
             final_state.project_metadata.opam_dependencies,
@@ -1452,7 +1732,8 @@ A function that annotates a repaired command with a set of tags.
 
 @dataclass
 class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
-                                                     ProjectCommitDataDiff]):
+                                                     ProjectCommitDataDiff,
+                                                     BuildProcess]):
     """
     A concise example of a repair in its most raw and unprocessed form.
 
@@ -1480,12 +1761,14 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
                 self.repaired_state_or_diff = ProjectCommitDataState(
                     self.repaired_state_or_diff.project_state,
                     self.repaired_state_or_diff.offset,
+                    self.repaired_state_or_diff._build_process,
                     self.repaired_state_or_diff._environment)
         elif isinstance(self.repaired_state_or_diff, ProjectStateDiff):
             if not isinstance(self.repaired_state_or_diff,
                               ProjectCommitDataStateDiff):
                 self.repaired_state_or_diff = ProjectCommitDataStateDiff(
                     self.repaired_state_or_diff.diff,
+                    self.repaired_state_or_diff.build_process,
                     self.repaired_state_or_diff.environment)
         else:
             raise TypeError(
@@ -1514,7 +1797,7 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
                 self.repaired_state_or_diff,
                 ProjectStateDiff)
             repaired = typing.cast(ProjectCommitDataState, repaired)
-            repaired = repaired.compress(error.environment)
+            repaired = repaired.compress(error.build_process, error.environment)
         else:
             repaired = cast_from_base_cls(
                 ProjectCommitDataStateDiff,
@@ -1531,6 +1814,8 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
                 repaired = GitProjectState(
                     repaired_commit_sha,
                     None,
+                    repaired.build_process
+                    if repaired.build_process != error.build_process else None,
                     repaired.environment
                     if repaired.environment != error.environment else None)
                 # remove the now-redundant tag
@@ -1540,6 +1825,7 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
                 repaired = typing.cast(ProjectCommitDataStateDiff, repaired)
                 repaired = repaired.compress(
                     error.error_state,
+                    error.build_process,
                     error.environment)
         repaired = typing.cast(
             Union[GitProjectState,
@@ -1562,6 +1848,12 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
         """
         Create the actual repair instance.
         """
+        repaired_build_process: Optional[
+            BuildProcess] = BuildProcess.from_metadata(
+                repaired_state.project_metadata)
+        if repaired_build_process == BuildProcess.from_metadata(
+                initial_state.project_metadata):
+            repaired_build_process = None
         repaired_environment = None
         if repaired_state.environment is not None:
             repaired_environment = repaired_state.environment.switch_config
@@ -1585,6 +1877,7 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
                     repaired_state)),
             repaired_state_or_diff=ProjectCommitDataStateDiff(
                 repaired_state_diff,
+                repaired_build_process,
                 repaired_environment))
         return repair_instance
 
@@ -1707,40 +2000,18 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
             "one-command",
             "one-file"
         }
-        if (initial_state.environment is not None
-                and repaired_state.environment is not None
-                and initial_state.project_metadata.opam_dependencies is not None
-                and repaired_state.project_metadata.opam_dependencies):
-            initial_dependencies = set()
-            for dep in initial_state.project_metadata.opam_dependencies:
-                initial_dependencies.update(
-                    typing.cast(PackageFormula,
-                                PackageFormula.parse(dep)).packages)
-            repaired_dependencies = set()
-            for dep in repaired_state.project_metadata.opam_dependencies:
-                repaired_dependencies.update(
-                    typing.cast(PackageFormula,
-                                PackageFormula.parse(dep)).packages)
-            initial_packages = dict(
-                initial_state.environment.switch_config.installed)
-            repair_packages = dict(
-                repaired_state.environment.switch_config.installed)
-            tags.update(
-                {
-                    f"dropped-dependency:{p}" for p in repair_packages if
-                    p in initial_dependencies and p not in repaired_dependencies
-                })
-            tags.update(
-                {
-                    f"new-dependency:{p}" for p in repair_packages if
-                    p not in initial_dependencies and p in repaired_dependencies
-                })
-            tags.update(
-                {
-                    f"updated-dependency:{p}" for p in repair_packages
-                    if p in initial_dependencies and p in repaired_dependencies
-                    and initial_packages[p] != repair_packages[p]
-                })
+        tags.update(
+            ProjectCommitDataErrorInstance.get_environment_tags(
+                initial_state.environment.switch_config
+                if initial_state.environment is not None else None,
+                initial_state.project_metadata.opam_dependencies,
+                repaired_state.environment.switch_config
+                if repaired_state.environment is not None else None,
+                repaired_state.project_metadata.opam_dependencies))
+        tags.update(
+            ProjectCommitDataErrorInstance.get_build_process_tags(
+                BuildProcess.from_metadata(initial_state.project_metadata),
+                BuildProcess.from_metadata(repaired_state.project_metadata)))
         return {f"repair:{t}" for t in tags}
 
     @classmethod
@@ -1806,6 +2077,12 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
                     broken_state,
                     repaired_state))
         # assemble the repair instance
+        repaired_build_process: Optional[
+            BuildProcess] = BuildProcess.from_metadata(
+                repaired_state.project_metadata)
+        if repaired_build_process == BuildProcess.from_metadata(
+                broken_state.project_metadata):
+            repaired_build_process = None
         repaired_environment = None
         if repaired_state.environment is not None:
             repaired_environment = repaired_state.environment.switch_config
@@ -1817,6 +2094,7 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
             error_instance,
             ProjectCommitDataStateDiff(
                 repaired_state_diff,
+                repaired_build_process,
                 repaired_environment))
         # make sure the repaired state's identity gets captured
         if repaired_state.project_metadata.commit_sha is not None:
