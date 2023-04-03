@@ -1450,7 +1450,7 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
         broken_qr_dict = bidict(broken_qr)
         for physical, logical in initial_qr:
             if physical in broken_qr_dict:
-                new_logical = broken_qr_dict[physical] != logical
+                new_logical = broken_qr_dict[physical]
                 if new_logical != logical:
                     tags.add(
                         f"changed-logical-{'Q' if is_Q else 'R'}-path:"
