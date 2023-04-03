@@ -946,7 +946,8 @@ class Project(ABC):
 
     def build_debug(
         self,
-        breakpoint: Optional[SexpInfo.Loc] = None
+        breakpoint: Optional[SexpInfo.Loc] = None,
+        **build_kwargs
     ) -> Tuple[Optional[SerAPI],
                Optional[SexpInfo.Loc],
                Optional[str]]:
@@ -991,7 +992,7 @@ class Project(ABC):
         fail_loc = None
         error_msg = None
         try:
-            self.build()
+            self.build(**build_kwargs)
         except ProjectBuildError:
             serapi, fail_loc, error_msg = self._build_debug(breakpoint)
         else:
