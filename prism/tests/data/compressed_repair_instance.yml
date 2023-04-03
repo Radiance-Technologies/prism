@@ -1,5 +1,6 @@
 error:
   change:
+    build_process: null
     diff:
       text: 'diff --git a/exgcd.v b/exgcd.v
 
@@ -51,6 +52,14 @@ error:
     lineno: 145
     lineno_last: 147
   initial_state:
+    _build_process:
+      build_cmd:
+      - make -j16
+      clean_cmd:
+      - make clean
+      install_cmd:
+      - make install
+      serapi_options: -R . HoareTut
     _environment:
       compiler:
       - - base-bigarray
@@ -313,15 +322,16 @@ error:
     project_state: bda0bc601a038ba6b65da2e3c52cc02c4d910f35
   project_name: hoare-tut
   tags:
-  - repair:one-command
-  - error:VernacStartTheoremProof
-  - repair:VernacStartTheoremProof
   - error:one-file
-  - repair:one-file
-  - repair:artificial:mined
-  - error:one-command
   - error:artificial:mined
+  - repair:one-file
+  - error:VernacStartTheoremProof
+  - repair:artificial:mined
+  - repair:VernacStartTheoremProof
+  - error:one-command
+  - repair:one-command
 repaired_state_or_diff:
+  _build_process: null
   _environment: null
   offset: null
   project_state: 269c0cabb267be44e5d85e568c11f18562add6c4
