@@ -719,6 +719,86 @@ class Project(ABC):
                 raise e
         return result
 
+    def _build_debug(
+        self,
+        breakpoint: Optional[SexpInfo.Loc] = None,
+    ) -> Tuple[Optional[SerAPI],
+               Optional[SexpInfo.Loc],
+               Optional[str]]:
+        """
+        Build a project line by line.
+
+        Ordinarily this would only be used in the case that
+        the project has failed to build using `Project.build`, meaning
+        some file triggers an exception.
+
+        Parameters
+        ----------
+        breakpoint : Optional[SexpInfo.Loc]
+            Location at which to stop building.
+            If not given, then building proceeds up to the line of the
+            first failure.
+
+        Returns
+        -------
+        serapi : Optional[SerAPI]
+            The SerAPI session describing the execution of the
+            file in which the desired failure occurs.
+            Only describes the execution of the file up to the failure
+            or the given location.
+            The result should only be None if no errors are encountered
+            and `breakpoint` is None.
+        fail_loc : Optional[SexpInfo.Loc]
+            The location at which an error was encountered or the given
+            `breakpoint` if no error was encountered.
+        error_msg : Optional[SexpInfo]
+            The message for an encountered error or None if no error
+            was encountered.
+
+        Raises
+        ------
+        ExecutionError
+            If `breakpoint` was given but not reached due to an
+            error encountered on the way.
+        MissingMetadataError
+            If `serapi_options` is `None`. Not expected in normal
+            operation.
+        ProjectCommandError
+            If `make_single_file` fails to build a particular file.
+        """
+        # Should be a list of filepaths ending in '.v'
+        file_list = self.get_file_list(dependency_order=True, relative=True)
+        serapi_options: Optional[SerAPIOptions] = self.metadata.serapi_options
+
+        if serapi_options is None:
+            raise MissingMetadataError("serapi_options should not be None.")
+
+        actual_temp_dir = tempfile.TemporaryDirectory()
+        temp_dir = actual_temp_dir.name
+        shutil.rmtree(temp_dir)
+        shutil.copytree(self.path, temp_dir, symlinks=True)
+        coqc_options = serapi_options.as_coq_args()
+
+        serapi = None
+        fail_loc = breakpoint
+        error_msg = None
+        for file in file_list:
+            try:
+                self.make_single_file(temp_dir, file, coqc_options)
+            except ProjectCommandError:
+                # stop at first error
+                (serapi,
+                 fail_loc,
+                 error_msg) = self.debug_file(file,
+                                              serapi_options,
+                                              breakpoint)
+                break
+            else:
+                shutil.copy(
+                    (Path(temp_dir) / file).with_suffix(".vo"),
+                    (Path(self.path) / file).with_suffix(".vo"))
+        return serapi, fail_loc, error_msg
+
     def _strace_build(
             self,
             use_dummy_coqc: bool,
@@ -924,35 +1004,45 @@ class Project(ABC):
                     breakpoint)
         return serapi, fail_loc, error_msg
 
-    def _build_debug(
+    def clean(self, **kwargs) -> Tuple[int, str, str]:
+        """
+        Clean the build status of the project.
+        """
+        r = self._make("clean", "Cleaning", **kwargs)
+        # ensure removal of Coq library files
+        self._clean()
+        return r
+
+    def debug_file(
         self,
-        breakpoint: Optional[SexpInfo.Loc] = None,
-    ) -> Tuple[Optional[SerAPI],
+        file: PathLike,
+        serapi_options: SerAPIOptions,
+        breakpoint: Optional[SexpInfo.Loc]
+    ) -> Tuple[SerAPI,
                Optional[SexpInfo.Loc],
                Optional[str]]:
         """
-        Build a project line by line.
-
-        Ordinarily this would only be used in the case that
-        the project has failed to build using `Project.build`, meaning
-        some file triggers an exception.
+        Obtain a serapi object up to a location for a specific file.
 
         Parameters
         ----------
+        file : PathLike
+            Path to file which needs to be built relative to the project
+            root.
+        serapi_options : SerAPIOptions
+            Options to pass to SerAPI.
         breakpoint : Optional[SexpInfo.Loc]
-            Location at which to stop building.
-            If not given, then building proceeds up to the line of the
-            first failure.
+            Maximum location which the file should be built up to.
+            This is an exclusive maximum, as it may be the location of
+            a failure.
+            If None, then the execution stops prior to the first
+            encountered failure.
 
         Returns
         -------
-        serapi : Optional[SerAPI]
-            The SerAPI session describing the execution of the
-            file in which the desired failure occurs.
-            Only describes the execution of the file up to the failure
-            or the given location.
-            The result should only be None if no errors are encountered
-            and `breakpoint` is None.
+        serapi : SerAPI
+            Object describing the file up to the specified maximum or
+            first encountered failure if no maximum is given.
         fail_loc : Optional[SexpInfo.Loc]
             The location at which an error was encountered or the given
             `breakpoint` if no error was encountered.
@@ -965,53 +1055,42 @@ class Project(ABC):
         ExecutionError
             If `breakpoint` was given but not reached due to an
             error encountered on the way.
-        MissingMetadataError
-            If `serapi_options` is `None`. Not expected in normal
-            operation.
-        ProjectCommandError
-            If `make_single_file` fails to build a particular file.
         """
-        # Should be a list of filepaths ending in '.v'
-        file_list = self.get_file_list(dependency_order=True, relative=True)
-        serapi_options: Optional[SerAPIOptions] = self.metadata.serapi_options
+        serapi = SerAPI(
+            serapi_options,
+            opam_switch=self.opam_switch,
+            cwd=str(self.path))
+        sentences = typing.cast(
+            List[CoqSentence],
+            self.get_sentences(
+                Path(self.path) / file,
+                sentence_extraction_method=SEM.HEURISTIC,
+                return_locations=True,
+                glom_proofs=False))
 
-        if serapi_options is None:
-            raise MissingMetadataError("serapi_options should not be None.")
-
-        actual_temp_dir = tempfile.TemporaryDirectory()
-        temp_dir = actual_temp_dir.name
-        shutil.rmtree(temp_dir)
-        shutil.copytree(self.path, temp_dir, symlinks=True)
-        coqc_options = serapi_options.as_coq_args()
-
-        serapi = None
         fail_loc = breakpoint
         error_msg = None
-        for file in file_list:
-            try:
-                self.make_single_file(temp_dir, file, coqc_options)
-            except ProjectCommandError:
-                # stop at first error
-                (serapi,
-                 fail_loc,
-                 error_msg) = self.debug_file(file,
-                                              serapi_options,
-                                              breakpoint)
+        for sentence in sentences:
+            assert sentence.location is not None
+            if (breakpoint is not None
+                    and not (sentence.location < breakpoint)):
                 break
-            else:
-                shutil.copy(
-                    (Path(temp_dir) / file).with_suffix(".vo"),
-                    (Path(self.path) / file).with_suffix(".vo"))
-        return serapi, fail_loc, error_msg
+            try:
+                serapi.execute(sentence.text)
+            except CoqExn as ce:
+                fail_loc = sentence.location
+                error_msg = ce.msg
+                # yapf: disable
+                if (breakpoint is not None
+                        and (breakpoint.filename != file
+                             or fail_loc < breakpoint)):
+                    # yapf: enable
+                    raise ExecutionError(fail_loc, error_msg) from ce
+                # Cancel addition of failed command
+                serapi.cancel([serapi.frame_stack[-1][-1]])
+                break
 
-    def clean(self, **kwargs) -> Tuple[int, str, str]:
-        """
-        Clean the build status of the project.
-        """
-        r = self._make("clean", "Cleaning", **kwargs)
-        # ensure removal of Coq library files
-        self._clean()
-        return r
+        return serapi, fail_loc, error_msg
 
     def depends_on(
             self,
@@ -1619,85 +1698,6 @@ class Project(ABC):
             *result,
             ExcType=ProjectCommandError)
         return result
-
-    def debug_file(
-        self,
-        file: PathLike,
-        serapi_options: SerAPIOptions,
-        breakpoint: Optional[SexpInfo.Loc]
-    ) -> Tuple[SerAPI,
-               Optional[SexpInfo.Loc],
-               Optional[str]]:
-        """
-        Obtain a serapi object up to a location for a specific file.
-
-        Parameters
-        ----------
-        file : PathLike
-            Path to file which needs to be built relative to the project
-            root.
-        serapi_options : SerAPIOptions
-            Options to pass to SerAPI.
-        breakpoint : Optional[SexpInfo.Loc]
-            Maximum location which the file should be built up to.
-            This is an exclusive maximum, as it may be the location of
-            a failure.
-            If None, then the execution stops prior to the first
-            encountered failure.
-
-        Returns
-        -------
-        serapi : SerAPI
-            Object describing the file up to the specified maximum or
-            first encountered failure if no maximum is given.
-        fail_loc : Optional[SexpInfo.Loc]
-            The location at which an error was encountered or the given
-            `breakpoint` if no error was encountered.
-        error_msg : Optional[SexpInfo]
-            The message for an encountered error or None if no error
-            was encountered.
-
-        Raises
-        ------
-        ExecutionError
-            If `breakpoint` was given but not reached due to an
-            error encountered on the way.
-        """
-        serapi = SerAPI(
-            serapi_options,
-            opam_switch=self.opam_switch,
-            cwd=str(self.path))
-        sentences = typing.cast(
-            List[CoqSentence],
-            self.get_sentences(
-                Path(self.path) / file,
-                sentence_extraction_method=SEM.HEURISTIC,
-                return_locations=True,
-                glom_proofs=False))
-
-        fail_loc = breakpoint
-        error_msg = None
-        for sentence in sentences:
-            assert sentence.location is not None
-            if (breakpoint is not None
-                    and not (sentence.location < breakpoint)):
-                break
-            try:
-                serapi.execute(sentence.text)
-            except CoqExn as ce:
-                fail_loc = sentence.location
-                error_msg = ce.msg
-                # yapf: disable
-                if (breakpoint is not None
-                        and (breakpoint.filename != file
-                             or fail_loc < breakpoint)):
-                    # yapf: enable
-                    raise ExecutionError(fail_loc, error_msg) from ce
-                # Cancel addition of failed command
-                serapi.cancel([serapi.frame_stack[-1][-1]])
-                break
-
-        return serapi, fail_loc, error_msg
 
     @contextmanager
     def managed_switch(
