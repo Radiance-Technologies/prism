@@ -337,7 +337,7 @@ class SerAPIOptions:
     @property
     def warnings_dict(self) -> Dict[str, CoqWarningState]:
         """
-        A dictionary mapping warning names to whether their states.
+        A dictionary mapping warning names to their states.
         """
         warning_states: Dict[str,
                              CoqWarningState] = {}
