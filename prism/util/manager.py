@@ -25,8 +25,8 @@ class ManagedServer(BaseManager, Generic[ManagedClient]):
         """
         Register logger with base manager.
         """
-        cls.Client = typing.cast(
+        referent = typing.cast(
             Type[ManagedClient],
             get_typevar_bindings(cls)[1][ManagedClient])
-        cls.register(cls.Client.__name__, cls.Client)
+        cls.register("Client", referent)
         return super().__new__(cls, *args, **kwargs)
