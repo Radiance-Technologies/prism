@@ -5,6 +5,7 @@ import logging
 import os
 import queue
 import sqlite3
+import select
 import traceback
 from dataclasses import dataclass
 from multiprocessing import Process, Queue
@@ -948,9 +949,13 @@ def mining_loop_worker(
     # do we process error instance creation jobs and start filling up
     # the repair instance jobs queue again.
     while True:
+        # Don't do anything until something is eligible to read.
+        select.select([control_queue._reader,error_instance_job_queue._reader,repair_instance_job_queue._reader],[],[])
+
         # #######################
         # Handle control messages
         # #######################
+
         try:
             control_message = control_queue.get_nowait()
         except Empty:
@@ -1225,6 +1230,8 @@ def _parallel_work(
     delayed_exception = None
     try:
         while observed_sentinels < expected_sentinels:
+            # Don't do anything until there's something to read.
+            select.select([worker_to_parent_queue._reader],[],[])
             try:
                 worker_msg = worker_to_parent_queue.get_nowait()
             except Empty:
