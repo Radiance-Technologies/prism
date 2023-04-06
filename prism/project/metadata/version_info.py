@@ -4,12 +4,15 @@ Provides metadata regarding Coq-related versions.
 import typing
 from dataclasses import InitVar, dataclass
 from pathlib import Path
+from subprocess import CalledProcessError
 from typing import Dict, List, Optional, Set, Tuple, Union
 
 import seutil.io as io
 
 from prism.util.opam import OCamlVersion, OpamAPI, Version
 from prism.util.opam.formula import LogicalPF, PackageConstraint, VersionFormula
+from prism.util.opam.formula.package import PackageFormula
+from prism.util.opam.version import OpamVersion
 from prism.util.radpytools import cachedmethod
 from prism.util.radpytools.dataclasses import default_field
 
@@ -33,7 +36,7 @@ class VersionInfo:
     coq_ocaml_compatibility: Dict[str, Set[str]] = default_field(dict())
     serapi_coq_compatibility: Dict[str, Set[str]] = default_field(dict())
 
-    def __post_init__(
+    def __post_init__(  # noqa: C901
             self,
             coq_versions,
             serapi_versions,
@@ -105,9 +108,31 @@ class VersionInfo:
             dependencies = OpamAPI.active_switch.get_dependencies(
                 "coq",
                 coq_version)
-            assert isinstance(dependencies, LogicalPF)
-            dependencies = dependencies.to_conjunctive_list()
-            coq_constraint = None
+            if isinstance(dependencies, LogicalPF):
+                dependencies = typing.cast(
+                    List[PackageFormula],
+                    dependencies.to_conjunctive_list())
+            else:
+                dependencies = [dependencies]
+            if not OpamVersion.less_than(coq_version, "8.17.0"):
+                try:
+                    # bandaid in lieu of constructing a general solution
+                    # with a dependency graph
+                    # Coq 8.17 introduced coq-core package, which
+                    # transitively introduces a dependency on ocaml
+                    core_dependencies = OpamAPI.active_switch.get_dependencies(
+                        "coq-core",
+                        coq_version)
+                except CalledProcessError:
+                    core_dependencies = []
+                else:
+                    if isinstance(core_dependencies, LogicalPF):
+                        core_dependencies = typing.cast(
+                            List[PackageFormula],
+                            core_dependencies.to_conjunctive_list())
+                    else:
+                        core_dependencies = [core_dependencies]
+                dependencies.extend(core_dependencies)
             ocaml_constraint = None
             for dependency in dependencies:
                 if (isinstance(dependency,
