@@ -37,6 +37,11 @@ Serializable.load returns a specific type
 and not just a `Serializable`
 """
 
+fast_yaml_fmt = su.io.FmtProperty(
+    writer=lambda f, obj: yaml.dump(obj,f,encoding="utf-8",default_flow_style=False,Dumper=yaml.CDumper),
+    reader=lambda f: yaml.load(f, Loader=yaml.CLoader),
+    serialize=True,
+)
 
 @runtime_checkable
 class Serializable(Protocol):
@@ -44,10 +49,14 @@ class Serializable(Protocol):
     A simple protocol for serializable data.
     """
 
+
+
+
+
     def dump(
             self,
             output_filepath: PathLike,
-            fmt: su.io.Fmt = su.io.Fmt.yaml) -> None:
+            fmt: su.io.Fmt = fast_yaml_fmt) -> None:
         """
         Serialize data to text file.
 
@@ -88,6 +97,13 @@ class Serializable(Protocol):
         Serializable
             The deserialized object.
         """
+        
+        suffix = Path(filepath).suffix
+        if (suffix==".yaml" or suffix==".yml"):
+            fmt = fast_yaml_fmt
+        else:
+            print("can't speed up",filepath)
+
         return typing.cast(
             T,
             su.io.load(typing.cast(Union[str,
