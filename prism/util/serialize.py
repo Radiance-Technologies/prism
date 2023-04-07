@@ -19,10 +19,12 @@ from typing import (
     Union,
     runtime_checkable,
 )
-
+import tempfile
 import seutil as su
 import typing_inspect
 import yaml
+import os
+
 from diff_match_patch import diff_match_patch
 
 from prism.util.radpytools import PathLike
@@ -57,6 +59,18 @@ fast_yaml_fmt = su.io.FmtProperty(
 Define a faster, C-based yaml format definition for seutil.
 """
 
+
+import ujson
+
+fast_json_fmt = su.io.FmtProperty(
+    writer=lambda f,obj: ujson.dump(obj,f),
+    reader=ujson.load,
+    serialize=True,
+)
+
+# opportunistically convert files to json...
+_PREFERRED_FORMAT=fast_json_fmt
+_PREFERRED_EXT=".json"
 
 @runtime_checkable
 class Serializable(Protocol):
@@ -114,13 +128,35 @@ class Serializable(Protocol):
         else:
             module_logger.info(f"can't speed up {filepath}")
 
-        return typing.cast(
+        intercept = False
+        if _PREFERRED_FORMAT is not None:
+            preferable = Path(filepath).with_suffix(_PREFERRED_EXT)
+            if preferable.exists():
+                print("intercepting request, instead: ",preferable)
+                filepath = str(preferable)
+                fmt = _PREFERRED_FORMAT
+                intercept = True
+
+        loaded = typing.cast(
             T,
             su.io.load(typing.cast(Union[str,
                                          Path],
                                    filepath),
                        fmt,
                        clz=cls))
+
+        if not intercept and _PREFERRED_FORMAT is not None:
+            # converting this file.
+            print("opportunistic conversion: ",preferable)
+            tmp = tempfile.NamedTemporaryFile(delete=False,suffix=".json")
+            tmp.close()
+            loaded.dump(tmp.name,fmt=_PREFERRED_FORMAT)
+            os.rename(tmp.name,preferable)
+            # integrity check
+            assert(cls.load(filepath,fmt)==loaded)
+
+
+        return loaded
 
 
 _S = TypeVar('_S')
