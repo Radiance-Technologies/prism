@@ -9,6 +9,7 @@ import os
 import re
 import traceback
 import typing
+from traceback_with_variables import format_exc
 import warnings
 from dataclasses import InitVar, dataclass, field
 from datetime import datetime
@@ -1263,7 +1264,7 @@ def _extract_vernac_commands_worker(
             f"Error on {filename}",
             filename,
             e,
-            traceback.format_exc())
+            format_exc(e))
     finally:
         if worker_semaphore is not None:
             worker_semaphore.release()
