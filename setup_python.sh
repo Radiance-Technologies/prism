@@ -52,7 +52,7 @@ if [ "$REINSTALL" == "true" ] || [ "$REINSTALL" = "" ] ; then
   wget http://www.python.org/ftp/python/$VERSION/$PYTHON_NAME.tgz
   tar -zxvf $PYTHON_NAME.tgz
   pushd $PYTHON_NAME
-  ./configure --prefix=$PYTHON_INSTALL_PATH
+  ./configure --prefix=$PYTHON_INSTALL_PATH --enable-optimizations
   make
   make install
   popd
