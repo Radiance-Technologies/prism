@@ -621,7 +621,8 @@ class CommandExtractor:
                         e.msg,
                         e.full_sexp,
                         sentence.location,
-                        sentence.text) from e
+                        sentence.text,
+                        e.query) from e
                 except Exception as e:
                     # slight abuse of CoqExn
                     raise CoqExn(

@@ -338,19 +338,19 @@ class SerAPI:
             If `exc` is not an instance of the above exception.
         """
         if exc.msg.endswith("is reserved."):
-            self.execute("Unset SsrIdents.")
-            result = f(*args, **kwargs)
-            self.execute("Set SsrIdents.")
-            return result
+            with self.settings([CoqSetting(False, 'SsrIdents')]):
+                return f(*args, **kwargs)
         else:
             raise exc
 
-    def _process_coq_exn(self, exception: SexpNode) -> NoReturn:
+    def _process_coq_exn(self, query: str, exception: SexpNode) -> NoReturn:
         """
         Process and raise a `CoqExn`.
 
         Parameters
         ----------
+        query : str
+            The SerAPI query that caused the error.
         exception : SexpNode
             A serialized `CoqExn` object.
 
@@ -379,7 +379,7 @@ class SerAPI:
             msg = coq_exn[1][5][1]
             assert isinstance(msg, SexpString)
             msg = unquote(msg.get_content())
-        raise CoqExn(msg, str(coq_exn))
+        raise CoqExn(msg, str(coq_exn), query=query)
 
     def _process_feedback(self, feedback: SexpNode) -> Optional[str]:
         """
@@ -1391,7 +1391,7 @@ class SerAPI:
             print(
                 self._proc.before[: 500]
                 + "..." if len(self._proc.before) > 500 else "")
-            raise CoqTimeout
+            raise CoqTimeout(cmd)
         assert self._proc.after is not None, \
             "A complete response should have been received from sertop"
         raw_responses: str = self._proc.after
@@ -1418,7 +1418,7 @@ class SerAPI:
                 assert item.endswith(")")
             parsed_item = SexpParser.parse(item)
             if "CoqExn" in item:  # an error occured in Coq
-                self._process_coq_exn(parsed_item)
+                self._process_coq_exn(cmd, parsed_item)
             if item.startswith("(Feedback"):
                 msg = self._process_feedback(parsed_item)
                 if msg is not None:

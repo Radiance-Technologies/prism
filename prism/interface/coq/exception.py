@@ -17,7 +17,8 @@ class CoqExn(Exception):
             msg: str,
             full_sexp: str,
             location: Optional[SexpInfo.Loc] = None,
-            command: Optional[str] = None):
+            command: Optional[str] = None,
+            query: Optional[str] = None):
         super().__init__()
         self.msg = msg
         """
@@ -33,15 +34,28 @@ class CoqExn(Exception):
         """
         self.command = command
         """
-        The text of the command that caused the error.
+        The text of the Vernacular command that directly or indirectly
+        caused the error.
+        """
+        self.query = query
+        """
+        The text of a SerAPI query that directly caused the error.
         """
 
     def __reduce__(  # noqa: D105
         self) -> Tuple[Type['CoqExn'],
                        Tuple[str,
                              str,
-                             Optional[SexpInfo.Loc]]]:
-        return CoqExn, (self.msg, self.full_sexp, self.location)
+                             Optional[SexpInfo.Loc],
+                             Optional[str],
+                             Optional[str]]]:
+        return (
+            CoqExn,
+            (self.msg,
+             self.full_sexp,
+             self.location,
+             self.command,
+             self.query))
 
     def __repr__(self) -> str:  # noqa: D105
         return str(self)
@@ -50,20 +64,32 @@ class CoqExn(Exception):
         """
         Get the Coq error message.
         """
+        if self.query is not None:
+            query_text = f"While executing query:\n{self.query}\n"
+        else:
+            query_text = ""
         if self.location is None:
-            msg = self.msg
+            msg = ''.join([self.msg, "\n", query_text])
         else:
             if self.command is not None:
                 command_text = f":\n{self.command}"
             else:
                 command_text = ""
+            if self.location.lineno != self.location.lineno_last:
+                line_text = f"lines {self.location.lineno}-{self.location.lineno_last}"
+            else:
+                line_text = (
+                    f"line {self.location.lineno}, "
+                    f"characters {self.location.column_start}"
+                    f"-{self.location.column_end}")
             msg = ''.join(
                 [
                     self.msg,
                     "\n",
-                    f"In file {self.location.filename}, "
-                    f"lines {self.location.lineno}-{self.location.lineno_last}",
-                    command_text
+                    query_text,
+                    f"In file {self.location.filename}, ",
+                    line_text,
+                    command_text,
                 ])
         return msg
 
@@ -73,4 +99,21 @@ class CoqTimeout(Exception):
     Raised when SerAPI fails to respond within a time limit.
     """
 
-    pass
+    def __init__(self, *args, query: Optional[str] = None) -> None:
+        super().__init__(*args)
+        self.query = query
+        """
+        The text of a SerAPI query that caused the timeout.
+        """
+
+    def __reduce__(  # noqa: D105
+            self) -> Tuple[Type['CoqTimeout'],
+                           Tuple[Optional[str]]]:
+        return CoqTimeout, (self.query,)
+
+    def __str__(self) -> str:  # noqa: D105
+        if self.query is None:
+            msg = super().__str__()
+        else:
+            msg = f'Timeout in:\n    {self.query}'
+        return msg
