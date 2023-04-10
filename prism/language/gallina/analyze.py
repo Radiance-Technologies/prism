@@ -364,6 +364,20 @@ class SexpInfo:
                 loc = other | self
             return loc
 
+        @property
+        def column_end(self) -> int:
+            """
+            Get the column of the last character of this location.
+            """
+            return self.end_charno - self.bol_pos_last
+
+        @property
+        def column_start(self) -> int:
+            """
+            Get the column of the first character of this location.
+            """
+            return self.beg_charno - self.bol_pos
+
         def contains_charno_range(
                 self,
                 beg_charno: int,
