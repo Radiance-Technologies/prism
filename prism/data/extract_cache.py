@@ -112,7 +112,8 @@ _loadpath_problem_pattern = regex_from_options(
             f"Can(?:'|no)t find file {QUALIFIED_IDENT_PATTERN.pattern}",
             r"[Cc]annot find library "
             rf"(?P<library>{QUALIFIED_IDENT_PATTERN.pattern})",
-            "Cannot find a physical path bound "
+            "Cannot find a physical path bound ",
+            "Unable to locate library"
         ]
     ],
     False,
