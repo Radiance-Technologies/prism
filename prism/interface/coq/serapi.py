@@ -40,7 +40,13 @@ from prism.interface.coq.environ import (
 from prism.interface.coq.exception import CoqExn, CoqTimeout
 from prism.interface.coq.goals import Goal, Goals, Hypothesis
 from prism.interface.coq.names import mod_path_file, print_ker_name
-from prism.interface.coq.options import CoqSetting, SerAPIOptions
+from prism.interface.coq.options import (
+    CoqFlag,
+    CoqOption,
+    CoqSetting,
+    CoqTable,
+    SerAPIOptions,
+)
 from prism.interface.coq.re_patterns import (
     ADDED_STATE_PATTERN,
     NAMED_DEF_ASSUM_PATTERN,
@@ -135,10 +141,6 @@ class SerAPI:
     """
     The switch in which `sertop` is being executed.
     """
-    _allow_sprop: bool = True
-    """
-    Whether this session allows use of the `SProp` sort.
-    """
 
     def __post_init__(
             self,
@@ -157,8 +159,6 @@ class SerAPI:
         self._switch = opam_switch
         self._cwd = cwd
         sertop_args = sertop_options.as_serapi_args(self.serapi_version)
-        if sertop_options.disallow_sprop:
-            self._allow_sprop = False
         try:
             cmd = f"sertop --implicit --print0 {sertop_args}"
             if omit_loc:
@@ -213,11 +213,6 @@ class SerAPI:
         self.execute("Set Printing Implicit.")
         self.execute("Set Printing Depth 999999.")
         self.execute("Unset Printing Records.")
-        if (not OpamVersion.less_than(self.serapi_version,
-                                      '8.10.0') and self._allow_sprop):
-            # required for query_env to get the types/sorts of all
-            # constants
-            self.execute("Set Allow StrictProp.")
 
         # initialize the stack
         self.push()
@@ -338,7 +333,7 @@ class SerAPI:
             If `exc` is not an instance of the above exception.
         """
         if exc.msg.endswith("is reserved."):
-            with self.settings([CoqSetting(False, 'SsrIdents')]):
+            with self.settings([CoqFlag('SsrIdents', False)]):
                 return f(*args, **kwargs)
         else:
             raise exc
@@ -969,10 +964,13 @@ class SerAPI:
             If this operation is not supported by the current session's
             version of SerAPI.
         """
-        if not self._allow_sprop:
-            with self.settings([CoqSetting(True, "Allow StrictProp")]):
-                env = self._query_env(current_file)
-        else:
+        allow_strictprop = self.query_setting("Allow StrictProp")
+        settings = []
+        # ensure StrictProp is enabled to get the types/sorts of all
+        # constants
+        if allow_strictprop is not None and not allow_strictprop.value:
+            settings.append(CoqFlag("Allow StrictProp", True))
+        with self.settings(settings):
             env = self._query_env(current_file)
         return env
 
@@ -1259,6 +1257,79 @@ class SerAPI:
             qualids.append(short_ident)
         return qualids
 
+    def query_setting(self, setting_name: str) -> Optional[CoqSetting]:
+        """
+        Get the value of a flag, option, or table given its name.
+
+        Parameters
+        ----------
+        setting_name : str
+            The name of a Coq flag, options, or table.
+
+        Returns
+        -------
+        Optional[CoqSetting]
+            The requested flag, option, or table, or None if there is no
+            such setting.
+        """
+        try:
+            feedback = self.query_vernac(f"Print Table {setting_name}.")
+        except CoqExn:
+            return None
+        else:
+            assert feedback, \
+                "feedback should be non-empty"
+            return CoqSetting.parse_print_table(setting_name, feedback[0])
+
+    def query_settings(self) -> List[CoqSetting]:
+        """
+        Get an exhaustive list of current flag, option, or table values.
+
+        Returns
+        -------
+        List[CoqSetting]
+            A list of the current flags, options, or tables and their
+            values.
+        """
+        responses, _, _ = self.send("(Query () Option)")
+        settings = []
+        for option in responses[1][2][1]:
+            option_name = option[1]
+            assert isinstance(option_name, SexpList)
+            setting_name = ' '.join([str(c) for c in option_name])
+            option_state = option[2]
+            if OpamVersion.less_than(self.serapi_version, "8.12.0"):
+                # the opt_name field was removed in Coq 8.12
+                option_value = option_state[2]
+            else:
+                option_value = option_state[1]
+            option_value = option_value[1]
+            option_value_type = option_value[0]
+            option_value = option_value[1]
+            assert isinstance(option_value_type, SexpString)
+            option_value_type = option_value_type.content
+            if option_value_type == "BoolValue":
+                settings.append(
+                    CoqFlag(setting_name,
+                            option_value.content == 'true'))
+            else:
+                if (option_value_type == "IntValue"
+                        or option_value_type == "StringOptValue"):
+                    if option_value.get_children():
+                        option_value = option_value[0]
+                    else:
+                        option_value = None
+                if option_value is not None:
+                    option_value = option_value.content
+                settings.append(CoqOption(setting_name, option_value))
+        # cannot catch custom tables defined in unknown plugins
+        tables = [
+            self.query_setting(table_name)
+            for table_name in CoqTable.known_tables
+        ]
+        settings.extend(t for t in tables if t is not None)
+        return settings
+
     def query_type(self, term: str) -> str:
         """
         Get the type of the given expression.
@@ -1475,21 +1546,56 @@ class SerAPI:
         return state_id, ast, feedback
 
     @contextmanager
-    def settings(self,
-                 flags: Iterable[CoqSetting]) -> Generator[None,
-                                                           None,
-                                                           None]:
+    def settings(
+        self,
+        temp_settings: Iterable[CoqSetting[Any]]) -> Generator[None,
+                                                               None,
+                                                               None]:
         """
         Create a context in which given Coq flags are set/unset.
         """
-        negated_flags = [CoqSetting(not f.is_set, f.name) for f in flags]
+        # get a consistent order of iteration
+        # (and protect against single-use iterators)
+        temp_settings = CoqSetting.simplify(temp_settings)
+        current_settings = [self.query_setting(s.name) for s in temp_settings]
+        current_settings = CoqSetting.to_dict(
+            s for s in current_settings if s is not None)
+        restorations = []
         try:
-            for flag in flags:
-                self.try_execute(flag.as_command())
+            for setting in temp_settings:
+                r = self.try_execute(setting.as_command())
+                if r is not None:
+                    tp, args = current_settings[setting.name]
+                    current_setting = tp.from_args(setting.name, args)
+                    assert len(current_setting) == 1
+                    current_setting = current_setting[0]
+                    if isinstance(setting, CoqTable):
+                        assert isinstance(current_setting, CoqTable)
+                        # Tables cannot be set directly, only modified.
+                        # Get the difference that will restore the
+                        # original table value.
+                        if setting.inclusive:
+                            # remove items that were added
+                            restoration = CoqTable(
+                                setting.name,
+                                setting.value.difference(current_setting.value),
+                                False)
+                        else:
+                            # add items that were removed
+                            restoration = CoqTable(
+                                setting.name,
+                                current_setting.value.difference(setting.value),
+                                True)
+                    else:
+                        restoration = current_setting
+                    restorations.append(restoration)
             yield
         finally:
-            for flag in negated_flags:
-                self.try_execute(flag.as_command())
+            # since the given settings were simplified, the order of
+            # restoration should not matter
+            for setting in restorations:
+                if setting is not None:
+                    self.try_execute(setting.as_command())
 
     def shutdown(self) -> None:
         """

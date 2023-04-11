@@ -1,19 +1,38 @@
 """
 Defines an abstraction of Coq compiler options that are used by SerAPI.
 """
+import abc
 import argparse
 import glob
 import itertools
+import re
 import shlex
+import typing
 from dataclasses import dataclass
 from enum import Enum, auto
 from functools import reduce
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple, Union
+from typing import (
+    Any,
+    ClassVar,
+    Dict,
+    Generic,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
 from prism.interface.coq.iqr import IQR
 from prism.util.opam import OpamVersion, Version
 from prism.util.radpytools import PathLike
+from prism.util.re import regex_from_options
+from prism.util.string import unquote
 
 
 class SerAPIOptionException(Exception):
@@ -115,30 +134,229 @@ class CoqWarning:
     parse = deserialize
 
 
+_T = TypeVar('_T')
+_C = TypeVar('_C', bound='CoqSetting')
+
+
 @dataclass
-class CoqSetting:
+class CoqSetting(Generic[_T], abc.ABC):
     """
     A Coq flag, option, or table.
 
-    See https://coq.inria.fr/refman/coq-optindex.html.
-    """
+    See https://coq.inria.fr/refman/language/core/basic.html#flags-options-and-tables
+    for more information about the distinction between each kind of
+    setting.
+    See https://coq.inria.fr/refman/coq-optindex.html for a complete
+    list of settings.
+    """  # noqa: W505
 
-    is_set: bool
-    """
-    Whether the flag is enabled.
-
-    Irrelevant for non-Boolean options.
-    """
     name: str
     """
     The name of the flag, option, or table.
     """
+    value: _T
+    """
+    The value of the flag, option or table.
+    """
 
+    def __hash__(self) -> int:  # noqa: D105
+        return hash((self.name, self.value))
+
+    @abc.abstractmethod
     def __str__(self) -> str:
         """
         Format the setting as it would appear as a command-line option.
         """
-        if self.is_set:
+        ...
+
+    @property
+    def args(self) -> Tuple[_T, ...]:
+        """
+        The arguments (sans `name`) used to construct this setting.
+        """
+        return (self.value,)
+
+    @abc.abstractmethod
+    def as_command(self) -> str:
+        """
+        Get a Vernacular command for setting this flag, option or table.
+        """
+        ...
+
+    @classmethod
+    @abc.abstractmethod
+    def _parse_command(cls: _C, command: str) -> _C:  # type: ignore
+        """
+        Deserialize by parsing a Vernacular command.
+        """
+        ...
+
+    @classmethod
+    @abc.abstractmethod
+    def _parse_print_table(
+            cls,
+            setting_name: str,
+            feedback: str) -> 'CoqSetting':
+        """
+        Parse a setting's value from the output of ``Print Table ...``.
+        """
+        ...
+
+    @classmethod
+    def from_args(cls,
+                  name: str,
+                  args: Tuple[_T,
+                              ...]) -> List['CoqSetting[_T]']:
+        """
+        Construct one or more settings from given arguments.
+
+        The arguments are presumed to have been obtained from `args`.
+        """
+        return [cls(name, a) for a in args]
+
+    @classmethod
+    def reduce_args(
+            cls,
+            former_args: Tuple[_T,
+                               ...],
+            latter_args: Tuple[_T,
+                               ...]) -> Tuple[_T,
+                                              ...]:
+        """
+        Reduce arguments, presumably for the same setting.
+        """
+        if latter_args:
+            return latter_args[-1 :]
+        elif former_args:
+            return former_args[-1 :]
+        else:
+            return ()
+
+    @classmethod
+    def parse_command(cls: _C, command: str) -> _C:  # type: ignore
+        """
+        Deserialize by parsing a Vernacular command.
+        """
+        setting: Union[CoqFlag, CoqOption, CoqTable]
+        try:
+            setting = CoqOption._parse_command(command)
+        except ValueError:
+            try:
+                setting = CoqTable._parse_command(command)
+            except ValueError:
+                setting = CoqFlag._parse_command(command)
+        return typing.cast(_C, setting)
+
+    @classmethod
+    def parse_arg(cls, is_set: bool, arg: str) -> Union['CoqFlag', 'CoqOption']:
+        """
+        Parse a setting from a command-line argument.
+        """
+        arg = unquote(arg)
+        args = arg.split('=', maxsplit=1)
+        result: Union[CoqFlag, CoqOption]
+        if len(args) == 1:
+            result = CoqFlag(arg, is_set)
+        else:
+            result = CoqOption(args[0], args[1])
+        return result
+
+    @classmethod
+    def parse_print_table(
+            cls,
+            setting_name: str,
+            feedback: str) -> 'CoqSetting':
+        """
+        Parse a setting's value from the output of ``Print Table ...``.
+        """
+        if setting_name in CoqTable.known_tables:
+            return CoqTable._parse_print_table(setting_name, feedback)
+        else:
+            return CoqOption._parse_print_table(setting_name, feedback)
+
+    @classmethod
+    def from_dict(
+        cls,
+        setting_states: Dict[str,
+                             Tuple[Type['CoqSetting[Any]'],
+                                   Tuple[Any,
+                                         ...]]]
+    ) -> List['CoqSetting[Any]']:
+        """
+        Construct settings from a map of their names and arguments.
+
+        The (pseudo)inverse of `to_dict`.
+        """
+        settings = []
+        for nm, (tp, args) in setting_states.items():
+            settings.extend(tp.from_args(nm, args))
+        return settings
+
+    @classmethod
+    def simplify(
+            cls,
+            settings: Iterable['CoqSetting[Any]']) -> List['CoqSetting[Any]']:
+        """
+        Remove redundant settings.
+
+        A setting is redundant if a subsequent setting would replace it.
+        """
+        return cls.from_dict(cls.to_dict(settings))
+
+    @classmethod
+    def to_dict(
+        cls,
+        settings: Iterable['CoqSetting[Any]']
+    ) -> Dict[str,
+              Tuple[Type['CoqSetting[Any]'],
+                    Tuple[Any,
+                          ...]]]:
+        """
+        Convert a collection of settings to a dictionary.
+
+        The dictionary effectively removes duplicates by choosing the
+        *last* version of each setting encountered when iterating over
+        the provided `settings`.
+
+        Parameters
+        ----------
+        settings : Iterable[CoqSetting[Any]]
+            An iterable container of settings.
+
+        Returns
+        -------
+        Dict[str, Tuple[Type[CoqSetting[Any]], Tuple[Any, ...]]]
+            A map from setting names to their type and arguments with
+            which they can be reconstructed.
+        """
+        setting_states: Dict[str,
+                             Tuple[Type['CoqSetting[Any]'],
+                                   Tuple[Any,
+                                         ...]]] = {}
+        for s in settings:
+            if s.name in setting_states:
+                _, former_args = setting_states[s.name]
+                clz = type(s)
+                setting_states[s.name] = (
+                    clz,
+                    clz.reduce_args(former_args,
+                                    s.args))
+            else:
+                setting_states[s.name] = (type(s), s.args)
+        return setting_states
+
+
+@dataclass(unsafe_hash=True)
+class CoqFlag(CoqSetting[bool]):
+    """
+    A Boolean flag.
+    """
+
+    def __str__(self) -> str:
+        """
+        Format the flag as it would appear as a command-line option.
+        """
+        if self.value:
             result = f'-set "{self.name}"'
         else:
             result = f'-unset "{self.name}"'
@@ -146,13 +364,283 @@ class CoqSetting:
 
     def as_command(self) -> str:
         """
-        Get a Vernacular command for setting this warning.
+        Get a Vernacular command for setting this flag.
         """
-        if self.is_set:
+        if self.value:
             command = f'Set {self.name}.'
         else:
             command = f'Unset {self.name}.'
         return command
+
+    @classmethod
+    def _parse_command(cls, command: str) -> 'CoqFlag':  # noqa: D105
+        error_msg = f"Syntax error when parsing flag from {command}"
+        try:
+            cmd, flag_name = command.split(maxsplit=1)
+        except ValueError as e:
+            raise ValueError(error_msg) from e
+        if cmd == 'Set':
+            flag = CoqFlag(flag_name, True)
+        elif cmd == 'Unset':
+            flag = CoqFlag(flag_name, False)
+        else:
+            raise ValueError(error_msg)
+        return flag
+
+    @classmethod
+    def _parse_print_table(cls, flag_name: str, feedback: str) -> CoqSetting:
+        return CoqOption._parse_print_table(flag_name, feedback)
+
+
+@dataclass(unsafe_hash=True)
+class CoqOption(CoqSetting[Optional[Union[int, str]]]):
+    """
+    An option set to a numeric or string value.
+    """
+
+    _print_table_regex: ClassVar[re.Pattern] = re.compile(
+        r'^.*\s(?P<option_value>".*"|[^"]+)$')
+    """
+    A simple regex for parsing the output of ``Print Table ...".
+
+    The regex assumes the value always appears last (and may be quoted).
+    """
+
+    def __post_init__(self) -> None:
+        """
+        Convert string options to numeric (integral) if possible.
+        """
+        if self.value is not None and isinstance(self.value, str):
+            value = unquote(self.value)
+            try:
+                value = int(value)
+            except ValueError:
+                pass
+            self.value = value
+
+    def __str__(self) -> str:
+        """
+        Format the option as it would appear as a command-line option.
+        """
+        value = self.value
+        if isinstance(value, str):
+            # escape double quotes for shell
+            value = value.replace('"', r'\"')
+        if value is not None:
+            result = f'-set "{self.name}={value}"'
+        else:
+            result = ""
+        return result
+
+    def as_command(self) -> str:
+        """
+        Get a Vernacular command for setting this option.
+        """
+        value = self.value
+        if value is None:
+            # set to default
+            command = f'Unset {self.name}.'
+        else:
+            command = f'Set {self.name} {self.value}.'
+        return command
+
+    @classmethod
+    def _parse_command(cls, command: str) -> 'CoqOption':  # noqa: D105
+        error_msg = f"Syntax error when parsing option from {command}"
+        try:
+            cmd, option_name = command.split(maxsplit=1)
+        except ValueError as e:
+            raise ValueError(error_msg) from e
+        if cmd == 'Set':
+            value: Union[int, str]
+            try:
+                option_name, value = option_name.rsplit(option_name, maxsplit=1)
+            except ValueError as e:
+                raise ValueError(error_msg) from e
+            option = CoqOption(option_name, value)
+        elif cmd == 'Unset':
+            option = CoqOption(option_name, None)
+        else:
+            raise ValueError(error_msg)
+        return option
+
+    @classmethod
+    def _parse_print_table(cls, option_name: str, feedback: str) -> CoqSetting:
+        feedback = feedback.encode('utf-8').decode('unicode-escape')
+        m = CoqOption._print_table_regex.match(feedback)
+        if m is not None:
+            value = m['option_value']
+            if value in {'on',
+                         'off'}:
+                return CoqFlag(option_name, value == 'on')
+            elif value == 'undefined':
+                value = None
+            else:
+                value = value.encode('utf-8').decode('unicode_escape')
+            return CoqOption(option_name, value)
+        else:
+            raise ValueError(f"Cannot parse option value from '{feedback}'")
+
+
+@dataclass
+class CoqTable(CoqSetting[Set[str]]):
+    """
+    A table containing a set of strings or qualids.
+    """
+
+    inclusive: bool
+    """
+    Whether this setting adds values to a table or removes them.
+    """
+    known_tables: ClassVar[Set[str]] = {
+        "Search Blacklist",
+        "Printing Coercion",
+        "Printing If",
+        "Printing Let",
+        "Printing Record",
+        "Printing Constructor",
+        "Keep Equalities"
+    }
+    """
+    An exhaustive list of known tables.
+
+    Required for parsing table names from commands since we do not have
+    access to the Coq parser.
+    List obtained from an invocation of ``Print Options.``.
+    Do not modify this list.
+    """
+    _known_table_regex: ClassVar[re.Pattern] = regex_from_options(
+        known_tables,
+        True,
+        False,
+        True)
+
+    def __post_init__(self):
+        """
+        Validate that at least one value is provided.
+        """
+        if not isinstance(self.value, set):
+            raise TypeError(f"Expected a set of values, got {type(self.value)}")
+        elif len(self.value) == 0:
+            raise ValueError("At least one table value must be specified.")
+
+    def __hash__(self) -> int:  # noqa: D105
+        return hash((self.name, tuple(self.value), self.inclusive))
+
+    def __str__(self) -> str:
+        """
+        Format the table as it would appear as a command-line option.
+        """
+        return ""
+
+    @property
+    def args(self) -> Tuple[Set[str], Set[str]]:
+        """
+        A pair of sets of values added or removed from the table.
+        """
+        if self.inclusive:
+            return (self.value, set())
+        else:
+            return (set(), self.value)
+
+    def as_command(self) -> str:
+        """
+        Get a Vernacular command for modifying this table.
+        """
+        if self.inclusive:
+            prefix = "Add"
+        else:
+            prefix = "Remove"
+        result = f'{prefix} {self.name} {" ".join(self.value)}'
+        return result
+
+    @classmethod
+    def _parse_command(cls, command: str) -> 'CoqTable':
+        error_msg = f"Syntax error when parsing table from {command}"
+        try:
+            cmd, table_setting = command.split(maxsplit=1)
+        except ValueError as e:
+            raise ValueError(error_msg) from e
+        if cmd == 'Add':
+            inclusive = True
+        elif cmd == 'Remove':
+            inclusive = False
+        else:
+            raise ValueError(error_msg)
+        m = cls._known_table_regex.match(table_setting)
+        if m is None:
+            raise ValueError
+        table_name = m.groups()[0]
+        values_ = table_setting[m.end():].split()
+        # recombine any split strings
+        values: List[str] = []
+        in_string = False
+        for value in values_:
+            if in_string:
+                values[-1] += value
+                if value[-1] == '"':
+                    in_string = False
+                continue
+            elif value[0] == '"':
+                in_string = True
+            values.append(value)
+        return CoqTable(table_name, set(values), inclusive)
+
+    @classmethod
+    def _parse_print_table(cls, table_name: str, feedback: str) -> 'CoqTable':
+        """
+        Parse a table's value from the output of ``Print Table ...``.
+        """
+        delimiter = ":"
+        if table_name == "Keep Equalities":
+            # no colon for this table
+            delimiter = "proofs"
+        values: Union[str, Set[str]]
+        try:
+            _msg, values = feedback.split(delimiter, maxsplit=1)
+        except ValueError as e:
+            raise ValueError(
+                f"Cannot parse table value from '{feedback}'") from e
+        if len(values) == 1 and values[0] == "None":
+            values = set()
+        else:
+            values = {v[:-1] if v.endswith('.') else v for v in values.split()}
+        return CoqTable(table_name, values, True)
+
+    @classmethod
+    def from_args(cls,  # noqa: D102
+                  name: str,
+                  args: Tuple[Set[str],
+                              ...]) -> List[CoqSetting[Set[str]]]:
+        tables: List[CoqSetting[Set[str]]] = []
+        for i, values in enumerate(args):
+            is_inclusive = not bool(i % 2)
+            tables.append(CoqTable(name, values, is_inclusive))
+        if not tables:
+            tables.append(CoqTable(name, set(), True))
+        return tables
+
+    @classmethod
+    def reduce_args(  # noqa: D102
+            cls,
+            former_args: Tuple[Set[str],
+                               ...],
+            latter_args: Tuple[Set[str],
+                               ...]) -> Tuple[Set[str],
+                                              ...]:
+        inclusions: Set[str] = reduce(
+            lambda x,
+            y: x.union(y),
+            former_args[:: 2] + latter_args[:: 2],
+            initial=set())
+        exclusions: Set[str] = reduce(
+            lambda x,
+            y: x.union(y),
+            former_args[1 :: 2] + latter_args[1 :: 2],
+            initial=set())
+        return (
+            inclusions.difference(exclusions),
+            exclusions.difference(inclusions))
 
 
 @dataclass
@@ -225,7 +713,7 @@ class SerAPIOptions:
     previously listed ones.
     Each set warning is equivalent to ``Set Warning <w>.``.
     """
-    settings: List[CoqSetting]
+    settings: List[Union[CoqFlag, CoqOption]]
     """
     A sequence of explicitly set flags or options.
     """
@@ -281,9 +769,14 @@ class SerAPIOptions:
         for w in itertools.chain(self.warnings, other.warnings):
             warning_states[w.name] = w.state
         setting_states: Dict[str,
-                             bool] = {}
+                             Tuple[Type[CoqSetting],
+                                   Optional[Union[bool,
+                                                  str,
+                                                  int]]]] = {}
         for s in itertools.chain(self.settings, other.settings):
-            setting_states[s.name] = s.is_set
+            assert not isinstance(s, CoqTable), \
+                "Tables cannot be assigned values directly"
+            setting_states[s.name] = (type(s), s.value)
         loaded_files: Dict[str,
                            bool] = {}
         for load in itertools.chain(self.loaded_files, other.loaded_files):
@@ -295,9 +788,13 @@ class SerAPIOptions:
             [CoqWarning(v,
                         k) for k,
              v in warning_states.items()],
-            [CoqSetting(v,
-                        k) for k,
-             v in setting_states.items()],
+            typing.cast(
+                List[Union[CoqFlag,
+                           CoqOption]],
+                [tp(k,
+                    v) for k,
+                 (tp,
+                  v) in setting_states.items()]),
             allow_sprop=self.allow_sprop or other.allow_sprop,
             disallow_sprop=self.disallow_sprop or other.disallow_sprop,
             type_in_type=self.type_in_type or other.type_in_type,
@@ -324,15 +821,25 @@ class SerAPIOptions:
         return ' '.join(options)
 
     @property
-    def settings_dict(self) -> Dict[str, bool]:
+    def settings_dict(
+        self
+    ) -> Dict[str,
+              Tuple[Type[Union[CoqFlag,
+                               CoqOption]],
+                    Optional[Union[bool,
+                                   str,
+                                   int]]]]:
         """
-        A dictionary mapping setting names to whether they are enabled.
+        A dictionary mapping setting names to their values.
         """
-        setting_states: Dict[str,
-                             bool] = {}
-        for s in self.settings:
-            setting_states[s.name] = s.is_set
-        return setting_states
+        return typing.cast(
+            Dict[str,
+                 Tuple[Type[Union[CoqFlag,
+                                  CoqOption]],
+                       Optional[Union[bool,
+                                      str,
+                                      int]]]],
+            CoqSetting.to_dict(self.settings))
 
     @property
     def warnings_dict(self) -> Dict[str, CoqWarningState]:
@@ -562,10 +1069,13 @@ class SerAPIOptions:
             warns = warning_option[0].split(',')
             for warning in warns:
                 warnings.append(CoqWarning.deserialize(warning))
-        settings = [CoqSetting(True, setting[0]) for setting in parsed_args.set]
+        settings = [
+            CoqSetting.parse_arg(True,
+                                 setting[0]) for setting in parsed_args.set
+        ]
         settings.extend(
-            CoqSetting(False,
-                       setting[0]) for setting in parsed_args.unset)
+            CoqSetting.parse_arg(False,
+                                 setting[0]) for setting in parsed_args.unset)
         loaded_files = [
             LoadedFile(False,
                        filename[0])

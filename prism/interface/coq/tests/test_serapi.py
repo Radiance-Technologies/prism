@@ -11,6 +11,7 @@ from typing import Dict, List, Optional
 import pytest
 
 from prism.interface.coq.exception import CoqExn
+from prism.interface.coq.options import CoqFlag, CoqOption, CoqTable
 from prism.interface.coq.serapi import Goal, Goals, Hypothesis, SerAPI
 from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.parser import HeuristicParser
@@ -1137,6 +1138,48 @@ class TestSerAPI(unittest.TestCase):
                 self.assertEqual(qualid, "or")
                 qualid = serapi.query_qualid(qualid)
                 self.assertEqual(qualid, "or")
+
+    def test_query_settings(self):
+        """
+        Verify that settings can be accurately retrieved.
+        """
+        with SerAPI(opam_switch=self.test_switch) as serapi:
+            settings = serapi.query_settings()
+            self.assertGreater(len(settings), 0)
+            # spot check a few settings for correctness
+            settings = set(settings)
+            self.assertIn(
+                CoqTable("Printing If",
+                         {"sumor",
+                          "sumbool",
+                          "bool"},
+                         True),
+                settings)
+            self.assertIn(CoqFlag("Printing Notations", False), settings)
+            self.assertIn(CoqFlag("Printing Wildcard", False), settings)
+            self.assertIn(CoqFlag("Printing Coercions", True), settings)
+            self.assertIn(
+                CoqFlag("Printing Allow Match Default Clause",
+                        False),
+                settings)
+            self.assertIn(
+                CoqFlag("Printing Factorizable Match Patterns",
+                        False),
+                settings)
+            self.assertIn(CoqFlag("Printing Compact Contexts", False), settings)
+            self.assertIn(CoqFlag("Printing Implicit", True), settings)
+            self.assertIn(CoqOption("Printing Depth", 999999), settings)
+            self.assertIn(CoqFlag("Printing Records", False), settings)
+            self.assertIn(CoqOption("Firstorder Depth", 3), settings)
+            self.assertIn(CoqOption("Diffs", "off"), settings)
+            if not OpamVersion.less_than(serapi.serapi_version, "8.10.0"):
+                self.assertIn(CoqFlag("Allow StrictProp", False), settings)
+            for setting in settings:
+                # assert equivalence between different modes of
+                # retrieval
+                alt_setting = serapi.query_setting(setting.name)
+                self.assertIsNotNone(alt_setting)
+                self.assertEqual(alt_setting, setting)
 
     def test_query_type(self):
         """
