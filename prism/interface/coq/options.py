@@ -526,7 +526,7 @@ class CoqTable(CoqSetting[Set[str]]):
             raise ValueError("At least one table value must be specified.")
 
     def __hash__(self) -> int:  # noqa: D105
-        return hash((self.name, tuple(self.value), self.inclusive))
+        return hash((self.name, tuple(sorted(self.value)), self.inclusive))
 
     def __str__(self) -> str:
         """
