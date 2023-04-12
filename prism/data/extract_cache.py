@@ -51,6 +51,7 @@ from prism.data.build_cache import (
     VernacCommandDataList,
     VernacDict,
     VernacSentence,
+    CacheStatus
 )
 from prism.data.commit_map import Except, ProjectCommitUpdateMapper
 from prism.data.util import get_project_func
@@ -2284,9 +2285,9 @@ class CacheExtractor:
         max_runtime : Optional[ResourceLimits]
             Maximum cpu time (seconds) allowed to build project
         """
-        pbar = tqdm.tqdm(
-            coq_version_iterator(project,
-                                 commit_sha),
+        # newest first
+        sorted_coq_version_iterator = sorted(coq_version_iterator(project,commit_sha),key=OpamVersion.parse,reverse=True)
+        pbar = tqdm.tqdm(sorted_coq_version_iterator,
             desc="Coq version")
         files_to_use = None
         if files_to_use_map is not None:
@@ -2315,3 +2316,7 @@ class CacheExtractor:
                 max_memory=max_memory,
                 max_runtime=max_runtime,
             )
+            status = build_cache_client.get_status(project.name,commit_sha,str(coq_version))
+            if (status==CacheStatus.SUCCESS):
+                # just build the newest version and call it a day.
+                break
