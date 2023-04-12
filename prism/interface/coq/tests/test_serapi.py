@@ -1173,7 +1173,7 @@ class TestSerAPI(unittest.TestCase):
             self.assertIn(CoqOption("Firstorder Depth", 3), settings)
             self.assertIn(CoqOption("Diffs", "off"), settings)
             if not OpamVersion.less_than(serapi.serapi_version, "8.10.0"):
-                self.assertIn(CoqFlag("Allow StrictProp", False), settings)
+                self.assertIn(CoqFlag("Allow StrictProp", True), settings)
             for setting in settings:
                 # assert equivalence between different modes of
                 # retrieval

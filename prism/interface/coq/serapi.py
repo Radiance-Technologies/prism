@@ -213,6 +213,12 @@ class SerAPI:
         self.execute("Set Printing Implicit.")
         self.execute("Set Printing Depth 999999.")
         self.execute("Unset Printing Records.")
+        if (not OpamVersion.less_than(self.serapi_version,
+                                      '8.10.0')
+                and not sertop_options.disallow_sprop):
+            # required for query_env to get the types/sorts of all
+            # constants
+            self.execute("Set Allow StrictProp.")
 
         # initialize the stack
         self.push()
