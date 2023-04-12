@@ -53,7 +53,7 @@ class StrWithLocation(str):
     single character.
     """
     _bol_matcher: ClassVar[re.Pattern] = re.compile(
-        r"((?<=\n)[^\n](?=[^\n]*$))|(^[^\n](?=[^\n]*$))")
+        r"(?:^|\n)([^\n])[^\n]*\n*$")
     """
     Pattern to match the character immediately following the last
     newline as long as newline has non-newline characters after it.
@@ -214,23 +214,24 @@ class StrWithLocation(str):
         end = self.end
         if end is None:
             end = len(file_contents)
+        assert(start_idx <= start)
         num_newlines_before_string = file_contents.count(
             "\n",
             start_idx,
-            self.start) + newlines_so_far
+            start) + newlines_so_far
         num_newlines_in_string = file_contents.count("\n", self.start, self.end)
         bol_match = self._bol_matcher.search(
             file_contents,
             pos=0,
             endpos=start + 1)
         assert bol_match is not None
-        bol_pos = bol_match.start()
+        bol_pos = bol_match.start(1)
         bol_last_match = self._bol_matcher.search(
             file_contents,
             pos=0,
             endpos=end)
         assert bol_last_match is not None
-        bol_pos_last = bol_last_match.start()
+        bol_pos_last = bol_last_match.start(1)
         return SexpInfo.Loc(
             filename=filename,
             lineno=num_newlines_before_string,
