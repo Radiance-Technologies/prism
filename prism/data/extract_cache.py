@@ -7,9 +7,7 @@ import logging
 import multiprocessing as mp
 import os
 import re
-import traceback
 import typing
-from traceback_with_variables import format_exc
 import warnings
 from dataclasses import InitVar, dataclass, field
 from datetime import datetime
@@ -36,6 +34,7 @@ import numba.typed
 import tqdm
 from seutil import io
 from tqdm.contrib.concurrent import process_map
+from traceback_with_variables import format_exc
 
 from prism.data.build_cache import (
     CommandType,
