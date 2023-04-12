@@ -399,7 +399,8 @@ class CoqOption(CoqSetting[Optional[Union[int, str]]]):
     """
 
     _print_table_regex: ClassVar[re.Pattern] = re.compile(
-        r'^.*\s(?P<option_value>".*"|[^"]+)$')
+        r'^.*\s(?P<option_value>".*"|[^"]+)$',
+        flags=re.DOTALL)
     """
     A simple regex for parsing the output of ``Print Table ...".
 
