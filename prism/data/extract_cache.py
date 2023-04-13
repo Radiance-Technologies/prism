@@ -1841,33 +1841,39 @@ class CacheExtractor:
     """
 
     def __init__(
-            self,
-            cache_dir: str,
-            metadata_storage_file: str,
-            swim: SwitchManager,
-            default_commits_path: str,
-            commit_iterator_factory: Callable[[ProjectRepo,
-                                               str],
-                                              Iterable[str]],
-            coq_version_iterator: Optional[Callable[[ProjectRepo,
-                                                     str],
-                                                    Iterable[Union[
-                                                        str,
-                                                        Version]]]] = None,
-            process_project_fallback: Optional[Callable[
-                [ProjectRepo],
-                Tuple[VernacDict,
-                      CommentDict]]] = None,
-            recache: Optional[Callable[
-                [CoqProjectBuildCacheProtocol,
-                 ProjectRepo,
-                 str,
-                 str],
-                bool]] = None,
-            files_to_use: Optional[Dict[str,
-                                        Iterable[str]]] = None,
-            cache_fmt_ext: Optional[str] = None,
-            mds_fmt: Optional[str] = None):
+        self,
+        cache_dir: str,
+        metadata_storage_file: str,
+        swim: SwitchManager,
+        default_commits_path: str,
+        commit_iterator_factory: Callable[[ProjectRepo,
+                                           str],
+                                          Iterable[str]],
+        coq_version_iterator: Optional[Callable[[ProjectRepo,
+                                                 str],
+                                                Iterable[Union[
+                                                    str,
+                                                    Version]]]] = None,
+        process_project_fallback: Optional[Callable[[ProjectRepo],
+                                                    Tuple[VernacDict,
+                                                          CommentDict]]] = None,
+        recache: Optional[Callable[
+            [CoqProjectBuildCacheProtocol,
+             ProjectRepo,
+             str,
+             str],
+            bool]] = None,
+        files_to_use: Optional[Dict[str,
+                                    Iterable[str]]] = None,
+        cache_fmt_ext: Optional[str] = None,
+        mds_fmt: Optional[str] = None,
+        coq_version_stop_callback: Callable[
+            [CoqProjectBuildCacheProtocol,
+             str,
+             str,
+             Sequence[str | Version]],
+            bool] | None = None,
+    ):
         self.cache_kwargs = {
             "fmt_ext": cache_fmt_ext
         } if cache_fmt_ext else {}
@@ -1949,6 +1955,15 @@ class CacheExtractor:
         artifacts should be recomputed.
         """
 
+        if coq_version_stop_callback is None:
+            coq_version_stop_callback = self.default_coq_version_stop_callback
+        self.coq_version_stop_callback = coq_version_stop_callback
+        """
+        Call this function on the cache, project name, commit hash,
+        and sequence of Coq versions encountered so far to determine
+        whether or not to stop iterating over Coq versions.
+        """
+
     def get_commit_iterator_func(
             self) -> Callable[[ProjectRepo],
                               Iterable[str]]:
@@ -2010,7 +2025,7 @@ class CacheExtractor:
             worker_semaphore=worker_semaphore,
             max_memory=max_memory,
             max_runtime=max_runtime,
-        )
+            coq_version_stop_callback=self.coq_version_stop_callback)
 
     def run(
         self,
@@ -2192,6 +2207,40 @@ class CacheExtractor:
         ]
 
     @classmethod
+    def default_coq_version_stop_callback(
+            cls,
+            cache: CoqProjectBuildCacheProtocol,
+            project_name: str,
+            commit_sha: str,
+            coq_versions_observed_so_far: Sequence[str | Version]) -> bool:
+        """
+        Stop Coq version iteration if the last version was successful.
+
+        Parameters
+        ----------
+        cache : CoqProjectBuildCacheProtocol
+            Cache to check for successful extraction
+        project_name : str
+            The name of the current project being extracted
+        commit_sha : str
+            The commit hash currently being extracted
+        coq_versions_observed_so_far : Sequence[str  |  Version]
+            A sequence of Coq versions that have been observed so far.
+
+        Returns
+        -------
+        bool
+            True if Coq version iterator should stop, False otherwise.
+        """
+        if cache.get_status(
+                project_name,
+                commit_sha,
+                str(coq_versions_observed_so_far[-1])) == CacheStatus.SUCCESS:
+            # just build the newest version and call it a day.
+            return True
+        return False
+
+    @classmethod
     def default_process_project_fallback(cls,
                                          _project: ProjectRepo
                                          ) -> Tuple[VernacDict,
@@ -2231,15 +2280,19 @@ class CacheExtractor:
                           bool],
         coq_version_iterator: Callable[[ProjectRepo,
                                         str],
-                                       Iterable[Union[str,
-                                                      Version]]],
+                                       Iterable[str | Version]],
         files_to_use_map: Optional[Dict[str,
                                         Iterable[str]]],
         force_serial: bool,
         worker_semaphore: Optional[BoundedSemaphore],
         max_memory: Optional[int],
         max_runtime: Optional[int],
-    ):
+        coq_version_stop_callback: Callable[
+            [CoqProjectBuildCacheProtocol,
+             str,
+             str,
+             Sequence[str | Version]],
+            bool]):
         r"""
         Extract cache.
 
@@ -2284,6 +2337,15 @@ class CacheExtractor:
             Maximum memory (bytes) allowed to build project
         max_runtime : Optional[ResourceLimits]
             Maximum cpu time (seconds) allowed to build project
+        coq_version_stop_callback : Callable[
+                [CoqProjectBuildCacheProtocol,
+                 str,
+                 str,
+                 Sequence[str | Version]],
+                bool]
+            Call this function on the cache, project name, commit hash,
+            and sequence of Coq versions encountered so far to determine
+            whether or not to stop iterating over Coq versions.
         """
         # newest first
         sorted_coq_version_iterator = sorted(
@@ -2302,7 +2364,9 @@ class CacheExtractor:
                     files_to_use = files_to_use_map[project.name]
                 except KeyError:
                     files_to_use = None
+        coq_versions_observed_so_far: list[str | Version] = []
         for coq_version in pbar:
+            coq_versions_observed_so_far.append(coq_version)
             pbar.set_description(
                 f"Coq version ({project.name}@{commit_sha[: 8]}): {coq_version}"
             )
@@ -2320,10 +2384,8 @@ class CacheExtractor:
                 max_memory=max_memory,
                 max_runtime=max_runtime,
             )
-            status = build_cache_client.get_status(
-                project.name,
-                commit_sha,
-                str(coq_version))
-            if (status == CacheStatus.SUCCESS):
-                # just build the newest version and call it a day.
+            if coq_version_stop_callback(build_cache_client,
+                                         project.name,
+                                         commit_sha,
+                                         coq_versions_observed_so_far):
                 break
