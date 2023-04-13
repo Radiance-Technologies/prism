@@ -473,9 +473,8 @@ class ParserUtils:
                 str_no_comments.append(segment)
             elif return_comments:
                 current_comment.append(segment)
-            if segment == '*)':
-                if comment_depth > 0:
-                    comment_depth -= 1
+            if segment == '*)' and comment_depth > 0:
+                comment_depth -= 1
                 if return_comments:
                     if comment_depth == 0:
                         # a top-level comment just ended
