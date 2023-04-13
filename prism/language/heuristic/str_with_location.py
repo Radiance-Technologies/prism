@@ -214,7 +214,7 @@ class StrWithLocation(str):
         end = self.end
         if end is None:
             end = len(file_contents)
-        assert(start_idx <= start)
+        assert start_idx <= start
         num_newlines_before_string = file_contents.count(
             "\n",
             start_idx,
