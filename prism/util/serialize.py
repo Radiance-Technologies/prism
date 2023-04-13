@@ -155,7 +155,10 @@ class Serializable(Protocol):
             # converting this file.
             preferable = Path(filepath).with_suffix(_PREFERRED_EXT)
             module_logger.info(f"opportunistic conversion: {preferable}")
-            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
+            tmp = tempfile.NamedTemporaryFile(
+                dir=Path(filepath).parent,
+                delete=False,
+                suffix=".json")
             tmp.close()
             loaded.dump(tmp.name, fmt=_PREFERRED_FORMAT)
             os.rename(tmp.name, preferable)
