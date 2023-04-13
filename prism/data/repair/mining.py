@@ -407,8 +407,10 @@ class RepairInstanceDB:
         label_related_rows = self.cursor.fetchall()
         row_ids = sorted([row[0] for row in label_related_rows])
         file_index = row_ids.index(recent_id)
+        project_repair_save_directory = repair_save_directory / Path(
+            project_name)
         new_file_name = str(
-            repair_save_directory / (
+            project_repair_save_directory / (
                 "-".join(
                     [
                         "repair",

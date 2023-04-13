@@ -68,7 +68,7 @@ class TestRepairInstanceDB(unittest.TestCase):
             result = db.cursor.fetchall()
             self.assertListEqual(result, [("records",)])
 
-    def test_insert_record(self):
+    def test_insert_record(self) -> None:
         """
         Verify records get inserted properly.
         """
@@ -83,8 +83,10 @@ class TestRepairInstanceDB(unittest.TestCase):
             self.assertEqual(
                 path,
                 self._test_db_path.parent
+                / Path(self._cache_label["project_name"])
                 / Path('repair-test_project-abcde-12345-8.10.2-8.10.2-0.yml'))
             change_selection = self._change_selection
+            assert isinstance(change_selection.added_commands, list)
             change_selection.added_commands.append(("y", 25))
             db.insert_record_get_path(
                 **self._cache_label,
@@ -111,22 +113,21 @@ class TestRepairInstanceDB(unittest.TestCase):
             record = db.get_record(
                 **self._cache_label,
                 change_selection=self._change_selection)
+            expected_path = str(
+                Path(self._cache_label["project_name"])
+                / 'repair-test_project-abcde-12345-8.10.2-8.10.2-0.yml')
             expected_record = {
                 'id': 1,
                 **self._cache_label,
                 **{
-                    'added_commands':
-                        'a 1 b 2',
-                    'affected_commands':
-                        'a 1',
-                    'changed_commands':
-                        'a 1 b 2 c 3',
-                    'dropped_commands':
-                        'a 1 b 2 c 3 d 4',
-                    'file_name':
-                        'repair-test_project-abcde-12345-8.10.2-8.10.2-0.yml'
+                    'added_commands': 'a 1 b 2',
+                    'affected_commands': 'a 1',
+                    'changed_commands': 'a 1 b 2 c 3',
+                    'dropped_commands': 'a 1 b 2 c 3 d 4',
+                    'file_name': expected_path
                 }
             }
+            assert record is not None
             self.assertDictEqual(record, expected_record)
 
     def tearDown(self):
