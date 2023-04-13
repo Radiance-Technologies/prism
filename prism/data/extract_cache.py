@@ -106,16 +106,12 @@ _printing_options_pattern = re.compile(r"(?:Set|Unset)\s+Printing\s+.*\.")
 
 _loadpath_problem_pattern = regex_from_options(
     [
-        s.replace(" ",
-                  r"\s+")
-        for s in [
-            "[Ff]ile not found on loadpath",
-            f"Can(?:'|no)t find file {QUALIFIED_IDENT_PATTERN.pattern}",
-            r"[Cc]annot find library "
-            rf"(?P<library>{QUALIFIED_IDENT_PATTERN.pattern})",
-            "Cannot find a physical path bound ",
-            "Unable to locate library"
-        ]
+        r".*library.*",
+        r".*vo.*",
+        r".*path.*",
+        r".*[Ff]ile.*",
+        r".*suffix.*",
+        r".*prefix.*"
     ],
     False,
     False)
