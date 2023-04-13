@@ -54,7 +54,10 @@ class TestRepairInstanceDB(unittest.TestCase):
         'a 1',
         'a 1 b 2 c 3',
         'a 1 b 2 c 3 d 4',
-        'repair-test_project-abcde-12345-8.10.2-8.10.2-0.yml')
+        str(
+            Path(
+                'test_project/repair-test_project-abcde-12345-8.10.2-8.10.2-0.yml'
+            )))
 
     def test_create_table(self):
         """
