@@ -3,7 +3,8 @@ Supply a protocol for serializable data.
 """
 
 import copy
-import logging
+import os
+import tempfile
 import typing
 from dataclasses import dataclass, fields, is_dataclass
 from pathlib import Path
@@ -19,18 +20,19 @@ from typing import (
     Union,
     runtime_checkable,
 )
-import tempfile
+
 import seutil as su
 import typing_inspect
+import ujson
 import yaml
-import os
-
 from diff_match_patch import diff_match_patch
 
+from prism.util.logging import logging
 from prism.util.radpytools import PathLike
 
 # Module logger
 module_logger = logging.getLogger(__name__)
+module_logger.setLevel(logging.INFO)
 
 _dmp = diff_match_patch()
 # Produce smaller diffs
@@ -56,21 +58,24 @@ fast_yaml_fmt = su.io.FmtProperty(
     serialize=True,
 )
 """
-Define a faster, C-based yaml format definition for seutil.
+Define a faster, C-based yaml format for seutil.
 """
 
-
-import ujson
-
 fast_json_fmt = su.io.FmtProperty(
-    writer=lambda f,obj: ujson.dump(obj,f),
+    writer=lambda f,
+    obj: ujson.dump(obj,
+                    f),
     reader=ujson.load,
     serialize=True,
 )
+"""
+Define a faster json format for seutil.
+"""
 
 # opportunistically convert files to json...
-_PREFERRED_FORMAT=fast_json_fmt
-_PREFERRED_EXT=".json"
+_PREFERRED_FORMAT = fast_json_fmt
+_PREFERRED_EXT = ".json"
+
 
 @runtime_checkable
 class Serializable(Protocol):
@@ -132,7 +137,8 @@ class Serializable(Protocol):
         if _PREFERRED_FORMAT is not None:
             preferable = Path(filepath).with_suffix(_PREFERRED_EXT)
             if preferable.exists():
-                print("intercepting request, instead: ",preferable)
+                module_logger.info(
+                    f"intercepting request, instead: {preferable}")
                 filepath = str(preferable)
                 fmt = _PREFERRED_FORMAT
                 intercept = True
@@ -147,14 +153,14 @@ class Serializable(Protocol):
 
         if not intercept and _PREFERRED_FORMAT is not None:
             # converting this file.
-            print("opportunistic conversion: ",preferable)
-            tmp = tempfile.NamedTemporaryFile(delete=False,suffix=".json")
+            preferable = Path(filepath).with_suffix(_PREFERRED_EXT)
+            module_logger.info(f"opportunistic conversion: {preferable}")
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
             tmp.close()
-            loaded.dump(tmp.name,fmt=_PREFERRED_FORMAT)
-            os.rename(tmp.name,preferable)
+            loaded.dump(tmp.name, fmt=_PREFERRED_FORMAT)
+            os.rename(tmp.name, preferable)
             # integrity check
-            assert(cls.load(filepath,fmt)==loaded)
-
+            assert cls.load(filepath, fmt) == loaded
 
         return loaded
 
