@@ -1047,7 +1047,8 @@ class SerAPI:
             feedback = feedback_list[0]
             if feedback.startswith("No object of basename"):
                 return []
-            return re.findall("(?:^|\n)[^\s]+\s+([^\s]+)",feedback)
+            qualids = re.findall(r"(?:^|\n)[^\s]+\s+([^\s]+)", feedback)
+        return qualids
 
     def query_goals(self) -> Optional[Goals]:
         """
