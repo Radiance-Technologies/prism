@@ -38,20 +38,27 @@ and not just a `Serializable`
 """
 
 fast_yaml_fmt = su.io.FmtProperty(
-    writer=lambda f, obj: yaml.dump(obj,f,encoding="utf-8",default_flow_style=False,Dumper=yaml.CDumper),
-    reader=lambda f: yaml.load(f, Loader=yaml.CLoader),
+    writer=lambda f,
+    obj: yaml.dump(
+        obj,
+        f,
+        encoding="utf-8",
+        default_flow_style=False,
+        Dumper=yaml.CDumper),
+    reader=lambda f: yaml.load(f,
+                               Loader=yaml.CLoader),
     serialize=True,
 )
+"""
+Define a faster, C-based yaml format definition for seutil.
+"""
+
 
 @runtime_checkable
 class Serializable(Protocol):
     """
     A simple protocol for serializable data.
     """
-
-
-
-
 
     def dump(
             self,
@@ -97,12 +104,11 @@ class Serializable(Protocol):
         Serializable
             The deserialized object.
         """
-        
         suffix = Path(filepath).suffix
-        if (suffix==".yaml" or suffix==".yml"):
+        if (suffix == ".yaml" or suffix == ".yml"):
             fmt = fast_yaml_fmt
         else:
-            print("can't speed up",filepath)
+            print("can't speed up", filepath)
 
         return typing.cast(
             T,
