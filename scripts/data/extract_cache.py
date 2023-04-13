@@ -10,7 +10,7 @@ from functools import partial
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional
 
-from traceback_with_variables import activate_by_import
+from traceback_with_variables import activate_by_import  # noqa: F401
 
 from prism.data.extract_cache import (
     CacheExtractor,
