@@ -3,6 +3,7 @@ Supply a protocol for serializable data.
 """
 
 import copy
+import logging
 import typing
 from dataclasses import dataclass, fields, is_dataclass
 from pathlib import Path
@@ -25,6 +26,9 @@ import yaml
 from diff_match_patch import diff_match_patch
 
 from prism.util.radpytools import PathLike
+
+# Module logger
+module_logger = logging.getLogger(__name__)
 
 _dmp = diff_match_patch()
 # Produce smaller diffs
@@ -108,7 +112,7 @@ class Serializable(Protocol):
         if (suffix == ".yaml" or suffix == ".yml"):
             fmt = fast_yaml_fmt
         else:
-            print("can't speed up", filepath)
+            module_logger.info(f"can't speed up {filepath}")
 
         return typing.cast(
             T,
