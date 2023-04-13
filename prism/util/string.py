@@ -9,11 +9,8 @@ from prism.util.iterable import CallableIterator
 _whitespace_regex = re.compile(r"\s+", flags=re.DOTALL)
 _escape_regex = re.compile('(["\'\\\\\b\f\t\n\r\v\a])')
 
-# union of the two dicts within
-_escaped_chars = {
-    **{x:repr(x)[1:-1] for x in "\b\f\t\n\r\v\a"},
-    **{x:"\\"+x for x in "\"\'\\"}
-}
+_escaped_chars = {x: repr(x)[1 :-1]
+                  for x in "\b\f\t\n\r\v\a"} | {x: "\\" + x for x in "\"\'\\"}
 
 
 def escape(s: str) -> str:
