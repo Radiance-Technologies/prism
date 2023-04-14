@@ -10,8 +10,9 @@ from collections import deque
 from enum import Enum
 from typing import List, Optional, Set, Tuple
 
-import git
-from git import Commit, Repo
+from git.exc import GitCommandError, NoSuchPathError
+from git.objects import Commit
+from git.repo import Repo
 
 from prism.data.document import CoqDocument
 from prism.project.base import MetadataArgs, Project
@@ -224,7 +225,7 @@ class ProjectRepo(Repo, Project):
         """
         try:
             Repo.__init__(self, dir_abspath)
-        except git.exc.NoSuchPathError:
+        except NoSuchPathError:
             dir_abspath = pathlib.Path(dir_abspath)
             storage = [a for a in args if isinstance(a, MetadataStorage)]
             if not storage:
@@ -245,7 +246,7 @@ class ProjectRepo(Repo, Project):
                 for project_url in project_urls:
                     try:
                         Repo.clone_from(project_url, dir_abspath)
-                    except git.exc.GitCommandError:
+                    except GitCommandError:
                         continue
                     else:
                         break

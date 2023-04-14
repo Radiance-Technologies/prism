@@ -966,6 +966,8 @@ class ProjectCommitData(Serializable):
         dirpath = Path(dirpath)
         dirpath.mkdir(parents=True, exist_ok=True)
         for filename, commands in self.command_data.items():
+            # filename can contain leading directories
+            Path(filename).parent.mkdir(parents=True, exist_ok=True)
             commands.write_coq_file(dirpath / filename)
 
 

@@ -851,9 +851,14 @@ def _get_consecutive_commit_hashes(
     """
     repo = ProjectRepo(repo_root / project, metadata_storage=metadata_storage)
     commit_hashes = set(ci.commit_hash for ci in cache_items)
-    dated_commit_hashes = sorted(
-        [(repo.commit(ch).authored_datetime,
-          ch) for ch in commit_hashes])
+    commit_tuples = []
+    for ch in commit_hashes:
+        try:
+            commit_tuples.append((repo.commit(ch).authored_datetime, ch))
+        except ValueError:
+            # Skip if commit can't be checked out
+            continue
+    dated_commit_hashes = sorted(commit_tuples)
     return [
         (dch1[1],
          dch2[1]) for dch1,
