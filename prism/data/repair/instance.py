@@ -1369,7 +1369,7 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
             broken_warnings = broken_options.warnings_dict
             for warning_name, warning_state in broken_warnings.items():
                 if (warning_name not in initial_warnings
-                        or warning_state != initial_settings[warning_name]):
+                        or warning_state != initial_warnings[warning_name]):
                     if warning_state == CoqWarningState.DISABLED:
                         tags.add(f"warning-disabled:{warning_name}")
                     elif warning_state == CoqWarningState.ENABLED:
