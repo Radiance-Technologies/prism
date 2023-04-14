@@ -7,6 +7,8 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from traceback_with_variables import activate_by_import  # noqa: F401
+
 from prism.data.repair.instance import (
     ProjectCommitDataErrorInstance,
     ProjectCommitDataRepairInstance,

@@ -6,7 +6,6 @@ import os
 import queue
 import select
 import sqlite3
-import traceback
 from dataclasses import dataclass
 from multiprocessing import Process, Queue
 from pathlib import Path
@@ -16,6 +15,7 @@ from types import TracebackType
 from typing import Callable, Dict, List, Optional, Tuple, Type, Union
 
 from tqdm import tqdm
+from traceback_with_variables import format_exc
 
 from prism.data.build_cache import (
     CacheObjectStatus,
@@ -638,7 +638,7 @@ def build_repair_instance(
             else:
                 result = None
     except Exception as e:
-        result = Except(None, e, traceback.format_exc())
+        result = Except(None, e, format_exc(e))
     finally:
         if result is not None:
             write_repair_instance(
@@ -748,7 +748,7 @@ def build_error_instances_from_label_pair(
             error_instances.append((error_instance, repaired_state, changeset))
         result = error_instances
     except Exception as e:
-        result = Except(None, e, traceback.format_exc())
+        result = Except(None, e, format_exc(e))
         repair_mining_logger.write_exception_log(result)
     return result
 
