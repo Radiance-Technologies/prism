@@ -43,7 +43,7 @@ def is_location_in_change(
     else:
         change_filename = str(change.after_filename)
         change_range = change.after_range
-    return change_filename == loc.filename and change_range and (
+    return change_filename == loc.filename and (
         # if there is any intersection, then one endpoint lies in the
         # interval spanned by the change
         loc.lineno in change_range or loc.lineno_last in change_range
