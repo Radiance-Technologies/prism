@@ -115,6 +115,13 @@ _loadpath_problem_pattern = regex_from_options(
             "Cannot find a physical path bound ",
             "Unable to locate library"
         ]
+    ] + [
+        r".*library.*",
+        r".*vo.*",
+        r".*path.*",
+        r".*[Ff]ile.*",
+        r".*suffix.*",
+        r".*prefix.*"
     ],
     False,
     False)
