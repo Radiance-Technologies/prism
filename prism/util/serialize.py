@@ -3,6 +3,7 @@ Supply a protocol for serializable data.
 """
 
 import copy
+import os
 import typing
 from dataclasses import dataclass, fields, is_dataclass
 from pathlib import Path
@@ -67,6 +68,10 @@ class Serializable(Protocol):
             Designated format of the output file,
             by default `Fmt.yaml`.
         """
+        if _PREFERRED_FORMAT is not None:
+            fmt = _PREFERRED_FORMAT
+            module_logger.info(
+                f"intercepting request, instead dumping {_PREFERRED_EXT}")
         su.io.dump(
             typing.cast(Union[str,
                               Path],
@@ -104,12 +109,13 @@ class Serializable(Protocol):
             module_logger.info(f"can't speed up {filepath}")
 
         intercept = False
+        preferred_file = None
         if _PREFERRED_FORMAT is not None:
-            preferable = Path(filepath).with_suffix(_PREFERRED_EXT)
-            if preferable.exists():
+            preferred_file = Path(filepath).with_suffix(_PREFERRED_EXT)
+            if preferred_file.exists():
                 module_logger.info(
-                    f"intercepting request, instead: {preferable}")
-                filepath = str(preferable)
+                    f"intercepting request, instead: {preferred_file}")
+                filepath = str(preferred_file)
                 fmt = _PREFERRED_FORMAT
                 intercept = True
 
@@ -124,9 +130,12 @@ class Serializable(Protocol):
                 clz=cls))
 
         if not intercept and _PREFERRED_FORMAT is not None:
+            assert preferred_file is not None
             # converting this file.
-            preferable = Path(filepath).with_suffix(_PREFERRED_EXT)
-            atomic_write(preferable, loaded)
+            atomic_write(preferred_file, loaded)
+            # copy permissions
+            st = os.stat(filepath)
+            os.chown(preferred_file, st.st_uid, st.st_gid)
             # integrity check
             assert cls.load(filepath, fmt) == loaded
 
