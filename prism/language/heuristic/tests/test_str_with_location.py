@@ -17,12 +17,17 @@ class TestStrWithLocation(unittest.TestCase):
     Tests for StrWithLocation.
     """
 
+    simple_file: Path
+    simple_doc: CoqDocument
+    located_str_simple: StrWithLocation
+    example: StrWithLocation
+
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         """
         Set up common test data.
         """
-        cls.simple_file: Path = _COQ_EXAMPLES_PATH / "simple.v"
+        cls.simple_file = _COQ_EXAMPLES_PATH / "simple.v"
         cls.simple_doc = CoqDocument(
             cls.simple_file,
             CoqParser.parse_source(cls.simple_file),
@@ -218,6 +223,27 @@ class TestStrWithLocation(unittest.TestCase):
                 end_charno=1546),
         ]
         self.assertEqual(loc_results_2, expected_loc_results_2)
+
+    def test_two_newlines_at_end_of_file(self):
+        """
+        Verify that bol_matcher works on files with extra space at end.
+        """
+        simple_file_two_newlines = (
+            _COQ_EXAMPLES_PATH / "simple with extra space at end.v")
+        simple_doc_two_newlines = CoqDocument(
+            simple_file_two_newlines,
+            CoqParser.parse_source(simple_file_two_newlines),
+            project_path=_COQ_EXAMPLES_PATH,
+            serapi_options=SerAPIOptions.empty(_COQ_EXAMPLES_PATH))
+        doc_with_location = StrWithLocation.create_from_file_contents(
+            simple_doc_two_newlines.source_code)
+        loc = doc_with_location.get_location(
+            doc_with_location,
+            simple_file_two_newlines)
+        # Note: there would be an assertion error in the above call if
+        # this test were to fail. The below assertion is here just so we
+        # have an assertion in the test.
+        self.assertIsInstance(loc, SexpInfo.Loc)
 
 
 if __name__ == "__main__":
