@@ -228,18 +228,11 @@ class TestStrWithLocation(unittest.TestCase):
         """
         Verify that bol_matcher works on files with extra space at end.
         """
-        simple_file_two_newlines = (
-            _COQ_EXAMPLES_PATH / "simple with extra space at end.v")
-        simple_doc_two_newlines = CoqDocument(
-            simple_file_two_newlines,
-            CoqParser.parse_source(simple_file_two_newlines),
-            project_path=_COQ_EXAMPLES_PATH,
-            serapi_options=SerAPIOptions.empty(_COQ_EXAMPLES_PATH))
         doc_with_location = StrWithLocation.create_from_file_contents(
-            simple_doc_two_newlines.source_code)
+            self.simple_doc.source_code + "\n")
         loc = doc_with_location.get_location(
             doc_with_location,
-            simple_file_two_newlines)
+            self.simple_file)
         # Note: there would be an assertion error in the above call if
         # this test were to fail. The below assertion is here just so we
         # have an assertion in the test.
