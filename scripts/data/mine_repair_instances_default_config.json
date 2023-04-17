@@ -13,5 +13,6 @@
       "64b36d30430ca8e6e335283290cf866decba8bb8"
     ]
   },
-  "logging_level": "DEBUG"
+  "logging_level": "DEBUG",
+  "skip_errors": true
 }

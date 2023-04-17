@@ -926,7 +926,8 @@ def mining_loop_worker(
                                                   ErrorInstanceEndSentinel]],
         repair_save_directory: Path,
         repair_instance_db_file: Path,
-        repair_miner: RepairMiner):
+        repair_miner: RepairMiner,
+        skip_errors: bool):
     """
     Perform either error instance or repair instance mining.
 
@@ -947,6 +948,11 @@ def mining_loop_worker(
         Path to database file containing repair instance records
     repair_miner : RepairMiner
         Function used to mine repairs
+    skip_errors : bool, optional
+        If true, allow repair mining to proceed even if an exception is
+        encountered during error instance or repair mining. Other
+        exceptions will not be ignored. If false, stop on exceptions in
+        mining. By default, true.
     """
     # The order of the following blocks is important. We wish to keep
     # the size of the repair_instance_job_queue small so that we don't
@@ -987,10 +993,10 @@ def mining_loop_worker(
         else:
             if isinstance(repair_job, RepairInstanceJob):
                 result = build_repair_instance_star(repair_job)
-                if isinstance(result, Except):
+                if not skip_errors and isinstance(result, Except):
                     worker_to_parent_queue.put(result)
                     break
-            else:
+            elif isinstance(repair_job, ErrorInstanceEndSentinel):
                 worker_to_parent_queue.put(repair_job)
             # Don't automatically go to building error instances. Focus
             # on clearing the repair instance queue out.
@@ -1005,9 +1011,11 @@ def mining_loop_worker(
         else:
             result = build_error_instances_from_label_pair_star(
                 error_instance_job)
-            if isinstance(result, Except):
+            if not skip_errors and isinstance(result, Except):
                 worker_to_parent_queue.put(result)
                 break
+            # If skip_errors is true and result is an Except, the
+            # following will immediately return an empty list.
             repair_instance_jobs = build_repair_instance_mining_inputs(
                 result,
                 repair_save_directory,
@@ -1164,7 +1172,8 @@ def _serial_work(
         repair_mining_logger: RepairMiningLogger,
         repair_save_directory: Path,
         db_file: Path,
-        repair_miner: RepairMiner):
+        repair_miner: RepairMiner,
+        skip_errors: bool):
     for label_a, label_b in tqdm(
             cache_label_pairs, desc="Error instance mining"):
         new_error_instances = build_error_instances_from_label_pair(
@@ -1187,7 +1196,7 @@ def _serial_work(
                 db_file,
                 repair_miner,
                 repair_mining_logger)
-            if isinstance(result, Except):
+            if isinstance(result, Except) and not skip_errors:
                 raise RuntimeError(
                     f"Exception: {result.exception}. {result.trace}")
 
@@ -1202,7 +1211,8 @@ def _parallel_work(
         repair_save_directory: Path,
         db_file: Path,
         repair_miner: RepairMiner,
-        max_workers: int):
+        max_workers: int,
+        skip_errors: bool):
     error_instance_jobs = [
         ErrorInstanceJob(
             label_a,
@@ -1284,7 +1294,8 @@ def repair_mining_loop(
         max_workers: int = 1,
         project_commit_hash_map: Optional[Dict[str,
                                                Optional[List[str]]]] = None,
-        logging_level: int = logging.DEBUG):
+        logging_level: int = logging.DEBUG,
+        skip_errors: bool = True):
     """
     Mine repair instances from the given build cache.
 
@@ -1324,6 +1335,11 @@ def repair_mining_loop(
         listed for that project
     logging_level : int, optional
         Logging level for the exception logger, by default DEBUG.
+    skip_errors : bool, optional
+        If true, allow repair mining to proceed even if an exception is
+        encountered during error instance or repair mining. Other
+        exceptions will not be ignored. If false, stop on exceptions in
+        mining. By default, true.
     """
     os.makedirs(str(repair_save_directory), exist_ok=True)
     if metadata_storage_file is None:
@@ -1358,7 +1374,8 @@ def repair_mining_loop(
                 repair_mining_logger,
                 repair_save_directory,
                 db_file,
-                repair_miner)
+                repair_miner,
+                skip_errors)
         # ##############################################################
         # Parallel processing
         # ##############################################################
@@ -1371,4 +1388,5 @@ def repair_mining_loop(
                 repair_save_directory,
                 db_file,
                 repair_miner,
-                max_workers)
+                max_workers,
+                skip_errors)
