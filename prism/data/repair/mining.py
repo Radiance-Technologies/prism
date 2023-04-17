@@ -998,6 +998,9 @@ def mining_loop_worker(
                     break
             elif isinstance(repair_job, ErrorInstanceEndSentinel):
                 worker_to_parent_queue.put(repair_job)
+            else:
+                raise RuntimeError(
+                    f"Unexpected type {type(repair_job)} for repair_job.")
             # Don't automatically go to building error instances. Focus
             # on clearing the repair instance queue out.
             continue
