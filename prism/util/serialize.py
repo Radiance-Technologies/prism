@@ -22,9 +22,9 @@ from typing import (
 
 import seutil as su
 import typing_inspect
+import ujson
 from diff_match_patch import diff_match_patch
 
-from prism.util import cyaml
 from prism.util.io import Fmt, atomic_write
 from prism.util.logging import logging
 from prism.util.radpytools import PathLike
@@ -143,7 +143,7 @@ class SerializableDataDiff(Generic[_S]):
     """
 
     diff: str
-    _fmt: ClassVar[Fmt] = Fmt.yaml
+    _fmt: ClassVar[Fmt] = Fmt.json
 
     def patch(self, a: _S) -> _S:
         """
@@ -206,7 +206,7 @@ class SerializableDataDiff(Generic[_S]):
         --------
         yaml.safe_dump
         """
-        return cyaml.safe_dump(data)
+        return ujson.dumps(data, sort_keys=True)
 
     @classmethod
     def safe_load(cls, stream: str) -> _S:
@@ -217,7 +217,7 @@ class SerializableDataDiff(Generic[_S]):
         --------
         yaml.safe_load
         """
-        return typing.cast(_S, cyaml.safe_load(stream))
+        return ujson.loads(stream)
 
 
 _Generic = Any
