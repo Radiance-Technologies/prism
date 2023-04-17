@@ -37,6 +37,7 @@ from prism.project.base import SEM, SentenceExtractionMethod
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
 from prism.tests import _PROJECT_EXAMPLES_PATH
+from prism.util.io import Fmt
 from prism.util.opam import OpamAPI
 
 TEST_DIR = Path(__file__).parent
@@ -121,9 +122,13 @@ class TestVernacSentence(unittest.TestCase):
         ]
         with NamedTemporaryFile("w") as f:
             with self.subTest("serialize"):
-                io.dump(f.name, sentences, fmt=io.Fmt.yaml)
+                io.dump(f.name, sentences, fmt=typing.cast(io.Fmt, Fmt.yaml))
             with self.subTest("deserialize"):
-                loaded = io.load(f.name, io.Fmt.yaml, clz=List[VernacSentence])
+                loaded = io.load(
+                    f.name,
+                    typing.cast(io.Fmt,
+                                Fmt.yaml),
+                    clz=List[VernacSentence])
                 self.assertEqual(loaded, sentences)
 
 

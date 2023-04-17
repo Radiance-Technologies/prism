@@ -42,10 +42,10 @@ from prism.interface.coq.options import CoqWarningState, SerAPIOptions
 from prism.language.gallina.analyze import SexpInfo
 from prism.project.metadata import ProjectMetadata
 from prism.util.diff import GitDiff
-from prism.util.io import Serializable
 from prism.util.opam import OpamSwitch, PackageFormula
 from prism.util.radpytools.dataclasses import Dataclass, default_field
 from prism.util.serialize import (
+    Serializable,
     SerializableDataDiff,
     deserialize_generic_dataclass,
 )
@@ -605,7 +605,7 @@ _Process = TypeVar("_Process")
 
 
 @dataclass
-class ProjectState(Generic[_State, _StateDiff, _Process]):
+class ProjectState(Serializable, Generic[_State, _StateDiff, _Process]):
     """
     The state of a project.
     """
@@ -657,7 +657,7 @@ class ProjectState(Generic[_State, _StateDiff, _Process]):
 
 
 @dataclass
-class ProjectStateDiff(Generic[_StateDiff, _Process]):
+class ProjectStateDiff(Serializable, Generic[_StateDiff, _Process]):
     """
     A change in some implicit project's state.
     """
@@ -692,7 +692,7 @@ class ProjectStateDiff(Generic[_StateDiff, _Process]):
 
 
 @dataclass
-class ErrorInstance(Generic[_State, _StateDiff, _Process]):
+class ErrorInstance(Serializable, Generic[_State, _StateDiff, _Process]):
     """
     A concise example of an error.
 

@@ -21,6 +21,7 @@ from prism.language.heuristic.util import ParserUtils
 from prism.language.sexp.list import SexpList
 from prism.language.sexp.node import SexpNode
 from prism.language.sexp.string import SexpString
+from prism.util.io import Fmt
 from prism.util.iterable import CallableIterator, CompareIterator
 from prism.util.path import get_relative_path
 from prism.util.radpytools import PathLike
@@ -1073,7 +1074,8 @@ class SerAPIParser(HeuristicParser):
         """
         warnings.warn(
             "Use SerAPIOptions.from_coq_project_files instead",
-            DeprecationWarning)
+            DeprecationWarning,
+            stacklevel=2)
         coq_project_files = [
             pathlib.Path(project_path) / "_CoqProject",
             pathlib.Path(project_path) / "Make"
@@ -1081,7 +1083,11 @@ class SerAPIParser(HeuristicParser):
         possible_serapi_options = []
         for coq_project_file in coq_project_files:
             if coq_project_file.exists():
-                coq_project = io.load(coq_project_file, io.Fmt.txt)
+                coq_project = typing.cast(
+                    str,
+                    io.load(coq_project_file,
+                            typing.cast(io.Fmt,
+                                        Fmt.txt)))
                 for line in coq_project.splitlines():
                     match = cls.RE_SERAPI_OPTIONS.fullmatch(line.strip())
                     if match is not None:

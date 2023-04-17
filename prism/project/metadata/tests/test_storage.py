@@ -3,6 +3,7 @@ Test suite for project metadata storage utilities.
 """
 
 import os
+import typing
 import unittest
 from copy import copy
 from pathlib import Path
@@ -20,6 +21,7 @@ from prism.project.metadata.storage import (
     Revision,
 )
 from prism.tests.factories import ProjectFactory
+from prism.util.io import Fmt
 from prism.util.opam import OCamlVersion
 
 TEST_DIR = Path(__file__).parent
@@ -385,7 +387,7 @@ class TestMetadataStorage(unittest.TestCase):
             storage.insert(metadata)
         with self.subTest("inverse"):
             # deserialization is the inverse of serialization
-            serialized = io.serialize(storage, io.Fmt.json)
+            serialized = io.serialize(storage, typing.cast(io.Fmt, Fmt.json))
             self.assertEqual(
                 storage,
                 io.deserialize(serialized,
@@ -398,8 +400,8 @@ class TestMetadataStorage(unittest.TestCase):
             self.assertEqual(storage, loaded)
             os.remove(storage_file)
         with self.subTest("deterministic"):
-            serialized_1 = io.serialize(storage, io.Fmt.json)
-            serialized_2 = io.serialize(storage, io.Fmt.json)
+            serialized_1 = io.serialize(storage, typing.cast(io.Fmt, Fmt.json))
+            serialized_2 = io.serialize(storage, typing.cast(io.Fmt, Fmt.json))
             self.assertEqual(serialized_1, serialized_2)
 
 

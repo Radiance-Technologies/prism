@@ -6,8 +6,7 @@ import re
 from pathlib import Path
 from typing import Dict, Optional, Set, Tuple, Union
 
-import yaml
-
+from prism.util import cyaml
 from prism.util.opam import Version
 
 _PARENT_DIR = Path(__file__).parent
@@ -193,18 +192,18 @@ class LogicalMappings:
 
 # load precomputed mappings
 with open(_OPAM_MAPPING_DATA_PATH) as f:
-    LogicalMappings.opam = LogicalMappings(yaml.safe_load(f))
+    LogicalMappings.opam = LogicalMappings(cyaml.safe_load(f))
 with open(_COQ_8_9_1_DATA_PATH) as f:
-    LogicalMappings.coq_8_9_1 = LogicalMappings(yaml.safe_load(f))
+    LogicalMappings.coq_8_9_1 = LogicalMappings(cyaml.safe_load(f))
 with open(_COQ_8_10_2_DATA_PATH) as f:
-    LogicalMappings.coq_8_10_2 = LogicalMappings(yaml.safe_load(f))
+    LogicalMappings.coq_8_10_2 = LogicalMappings(cyaml.safe_load(f))
 with open(_COQ_8_11_2_DATA_PATH) as f:
-    LogicalMappings.coq_8_11_2 = LogicalMappings(yaml.safe_load(f))
+    LogicalMappings.coq_8_11_2 = LogicalMappings(cyaml.safe_load(f))
 with open(_COQ_8_12_2_DATA_PATH) as f:
-    LogicalMappings.coq_8_12_2 = LogicalMappings(yaml.safe_load(f))
+    LogicalMappings.coq_8_12_2 = LogicalMappings(cyaml.safe_load(f))
 with open(_COQ_8_13_2_DATA_PATH) as f:
-    LogicalMappings.coq_8_13_2 = LogicalMappings(yaml.safe_load(f))
+    LogicalMappings.coq_8_13_2 = LogicalMappings(cyaml.safe_load(f))
 with open(_COQ_8_14_1_DATA_PATH) as f:
-    LogicalMappings.coq_8_14_1 = LogicalMappings(yaml.safe_load(f))
+    LogicalMappings.coq_8_14_1 = LogicalMappings(cyaml.safe_load(f))
 with open(_COQ_8_15_2_DATA_PATH) as f:
-    LogicalMappings.coq_8_15_2 = LogicalMappings(yaml.safe_load(f))
+    LogicalMappings.coq_8_15_2 = LogicalMappings(cyaml.safe_load(f))

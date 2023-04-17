@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Set, Tuple, Union
 
 import seutil.io as io
 
+from prism.util.io import Fmt
 from prism.util.opam import OCamlVersion, OpamAPI, Version
 from prism.util.opam.formula import LogicalPF, PackageConstraint, VersionFormula
 from prism.util.opam.formula.package import PackageFormula
@@ -221,8 +222,9 @@ try:
     version_info = typing.cast(
         VersionInfo,
         io.load(DATA_FILE,
-                io.Fmt.yaml,
+                typing.cast(io.Fmt,
+                            Fmt.yaml),
                 clz=VersionInfo))
 except FileNotFoundError:
     version_info = VersionInfo()
-io.dump(DATA_FILE, version_info, io.Fmt.yaml)
+io.dump(DATA_FILE, version_info, typing.cast(io.Fmt, Fmt.yaml))

@@ -5,6 +5,7 @@ import glob
 import os
 import re
 import subprocess
+import typing
 import warnings
 from dataclasses import InitVar, dataclass, field, fields
 from enum import IntEnum, auto
@@ -42,7 +43,7 @@ from prism.language.gallina.analyze import SexpInfo
 from prism.language.heuristic.parser import CoqComment
 from prism.language.sexp.node import SexpNode
 from prism.project.metadata import ProjectMetadata
-from prism.util.io import atomic_write
+from prism.util.io import Fmt, atomic_write, infer_fmt_from_ext
 from prism.util.iterable import split
 from prism.util.manager import ManagedServer
 from prism.util.opam.switch import OpamSwitch
@@ -235,7 +236,7 @@ class VernacSentence:
         """
         return {ident.string for ident in self.qualified_identifiers}
 
-    def serialize(self, fmt: Optional[su.io.Fmt] = None) -> Dict[str, Any]:
+    def serialize(self, fmt: Optional[Fmt] = None) -> Dict[str, Any]:
         """
         Serialize this configuration.
 
@@ -243,9 +244,11 @@ class VernacSentence:
         name, root, and whether it is a clone.
         """
         serialized = {
-            f.name: su.io.serialize(getattr(self,
-                                            f.name),
-                                    fmt) for f in fields(self)
+            f.name: su.io.serialize(
+                getattr(self,
+                        f.name),
+                typing.cast(su.io.Fmt,
+                            fmt)) for f in fields(self)
         }
         # remove non-derived configuration information
         serialized.pop('command_index', None)
@@ -345,7 +348,7 @@ class ProofSentence(VernacSentence):
     See `VernacSentence.command_index`.
     """
 
-    def serialize(self, fmt: Optional[su.io.Fmt] = None) -> Dict[str, Any]:
+    def serialize(self, fmt: Optional[Fmt] = None) -> Dict[str, Any]:
         """
         Serialize this configuration.
 
@@ -716,11 +719,11 @@ class VernacCommandDataList:
         with open(filepath, "w") as f:
             f.write("\n".join(lines))
 
-    def serialize(self, fmt: Optional[su.io.Fmt] = None) -> List[object]:
+    def serialize(self, fmt: Optional[Fmt] = None) -> List[object]:
         """
         Serialize as a basic list.
         """
-        return su.io.serialize(self.commands, fmt)
+        return su.io.serialize(self.commands, typing.cast(su.io.Fmt, fmt))
 
     @classmethod
     def deserialize(cls, data: object) -> 'VernacCommandDataList':
@@ -1049,11 +1052,11 @@ class CoqProjectBuildCacheProtocol(Protocol):
         return self.contains(obj)
 
     @property
-    def fmt(self) -> su.io.Fmt:
+    def fmt(self) -> Fmt:
         """
         Get the serialization format with which to cache data.
         """
-        return su.io.infer_fmt_from_ext(self.fmt_ext)
+        return infer_fmt_from_ext(self.fmt_ext)
 
     def _write_kernel(
             self,

@@ -28,6 +28,7 @@ from bidict import bidict
 from prism.interface.coq.options import SerAPIOptions
 from prism.project.metadata.dataclass import ProjectMetadata
 from prism.project.util import GitURL
+from prism.util.io import Fmt
 from prism.util.opam import OCamlVersion, Version
 from prism.util.radpytools import PathLike
 from prism.util.radpytools.dataclasses import default_field
@@ -1159,14 +1160,14 @@ class MetadataStorage:
             self._remove_field(context_id, field_name)
         self.contexts.pop(context)
 
-    def serialize(self, fmt: io.Fmt = io.Fmt.yaml) -> Dict[str, Any]:
+    def serialize(self, fmt: Fmt = Fmt.yaml) -> Dict[str, Any]:
         """
         Serialize the stored metadata.
 
         Parameters
         ----------
-        fmt : io.Fmt, optional
-            The serialization format, by default io.Fmt.yaml
+        fmt : Fmt, optional
+            The serialization format, by default `Fmt.yaml`
 
         Returns
         -------
@@ -1182,7 +1183,7 @@ class MetadataStorage:
             field_value = getattr(self, f.name)
             if isinstance(field_value, set):
                 field_value = sorted(field_value)
-            result[f.name] = io.serialize(field_value, fmt)
+            result[f.name] = io.serialize(field_value, typing.cast(io.Fmt, fmt))
         for f_name in self._special_dict_fields:
             result[f_name] = io.serialize(list(getattr(self, f_name).items()))
         for f_name in self._special_set_fields:
@@ -1371,7 +1372,7 @@ class MetadataStorage:
             cls,
             storage: 'MetadataStorage',
             output_filepath: PathLike,
-            fmt: io.Fmt = io.Fmt.yaml) -> None:
+            fmt: Fmt = Fmt.yaml) -> None:
         """
         Serialize metadata and writes to .yml file.
 
@@ -1381,17 +1382,14 @@ class MetadataStorage:
             A metadata storage instance.
         output_filepath : PathLike
             Filepath to which metadata should be dumped.
-        fmt : su.io.Fmt, optional
+        fmt : Fmt, optional
             Designated format of the output file, by default
-            `io.Fmt.yaml`.
+            `Fmt.yaml`.
         """
-        io.dump(str(output_filepath), storage, fmt=fmt)
+        io.dump(str(output_filepath), storage, fmt=typing.cast(io.Fmt, fmt))
 
     @classmethod
-    def load(
-            cls,
-            filepath: PathLike,
-            fmt: io.Fmt = io.Fmt.yaml) -> 'MetadataStorage':
+    def load(cls, filepath: PathLike, fmt: Fmt = Fmt.yaml) -> 'MetadataStorage':
         """
         Create list of `ProjectMetadata` objects from input file.
 
@@ -1399,9 +1397,9 @@ class MetadataStorage:
         ----------
         filepath : PathLike
             Filepath containing dumped metadata storage.
-        fmt : su.io.Fmt, optional
+        fmt : Fmt, optional
             Designated format of the input file, by default
-            `io.Fmt.yaml`.
+            `Fmt.yaml`.
 
         Returns
         -------
@@ -1412,7 +1410,8 @@ class MetadataStorage:
             MetadataStorage,
             io.load(
                 str(filepath),
-                fmt,
+                typing.cast(io.Fmt,
+                            fmt),
                 serialization=True,
                 clz=MetadataStorage))
 

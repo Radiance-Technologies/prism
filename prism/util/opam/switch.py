@@ -17,6 +17,7 @@ from typing import Any, ClassVar, Dict, List, Optional, Tuple, Union
 from seutil import bash, io
 
 from prism.util.bash import escape
+from prism.util.io import Fmt
 from prism.util.radpytools import PathLike
 from prism.util.radpytools.dataclasses import default_field
 
@@ -667,7 +668,8 @@ class OpamSwitch:
                     warnings.warn(
                         "Unable to invoke 'bwrap'. "
                         "Are you running in an unprivileged Docker container? "
-                        "Falling back to terrible alternative. ")
+                        "Falling back to terrible alternative. ",
+                        stacklevel=2)
                     # temporarily switch clone and origin directories
                     assert isinstance(dest, Path)
                     assert isinstance(src, Path)
@@ -817,7 +819,7 @@ class OpamSwitch:
 
         def serialize(
                 self,
-                fmt: Optional[io.Fmt] = None,
+                fmt: Optional[Fmt] = None,
                 derived_only: bool = True) -> Dict[str,
                                                    Any]:
             """
@@ -827,9 +829,11 @@ class OpamSwitch:
             name, root, and whether it is a clone.
             """
             serialized = {
-                f.name: io.serialize(getattr(self,
-                                             f.name),
-                                     fmt) for f in fields(self)
+                f.name: io.serialize(
+                    getattr(self,
+                            f.name),
+                    typing.cast(io.Fmt,
+                                fmt)) for f in fields(self)
             }
             if derived_only:
                 # remove non-derived configuration information

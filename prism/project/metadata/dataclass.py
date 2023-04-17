@@ -21,6 +21,7 @@ import seutil as su
 
 from prism.interface.coq.options import SerAPIOptions
 from prism.project.util import GitURL
+from prism.util.io import Fmt
 from prism.util.radpytools import PathLike
 from prism.util.radpytools.dataclasses import default_field
 
@@ -434,7 +435,7 @@ class ProjectMetadata:
             cls,
             projects: Iterable['ProjectMetadata'],
             output_filepath: PathLike,
-            fmt: su.io.Fmt = su.io.Fmt.yaml) -> None:
+            fmt: Fmt = Fmt.yaml) -> None:
         """
         Serialize metadata and writes to .yml file.
 
@@ -444,16 +445,20 @@ class ProjectMetadata:
             List of `ProjectMetadata` class objects to be serialized.
         output_filepath : PathLike
             Filepath to which metadata should be dumped.
-        fmt : su.io.Fmt, optional
+        fmt : Fmt, optional
             Designated format of the output file,
-            by default `su.io.Fmt.yaml`.
+            by default `Fmt.yaml`.
         """
-        su.io.dump(str(output_filepath), projects, fmt=fmt)
+        su.io.dump(
+            str(output_filepath),
+            projects,
+            fmt=typing.cast(su.io.Fmt,
+                            fmt))
 
     @classmethod
     def load(cls,
              filepath: PathLike,
-             fmt: su.io.Fmt = su.io.Fmt.yaml) -> List['ProjectMetadata']:
+             fmt: Fmt = Fmt.yaml) -> List['ProjectMetadata']:
         """
         Create list of `ProjectMetadata` objects from input file.
 
@@ -461,16 +466,21 @@ class ProjectMetadata:
         ----------
         filepath : PathLike
             Filepath containing project metadata.
-        fmt : su.io.Fmt, optional
+        fmt : Fmt, optional
             Designated format of the input file,
-            by default `su.io.Fmt.yaml`.
+            by default `Fmt.yaml`.
 
         Returns
         -------
         List[ProjectMetadata]
             List of `ProjectMetadata` objects
         """
-        data = typing.cast(List[Dict[str, Any]], su.io.load(str(filepath), fmt))
+        data = typing.cast(
+            List[Dict[str,
+                      Any]],
+            su.io.load(str(filepath),
+                       typing.cast(su.io.Fmt,
+                                   fmt)))
         project_metadata: List[ProjectMetadata] = [
             su.io.deserialize(project,
                               cls) for project in data

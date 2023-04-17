@@ -1,13 +1,11 @@
 """
 Test suite for `prism.data.repair.align`.
 """
-import typing
 import unittest
 from functools import partial
 from typing import Optional
 
 import pytest
-from seutil import io
 
 from prism.data.build_cache import ProjectCommitData, VernacCommandData
 from prism.data.repair.align import default_align
@@ -163,20 +161,12 @@ class TestRepairInstance(unittest.TestCase):
         """
         Load realistic sample cached data.
         """
-        initial_state = io.load(
-            _DATA_PATH / "initial_state.yml",
-            clz=ProjectCommitData)
-        cls.initial_state = typing.cast(ProjectCommitData, initial_state)
-        repaired_state = io.load(
-            _DATA_PATH / "repaired_state.yml",
-            clz=ProjectCommitData)
-        cls.repaired_state = typing.cast(ProjectCommitData, repaired_state)
-        compressed_repair_instance = io.load(
-            _DATA_PATH / "compressed_repair_instance.yml",
-            clz=GitRepairInstance)
-        cls.compressed_repair_instance = typing.cast(
-            GitRepairInstance,
-            compressed_repair_instance)
+        cls.initial_state = ProjectCommitData.load(
+            _DATA_PATH / "initial_state.yml")
+        cls.repaired_state = ProjectCommitData.load(
+            _DATA_PATH / "repaired_state.yml")
+        cls.compressed_repair_instance = GitRepairInstance.load(
+            _DATA_PATH / "compressed_repair_instance.yml")
         cls.diff = None
 
 

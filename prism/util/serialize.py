@@ -3,13 +3,12 @@ Supply a protocol for serializable data.
 """
 
 import copy
-import os
-import tempfile
 import typing
 from dataclasses import dataclass, fields, is_dataclass
 from pathlib import Path
 from typing import (
     Any,
+    ClassVar,
     Dict,
     Generic,
     Optional,
@@ -23,10 +22,10 @@ from typing import (
 
 import seutil as su
 import typing_inspect
-import ujson
-import yaml
 from diff_match_patch import diff_match_patch
 
+from prism.util import cyaml
+from prism.util.io import Fmt, atomic_write
 from prism.util.logging import logging
 from prism.util.radpytools import PathLike
 
@@ -38,42 +37,15 @@ _dmp = diff_match_patch()
 # Produce smaller diffs
 _dmp.Patch_Margin = 1
 
-T = TypeVar('T', bound='Serializable')
+_Serializable = TypeVar('_Serializable', bound='Serializable')
 """
 A TypeVar to help type checkers identify that
 Serializable.load returns a specific type
 and not just a `Serializable`
 """
 
-fast_yaml_fmt = su.io.FmtProperty(
-    writer=lambda f,
-    obj: yaml.dump(
-        obj,
-        f,
-        encoding="utf-8",
-        default_flow_style=False,
-        Dumper=yaml.CDumper),
-    reader=lambda f: yaml.load(f,
-                               Loader=yaml.CLoader),
-    serialize=True,
-)
-"""
-Define a faster, C-based yaml format for seutil.
-"""
-
-fast_json_fmt = su.io.FmtProperty(
-    writer=lambda f,
-    obj: ujson.dump(obj,
-                    f),
-    reader=ujson.load,
-    serialize=True,
-)
-"""
-Define a faster json format for seutil.
-"""
-
 # opportunistically convert files to json...
-_PREFERRED_FORMAT = fast_json_fmt
+_PREFERRED_FORMAT = Fmt.json
 _PREFERRED_EXT = ".json"
 
 
@@ -83,10 +55,7 @@ class Serializable(Protocol):
     A simple protocol for serializable data.
     """
 
-    def dump(
-            self,
-            output_filepath: PathLike,
-            fmt: su.io.Fmt = fast_yaml_fmt) -> None:
+    def dump(self, output_filepath: PathLike, fmt: Fmt = Fmt.yaml) -> None:
         """
         Serialize data to text file.
 
@@ -94,23 +63,24 @@ class Serializable(Protocol):
         ----------
         output_filepath : os.PathLike
             Filepath to which cache should be dumped.
-        fmt : su.io.Fmt, optional
+        fmt : Fmt, optional
             Designated format of the output file,
-            by default `su.io.Fmt.yaml`.
+            by default `Fmt.yaml`.
         """
         su.io.dump(
             typing.cast(Union[str,
                               Path],
                         output_filepath),
             self,
-            fmt=fmt)
+            fmt=typing.cast(su.io.Fmt,
+                            fmt))
 
     @classmethod
     def load(
             # Tell type check that return type is same type as `cls`.
-            cls: Type[T],
+            cls: Type[_Serializable],
             filepath: PathLike,
-            fmt: Optional[su.io.Fmt] = None) -> T:
+            fmt: Optional[Fmt] = None) -> _Serializable:
         """
         Load a serialized object from file..
 
@@ -118,7 +88,7 @@ class Serializable(Protocol):
         ----------
         filepath : os.PathLike
             Filepath containing repair mining cache.
-        fmt : Optional[su.io.Fmt], optional
+        fmt : Optional[Fmt], optional
             Designated format of the input file, by default None.
             If None, then the format is inferred from the extension.
 
@@ -129,7 +99,7 @@ class Serializable(Protocol):
         """
         suffix = Path(filepath).suffix
         if (suffix == ".yaml" or suffix == ".yml"):
-            fmt = fast_yaml_fmt
+            fmt = Fmt.yaml
         else:
             module_logger.info(f"can't speed up {filepath}")
 
@@ -144,24 +114,19 @@ class Serializable(Protocol):
                 intercept = True
 
         loaded = typing.cast(
-            T,
-            su.io.load(typing.cast(Union[str,
-                                         Path],
-                                   filepath),
-                       fmt,
-                       clz=cls))
+            _Serializable,
+            su.io.load(
+                typing.cast(Union[str,
+                                  Path],
+                            filepath),
+                typing.cast(su.io.Fmt,
+                            fmt),
+                clz=cls))
 
         if not intercept and _PREFERRED_FORMAT is not None:
             # converting this file.
             preferable = Path(filepath).with_suffix(_PREFERRED_EXT)
-            module_logger.info(f"opportunistic conversion: {preferable}")
-            tmp = tempfile.NamedTemporaryFile(
-                dir=Path(filepath).parent,
-                delete=False,
-                suffix=".json")
-            tmp.close()
-            loaded.dump(tmp.name, fmt=_PREFERRED_FORMAT)
-            os.rename(tmp.name, preferable)
+            atomic_write(preferable, loaded)
             # integrity check
             assert cls.load(filepath, fmt) == loaded
 
@@ -178,6 +143,7 @@ class SerializableDataDiff(Generic[_S]):
     """
 
     diff: str
+    _fmt: ClassVar[Fmt] = Fmt.yaml
 
     def patch(self, a: _S) -> _S:
         """
@@ -198,11 +164,11 @@ class SerializableDataDiff(Generic[_S]):
         """
         if self.diff:
             clz = type(a)
-            a = su.io.serialize(a, fmt=su.io.Fmt.yaml)
-            a_str = typing.cast(str, yaml.safe_dump(a))
+            a = su.io.serialize(a, fmt=typing.cast(su.io.Fmt, self._fmt))
+            a_str = typing.cast(str, self.safe_dump(a))
             patches = _dmp.patch_fromText(self.diff)
             patched_a_str, _ = _dmp.patch_apply(patches, a_str)
-            patched_a = yaml.safe_load(patched_a_str)
+            patched_a = self.safe_load(patched_a_str)
             patched_a = su.io.deserialize(patched_a, clz=clz, error="raise")
         else:
             patched_a = copy.deepcopy(a)
@@ -223,14 +189,35 @@ class SerializableDataDiff(Generic[_S]):
         SerializableDiff
             A text representation of the diff between `a` and `b`.
         """
-        fmt = su.io.Fmt.yaml
-        a = su.io.serialize(a, fmt=fmt)
-        b = su.io.serialize(b, fmt=fmt)
-        a_str = typing.cast(str, yaml.safe_dump(a))
-        b_str = typing.cast(str, yaml.safe_dump(b))
+        a = su.io.serialize(a, fmt=typing.cast(su.io.Fmt, cls._fmt))
+        b = su.io.serialize(b, fmt=typing.cast(su.io.Fmt, cls._fmt))
+        a_str = typing.cast(str, cls.safe_dump(a))
+        b_str = typing.cast(str, cls.safe_dump(b))
         patches = _dmp.patch_make(a_str, b_str)
         diff = _dmp.patch_toText(patches)
         return SerializableDataDiff(diff)
+
+    @classmethod
+    def safe_dump(cls, data: _S) -> str:
+        """
+        Safely dump a Python object to a string.
+
+        See Also
+        --------
+        yaml.safe_dump
+        """
+        return cyaml.safe_dump(data)
+
+    @classmethod
+    def safe_load(cls, stream: str) -> _S:
+        """
+        Safely load potentially untrusted input from a string.
+
+        See Also
+        --------
+        yaml.safe_load
+        """
+        return typing.cast(_S, cyaml.safe_load(stream))
 
 
 _Generic = Any
