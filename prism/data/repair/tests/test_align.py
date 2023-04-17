@@ -1,9 +1,10 @@
 """
 Test module for repair tools.
 """
+import typing
 import unittest
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 
 import numpy as np
 
@@ -15,7 +16,8 @@ from prism.data.build_cache import (
 from prism.data.extract_cache import VernacCommandData
 from prism.data.repair import align_commits, align_commits_per_file
 from prism.data.repair.diff import compute_git_diff
-from prism.language.heuristic.parser import HeuristicParser
+from prism.language.gallina.analyze import SexpInfo
+from prism.language.heuristic.parser import CoqSentence, HeuristicParser
 from prism.project.metadata import ProjectMetadata
 from prism.tests import _COQ_EXAMPLES_PATH
 from prism.util.diff import GitDiff
@@ -47,20 +49,28 @@ class TestAlign(unittest.TestCase):
             # grab a small representative set of lines
             definitions = [
                 VernacCommandData(
-                    None,
+                    [],
                     None,
                     VernacSentence(
                         x.text,
-                        x.ast,
-                        None,
-                        x.location.rename("core_net")
-                        if f.startswith("verdi") else x.location,
-                        None))
-                for x in HeuristicParser.parse_sentences_from_file(
-                    Path(_COQ_EXAMPLES_PATH) / f,
-                    return_locations=True,
-                    glom_proofs=False,
-                    project_path=Path(_COQ_EXAMPLES_PATH))
+                        # AST is not used, don't worry about Nones
+                        str(x.ast),
+                        [],
+                        typing.cast(SexpInfo.Loc,
+                                    x.location).rename("core_net")
+                        if f.startswith("verdi") else typing.cast(
+                            SexpInfo.Loc,
+                            x.location),
+                        # heuristic command type; won't work with
+                        # attributes
+                        x.text.split()[0]))
+                for x in typing.cast(
+                    List[CoqSentence],
+                    HeuristicParser.parse_sentences_from_file(
+                        Path(_COQ_EXAMPLES_PATH) / f,
+                        return_locations=True,
+                        glom_proofs=False,
+                        project_path=Path(_COQ_EXAMPLES_PATH)))
                 if x.text.startswith("Lemma") or x.text.startswith("Theorem")
                 or x.text.startswith("Definition")
                 or x.text.startswith("Inductive")
