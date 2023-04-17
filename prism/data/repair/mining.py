@@ -1237,7 +1237,8 @@ def _parallel_work(
         worker_to_parent_queue,
         repair_save_directory,
         db_file,
-        repair_miner
+        repair_miner,
+        skip_errors
     ]
     worker_processes: List[Process] = []
     # Start processes
