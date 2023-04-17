@@ -2,9 +2,8 @@
 Miscellaneous utilities for SerAPI interaction.
 """
 
-import re
-
 from prism.util.iterable import CallableIterator
+from prism.util.re import re
 
 _whitespace_regex = re.compile(r"\s+", flags=re.DOTALL)
 _escape_regex = re.compile('(["\'\\\\\b\f\t\n\r\v\a])')
