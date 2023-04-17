@@ -16,8 +16,10 @@ from prism.language.heuristic.parser import (
     CoqComment,
     CoqSentence,
     HeuristicParser,
+    ParserUtils,
     SerAPIParser,
 )
+from prism.language.heuristic.str_with_location import StrWithLocation
 from prism.tests import _COQ_EXAMPLES_PATH
 from prism.util.path import get_relative_path
 
@@ -532,6 +534,28 @@ class TestHeuristicParser(unittest.TestCase):
         }
         for i, v in expected_loc_results.items():
             self.assertEqual(sentences[i].location, v)
+
+    def test_strip_comments(self):
+        """
+        Verify _strip_comments handles comment-adjacent legal notation.
+        """
+        test_string = StrWithLocation.create_from_file_contents(
+            "Lemma Cmod_Cconj : forall c : C, Cmod (c^*) = Cmod c. (* Comment *)"
+        )
+        str_no_comments, comments = ParserUtils._strip_comments(test_string, True)
+        self.assertEqual(
+            str_no_comments,
+            StrWithLocation.create_from_file_contents(
+                "Lemma Cmod_Cconj : forall c : C, Cmod (c^*) = Cmod c. "))
+        self.assertEqual(
+            comments,
+            [
+                StrWithLocation(
+                    "(* Comment *)",
+                    [(i,
+                      i + 1) for i in range(54,
+                                            67)])
+            ])
 
 
 @pytest.mark.coq_all
