@@ -150,3 +150,7 @@ SUBPROOF_ID_PATTERN = re.compile(
     rf"(?P<proof_id>{IDENT_PATTERN.pattern})_subproof\d*$")
 
 ABORT_COMMAND_PATTERN = re.compile("VernacAbort(?:All)?")
+
+LOCATE_QUALID_PATTERN = re.compile(
+    rf"^\S+\s+({QUALIFIED_IDENT_PATTERN.pattern})",
+    re.MULTILINE)

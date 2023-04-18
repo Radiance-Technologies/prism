@@ -49,6 +49,7 @@ from prism.interface.coq.options import (
 )
 from prism.interface.coq.re_patterns import (
     ADDED_STATE_PATTERN,
+    LOCATE_QUALID_PATTERN,
     NAMED_DEF_ASSUM_PATTERN,
     NEW_IDENT_PATTERN,
     PRINT_ALL_IDENT_PATTERN,
@@ -1046,8 +1047,9 @@ class SerAPI:
             assert feedback_list
             feedback = feedback_list[0]
             if feedback.startswith("No object of basename"):
-                return []
-            qualids = re.findall(r"(?:^|\n)[^\s]+\s+([^\s]+)", feedback)
+                qualids = []
+            else:
+                qualids = LOCATE_QUALID_PATTERN.findall(feedback)
         return qualids
 
     def query_goals(self) -> Optional[Goals]:
