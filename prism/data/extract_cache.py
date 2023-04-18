@@ -1368,10 +1368,10 @@ def extract_cache(
     worker_semaphore : Semaphore or None, optional
         Semaphore used to control the number of file workers than
         can run at once, by default None. If None, ignore.
-    max_memory : Optional[ResourceLimits], optional
+    max_memory : Optional[int], optional
         Maximum memory (bytes) allowed to build project, by default
         None
-    max_runtime : Optional[ResourceLimits], optional
+    max_runtime : Optional[int], optional
         Maximum cpu time (seconds) allowed to build project, by default
         None
 
@@ -1640,9 +1640,9 @@ def extract_cache_new(
     worker_semaphore : BoundedSemaphore or None
         Semaphore used to control the number of file workers that can
         run at once. If None, ignore.
-    max_memory : Optional[ResourceLimits]
+    max_memory : Optional[int]
         Maximum memory (bytes) allowed to build project
-    max_runtime : Optional[ResourceLimits]
+    max_runtime : Optional[int]
         Maximum cpu time (seconds) allowed to build project
     """
     # Construct a logger local to this function and unique to this PID
@@ -2008,10 +2008,10 @@ class CacheExtractor:
         worker_semaphore : Semaphore or None, optional
             Semaphore used to control the number of file workers than
             can run at once, by default None. If None, ignore.
-        max_memory : Optional[ResourceLimits], optional
+        max_memory : Optional[int], optional
             Maximum memory (bytes) allowed to build project, by default
             None
-        max_runtime : Optional[ResourceLimits], optional
+        max_runtime : Optional[int], optional
             Maximum cpu time (seconds) allowed to build project, by
             default None
 
@@ -2080,10 +2080,10 @@ class CacheExtractor:
             Maximum number of active workers to allow at once on the
             file-level of extraction, by default 0. If 0, allow
             unlimited processes at this level.
-        max_memory : Optional[ResourceLimits], optional
+        max_memory : Optional[int], optional
             Maximum memory (bytes) allowed to build project, by default
             None
-        max_runtime : Optional[ResourceLimits], optional
+        max_runtime : Optional[int], optional
             Maximum cpu time (seconds) allowed to build project, by
             default None
         """
@@ -2340,15 +2340,15 @@ class CacheExtractor:
         worker_semaphore : Semaphore or None
             Semaphore used to control the number of file workers than
             can run at once. If None, ignore.
-        max_memory : Optional[ResourceLimits]
+        max_memory : Optional[int]
             Maximum memory (bytes) allowed to build project
-        max_runtime : Optional[ResourceLimits]
+        max_runtime : Optional[int]
             Maximum cpu time (seconds) allowed to build project
-        coq_version_stop_callback : Callable[
-                [CoqProjectBuildCacheProtocol,
-                 str,
-                 str,
-                 Sequence[str | Version]],
+        coq_version_stop_callback : Callable[ \
+                [CoqProjectBuildCacheProtocol, \
+                 str, \
+                 str, \
+                 Sequence[str | Version]], \
                 bool]
             Call this function on the cache, project name, commit hash,
             and sequence of Coq versions encountered so far to determine
