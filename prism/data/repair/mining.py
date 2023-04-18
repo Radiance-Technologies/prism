@@ -6,14 +6,15 @@ import os
 import queue
 import select
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from multiprocessing import Process, Queue
 from pathlib import Path
 from queue import Empty
 from tempfile import TemporaryDirectory
 from types import TracebackType
-from typing import Callable, Dict, List, Optional, Tuple, Type, Union
+from typing import Callable, Dict, Iterable, List, Optional, Tuple, Type, Union
 
+import pandas as pd
 from tqdm import tqdm
 from traceback_with_variables import format_exc
 
@@ -1042,6 +1043,43 @@ def mining_loop_worker_star(args: tuple):
     mining_loop_worker(*args)
 
 
+def filter_max_coq_version(
+        cache_labels: Iterable[CacheObjectStatus]) -> List[CacheObjectStatus]:
+    """
+    Filter an iterable of cache labels by max Coq version.
+
+    Parameters
+    ----------
+    cache_labels : Iterable[CacheObjectStatus]
+        The iterable of cache labels to filter
+
+    Returns
+    -------
+    List[CacheObjectStatus]
+        The cache labels filtered by selecting only the highest Coq
+        version for each project, commit, and status combination.
+    """
+    cache_label_dict_list = [asdict(label) for label in cache_labels]
+    cache_label_df = pd.DataFrame(
+        cache_label_dict_list,
+        columns=["project",
+                 "commit_hash",
+                 "coq_version",
+                 "status"])
+    filtered_df = cache_label_df.groupby(["project",
+                                          "commit_hash",
+                                          "status"]).max().reset_index()
+    output_label_list = [
+        CacheObjectStatus(
+            row['project'],
+            row['commit_hash'],
+            row['coq_version'],
+            row['status']) for _,
+        row in filtered_df.iterrows()
+    ]
+    return output_label_list
+
+
 def prepare_label_pairs(
     cache_root: Path,
     cache_format_extension: str,
@@ -1150,9 +1188,12 @@ def prepare_label_pairs(
                 p for p in project_list if p in project_commit_hash_map
             ]
         all_cache_items = cache.list_status_success_only()
+        max_version_cache_items = filter_max_coq_version(all_cache_items)
         cache_item_pairs: List[Tuple[CacheObjectStatus, CacheObjectStatus]] = []
         for project in project_list:
-            cache_items = [t for t in all_cache_items if t.project == project]
+            cache_items = [
+                t for t in max_version_cache_items if t.project == project
+            ]
             consecutive_commit_hashes = _get_consecutive_commit_hashes(
                 metadata_storage,
                 project,
