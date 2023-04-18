@@ -711,7 +711,10 @@ class VernacCommandDataList:
                 sentence_part = " ".join(sentence_part)
                 if linenos and sentence_lineno == linenos[-1]:
                     # sentence starts on same line as another ends
-                    lines[-1] = lines[-1] + sentence_part
+                    if lines:
+                        lines[-1] = lines[-1] + sentence_part
+                    else:
+                        lines.append(sentence_part)
                 else:
                     # place each part of sentence on new line
                     lines.append(sentence_part)
