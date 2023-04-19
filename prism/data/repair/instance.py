@@ -195,15 +195,21 @@ class ProjectCommitDataDiff:
 
     Notes
     -----
-    This diff is purely between the command elements of the
+    This diff is purely between the command-related elements of the
     `ProjectCommitData` and thus does not capture changes to the
     environment, metadata, or other fields of `ProjectCommitData`.
     """
 
-    changes: Dict[str,
-                  VernacCommandDataListDiff] = default_field({})
+    command_changes: Dict[str,
+                          VernacCommandDataListDiff] = default_field({})
     """
     A map containing per-file changes.
+    """
+    file_dependencies_diff: SerializableDataDiff[Optional[Dict[
+        str,
+        List[str]]]] = default_field(SerializableDataDiff(""))
+    """
+    Any changes to the precomputed dependency graph between the files.
     """
 
     @property
@@ -218,7 +224,7 @@ class ProjectCommitDataDiff:
         VernacCommandData
             The added command.
         """
-        for filename, file_changes in self.changes.items():
+        for filename, file_changes in self.command_changes.items():
             for command in file_changes.added_commands:
                 yield filename, command
 
@@ -245,7 +251,7 @@ class ProjectCommitDataDiff:
             A diff that when applied to the original command yields the
             affected version.
         """
-        for filename, file_changes in self.changes.items():
+        for filename, file_changes in self.command_changes.items():
             for command_index, command_diff in file_changes.affected_commands.items():
                 yield filename, command_index, command_diff
 
@@ -268,7 +274,7 @@ class ProjectCommitDataDiff:
             A diff that when applied to the original command yields the
             changed version.
         """
-        for filename, file_changes in self.changes.items():
+        for filename, file_changes in self.command_changes.items():
             for command_index, command_diff in file_changes.changed_commands.items():
                 yield filename, command_index, command_diff
 
@@ -285,7 +291,7 @@ class ProjectCommitDataDiff:
             The index of the dropped command in the original state's
             list of commands for the file.
         """
-        for filename, file_changes in self.changes.items():
+        for filename, file_changes in self.command_changes.items():
             for index in file_changes.dropped_commands:
                 yield filename, index
 
@@ -294,7 +300,7 @@ class ProjectCommitDataDiff:
         """
         Return whether this diff is empty.
         """
-        return all([v.is_empty for v in self.changes.values()])
+        return all([v.is_empty for v in self.command_changes.values()])
 
     def patch(self, data: ProjectCommitData) -> ProjectCommitData:
         """
@@ -324,7 +330,7 @@ class ProjectCommitDataDiff:
                                Set[int]] = {}
         added_commands: Dict[str,
                              VernacCommandDataList] = {}
-        for filename, change in self.changes.items():
+        for filename, change in self.command_changes.items():
             # Set of commands to be dropped from original state.
             dropped = dropped_commands.setdefault(filename, set())
             dropped.update(change.dropped_commands)
@@ -384,6 +390,8 @@ class ProjectCommitDataDiff:
                 assert not added, "file cannot be empty if commands were added"
                 # the resulting file would be empty; remove it
                 result_command_data.pop(filename, None)
+        result.file_dependencies = self.file_dependencies_diff.patch(
+            data.file_dependencies)
         return result
 
     @classmethod
@@ -403,9 +411,14 @@ class ProjectCommitDataDiff:
         diff : ProjectCommitDataDiff
             A diff between the implied commits consistent with the given
             alignment.
+
+        Notes
+        -----
+        This computation does not capture changes to the file
+        dependencies.
         """
         result = ProjectCommitDataDiff()
-        changes = result.changes
+        changes = result.command_changes
         a_file_offsets: Dict[str,
                              int] = {}
         for a, _ in aligned_commands:
@@ -495,6 +508,9 @@ class ProjectCommitDataDiff:
         a.patch_goals()
         b.patch_goals()
         diff = cls.from_aligned_commands(get_aligned_commands(a, b, alignment))
+        diff.file_dependencies_diff = SerializableDataDiff.compute_diff(
+            a.file_dependencies,
+            b.file_dependencies)
         return diff
 
     @classmethod
@@ -1292,7 +1308,7 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
                     (f,
                      idx)
                     for f,
-                    file_changes in commit_diff.changes.items()
+                    file_changes in commit_diff.command_changes.items()
                     for idx in range(len(file_changes.added_commands))
                 ]
                 affected_commands = [
@@ -1600,27 +1616,29 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
             broken_state_diff = ProjectCommitDataDiff(
                 {
                     k: VernacCommandDataListDiff()
-                    for k in commit_diff.changes.keys()
-                })
+                    for k in commit_diff.command_changes.keys()
+                },
+                commit_diff.file_dependencies_diff)
             for filename, added_idx in changeset.added_commands:
-                broken_state_diff.changes[filename].added_commands.append(
-                    copy.deepcopy(
-                        commit_diff.changes[filename].added_commands[added_idx])
-                )
+                broken_state_diff.command_changes[
+                    filename].added_commands.append(
+                        copy.deepcopy(
+                            commit_diff.command_changes[filename]
+                            .added_commands[added_idx]))
             for filename, changed_idx in changeset.affected_commands:
-                broken_state_diff.changes[filename].affected_commands[
+                broken_state_diff.command_changes[filename].affected_commands[
                     changed_idx] = copy.deepcopy(
-                        commit_diff.changes[filename]
+                        commit_diff.command_changes[filename]
                         .affected_commands[changed_idx])
             for filename, changed_idx in changeset.changed_commands:
-                broken_state_diff.changes[filename].changed_commands[
+                broken_state_diff.command_changes[filename].changed_commands[
                     changed_idx] = copy.deepcopy(
-                        commit_diff.changes[filename]
+                        commit_diff.command_changes[filename]
                         .changed_commands[changed_idx])
                 broken_command_indices.discard((filename, changed_idx))
             for filename, dropped_idx in changeset.dropped_commands:
-                broken_state_diff.changes[filename].dropped_commands.add(
-                    dropped_idx)
+                broken_state_diff.command_changes[
+                    filename].dropped_commands.add(dropped_idx)
         broken_commands: List[VernacCommandData] = [
             initial_state.command_data[f][idx] for f,
             idx in broken_command_indices
@@ -1920,7 +1938,7 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
                     (f,
                      idx)
                     for f,
-                    file_changes in commit_diff.changes.items()
+                    file_changes in commit_diff.command_changes.items()
                     for idx in range(len(file_changes.added_commands))
                 ]
                 affected_commands = [

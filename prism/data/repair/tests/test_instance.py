@@ -127,7 +127,9 @@ class TestRepairInstance(unittest.TestCase):
         repair_instance = repairs[0]
         repair_state_diff = repair_instance.repaired_state_or_diff
         # and it should be represented as two partial diffs
-        self.assertGreater(len(repair_instance.error.change.diff.changes), 0)
+        self.assertGreater(
+            len(repair_instance.error.change.diff.command_changes),
+            0)
         self.assertIsInstance(repair_state_diff, ProjectStateDiff)
         assert isinstance(repair_state_diff, ProjectStateDiff)
         # there should be only one change
@@ -140,9 +142,9 @@ class TestRepairInstance(unittest.TestCase):
         self.assertEqual(repaired_file, "exgcd.v")
         # and the first changed proof in the file should be repaired
         broken_command_indices = set(
-            self.diff.changes[repaired_file].changed_commands.keys()
+            self.diff.command_changes[repaired_file].changed_commands.keys()
         ).difference(
-            repair_instance.error.change.diff.changes[repaired_file]
+            repair_instance.error.change.diff.command_changes[repaired_file]
             .changed_commands.keys())
         self.assertEqual(len(broken_command_indices), 1)
         broken_command_index = broken_command_indices.pop()

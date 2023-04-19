@@ -79,7 +79,7 @@ def get_error_state_diff(
     Remove the first change to a theorem.
     """
     modified_repaired_state_diff = deepcopy(repaired_state_diff)
-    changes = modified_repaired_state_diff.changes[changed_proof_file]
+    changes = modified_repaired_state_diff.command_changes[changed_proof_file]
     cmds = changes.changed_commands
     changed_cmd = None
     changed_cmd_idx = -1
@@ -138,8 +138,8 @@ def repaired_proof_location(
     Get location of repaired proof in error state.
     """
     error_command_idx = list(
-        repaired_state_diff.changes[changed_proof_file].changed_commands.keys()
-    )[0]
+        repaired_state_diff.command_changes[changed_proof_file].changed_commands
+        .keys())[0]
     error_location = error_state.command_data[changed_proof_file][
         error_command_idx].location
     return error_location
