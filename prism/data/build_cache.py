@@ -704,7 +704,7 @@ class VernacCommandDataList:
         comments, the line numbers on which each sentence is written
         should match the original Coq file.
         """
-        lines: List[str] = []
+        lines: List[str] = [""]
         linenos: List[int] = [0]
         for sentence in self.sorted_sentences():
             while linenos[-1] < sentence.location.lineno:
