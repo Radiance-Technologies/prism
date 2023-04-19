@@ -1177,7 +1177,7 @@ def _serial_work(
             raise RuntimeError(
                 f"Exception: {new_error_instances.exception}. "
                 f"{new_error_instances.trace}")
-        for result in tqdm(new_error_instances, desc="Repair instance mining."):
+        for result in tqdm(new_error_instances, desc="Repair instance mining"):
             (error_instance, repaired_state, change_selection) = result
             result = build_repair_instance(
                 error_instance,
