@@ -23,9 +23,9 @@ from typing import (
 
 import seutil as su
 import typing_inspect
-import ujson
 from diff_match_patch import diff_match_patch
 
+import prism.util.cyaml as cyaml
 from prism.util.io import Fmt, atomic_write
 from prism.util.logging import logging
 from prism.util.radpytools import PathLike
@@ -70,8 +70,9 @@ class Serializable(Protocol):
         """
         if _PREFERRED_FORMAT is not None:
             fmt = _PREFERRED_FORMAT
+            output_filepath = Path(output_filepath).with_suffix(_PREFERRED_EXT)
             module_logger.info(
-                f"intercepting request, instead dumping {_PREFERRED_EXT}")
+                f"intercepting request, instead dumping {output_filepath}")
         su.io.dump(
             typing.cast(Union[str,
                               Path],
@@ -152,7 +153,7 @@ class SerializableDataDiff(Generic[_S]):
     """
 
     diff: str
-    _fmt: ClassVar[Fmt] = Fmt.json
+    _fmt: ClassVar[Fmt] = Fmt.yaml
 
     def patch(self, a: _S) -> _S:
         """
@@ -214,8 +215,13 @@ class SerializableDataDiff(Generic[_S]):
         See Also
         --------
         yaml.safe_dump
+
+        Notes
+        -----
+        yaml is chosen because it breaks long ASTs into short manageable
+        lines that the diff algorithm can more accurately work with.
         """
-        return ujson.dumps(data, sort_keys=True)
+        return cyaml.safe_dump(data)
 
     @classmethod
     def safe_load(cls, stream: str) -> _S:
@@ -226,7 +232,7 @@ class SerializableDataDiff(Generic[_S]):
         --------
         yaml.safe_load
         """
-        return ujson.loads(stream)
+        return cyaml.safe_load(stream)
 
 
 _Generic = Any
