@@ -832,7 +832,7 @@ def write_repair_instance(
                 repaired_state_metadata.coq_version,
                 change_selection,
                 repair_file_directory)
-            atomic_write(file_path, potential_diff.compress())
+            atomic_write(file_path, potential_diff)
     elif isinstance(potential_diff, Except):
         repair_mining_logger.write_exception_log(potential_diff)
     else:
