@@ -230,6 +230,9 @@ class VernacSentence:
                     goals_identifiers[goal_idx] = gids
         self.goals_qualified_identifiers = goals_identifiers
 
+    def __repr__(self) -> str:  # noqa: D105
+        return f"VernacSentence(text={self.text}, location={self.location})"
+
     def referenced_identifiers(self) -> Set[str]:
         """
         Get the set of identifiers referenced by this sentence.
@@ -411,6 +414,14 @@ class VernacCommandData:
         return (
             self.location.beg_charno < other.location.beg_charno
             or self.spanning_location() in other.spanning_location())
+
+    def __repr__(self) -> str:  # noqa: D105
+        return ''.join(
+            [
+                f"VernacCommandData(identifier={self.identifier}, ",
+                f"command={repr(self.command)}, ",
+                f"command_error={self.command_error})"
+            ])
 
     @property
     def command_type(self) -> str:
@@ -874,6 +885,19 @@ class ProjectCommitData(Serializable):
     The result of building the project commit in the `opam_switch` or
     None if building was not required to process the commit.
     """
+
+    def __repr__(self) -> str:
+        """
+        Get a simple representation that identifies the source of data.
+        """
+        return ''.join(
+            [
+                f"ProjectCommitData(project='{self.project_metadata.project_name}', ",
+                f"commit_sha='{self.project_metadata.commit_sha}', ",
+                f"coq_version='{self.project_metadata.coq_version}', ",
+                f"build_result={repr(self.build_result)})"
+            ],
+        )
 
     @property
     def commands(self) -> List[Tuple[str, VernacCommandData]]:
