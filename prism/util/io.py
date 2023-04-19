@@ -1,7 +1,9 @@
 """
 Provides utility functions for serialized data files.
 """
+import gzip
 import os
+import shutil
 import tempfile
 import typing
 from pathlib import Path
@@ -133,7 +135,8 @@ def infer_format(filepath: os.PathLike) -> Fmt:
 def atomic_write(
         full_file_path: Path,
         file_contents: Union[str,
-                             'Serializable']):
+                             'Serializable'],
+        apply_gzip_compression: bool = False):
     r"""
     Write a message or object to a text file.
 
@@ -146,6 +149,9 @@ def atomic_write(
         write to
     file_contents : Union[str, Serializable]
         The contents to write or serialized to the file.
+    apply_gzip_compression
+        Compress the resulting file using gzip before saving to disk.
+        A ".gz" suffix will be added in this case.
 
     Raises
     ------
@@ -173,6 +179,16 @@ def atomic_write(
     if isinstance(file_contents, Serializable):
         fmt = infer_fmt_from_ext(fmt_ext)
         file_contents.dump(f.name, fmt)
+    tmp_filename = f.name
+    if apply_gzip_compression:
+        gzip_tmp_filename = f.name + ".gz"
+        full_file_path = Path(str(full_file_path) + ".gz")
+        with open(tmp_filename, "rb") as f_in:
+            with gzip.open(gzip_tmp_filename, "wb") as f_out:
+                shutil.copyfileobj(f_in, f_out)
+        # After compression, we need to clean up the original file.
+        os.remove(tmp_filename)
+        tmp_filename = gzip_tmp_filename
     # Then, we atomically move the file to the correct, final
     # path.
-    os.replace(f.name, full_file_path)
+    os.replace(tmp_filename, full_file_path)
