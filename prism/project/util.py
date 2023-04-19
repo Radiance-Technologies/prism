@@ -40,6 +40,13 @@ class GitURL(str):
     def __hash__(self) -> int:  # noqa: D105
         return super().__hash__()
 
+    @classmethod
+    def deserialize(cls, data: str) -> 'GitURL':
+        """
+        Deserialize the `GitURL` from a string.
+        """
+        return GitURL(data)
+
 
 def camel_case_names(name: str) -> Set[str]:
     """
