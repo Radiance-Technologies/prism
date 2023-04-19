@@ -449,11 +449,7 @@ class ProjectMetadata:
             Designated format of the output file,
             by default `Fmt.yaml`.
         """
-        su.io.dump(
-            str(output_filepath),
-            projects,
-            fmt=typing.cast(su.io.Fmt,
-                            fmt))
+        su.io.dump(str(output_filepath), projects, fmt=fmt)
 
     @classmethod
     def load(cls,
@@ -475,12 +471,7 @@ class ProjectMetadata:
         List[ProjectMetadata]
             List of `ProjectMetadata` objects
         """
-        data = typing.cast(
-            List[Dict[str,
-                      Any]],
-            su.io.load(str(filepath),
-                       typing.cast(su.io.Fmt,
-                                   fmt)))
+        data = typing.cast(List[Dict[str, Any]], su.io.load(str(filepath), fmt))
         project_metadata: List[ProjectMetadata] = [
             su.io.deserialize(project,
                               cls) for project in data

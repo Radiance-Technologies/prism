@@ -122,13 +122,9 @@ class TestVernacSentence(unittest.TestCase):
         ]
         with NamedTemporaryFile("w") as f:
             with self.subTest("serialize"):
-                io.dump(f.name, sentences, fmt=typing.cast(io.Fmt, Fmt.yaml))
+                io.dump(f.name, sentences, fmt=Fmt.yaml)
             with self.subTest("deserialize"):
-                loaded = io.load(
-                    f.name,
-                    typing.cast(io.Fmt,
-                                Fmt.yaml),
-                    clz=List[VernacSentence])
+                loaded = io.load(f.name, Fmt.yaml, clz=List[VernacSentence])
                 self.assertEqual(loaded, sentences)
 
 

@@ -4,32 +4,21 @@ Provides utility functions for serialized data files.
 import os
 import tempfile
 import typing
-from enum import Enum
 from pathlib import Path
 from typing import IO, TYPE_CHECKING, Optional, Union
 
-import seutil as su
 import ujson
 import yaml
-from seutil.io import FmtProperty
+from seutil.io import Fmt, FmtProperty, infer_fmt_from_ext
 
 if TYPE_CHECKING:
     from prism.util.serialize import Serializable
 
-
-class Fmt(FmtProperty, Enum):
-    """
-    A variant of `su.io.Fmt` with faster YAML and JSON formatters.
-
-    To be used as a drop-in replacement, stymied somewhat by the fact
-    that enums cannot be subclassed. Use `typing.cast` where necessary
-    to convince type checkers that this is the original `su.io.Fmt`
-    class.
-    """
-
-    txt = su.io.Fmt.txt
-    pickle = su.io.Fmt.pickle
-    json = FmtProperty(
+# override Fmt enums on import
+type.__setattr__(
+    Fmt,
+    'json',
+    FmtProperty(
         writer=lambda f,
         obj: ujson.dump(obj,
                         typing.cast(IO[str],
@@ -39,46 +28,45 @@ class Fmt(FmtProperty, Enum):
                                                 f)),
         serialize=True,
         exts=["json"],
-    )
-    jsonFlexible = json._replace(
-        reader=lambda f: yaml.load(f,
-                                   Loader=yaml.CLoader))
-    """
-    A variant of `json` that allows formatting errors (e.g., trailing
-    commas), but cannot handle unprintable chars.
-    """
-    jsonPretty = json._replace(
+    ))
+type.__setattr__(
+    Fmt,
+    'jsonFlexible',
+    Fmt.json._replace(reader=lambda f: yaml.load(f,
+                                                 Loader=yaml.CLoader)))
+type.__setattr__(
+    Fmt,
+    'jsonPretty',
+    Fmt.json._replace(
         writer=lambda f,
         obj: ujson.dump(obj,
                         f,
                         sort_keys=True,
                         indent=4),
-    )
-    """
-    A variant of `json` that pretty-prints with sorted keys.
-    """
-    jsonNoSort = json._replace(
-        writer=lambda f,
-        obj: ujson.dump(obj,
-                        f,
-                        indent=4),
-    )
-    """
-    A variant of `json` that pretty-prints without sorted keys.
-    """
-    jsonList = FmtProperty(
+    ))
+type.__setattr__(
+    Fmt,
+    'jsonNoSort',
+    Fmt.json._replace(writer=lambda f,
+                      obj: ujson.dump(obj,
+                                      f,
+                                      indent=4),
+                      ))
+type.__setattr__(
+    Fmt,
+    'jsonList',
+    FmtProperty(
         writer=lambda item: ujson.dumps(item),
         reader=lambda line: ujson.loads(typing.cast(str,
                                                     line)),
         exts=["jsonl"],
         line_mode=True,
         serialize=True,
-    )
-    """
-    A variant of JSON that dumps to and from a string.
-    """
-    txtList = su.io.Fmt.txtList
-    yaml = FmtProperty(
+    ))
+type.__setattr__(
+    Fmt,
+    'yaml',
+    FmtProperty(
         writer=lambda f,
         obj: yaml.dump(
             obj,
@@ -91,27 +79,7 @@ class Fmt(FmtProperty, Enum):
         serialize=True,
         exts=["yml",
               "yaml"],
-    )
-    csvList = su.io.Fmt.csvList
-
-
-def infer_fmt_from_ext(ext: str, default: Optional[Fmt] = None) -> Fmt:
-    """
-    Infer a `Fmt` from a file extension.
-
-    To be used as a drop in replacement for `su.io.infer_fmt_from_ext`.
-    """
-    if ext.startswith("."):
-        ext = ext[1 :]
-
-    for fmt in Fmt:
-        if fmt.exts is not None and ext in fmt.exts:
-            return fmt
-
-    if default is not None:
-        return default
-    else:
-        raise RuntimeError(f'Cannot infer format for extension "{ext}"')
+    ))
 
 
 def infer_format(filepath: os.PathLike) -> Fmt:

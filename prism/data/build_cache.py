@@ -5,7 +5,6 @@ import glob
 import os
 import re
 import subprocess
-import typing
 import warnings
 from dataclasses import InitVar, dataclass, field, fields
 from enum import IntEnum, auto
@@ -247,11 +246,9 @@ class VernacSentence:
         name, root, and whether it is a clone.
         """
         serialized = {
-            f.name: su.io.serialize(
-                getattr(self,
-                        f.name),
-                typing.cast(su.io.Fmt,
-                            fmt)) for f in fields(self)
+            f.name: su.io.serialize(getattr(self,
+                                            f.name),
+                                    fmt) for f in fields(self)
         }
         # remove non-derived configuration information
         serialized.pop('command_index', None)
@@ -737,7 +734,7 @@ class VernacCommandDataList:
         """
         Serialize as a basic list.
         """
-        return su.io.serialize(self.commands, typing.cast(su.io.Fmt, fmt))
+        return su.io.serialize(self.commands, fmt)
 
     @classmethod
     def deserialize(cls, data: object) -> 'VernacCommandDataList':

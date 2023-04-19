@@ -1183,7 +1183,7 @@ class MetadataStorage:
             field_value = getattr(self, f.name)
             if isinstance(field_value, set):
                 field_value = sorted(field_value)
-            result[f.name] = io.serialize(field_value, typing.cast(io.Fmt, fmt))
+            result[f.name] = io.serialize(field_value, fmt)
         for f_name in self._special_dict_fields:
             result[f_name] = io.serialize(list(getattr(self, f_name).items()))
         for f_name in self._special_set_fields:
@@ -1386,7 +1386,7 @@ class MetadataStorage:
             Designated format of the output file, by default
             `Fmt.yaml`.
         """
-        io.dump(str(output_filepath), storage, fmt=typing.cast(io.Fmt, fmt))
+        io.dump(str(output_filepath), storage, fmt=fmt)
 
     @classmethod
     def load(cls, filepath: PathLike, fmt: Fmt = Fmt.yaml) -> 'MetadataStorage':
@@ -1410,8 +1410,7 @@ class MetadataStorage:
             MetadataStorage,
             io.load(
                 str(filepath),
-                typing.cast(io.Fmt,
-                            fmt),
+                fmt,
                 serialization=True,
                 clz=MetadataStorage))
 

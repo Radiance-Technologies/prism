@@ -222,9 +222,8 @@ try:
     version_info = typing.cast(
         VersionInfo,
         io.load(DATA_FILE,
-                typing.cast(io.Fmt,
-                            Fmt.yaml),
+                Fmt.yaml,
                 clz=VersionInfo))
 except FileNotFoundError:
     version_info = VersionInfo()
-io.dump(DATA_FILE, version_info, typing.cast(io.Fmt, Fmt.yaml))
+io.dump(DATA_FILE, version_info, Fmt.yaml)

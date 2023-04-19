@@ -78,8 +78,7 @@ class Serializable(Protocol):
                               Path],
                         output_filepath),
             self,
-            fmt=typing.cast(su.io.Fmt,
-                            fmt))
+            fmt=fmt)
 
     @classmethod
     def load(
@@ -122,13 +121,11 @@ class Serializable(Protocol):
 
         loaded = typing.cast(
             _Serializable,
-            su.io.load(
-                typing.cast(Union[str,
-                                  Path],
-                            filepath),
-                typing.cast(su.io.Fmt,
-                            fmt),
-                clz=cls))
+            su.io.load(typing.cast(Union[str,
+                                         Path],
+                                   filepath),
+                       fmt,
+                       clz=cls))
 
         if not intercept and _PREFERRED_FORMAT is not None:
             assert preferred_file is not None
@@ -174,7 +171,7 @@ class SerializableDataDiff(Generic[_S]):
         """
         if self.diff:
             clz = type(a)
-            a = su.io.serialize(a, fmt=typing.cast(su.io.Fmt, self._fmt))
+            a = su.io.serialize(a, fmt=self._fmt)
             a_str = typing.cast(str, self.safe_dump(a))
             patches = _dmp.patch_fromText(self.diff)
             patched_a_str, _ = _dmp.patch_apply(patches, a_str)
@@ -199,8 +196,8 @@ class SerializableDataDiff(Generic[_S]):
         SerializableDiff
             A text representation of the diff between `a` and `b`.
         """
-        a = su.io.serialize(a, fmt=typing.cast(su.io.Fmt, cls._fmt))
-        b = su.io.serialize(b, fmt=typing.cast(su.io.Fmt, cls._fmt))
+        a = su.io.serialize(a, fmt=cls._fmt)
+        b = su.io.serialize(b, fmt=cls._fmt)
         a_str = typing.cast(str, cls.safe_dump(a))
         b_str = typing.cast(str, cls.safe_dump(b))
         patches = _dmp.patch_make(a_str, b_str)

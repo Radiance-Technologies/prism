@@ -1086,8 +1086,7 @@ class SerAPIParser(HeuristicParser):
                 coq_project = typing.cast(
                     str,
                     io.load(coq_project_file,
-                            typing.cast(io.Fmt,
-                                        Fmt.txt)))
+                            Fmt.txt))
                 for line in coq_project.splitlines():
                     match = cls.RE_SERAPI_OPTIONS.fullmatch(line.strip())
                     if match is not None:

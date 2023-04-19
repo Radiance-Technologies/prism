@@ -829,11 +829,9 @@ class OpamSwitch:
             name, root, and whether it is a clone.
             """
             serialized = {
-                f.name: io.serialize(
-                    getattr(self,
-                            f.name),
-                    typing.cast(io.Fmt,
-                                fmt)) for f in fields(self)
+                f.name: io.serialize(getattr(self,
+                                             f.name),
+                                     fmt) for f in fields(self)
             }
             if derived_only:
                 # remove non-derived configuration information

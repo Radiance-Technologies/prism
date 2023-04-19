@@ -3,7 +3,6 @@ Test suite for project metadata storage utilities.
 """
 
 import os
-import typing
 import unittest
 from copy import copy
 from pathlib import Path
@@ -387,7 +386,7 @@ class TestMetadataStorage(unittest.TestCase):
             storage.insert(metadata)
         with self.subTest("inverse"):
             # deserialization is the inverse of serialization
-            serialized = io.serialize(storage, typing.cast(io.Fmt, Fmt.json))
+            serialized = io.serialize(storage, Fmt.json)
             self.assertEqual(
                 storage,
                 io.deserialize(serialized,
@@ -400,8 +399,8 @@ class TestMetadataStorage(unittest.TestCase):
             self.assertEqual(storage, loaded)
             os.remove(storage_file)
         with self.subTest("deterministic"):
-            serialized_1 = io.serialize(storage, typing.cast(io.Fmt, Fmt.json))
-            serialized_2 = io.serialize(storage, typing.cast(io.Fmt, Fmt.json))
+            serialized_1 = io.serialize(storage, Fmt.json)
+            serialized_2 = io.serialize(storage, Fmt.json)
             self.assertEqual(serialized_1, serialized_2)
 
 
