@@ -2,6 +2,7 @@
 Provides general-purpose exception utilities.
 """
 
+import copy
 from dataclasses import dataclass
 from typing import Generic, Optional, TypeVar
 
@@ -30,3 +31,9 @@ class Except(Generic[T]):
     """
     The stack trace of the exception.
     """
+
+    def __post_init__(self):
+        """
+        Copy the exception object, deleting the traceback.
+        """
+        self.exception = copy.copy(self.exception)
