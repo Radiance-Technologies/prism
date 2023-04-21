@@ -178,12 +178,10 @@ def atomic_write(
             f.write(file_contents)
     if isinstance(file_contents, Serializable):
         fmt = infer_fmt_from_ext(fmt_ext)
-<<<<<<< HEAD
         f_name = file_contents.dump(f.name, fmt)
         if str(f_name) != f.name:
             # redirected, atomically move the file to final path
             os.replace(f_name, full_file_path.with_suffix(f_name.suffix))
-=======
         file_contents.dump(f.name, fmt)
     tmp_filename = f.name
     if apply_gzip_compression:
@@ -195,7 +193,6 @@ def atomic_write(
         # After compression, we need to clean up the original file.
         os.remove(tmp_filename)
         tmp_filename = gzip_tmp_filename
->>>>>>> Update atomic_write to allow compressed file output
     # Then, we atomically move the file to the correct, final
     # path.
     os.replace(tmp_filename, full_file_path)
