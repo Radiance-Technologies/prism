@@ -9,12 +9,15 @@ from typing import IO, TYPE_CHECKING, Optional, Union
 
 import ujson
 import yaml
-from seutil.io import Fmt, FmtProperty, infer_fmt_from_ext
+from seutil.io import Fmt, FmtProperty
+
+from prism.util.path import with_suffixes
 
 if TYPE_CHECKING:
     from prism.util.serialize import Serializable
 
 # override Fmt enums on import
+# HACK
 type.__setattr__(
     Fmt,
     'json',
@@ -82,6 +85,29 @@ type.__setattr__(
     ))
 
 
+def infer_fmt_from_ext(ext: str, default: Optional[Fmt] = None) -> Fmt:
+    """
+    Infer the `Fmt` of a file from its extension.
+
+    Notes
+    -----
+    This is a HACK due to not completely overriding `Fmt` enumerated
+    values.
+    """
+    if ext.startswith("."):
+        ext = ext[1 :]
+
+    for fmt in Fmt._member_names_:
+        fmt = getattr(Fmt, fmt)
+        if fmt.exts is not None and ext in fmt.exts:
+            return fmt
+
+    if default is not None:
+        return default
+    else:
+        raise RuntimeError(f'Cannot infer format for extension "{ext}"')
+
+
 def infer_format(filepath: os.PathLike) -> Fmt:
     """
     Infer format for loading serialized data.
@@ -134,7 +160,7 @@ def atomic_write(
         full_file_path: Path,
         file_contents: Union[str,
                              'Serializable'],
-        use_gzip_compression_for_serializable: bool = False):
+        use_gzip_compression_for_serializable: bool = False) -> Path:
     r"""
     Write a message or object to a text file.
 
@@ -150,6 +176,12 @@ def atomic_write(
     use_gzip_compression_for_serializable : bool, optional
         Compress the resulting file using gzip before saving to
         disk. A ".gz" suffix will be added in this case.
+
+    Returns
+    -------
+    Path
+        The final file path containing the data in the event that it was
+        redirected from the given file path.
 
     Raises
     ------
@@ -182,7 +214,11 @@ def atomic_write(
             use_gzip_compression_for_serializable)
         if str(f_name) != f.name:
             # redirected, atomically move the file to final path
-            os.replace(f_name, full_file_path.with_suffix(f_name.suffix))
+            data_path = with_suffixes(full_file_path, f_name.suffixes)
+            os.replace(f_name, data_path)
+    else:
+        data_path = full_file_path
     # Then, we atomically move the file to the correct, final
     # path.
     os.replace(f.name, full_file_path)
+    return data_path

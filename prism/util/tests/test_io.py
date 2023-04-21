@@ -1,8 +1,7 @@
 """
 Tests for the util.io module.
 """
-import gzip
-import shutil
+
 import tempfile
 import unittest
 from dataclasses import dataclass
@@ -62,12 +61,16 @@ class TestAtomicWrite(unittest.TestCase):
                 test_filename,
                 test_object,
                 use_gzip_compression_for_serializable=True)
-            with gzip.open(str(test_filename) + ".gz", "rt") as f_in:
-                with open(Path(tmpdir) / "load.yml", "wt") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-            actual_file_contents = ExampleSerializable.load(
-                Path(tmpdir) / "load.yml")
+            actual_file_contents = ExampleSerializable.load(test_filename)
             self.assertEqual(test_object, actual_file_contents)
+            self.assertTrue(
+                ExampleSerializable.get_data_path(test_filename,
+                                                  None,
+                                                  True).exists())
+            self.assertFalse(
+                ExampleSerializable.get_data_path(test_filename,
+                                                  None,
+                                                  False).exists())
 
 
 if __name__ == "__main__":
