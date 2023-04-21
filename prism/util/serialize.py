@@ -3,7 +3,9 @@ Supply a protocol for serializable data.
 """
 
 import copy
+import gzip
 import os
+import shutil
 import typing
 from dataclasses import dataclass, fields, is_dataclass
 from pathlib import Path
@@ -56,7 +58,11 @@ class Serializable(Protocol):
     A simple protocol for serializable data.
     """
 
-    def dump(self, output_filepath: PathLike, fmt: Fmt = Fmt.yaml) -> Path:
+    def dump(
+            self,
+            output_filepath: PathLike,
+            fmt: Fmt = Fmt.yaml,
+            use_gzip_compression: bool = False) -> Path:
         """
         Serialize data to text file.
 
@@ -67,6 +73,9 @@ class Serializable(Protocol):
         fmt : Fmt, optional
             Designated format of the output file,
             by default `Fmt.yaml`.
+        use_gzip_compression : bool, optional
+            Compress the resulting file using gzip before saving to
+            disk. A ".gz" suffix will be added in this case.
 
         Returns
         -------
@@ -84,6 +93,14 @@ class Serializable(Protocol):
                         output_filepath),
             self,
             fmt=fmt)
+        if use_gzip_compression:
+            gzip_filepath = Path(str(output_filepath) + ".gz")
+            with open(output_filepath, "rb") as f_in:
+                with gzip.open(gzip_filepath, "wb") as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+            # After compression, we need to clean up the original file.
+            os.remove(output_filepath)
+            output_filepath = gzip_filepath
         return Path(output_filepath)
 
     @classmethod
@@ -125,6 +142,14 @@ class Serializable(Protocol):
                 fmt = _PREFERRED_FORMAT
                 intercept = True
 
+        delete_file_flag = False
+        if not Path(filepath).exists():
+            if Path(str(filepath) + ".gz").exists():
+                with gzip.open(str(filepath) + ".gz", "rb") as f_in:
+                    with open(filepath, "wb") as f_out:
+                        shutil.copyfileobj(f_in, f_out)
+                delete_file_flag = True
+
         loaded = typing.cast(
             _Serializable,
             su.io.load(typing.cast(Union[str,
@@ -142,6 +167,12 @@ class Serializable(Protocol):
             os.chown(preferred_file, st.st_uid, st.st_gid)
             # integrity check
             assert cls.load(filepath, fmt) == loaded
+
+        if delete_file_flag:
+            # In this case, the regular file did not exist and we loaded
+            # from the gz file. Delete the temporarily created regular
+            # file once we're done with it.
+            os.remove(filepath)
 
         return loaded
 
