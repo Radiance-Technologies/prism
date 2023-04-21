@@ -172,7 +172,10 @@ def atomic_write(
             f.write(file_contents)
     if isinstance(file_contents, Serializable):
         fmt = infer_fmt_from_ext(fmt_ext)
-        file_contents.dump(f.name, fmt)
+        f_name = file_contents.dump(f.name, fmt)
+        if str(f_name) != f.name:
+            # redirected, atomically move the file to final path
+            os.replace(f_name, full_file_path.with_suffix(f_name.suffix))
     # Then, we atomically move the file to the correct, final
     # path.
     os.replace(f.name, full_file_path)

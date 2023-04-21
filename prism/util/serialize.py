@@ -56,7 +56,7 @@ class Serializable(Protocol):
     A simple protocol for serializable data.
     """
 
-    def dump(self, output_filepath: PathLike, fmt: Fmt = Fmt.yaml) -> None:
+    def dump(self, output_filepath: PathLike, fmt: Fmt = Fmt.yaml) -> Path:
         """
         Serialize data to text file.
 
@@ -67,18 +67,24 @@ class Serializable(Protocol):
         fmt : Fmt, optional
             Designated format of the output file,
             by default `Fmt.yaml`.
+
+        Returns
+        -------
+        Path
+            The final output filepath, which may differ from
         """
         if _PREFERRED_FORMAT is not None:
             fmt = _PREFERRED_FORMAT
-            output_filepath = Path(output_filepath).with_suffix(_PREFERRED_EXT)
             module_logger.info(
-                f"intercepting request, instead dumping {output_filepath}")
+                f"intercepting request, instead dumping {_PREFERRED_EXT}")
+        output_filepath = Path(output_filepath).with_suffix(f".{fmt.exts[0]}")
         su.io.dump(
             typing.cast(Union[str,
                               Path],
                         output_filepath),
             self,
             fmt=fmt)
+        return Path(output_filepath)
 
     @classmethod
     def load(
