@@ -3,7 +3,7 @@
     "change": {
       "build_process": null,
       "diff": {
-        "text": "diff --git a\/exgcd.v b\/exgcd.v\nindex bfac862..fe1ae41 100644\n--- a\/exgcd.v\n+++ b\/exgcd.v\n@@ -18 +17,0 @@ Require Import Znumtheory.\n-Require Import Bool.\n@@ -144,0 +144 @@ Hint Resolve Zneq_bool_true Zneq_bool_false Zle_bool_imp_le Zis_gcd_intro: zarit\n+\n@@ -164 +163,0 @@ Qed.\n-\n@@ -187 +186 @@ unfold Zwf; simpl; (intuition auto with zarith).\n-cutrewrite <- ((fst e')=(snd e')) in H5; auto with zarith.\n+replace (snd e') with (fst e') in H5; auto with zarith.\ndiff --git a\/totalhoarelogic.v b\/totalhoarelogic.v\nindex 16b08de..96ab82d 100644\n--- a\/totalhoarelogic.v\n+++ b\/totalhoarelogic.v\n@@ -14 +13,0 @@ Require Export hoarelogicsemantics.\n-Require Wf.\n"
+        "text": "diff --git a\/exgcd.v b\/exgcd.v\nindex 7664a3b..f8b9c6b 100644\n--- a\/exgcd.v\n+++ b\/exgcd.v\n@@ -19 +18,0 @@ Require Import Znumtheory.\n-Require Import Bool.\n@@ -145,0 +145 @@ Hint Resolve Zneq_bool_true Zneq_bool_false Zle_bool_imp_le Zis_gcd_intro: zarit\n+\n@@ -165 +164,0 @@ Qed.\n-\n@@ -188 +187 @@ unfold Zwf; simpl; (intuition auto with zarith).\n-cutrewrite <- ((fst e')=(snd e')) in H5; auto with zarith.\n+replace (snd e') with (fst e') in H5; auto with zarith.\ndiff --git a\/totalhoarelogic.v b\/totalhoarelogic.v\nindex 2081db7..dde8818 100644\n--- a\/totalhoarelogic.v\n+++ b\/totalhoarelogic.v\n@@ -15 +14,0 @@ Require Export hoarelogicsemantics.\n-Require Wf.\n"
       },
       "environment": null
     },

@@ -36,6 +36,11 @@ def is_location_in_change(
     -------
     bool
         True if the location intersects the diff, False otherwise.
+
+    Notes
+    -----
+    `SexpInfo.Loc` line numbers are zero-indexed whereas diff line
+    numbers are one-indexed.
     """
     if is_before:
         change_filename = str(change.before_filename)
@@ -43,6 +48,8 @@ def is_location_in_change(
     else:
         change_filename = str(change.after_filename)
         change_range = change.after_range
+    # make change line numbers zero-indexed
+    change_range = range(change_range.start - 1, change_range.stop - 1)
     is_change_nonempty = bool(change_range)
     loc_intersects_change = (
         is_change_nonempty and (

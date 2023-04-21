@@ -164,11 +164,11 @@ class TestRepairInstance(unittest.TestCase):
         Load realistic sample cached data.
         """
         cls.initial_state = ProjectCommitData.load(
-            _DATA_PATH / "initial_state.yml")
+            _DATA_PATH / "initial_state.json")
         cls.repaired_state = ProjectCommitData.load(
-            _DATA_PATH / "repaired_state.yml")
+            _DATA_PATH / "repaired_state.json")
         cls.compressed_repair_instance = GitRepairInstance.load(
-            _DATA_PATH / "compressed_repair_instance.yml")
+            _DATA_PATH / "compressed_repair_instance.json")
         cls.diff = None
 
 
