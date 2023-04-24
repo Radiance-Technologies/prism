@@ -43,3 +43,19 @@ def with_suffixes(path: PathLike, suffixes: Sequence[str]) -> Path:
     """
     path = without_suffixes(path)
     return path.with_suffix(''.join(suffixes))
+
+
+def pop_suffix(path: PathLike) -> Path:
+    """
+    Remove the last suffix of the given path if it has any.
+    """
+    return Path(path).with_suffix('')
+
+
+def append_suffix(path: PathLike, suffix: str) -> Path:
+    """
+    Add a new suffix to the end of the path.
+    """
+    suffixes = Path(path).suffixes
+    suffixes.append(suffix)
+    return with_suffixes(path, suffixes)
