@@ -210,7 +210,7 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                         [
                             data.project_metadata.coq_version.replace(".",
                                                                       "_"),
-                            "yml"
+                            "json"
                         ]))
                 with self.subTest(f"get_path_{project.name}"):
                     self.assertEqual(

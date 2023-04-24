@@ -1034,8 +1034,8 @@ class CoqProjectBuildCacheProtocol(Protocol):
     Root/
     ├── Project 1/
     |   ├── Commit hash 1/
-    |   |   ├── cache_file_1.yml
-    |   |   ├── cache_file_2.yml
+    |   |   ├── cache_file_1.json
+    |   |   ├── cache_file_2.json
     |   |   └── ...
     |   ├── Commit hash 2/
     |   └── ...
@@ -1673,7 +1673,7 @@ class CoqProjectBuildCache(CoqProjectBuildCacheProtocol):
     def __init__(
             self,
             root: PathLike,
-            fmt_ext: str = "yml",
+            fmt_ext: str = "json",
             start_time: Optional[float] = None):
         self.root = Path(root)
         self.fmt_ext = fmt_ext
