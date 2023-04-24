@@ -3,9 +3,6 @@ Supply a protocol for serializable data.
 """
 
 import copy
-import gzip
-import os
-import shutil
 import typing
 from dataclasses import dataclass, fields, is_dataclass
 from pathlib import Path
@@ -28,8 +25,9 @@ import typing_inspect
 from diff_match_patch import diff_match_patch
 
 import prism.util.cyaml as cyaml
-from prism.util.io import Fmt, atomic_write, infer_fmt_from_ext
+from prism.util.io import Fmt, compress, infer_fmt_from_ext, uncompress
 from prism.util.logging import logging
+from prism.util.path import append_suffix
 from prism.util.radpytools import PathLike
 
 # Module logger
@@ -47,10 +45,6 @@ Serializable.load returns a specific type
 and not just a `Serializable`
 """
 
-# opportunistically convert files to json...
-_PREFERRED_FORMAT = Fmt.json
-_PREFERRED_EXT = ".json"
-
 
 @runtime_checkable
 class Serializable(Protocol):
@@ -58,13 +52,11 @@ class Serializable(Protocol):
     A simple protocol for serializable data.
     """
 
-    _fmt = Fmt.yaml
-
     def dump(
             self,
             output_filepath: PathLike,
-            fmt: Fmt = Fmt.yaml,
-            use_gzip_compression: bool = False) -> Path:
+            fmt: Fmt = Fmt.json,
+            use_gzip_compression: bool = False) -> None:
         """
         Serialize data to text file.
 
@@ -74,18 +66,11 @@ class Serializable(Protocol):
             Filepath to which cache should be dumped.
         fmt : Fmt, optional
             Designated format of the output file,
-            by default `Fmt.yaml`.
+            by default `Fmt.json`.
         use_gzip_compression : bool, optional
             Compress the resulting file using gzip before saving to
-            disk. A ".gz" suffix will be added in this case.
-
-        Returns
-        -------
-        Path
-            The final output filepath, which may differ from
+            disk. A ``".gz"`` suffix will be added in this case.
         """
-        fmt = self.get_fmt(fmt)
-        output_filepath = self.get_data_path(output_filepath, fmt)
         su.io.dump(
             typing.cast(Union[str,
                               Path],
@@ -93,61 +78,35 @@ class Serializable(Protocol):
             self,
             fmt=fmt)
         if use_gzip_compression:
-            gzip_filepath = Path(str(output_filepath) + ".gz")
-            with open(output_filepath, "rb") as f_in:
-                with gzip.open(gzip_filepath, "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-            # After compression, we need to clean up the original file.
-            os.remove(output_filepath)
-            output_filepath = gzip_filepath
-        return Path(output_filepath)
-
-    @classmethod
-    def get_data_path(
-            cls,
-            desired: PathLike,
-            fmt: Optional[Fmt],
-            use_gzip_compression: bool = False) -> Path:
-        """
-        Get the actual path to the data given a desired path.
-
-        The returned path accounts for any redirects.
-        """
-        fmt = cls.get_fmt(fmt)
-        output_filepath = Path(desired).with_suffix(f".{fmt.exts[0]}")
-        if use_gzip_compression:
-            output_filepath = Path(str(output_filepath) + ".gz")
-        return output_filepath
-
-    @classmethod
-    def get_fmt(cls, fmt: Optional[Fmt]) -> Fmt:
-        """
-        Get the actual format of the serialized data.
-        """
-        if _PREFERRED_FORMAT is not None:
-            fmt = _PREFERRED_FORMAT
-            module_logger.info(
-                f"intercepting request, instead dumping {_PREFERRED_EXT}")
-        else:
-            fmt = cls._fmt
-        return fmt
+            compress(
+                output_filepath,
+                append_suffix(output_filepath,
+                              '.gz'),
+                delete=True)
 
     @classmethod
     def load(
             # Tell type check that return type is same type as `cls`.
             cls: Type[_Serializable],
             filepath: PathLike,
-            fmt: Optional[Fmt] = None) -> _Serializable:
+            fmt: Optional[Fmt] = None,
+            compress_on_load: bool = True) -> _Serializable:
         """
         Load a serialized object from file..
 
         Parameters
         ----------
         filepath : os.PathLike
-            Filepath containing repair mining cache.
+            Filepath containing a serialized object (without any
+            ``'.gz"`` suffix added for compression).
         fmt : Optional[Fmt], optional
             Designated format of the input file, by default None.
             If None, then the format is inferred from the extension.
+        compress_on_load : bool, optional
+            If True, then opportunistically compress the loaded data
+            with gzip by saving it to file with a ``".gz"`` suffix
+            added. The original uncompressed file will then be deleted.
+            If False, then simply load the requested object.
 
         Returns
         -------
@@ -155,28 +114,16 @@ class Serializable(Protocol):
             The deserialized object.
         """
         filepath = Path(filepath)
-        fmt = infer_fmt_from_ext(filepath.suffix)
-        if fmt != Fmt.yaml:
-            module_logger.info(f"can't speed up {filepath}")
-        fmt = cls.get_fmt(fmt)
+        if fmt is None:
+            fmt = infer_fmt_from_ext(filepath.suffix)
 
-        was_uncompressed = False
-        datapath = cls.get_data_path(filepath, fmt, False)
-        if not datapath.exists():
-            gzip_path = cls.get_data_path(filepath, fmt, True)
+        if not filepath.exists():
+            gzip_path = append_suffix(filepath, '.gz')
+            # uncompress the archive
             if gzip_path.exists():
-                with gzip.open(gzip_path, "rb") as f_in:
-                    with open(datapath, "wb") as f_out:
-                        shutil.copyfileobj(f_in, f_out)
-                was_uncompressed = True
-
-        intercept = False
-        if datapath != filepath:
-            assert isinstance(datapath, Path)
-            if datapath.exists():
-                module_logger.info(f"intercepting request, instead: {datapath}")
-                filepath = str(datapath)
-                intercept = True
+                uncompressed_file = uncompress(gzip_path)
+                assert uncompressed_file is not None
+                filepath = uncompressed_file.name
 
         loaded = typing.cast(
             _Serializable,
@@ -185,22 +132,6 @@ class Serializable(Protocol):
                                    filepath),
                        fmt,
                        clz=cls))
-
-        if not intercept and _PREFERRED_FORMAT is not None:
-            assert isinstance(datapath, Path)
-            # converting this file.
-            atomic_write(datapath, loaded)
-            # copy permissions
-            st = os.stat(datapath)
-            os.chown(datapath, st.st_uid, st.st_gid)
-            # integrity check
-            assert cls.load(filepath, fmt) == loaded
-
-        if was_uncompressed:
-            # In this case, the regular file did not exist and we loaded
-            # from the gz file. Delete the temporarily created regular
-            # file once we're done with it.
-            os.remove(filepath)
 
         return loaded
 

@@ -1,7 +1,9 @@
 """
 Provides utility functions for serialized data files.
 """
+import gzip
 import os
+import shutil
 import tempfile
 import typing
 from pathlib import Path
@@ -11,7 +13,8 @@ import ujson
 import yaml
 from seutil.io import Fmt, FmtProperty
 
-from prism.util.path import with_suffixes
+from prism.util.path import append_suffix
+from prism.util.radpytools.path import PathLike
 
 if TYPE_CHECKING:
     from prism.util.serialize import Serializable
@@ -160,7 +163,7 @@ def atomic_write(
         full_file_path: Path,
         file_contents: Union[str,
                              'Serializable'],
-        use_gzip_compression_for_serializable: bool = False) -> Path:
+        use_gzip_compression_for_serializable: bool = False) -> None:
     r"""
     Write a message or object to a text file.
 
@@ -175,13 +178,7 @@ def atomic_write(
         The contents to write or serialized to the file.
     use_gzip_compression_for_serializable : bool, optional
         Compress the resulting file using gzip before saving to
-        disk. A ".gz" suffix will be added in this case.
-
-    Returns
-    -------
-    Path
-        The final file path containing the data in the event that it was
-        redirected from the given file path.
+        disk. A ``".gz"`` suffix will be added in this case.
 
     Raises
     ------
@@ -206,19 +203,68 @@ def atomic_write(
                                      encoding='utf-8') as f:
         if isinstance(file_contents, str):
             f.write(file_contents)
+    f_name = f.name
     if isinstance(file_contents, Serializable):
         fmt = infer_fmt_from_ext(fmt_ext)
-        f_name = file_contents.dump(
-            f.name,
-            fmt,
-            use_gzip_compression_for_serializable)
-        if str(f_name) != f.name:
-            # redirected, atomically move the file to final path
-            data_path = with_suffixes(full_file_path, f_name.suffixes)
-            os.replace(f_name, data_path)
-    else:
-        data_path = full_file_path
-    # Then, we atomically move the file to the correct, final
-    # path.
-    os.replace(f.name, full_file_path)
-    return data_path
+        file_contents.dump(f_name, fmt, use_gzip_compression_for_serializable)
+        if use_gzip_compression_for_serializable:
+            f_name = append_suffix(f.name, '.gz')
+            full_file_path = append_suffix(full_file_path, '.gz')
+    # Then, we atomically move the file to the correct, final path.
+    os.replace(f_name, full_file_path)
+
+
+def compress(src: PathLike, dest: PathLike, delete: bool = False) -> None:
+    """
+    Compress and existing file using gzip.
+
+    Parameters
+    ----------
+    src : PathLike
+        The existing uncompressed file.
+    dest : PathLike
+        The destination to which the compressed file should be written.
+    delete : bool, optional
+        If True, then delete the original `src` file after compressing
+        it. Otherwise, leave it as is.
+    """
+    with open(src, "rb") as f_in, gzip.open(dest, "wb") as f_out:
+        shutil.copyfileobj(f_in, f_out)
+    if delete:
+        os.remove(src)
+
+
+def uncompress(src: PathLike,
+               dest: Optional[PathLike] = None) -> Optional[IO[bytes]]:
+    """
+    Uncompress a gzip archive.
+
+    Parameters
+    ----------
+    src : PathLike
+        The path to a gzip archive.
+    dest : Optional[PathLike], optional
+        The destination at which the uncompressed file should be
+        written. If None, then it is written to a temporary file.
+
+    Returns
+    -------
+    Optional[tempfile.TemporaryFile]
+        If `dest` is None, then a temporary file handle is returned.
+        The file will be deleted automatically when this handle goes out
+        of scope, so the caller should make sure to assign the result to
+        a variable
+    """
+    with gzip.open(src, 'rb') as f_in:
+        if dest is None:
+            f_out = tempfile.NamedTemporaryFile('wb')
+        else:
+            f_out = open(dest, 'wb')
+        try:
+            shutil.copyfileobj(f_in, f_out)
+        finally:
+            if dest is not None:
+                f_out.close()
+            else:
+                f_out.flush()
+    return f_out

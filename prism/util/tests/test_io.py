@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from prism.util.io import atomic_write
+from prism.util.path import append_suffix
 from prism.util.serialize import Serializable
 
 
@@ -46,9 +47,10 @@ class TestAtomicWrite(unittest.TestCase):
             test_object = ExampleSerializable(123, "abc")
             test_filename = Path(tmpdir) / "test.yml"
             atomic_write(test_filename, test_object)
-            actual_file_contents = ExampleSerializable.load(
-                Path(tmpdir) / "test.yml")
+            actual_file_contents = ExampleSerializable.load(test_filename)
             self.assertEqual(test_object, actual_file_contents)
+            self.assertFalse(append_suffix(test_filename, '.gz').exists())
+            self.assertTrue(test_filename.exists())
 
     def test_atomic_write_serializable_compressed(self):
         """
@@ -63,14 +65,8 @@ class TestAtomicWrite(unittest.TestCase):
                 use_gzip_compression_for_serializable=True)
             actual_file_contents = ExampleSerializable.load(test_filename)
             self.assertEqual(test_object, actual_file_contents)
-            self.assertTrue(
-                ExampleSerializable.get_data_path(test_filename,
-                                                  None,
-                                                  True).exists())
-            self.assertFalse(
-                ExampleSerializable.get_data_path(test_filename,
-                                                  None,
-                                                  False).exists())
+            self.assertTrue(append_suffix(test_filename, '.gz').exists())
+            self.assertFalse(test_filename.exists())
 
 
 if __name__ == "__main__":
