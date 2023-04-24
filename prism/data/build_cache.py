@@ -1263,8 +1263,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
         if ext is None:
             ext = self.fmt_ext
         return self.root / project / commit / '.'.join(
-            [coq_version.replace(".",
-                                 "_"),
+            [self.format_coq_version(coq_version),
              ext])
 
     def get_path_from_metadata(self, metadata: ProjectMetadata) -> Path:
@@ -1663,6 +1662,13 @@ class CoqProjectBuildCacheProtocol(Protocol):
             block,
             log,
             ".txt")
+
+    @classmethod
+    def format_coq_version(cls, coq_version: str) -> str:
+        """
+        Format a Coq version for use in a filename.
+        """
+        return coq_version.replace('.', '_')
 
 
 class CoqProjectBuildCache(CoqProjectBuildCacheProtocol):

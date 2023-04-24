@@ -35,8 +35,10 @@ from prism.data.repair.instance import (
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
-from prism.util.io import atomic_write
+from prism.util.io import Fmt, atomic_write
 from prism.util.manager import ManagedServer
+from prism.util.path import append_suffix, with_suffixes
+from prism.util.radpytools.path import PathLike
 
 BuildRepairInstanceOutput = Optional[Union[ProjectCommitDataRepairInstance,
                                            Except[None]]]
@@ -245,6 +247,7 @@ class RepairInstanceDB:
         WHERE
             file_name = :file_name
         ORDER BY id;"""
+    _fmt: Fmt = Fmt.json
 
     def __init__(self, db_location: Path):
         self.db_location = db_location
@@ -389,7 +392,7 @@ class RepairInstanceDB:
             **cache_id_label,
             **change_selection.as_joined_dict()
         }
-        record['file_name'] = "repair-n.yml"
+        record['file_name'] = "repair-n"
         self.cursor.execute(self._sql_insert_record, record)
         self.connection.commit()
         inserted_row = self.get_record(
@@ -408,21 +411,15 @@ class RepairInstanceDB:
             cache_id_label)
         label_related_rows = self.cursor.fetchall()
         row_ids = sorted([row[0] for row in label_related_rows])
-        file_index = row_ids.index(recent_id)
-        project_repair_save_directory = repair_save_directory / Path(
-            project_name)
-        new_file_name = str(
-            project_repair_save_directory / (
-                "-".join(
-                    [
-                        "repair",
-                        project_name,
-                        initial_commit_sha,
-                        repaired_commit_sha,
-                        initial_coq_version,
-                        repaired_coq_version,
-                        str(file_index)
-                    ]) + ".yml"))
+        change_index = row_ids.index(recent_id)
+        new_file_name = self.get_file_name(
+            repair_save_directory,
+            project_name,
+            initial_commit_sha,
+            repaired_commit_sha,
+            initial_coq_version,
+            repaired_coq_version,
+            change_index)
         self.cursor.execute(
             self._sql_update_file_name,
             {
@@ -526,6 +523,78 @@ class RepairInstanceDB:
             raise RuntimeError(
                 f"There is more than 1 row for file {file_name}.")
         return self._record_to_dictionary(records[0])
+
+    @classmethod
+    def get_file_name(
+            cls,
+            repair_save_directory: Path,
+            project_name: str,
+            initial_commit_sha: str,
+            repaired_commit_sha: str,
+            initial_coq_version: str,
+            repaired_coq_version: str,
+            change_index: int) -> Path:
+        """
+        Get the canonical filename for the identified repair example.
+
+        Parameters
+        ----------
+        project_name : str
+            The name of the project identifying the record being
+            inserted
+        initial_commit_sha : str
+            The commit hash for the initial commit identifying the
+            record being inserted
+        repaired_commit_sha : str
+            The commit hash for the repaired commit identifying the
+            record being inserted
+        initial_coq_version : str
+            The Coq version for the initial cache item identifying the
+            record being inserted
+        repaired_coq_version : str
+            The Coq version for the repaired cache item identifying the
+            record being inserted
+        change_index : int
+            The index of the change as it was created.
+
+        Returns
+        -------
+        Path
+            The path to the file containing the requested change.
+        """
+        filename: PathLike = "-".join(
+            [
+                "repair",
+                project_name,
+                initial_commit_sha,
+                repaired_commit_sha,
+                CoqProjectBuildCache.format_coq_version(initial_coq_version),
+                CoqProjectBuildCache.format_coq_version(repaired_coq_version),
+                str(change_index)
+            ])
+        filename = append_suffix(filename, cls._fmt.exts[0])
+        filename = repair_save_directory / project_name / filename
+        return filename
+
+    @classmethod
+    def get_compressed_file_name(cls, file_name: PathLike) -> Path:
+        """
+        Get the path to the diff-compressed version of a repair example.
+
+        Parameters
+        ----------
+        file_name : PathLike
+            The canonical path to the full repair example containing a
+            serialized `ProjectCommitDataRepairInstance`.
+
+        Returns
+        -------
+        Path
+            The path to the file that should contain the corresponding
+            `GitRepairInstance`.
+        """
+        file_name = Path(file_name)
+        return with_suffixes(file_name, ["_compressed", file_name.suffix])
 
 
 class RepairMiningLogger:
@@ -832,7 +901,16 @@ def write_repair_instance(
                 repaired_state_metadata.coq_version,
                 change_selection,
                 repair_file_directory)
-            atomic_write(file_path, potential_diff)
+            atomic_write(
+                file_path,
+                potential_diff,
+                use_gzip_compression_for_serializable=True)
+            compressed_file_path = repair_instance_db.get_compressed_file_name(
+                file_path)
+            atomic_write(
+                compressed_file_path,
+                potential_diff.compress(),
+                use_gzip_compression_for_serializable=False)
     elif isinstance(potential_diff, Except):
         repair_mining_logger.write_exception_log(potential_diff)
     else:
@@ -1331,7 +1409,7 @@ def repair_mining_loop(
         cache_root: Path,
         repair_save_directory: Path,
         metadata_storage_file: Optional[Path] = None,
-        cache_format_extension: str = "yml",
+        cache_format_extension: str = "json",
         prepare_pairs: Optional[PreparePairsFunction] = None,
         repair_miner: Optional[RepairMiner] = None,
         changeset_miner: Optional[ChangeSetMiner] = None,
@@ -1353,7 +1431,7 @@ def repair_mining_loop(
     metadata_storage_file : Path or None, optional
         Path to metadata storage file to load for commit identification
     cache_format_extension : str, optional
-        Extension of cache files, by default "yml"
+        Extension of cache files, by default ``"json"``
     prepare_pairs : PreparePairsFunction, optional
         Function to prepare pairs of cache item labels to be used for
         repair instance mining, by default None
