@@ -1,7 +1,8 @@
 """
 Tests for the mining module.
 """
-import os
+
+import shutil
 import unittest
 from pathlib import Path
 
@@ -14,7 +15,7 @@ class TestRepairInstanceDB(unittest.TestCase):
     Class for testing RepairInstanceDB.
     """
 
-    _test_db_path = Path("./test_db.sqlite3")
+    _test_db_path = Path("test_db")
     _cache_label = {
         "project_name": "test_project",
         "initial_commit_sha": "abcde",
@@ -43,6 +44,10 @@ class TestRepairInstanceDB(unittest.TestCase):
           3),
          ("d",
           4)])
+    _expected_relative_filename = RepairInstanceDB.get_file_name(
+        change_index=0,
+        **_cache_label)
+    _expected_absolute_filename = _test_db_path / _expected_relative_filename
     _expected_record = (
         1,
         'test_project',
@@ -54,10 +59,7 @@ class TestRepairInstanceDB(unittest.TestCase):
         'a 1',
         'a 1 b 2 c 3',
         'a 1 b 2 c 3 d 4',
-        str(
-            Path(
-                'test_project/repair-test_project-abcde-12345-8.10.2-8.10.2-0.yml'
-            )))
+        str(_expected_relative_filename))
 
     def test_create_table(self):
         """
@@ -78,28 +80,21 @@ class TestRepairInstanceDB(unittest.TestCase):
         with RepairInstanceDB(self._test_db_path) as db:
             path: Path = db.insert_record_get_path(
                 **self._cache_label,
-                change_selection=self._change_selection,
-                repair_save_directory=self._test_db_path.parent)
+                change_selection=self._change_selection)
             db.cursor.execute("SELECT * FROM records")
             result = db.cursor.fetchall()
             self.assertListEqual(result, [self._expected_record])
-            self.assertEqual(
-                path,
-                self._test_db_path.parent
-                / Path(self._cache_label["project_name"])
-                / Path('repair-test_project-abcde-12345-8.10.2-8.10.2-0.yml'))
+            self.assertEqual(path, self._expected_absolute_filename)
             change_selection = self._change_selection
             assert isinstance(change_selection.added_commands, list)
             change_selection.added_commands.append(("y", 25))
             db.insert_record_get_path(
                 **self._cache_label,
-                change_selection=change_selection,
-                repair_save_directory=self._test_db_path.parent)
+                change_selection=change_selection)
             change_selection.added_commands.append(("z", 26))
             db.insert_record_get_path(
                 **self._cache_label,
-                change_selection=change_selection,
-                repair_save_directory=self._test_db_path.parent)
+                change_selection=change_selection)
             db.cursor.execute("SELECT * FROM records WHERE id = 3")
             result = db.cursor.fetchone()
             self.assertEqual(result[0], 3)
@@ -111,14 +106,10 @@ class TestRepairInstanceDB(unittest.TestCase):
         with RepairInstanceDB(self._test_db_path) as db:
             db.insert_record_get_path(
                 **self._cache_label,
-                change_selection=self._change_selection,
-                repair_save_directory=self._test_db_path.parent)
+                change_selection=self._change_selection)
             record = db.get_record(
                 **self._cache_label,
                 change_selection=self._change_selection)
-            expected_path = str(
-                Path(self._cache_label["project_name"])
-                / 'repair-test_project-abcde-12345-8.10.2-8.10.2-0.yml')
             expected_record = {
                 'id': 1,
                 **self._cache_label,
@@ -127,7 +118,7 @@ class TestRepairInstanceDB(unittest.TestCase):
                     'affected_commands': 'a 1',
                     'changed_commands': 'a 1 b 2 c 3',
                     'dropped_commands': 'a 1 b 2 c 3 d 4',
-                    'file_name': expected_path
+                    'file_name': str(self._expected_relative_filename)
                 }
             }
             assert record is not None
@@ -137,7 +128,7 @@ class TestRepairInstanceDB(unittest.TestCase):
         """
         Remove the test database once each test is finished.
         """
-        os.remove(self._test_db_path)
+        shutil.rmtree(self._test_db_path)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 {
   "cache_root": "../cache_root",
-  "repair_save_directory": "../test_repairs",
-  "cache_format_extension": "yml",
+  "repair_instance_db_directory": "../test_repairs",
+  "cache_format_extension": "json",
   "prepare_pairs": "prism.data.repair.mining.prepare_label_pairs",
   "repair_miner": "prism.data.repair.instance.ProjectCommitDataRepairInstance",
   "changeset_miner": "prism.data.repair.instance.ProjectCommitDataErrorInstance.default_changeset_miner",

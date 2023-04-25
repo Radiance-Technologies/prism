@@ -131,14 +131,10 @@ class RepairInstanceJob:
     The change selection that gives rise to this error instance and
     repaired state
     """
-    repair_save_directory: Path
+    repair_instance_db_directory: Path
     """
-    Path to directory to save repair instances
-    """
-    repair_instance_db_file: Path
-    """
-    Path to database for recording new repair instances saved to
-    disk
+    Path to directory that contains the database for recording new
+    repair instances saved to disk
     """
     miner: RepairMiner
     """
@@ -149,6 +145,13 @@ class RepairInstanceJob:
     Object used to log errors and other debug messages during repair
     instance building
     """
+
+    @property
+    def repair_save_directory(self) -> Path:
+        """
+        Path to directory to save repair instances.
+        """
+        return self.repair_instance_db_directory / ".sqlite3"
 
 
 class StopWorkSentinel:
@@ -249,8 +252,12 @@ class RepairInstanceDB:
         ORDER BY id;"""
     _fmt: Fmt = Fmt.json
 
-    def __init__(self, db_location: Path):
-        self.db_location = db_location
+    def __init__(self, db_directory: PathLike):
+        self.db_directory = Path(db_directory)
+        """
+        The directory containing the database.
+        """
+        self.db_directory.mkdir(parents=True, exist_ok=True)
         self.connection = sqlite3.connect(str(self.db_location))
         self.cursor = self.connection.cursor()
         self.create_table()
@@ -293,35 +300,12 @@ class RepairInstanceDB:
             self.connection.commit()
         self.connection.close()
 
-    @staticmethod
-    def _record_to_dictionary(
-        record: Tuple[int,
-                      str,
-                      str,
-                      str,
-                      str,
-                      str,
-                      str,
-                      str,
-                      str,
-                      str,
-                      str]
-    ) -> Dict[str,
-              Union[int,
-                    str]]:
-        return {
-            'id': record[0],
-            'project_name': record[1],
-            'initial_commit_sha': record[2],
-            'repaired_commit_sha': record[3],
-            'initial_coq_version': record[4],
-            'repaired_coq_version': record[5],
-            'added_commands': record[6],
-            'affected_commands': record[7],
-            'changed_commands': record[8],
-            'dropped_commands': record[9],
-            'file_name': record[10]
-        }
+    @property
+    def db_location(self) -> Path:
+        """
+        Get the path to the SQLite3 database file.
+        """
+        return self.db_directory / ".sqlite3"
 
     def create_table(self):
         """
@@ -337,8 +321,7 @@ class RepairInstanceDB:
             repaired_commit_sha: str,
             initial_coq_version: str,
             repaired_coq_version: str,
-            change_selection: ChangeSelection,
-            repair_save_directory: Path) -> Path:
+            change_selection: ChangeSelection) -> Path:
         """
         Insert a repair instance record into the database.
 
@@ -361,13 +344,11 @@ class RepairInstanceDB:
             record being inserted
         change_selection : ChangeSelection
             The selected changes that further identify the record
-        repair_save_directory : Path
-            Directory to save the repairs to
 
         Returns
         -------
         Path
-            The reserved path to the new repair instance file.
+            The reserved absolute path to the new repair instance file.
         """
         # Summary:
         # * Insert a record with a place-holder file name.
@@ -413,7 +394,6 @@ class RepairInstanceDB:
         row_ids = sorted([row[0] for row in label_related_rows])
         change_index = row_ids.index(recent_id)
         new_file_name = self.get_file_name(
-            repair_save_directory,
             project_name,
             initial_commit_sha,
             repaired_commit_sha,
@@ -423,11 +403,11 @@ class RepairInstanceDB:
         self.cursor.execute(
             self._sql_update_file_name,
             {
-                'file_name': new_file_name,
+                'file_name': str(new_file_name),
                 'row_id': recent_id
             })
         self.connection.commit()
-        return Path(new_file_name)
+        return self.db_directory / new_file_name
 
     def get_record(
         self,
@@ -527,7 +507,6 @@ class RepairInstanceDB:
     @classmethod
     def get_file_name(
             cls,
-            repair_save_directory: Path,
             project_name: str,
             initial_commit_sha: str,
             repaired_commit_sha: str,
@@ -560,7 +539,8 @@ class RepairInstanceDB:
         Returns
         -------
         Path
-            The path to the file containing the requested change.
+            The path to the file containing the requested change
+            relative to the root of the repair instance database.
         """
         filename: PathLike = "-".join(
             [
@@ -572,8 +552,8 @@ class RepairInstanceDB:
                 CoqProjectBuildCache.format_coq_version(repaired_coq_version),
                 str(change_index)
             ])
-        filename = append_suffix(filename, cls._fmt.exts[0])
-        filename = repair_save_directory / project_name / filename
+        filename = append_suffix(filename, f".{cls._fmt.exts[0]}")
+        filename = project_name / filename
         return filename
 
     @classmethod
@@ -594,7 +574,37 @@ class RepairInstanceDB:
             `GitRepairInstance`.
         """
         file_name = Path(file_name)
-        return with_suffixes(file_name, ["_compressed", file_name.suffix])
+        return with_suffixes(file_name, [".git", file_name.suffix])
+
+    @staticmethod
+    def _record_to_dictionary(
+        record: Tuple[int,
+                      str,
+                      str,
+                      str,
+                      str,
+                      str,
+                      str,
+                      str,
+                      str,
+                      str,
+                      str]
+    ) -> Dict[str,
+              Union[int,
+                    str]]:
+        return {
+            'id': record[0],
+            'project_name': record[1],
+            'initial_commit_sha': record[2],
+            'repaired_commit_sha': record[3],
+            'initial_coq_version': record[4],
+            'repaired_coq_version': record[5],
+            'added_commands': record[6],
+            'affected_commands': record[7],
+            'changed_commands': record[8],
+            'dropped_commands': record[9],
+            'file_name': record[10]
+        }
 
 
 class RepairMiningLogger:
@@ -653,8 +663,7 @@ def build_repair_instance(
         error_instance: ProjectCommitDataErrorInstance,
         repaired_state: ProjectCommitData,
         change_selection: ChangeSelection,
-        repair_save_directory: Path,
-        repair_instance_db_file: Path,
+        repair_instance_db_directory: Path,
         miner: RepairMiner,
         repair_mining_logger: RepairMiningLogger) -> BuildRepairInstanceOutput:
     """
@@ -672,7 +681,7 @@ def build_repair_instance(
         repaired state
     repair_save_directory : Path
         Path to directory to save repair instances
-    repair_instance_db_file : Path
+    repair_instance_db_directory : Path
         Path to database for recording new repair instances saved to
         disk
     miner : RepairMiner
@@ -691,7 +700,7 @@ def build_repair_instance(
     """
     result = None
     try:
-        with RepairInstanceDB(repair_instance_db_file) as db_instance:
+        with RepairInstanceDB(repair_instance_db_directory) as db_instance:
             initial_metadata = error_instance.project_metadata
             assert initial_metadata.commit_sha is not None
             assert initial_metadata.coq_version is not None
@@ -714,8 +723,7 @@ def build_repair_instance(
             write_repair_instance(
                 result,
                 change_selection,
-                repair_save_directory,
-                repair_instance_db_file,
+                repair_instance_db_directory,
                 repair_mining_logger,
                 repaired_state.project_metadata)
     return result
@@ -743,8 +751,7 @@ def build_repair_instance_star(
         args.error_instance,
         args.repaired_state,
         args.change_selection,
-        args.repair_save_directory,
-        args.repair_instance_db_file,
+        args.repair_instance_db_directory,
         args.miner,
         args.repair_mining_logger)
 
@@ -852,8 +859,7 @@ def build_error_instances_from_label_pair_star(
 def write_repair_instance(
         potential_diff: BuildRepairInstanceOutput,
         change_selection: ChangeSelection,
-        repair_file_directory: Path,
-        repair_instance_db_file: Path,
+        repair_instance_db_directory: Path,
         repair_mining_logger: RepairMiningLogger,
         repaired_state_metadata: ProjectMetadata):
     """
@@ -868,9 +874,7 @@ def write_repair_instance(
         A potential repair instance
     change_selection : ChangeSelection
         Change selection that corresponds to this repair instance
-    repair_file_directory : Path
-        Path to directory to store serialized repair instances
-    repair_instance_db_file : Path
+    repair_instance_db_directory : Path
         Path to database for recording new repair instances saved to
         disk
     repair_mining_logger : RepairMiningLogger
@@ -886,7 +890,8 @@ def write_repair_instance(
         nor of Except[None].
     """
     if isinstance(potential_diff, ProjectCommitDataRepairInstance):
-        with RepairInstanceDB(repair_instance_db_file) as repair_instance_db:
+        with RepairInstanceDB(
+                repair_instance_db_directory) as repair_instance_db:
             initial_metadata = \
                 potential_diff.error.initial_state.project_state.project_metadata
             assert initial_metadata.commit_sha is not None
@@ -899,8 +904,7 @@ def write_repair_instance(
                 repaired_state_metadata.commit_sha,
                 initial_metadata.coq_version,
                 repaired_state_metadata.coq_version,
-                change_selection,
-                repair_file_directory)
+                change_selection)
             atomic_write(
                 file_path,
                 potential_diff,
@@ -949,8 +953,7 @@ def _get_consecutive_commit_hashes(
 def build_repair_instance_mining_inputs(
         error_instance_results: Union[List[AugmentedErrorInstance],
                                       Except[None]],
-        repair_save_directory: Path,
-        repair_instance_db_file: Path,
+        repair_instance_db_directory: Path,
         repair_miner: RepairMiner,
         repair_mining_logger: RepairMiningLogger) -> List[RepairInstanceJob]:
     """
@@ -961,8 +964,6 @@ def build_repair_instance_mining_inputs(
     error_instance_results : Union[List[AugmentedErrorInstance],
                                    Except[None]]
         The output of the error instance builder
-    repair_save_directory : Path
-        The directory to save the repair instances in
     repair_instance_db_file : Path
         The path to the repair instance record database
     repair_miner : RepairMiner
@@ -988,8 +989,7 @@ def build_repair_instance_mining_inputs(
             error_instance,
             repaired_state,
             change_selection,
-            repair_save_directory,
-            repair_instance_db_file,
+            repair_instance_db_directory,
             repair_miner,
             repair_mining_logger)
         repair_instance_jobs.append(repair_instance_job)
@@ -1003,8 +1003,7 @@ def mining_loop_worker(
                                                      ErrorInstanceEndSentinel]],
         worker_to_parent_queue: queue.Queue[Union[Except,
                                                   ErrorInstanceEndSentinel]],
-        repair_save_directory: Path,
-        repair_instance_db_file: Path,
+        repair_instance_db_directory: Path,
         repair_miner: RepairMiner,
         skip_errors: bool):
     """
@@ -1021,9 +1020,7 @@ def mining_loop_worker(
     worker_to_parent_queue : Queue
         Queue for messages that need to be communicated back to the
         parent
-    repair_save_directory : Path
-        Path to directory to save repair mining results in
-    repair_instance_db_file : Path
+    repair_instance_db_directory : Path
         Path to database file containing repair instance records
     repair_miner : RepairMiner
         Function used to mine repairs
@@ -1100,8 +1097,7 @@ def mining_loop_worker(
             # following will immediately return an empty list.
             repair_instance_jobs = build_repair_instance_mining_inputs(
                 result,
-                repair_save_directory,
-                repair_instance_db_file,
+                repair_instance_db_directory,
                 repair_miner,
                 error_instance_job.repair_mining_logger)
             for repair_instance_job in repair_instance_jobs:
@@ -1292,8 +1288,7 @@ def _serial_work(
                           str],
         changeset_miner: ChangeSetMiner,
         repair_mining_logger: RepairMiningLogger,
-        repair_save_directory: Path,
-        db_file: Path,
+        db_directory: Path,
         repair_miner: RepairMiner,
         skip_errors: bool):
     for label_a, label_b in tqdm(
@@ -1314,8 +1309,7 @@ def _serial_work(
                 error_instance,
                 repaired_state,
                 change_selection,
-                repair_save_directory,
-                db_file,
+                db_directory,
                 repair_miner,
                 repair_mining_logger)
             if isinstance(result, Except) and not skip_errors:
@@ -1331,7 +1325,6 @@ def _parallel_work(
         changeset_miner: ChangeSetMiner,
         repair_mining_logger: RepairMiningLogger,
         repair_save_directory: Path,
-        db_file: Path,
         repair_miner: RepairMiner,
         max_workers: int,
         skip_errors: bool):
@@ -1358,7 +1351,6 @@ def _parallel_work(
         repair_instance_job_queue,
         worker_to_parent_queue,
         repair_save_directory,
-        db_file,
         repair_miner,
         skip_errors
     ]
@@ -1407,7 +1399,7 @@ def _parallel_work(
 
 def repair_mining_loop(
         cache_root: Path,
-        repair_save_directory: Path,
+        repair_instance_db_directory: Path,
         metadata_storage_file: Optional[Path] = None,
         cache_format_extension: str = "json",
         prepare_pairs: Optional[PreparePairsFunction] = None,
@@ -1464,7 +1456,7 @@ def repair_mining_loop(
         exceptions will not be ignored. If false, stop on exceptions in
         mining. By default, true.
     """
-    os.makedirs(str(repair_save_directory), exist_ok=True)
+    os.makedirs(str(repair_instance_db_directory), exist_ok=True)
     if metadata_storage_file is None:
         metadata_storage_file = Path(
             __file__).parents[3] / "dataset/agg_coq_repos.yml"
@@ -1475,10 +1467,9 @@ def repair_mining_loop(
     if changeset_miner is None:
         changeset_miner = ProjectCommitDataErrorInstance.default_changeset_miner
     metadata_storage = MetadataStorage.load(metadata_storage_file)
-    db_file = repair_save_directory / "repair_records.sqlite3"
     with RepairMiningLoggerServer() as logging_server:
         repair_mining_logger = logging_server.Client(
-            repair_save_directory,
+            repair_instance_db_directory,
             logging_level,
         )
         cache_args = (cache_root, cache_format_extension)
@@ -1495,8 +1486,7 @@ def repair_mining_loop(
                 cache_args,
                 changeset_miner,
                 repair_mining_logger,
-                repair_save_directory,
-                db_file,
+                repair_instance_db_directory,
                 repair_miner,
                 skip_errors)
         # ##############################################################
@@ -1508,8 +1498,7 @@ def repair_mining_loop(
                 cache_args,
                 changeset_miner,
                 repair_mining_logger,
-                repair_save_directory,
-                db_file,
+                repair_instance_db_directory,
                 repair_miner,
                 max_workers,
                 skip_errors)
