@@ -908,7 +908,8 @@ class ProjectCommitData(Serializable):
         for filename in self.files:
             commands.extend(
                 [(filename,
-                  c) for c in self.command_data[filename]])
+                  c) for c in self.command_data.get(filename,
+                                                    [])])
         return commands
 
     @property
@@ -925,7 +926,10 @@ class ProjectCommitData(Serializable):
             for f, deps in self.file_dependencies.items():
                 for dep in deps:
                     G.add_edge(f, dep)
-            files = list(reversed(list(nx.topological_sort(G))))
+            files = [
+                k for k in reversed(list(nx.topological_sort(G)))
+                if k in self.command_data
+            ]
         else:
             files = [k for k in self.command_data.keys()]
         return files
