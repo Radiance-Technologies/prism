@@ -146,13 +146,6 @@ class RepairInstanceJob:
     instance building
     """
 
-    @property
-    def repair_save_directory(self) -> Path:
-        """
-        Path to directory to save repair instances.
-        """
-        return self.repair_instance_db_directory / ".sqlite3"
-
 
 class StopWorkSentinel:
     """
@@ -612,14 +605,14 @@ class RepairMiningLogger:
     Logger for writing logs during repair mining process.
     """
 
-    def __init__(self, repair_save_directory: Path, level: int):
+    def __init__(self, repair_instance_db_directory: PathLike, level: int):
         self.logger = logging.getLogger(__name__)
         # Get rid of the stdout handler
         for handler in self.logger.handlers:
             self.logger.removeHandler(handler)
         self.logger.setLevel(level)
         self.handler = logging.FileHandler(
-            str(repair_save_directory / "repair_mining_log.txt"))
+            str(Path(repair_instance_db_directory) / "repair_mining_log.txt"))
         self.handler.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
         self.handler.setLevel(level)
         self.logger.addHandler(self.handler)
@@ -679,8 +672,6 @@ def build_repair_instance(
     change_selection : ChangeSelection
         The change selection that gives rise to this error instance and
         repaired state
-    repair_save_directory : Path
-        Path to directory to save repair instances
     repair_instance_db_directory : Path
         Path to database for recording new repair instances saved to
         disk
@@ -1324,7 +1315,7 @@ def _parallel_work(
                           str],
         changeset_miner: ChangeSetMiner,
         repair_mining_logger: RepairMiningLogger,
-        repair_save_directory: Path,
+        repair_instance_db_directory: Path,
         repair_miner: RepairMiner,
         max_workers: int,
         skip_errors: bool):
@@ -1350,7 +1341,7 @@ def _parallel_work(
         error_instance_job_queue,
         repair_instance_job_queue,
         worker_to_parent_queue,
-        repair_save_directory,
+        repair_instance_db_directory,
         repair_miner,
         skip_errors
     ]
@@ -1418,7 +1409,7 @@ def repair_mining_loop(
     ----------
     cache_root : Path
         Path to cache root to mine repair instances from
-    repair_save_directory : Path
+    repair_instance_db_directory : Path
         Path to directory for saving repair instances
     metadata_storage_file : Path or None, optional
         Path to metadata storage file to load for commit identification
