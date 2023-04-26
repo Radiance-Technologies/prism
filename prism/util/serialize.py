@@ -25,6 +25,7 @@ import typing_inspect
 from diff_match_patch import diff_match_patch
 
 import prism.util.cyaml as cyaml
+from prism.util.copy import ShallowCopy
 from prism.util.io import Fmt, compress, infer_fmt_from_ext, uncompress
 from prism.util.logging import logging
 from prism.util.path import append_suffix
@@ -139,7 +140,7 @@ class Serializable(Protocol):
 _S = TypeVar('_S')
 
 
-@dataclass
+@dataclass(frozen=True)
 class SerializableDataDiff(Generic[_S]):
     """
     A diff between two serializable objects.
@@ -173,6 +174,8 @@ class SerializableDataDiff(Generic[_S]):
             patched_a_str, _ = _dmp.patch_apply(patches, a_str)
             patched_a = self.safe_load(patched_a_str)
             patched_a = su.io.deserialize(patched_a, clz=clz, error="raise")
+        elif isinstance(a, ShallowCopy):
+            patched_a = a.shallow_copy()
         else:
             patched_a = copy.deepcopy(a)
         return patched_a
