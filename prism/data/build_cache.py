@@ -1,6 +1,7 @@
 """
 Tools for handling repair mining cache.
 """
+import copy
 import glob
 import os
 import re
@@ -53,6 +54,7 @@ from prism.util.serialize import Serializable
 
 CommandType = str
 _T = TypeVar('_T')
+_VernacSentence = TypeVar('_VernacSentence', bound='VernacSentence')
 
 
 class CacheStatus(IntEnum):
@@ -101,6 +103,14 @@ class HypothesisIndentifiers:
     appearance.
     """
 
+    def shallow_copy(self) -> 'HypothesisIndentifiers':
+        """
+        Get a shallow copy of this structure and its fields.
+        """
+        return HypothesisIndentifiers(
+            list(self.term) if self.term is not None else None,
+            list(self.type))
+
 
 @dataclass
 class GoalIdentifiers:
@@ -119,6 +129,14 @@ class GoalIdentifiers:
     A list of fully qualified identifiers contained within each of the
     `goal`'s hypotheses.
     """
+
+    def shallow_copy(self) -> 'GoalIdentifiers':
+        """
+        Get a shallow copy of this structure and its fields.
+        """
+        return GoalIdentifiers(
+            list(self.goal),
+            [h.shallow_copy() for h in self.hypotheses])
 
 
 @dataclass
@@ -253,6 +271,26 @@ class VernacSentence:
         # remove non-derived configuration information
         serialized.pop('command_index', None)
         return serialized
+
+    def shallow_copy(self: _VernacSentence) -> _VernacSentence:
+        """
+        Get a shallow copy of this structure and its fields.
+        """
+        result = type(self)(
+            self.text,
+            self.ast,
+            list(self.qualified_identifiers),
+            self.location,
+            self.command_type,
+            self.goals.shallow_copy() if self.goals is not None else None,
+            None,
+            list(self.feedback),
+            self.command_index)
+        result.goals_qualified_identifiers = {
+            k: v.shallow_copy() for k,
+            v in self.goals_qualified_identifiers.items()
+        }
+        return result
 
     @classmethod
     def deserialize(cls, data: Dict[str, Any]) -> 'VernacSentence':
@@ -452,6 +490,16 @@ class VernacCommandData:
             y: x.union(y),
             (s.referenced_identifiers() for s in self.sorted_sentences()))
 
+    def shallow_copy(self) -> 'VernacCommandData':
+        """
+        Get a shallow copy of this structure and its fields.
+        """
+        return VernacCommandData(
+            [s for s in self.identifier],
+            self.command_error,
+            self.command.shallow_copy(),
+            [[s.shallow_copy() for s in p] for p in self.proofs])
+
     def sorted_sentences(
             self,
             attach_proof_indexes: bool = False,
@@ -624,7 +672,8 @@ class VernacCommandDataList:
                     if isinstance(previous_goals, GoalsDiff):
                         warnings.warn(
                             "Unable to compute diff with respect to existing diff. "
-                            "Try patch_goals first and then try again.")
+                            "Try patch_goals first and then try again.",
+                            stacklevel=2)
                     goals_or_goals_diff = current_goals
             else:
                 goals_or_goals_diff = current_goals
@@ -674,6 +723,12 @@ class VernacCommandDataList:
             sentence.goals_qualified_identifiers = current_goal_identifiers
             previous_goals = current_goals
             previous_goal_identifiers = current_goal_identifiers
+
+    def shallow_copy(self) -> 'VernacCommandDataList':
+        """
+        Get a shallow copy of this list.
+        """
+        return VernacCommandDataList([c.shallow_copy() for c in self])
 
     def sorted_sentences(self) -> List[VernacSentence]:
         """
@@ -825,7 +880,8 @@ class ProjectBuildEnvironment:
             except subprocess.CalledProcessError:
                 warnings.warn(
                     "Unable to expand Git hash in version string. "
-                    "Try installing `coq-pearls` in editable mode.")
+                    "Try installing `coq-pearls` in editable mode.",
+                    stacklevel=2)
             else:
                 self.current_version = ''.join(
                     [
@@ -937,6 +993,23 @@ class ProjectCommitData(Serializable):
         """
         return {k: len(v) for k,
                 v in self.command_data.items()}
+
+    def shallow_copy(self) -> 'ProjectCommitData':
+        """
+        Get a shallow copy of this structure and its fields.
+        """
+        return ProjectCommitData(
+            copy.copy(self.project_metadata),
+            {k: v.shallow_copy() for k,
+             v in self.command_data.items()},
+            self.commit_message,
+            dict(self.comment_data) if self.comment_data is not None else None,
+            dict(self.file_dependencies)
+            if self.file_dependencies is not None else None,
+            copy.copy(self.environment)
+            if self.environment is not None else None,
+            copy.copy(self.build_result)
+            if self.build_result is not None else None)
 
     def diff_goals(self) -> None:
         """

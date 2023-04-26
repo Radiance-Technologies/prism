@@ -742,6 +742,16 @@ class GoalsDiff:
                 after.background_goals.extend([([], []) for _ in range(delta)])
         return after
 
+    def shallow_copy(self) -> 'GoalsDiff':
+        """
+        Get a shallow copy of this structure and its fields.
+        """
+        return GoalsDiff(
+            set(self.added_goals),
+            set(self.removed_goals),
+            set(self.moved_goals),
+            self.depth_change)
+
     @classmethod
     def compute_diff(cls, before: Goals, after: Goals) -> 'GoalsDiff':
         """
