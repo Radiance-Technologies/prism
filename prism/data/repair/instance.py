@@ -2,7 +2,6 @@
 Defines representations of repair instances (or examples).
 """
 
-import copy
 import typing
 from dataclasses import asdict, dataclass, fields
 from itertools import chain
@@ -187,6 +186,16 @@ class VernacCommandDataListDiff:
             self.added_commands or self.affected_commands
             or self.changed_commands or self.dropped_commands)
 
+    def shallow_copy(self) -> 'VernacCommandDataListDiff':
+        """
+        Get a shallow copy of this structure and its fields.
+        """
+        return VernacCommandDataListDiff(
+            self.added_commands.shallow_copy(),
+            dict(self.affected_commands),
+            dict(self.changed_commands),
+            set(self.dropped_commands))
+
 
 @dataclass
 class ProjectCommitDataDiff:
@@ -323,7 +332,7 @@ class ProjectCommitDataDiff:
         """
         # ensure goals are uncompressed
         data.patch_goals()
-        result = copy.deepcopy(data)
+        result = data.shallow_copy()
         result_command_data = result.command_data
         # decompose moves and changes into drops and adds
         dropped_commands: Dict[str,
@@ -336,7 +345,7 @@ class ProjectCommitDataDiff:
             dropped.update(change.dropped_commands)
             # Include added commands from diff being applied.
             added = added_commands.setdefault(filename, VernacCommandDataList())
-            added.extend(copy.deepcopy(c) for c in change.added_commands)
+            added.extend(c.shallow_copy() for c in change.added_commands)
             # decompose changes into drops and adds
             dropped.update(change.changed_commands.keys())
             dropped.update(change.affected_commands.keys())
@@ -394,6 +403,15 @@ class ProjectCommitDataDiff:
             data.file_dependencies)
         return result
 
+    def shallow_copy(self) -> 'ProjectCommitDataDiff':
+        """
+        Get a shallow copy of this structure and its fields.
+        """
+        return ProjectCommitDataDiff(
+            {k: v.shallow_copy() for k,
+             v in self.command_changes.items()},
+            self.file_dependencies_diff)
+
     @classmethod
     def from_aligned_commands(
             cls,
@@ -439,7 +457,7 @@ class ProjectCommitDataDiff:
                 file_diff = changes.setdefault(
                     filename,
                     VernacCommandDataListDiff())
-                file_diff.added_commands.append(copy.deepcopy(cmd))
+                file_diff.added_commands.append(cmd.shallow_copy())
             elif b is None:
                 # dropped command
                 assert a is not None, "cannot skip both sequences in alignment"
@@ -1611,7 +1629,7 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
             _ in commit_diff.changed_commands
         }
         if changeset is None:
-            broken_state_diff = copy.deepcopy(commit_diff)
+            broken_state_diff = commit_diff.shallow_copy()
         else:
             broken_state_diff = ProjectCommitDataDiff(
                 {
@@ -1622,19 +1640,18 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
             for filename, added_idx in changeset.added_commands:
                 broken_state_diff.command_changes[
                     filename].added_commands.append(
-                        copy.deepcopy(
-                            commit_diff.command_changes[filename]
-                            .added_commands[added_idx]))
-            for filename, changed_idx in changeset.affected_commands:
-                broken_state_diff.command_changes[filename].affected_commands[
-                    changed_idx] = copy.deepcopy(
                         commit_diff.command_changes[filename]
-                        .affected_commands[changed_idx])
+                        .added_commands[added_idx].shallow_copy())
+            for filename, changed_idx in changeset.affected_commands:
+                # no need to copy since SerializableDataDiff is
+                # immutable
+                broken_state_diff.command_changes[filename].affected_commands[
+                    changed_idx] = commit_diff.command_changes[
+                        filename].affected_commands[changed_idx]
             for filename, changed_idx in changeset.changed_commands:
                 broken_state_diff.command_changes[filename].changed_commands[
-                    changed_idx] = copy.deepcopy(
-                        commit_diff.command_changes[filename]
-                        .changed_commands[changed_idx])
+                    changed_idx] = commit_diff.command_changes[
+                        filename].changed_commands[changed_idx]
                 broken_command_indices.discard((filename, changed_idx))
             for filename, dropped_idx in changeset.dropped_commands:
                 broken_state_diff.command_changes[

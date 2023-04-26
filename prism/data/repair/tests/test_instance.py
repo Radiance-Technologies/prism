@@ -62,6 +62,7 @@ class TestRepairInstance(unittest.TestCase):
                             else:
                                 # a moved goal
                                 self.assertEqual(ag, bg)
+                self.assertEqual(asentence.location, bsentence.location)
 
     @pytest.mark.dependency()
     def test_ProjectCommitDataDiff(self) -> None:
