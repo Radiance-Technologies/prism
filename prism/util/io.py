@@ -146,7 +146,8 @@ def infer_format(filepath: os.PathLike) -> Fmt:
     formatter: Optional[Fmt]
     formatter = None
     extension = os.path.splitext(filepath)[-1].strip(".")
-    for fmt in Fmt:
+    for fmt in Fmt._member_names_:
+        fmt = getattr(Fmt, fmt)
         if extension in fmt.exts:
             formatter = fmt
             # Break early, ignore other formatters that may support
