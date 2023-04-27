@@ -74,6 +74,9 @@ from prism.util.opam import (
     major_minor_version_bound,
 )
 from prism.util.opam.formula import LogicalPF, LogOp
+from prism.util.opam.formula.common import RelOp
+from prism.util.opam.formula.package import PackageConstraint
+from prism.util.opam.formula.version import VersionConstraint
 from prism.util.path import get_relative_path
 from prism.util.radpytools import PathLike
 from prism.util.radpytools.os import pushd
@@ -1189,7 +1192,8 @@ class Project(ABC):
             coq_version: Optional[Union[str,
                                         Version]] = None,
             ocaml_version: Optional[Union[str,
-                                          Version]] = None) -> PackageFormula:
+                                          Version]] = None,
+            dev: bool = True) -> PackageFormula:
         """
         Get a formula for this project's dependencies.
 
@@ -1201,6 +1205,10 @@ class Project(ABC):
         ocaml_version : Optional[Union[str, Version]], optional
             If given, then include a dependency on OCaml that matches
             the given major and minor components of `ocaml_version`.
+        dev : bool, optional
+            If True, then default ``'= "dev"' constraints to ``true``.
+            Otherwise, return the formula unchanged.
+            By default True.
 
         Returns
         -------
@@ -1225,6 +1233,17 @@ class Project(ABC):
                              right),
             formula[1 :],
             formula[0])
+        if dev:
+            # remove dev constraints, presume them satisfied
+            assert isinstance(formula, LogicalPF)
+            dev_constraint = VersionConstraint(
+                relop=RelOp.EQ,
+                version=Version.parse('= "dev"'))
+            formula = formula.map(
+                lambda pc: typing.cast(
+                    PackageConstraint,
+                    PackageConstraint.parse(f"{pc.package_name} {{ true }}"))
+                if pc.version_constraint == dev_constraint else pc)
         return formula
 
     def get_file(self, filename: PathLike) -> CoqDocument:
