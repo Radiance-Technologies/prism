@@ -17,7 +17,7 @@ if __name__ == "__main__":
         "make -C mathcomp/solvable",
         "make -C mathcomp/ssreflect"
     ]
-    new_install_cmd = [
+    new_install_cmd = new_build_cmd + [
         "make -C mathcomp/algebra install",
         "make -C mathcomp/character install",
         "make -C mathcomp/field install",
@@ -25,14 +25,25 @@ if __name__ == "__main__":
         "make -C mathcomp/solvable install",
         "make -C mathcomp/ssreflect install"
     ]
+    new_clean_cmd = [
+        "make -C mathcomp/algebra clean",
+        "make -C mathcomp/character clean",
+        "make -C mathcomp/field clean",
+        "make -C mathcomp/fingroup clean",
+        "make -C mathcomp/solvable clean",
+        "make -C mathcomp/ssreflect clean"
+    ]
     for record in mds.get_all("math-comp", True):
         print(record.build_cmd)
         print(record.install_cmd)
+        print(record.clean_cmd)
     mds.update_all(
         "math-comp",
         build_cmd=new_build_cmd,
-        install_cmd=new_install_cmd)
+        install_cmd=new_install_cmd,
+        clean_cmd=new_clean_cmd)
     for record in mds.get_all("math-comp", True):
         print(record.build_cmd)
         print(record.install_cmd)
+        print(record.clean_cmd)
     MetadataStorage.dump(mds, mds_file)
