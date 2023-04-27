@@ -1341,7 +1341,6 @@ class MetadataStorage:
     def update_all(
             self,
             project_name: str | ProjectMetadata,
-            get_all_autofill: bool | None = None,
             **update_kwargs) -> None:
         """
         Update all records associated with the given project.
@@ -1352,11 +1351,6 @@ class MetadataStorage:
             The name or metadata for the project to be updated. If
             metadata is provided, only the name is used. Other fields
             are ignored.
-        get_all_autofill : bool | None, optional
-            When calling ``self.get_all``, whether to automatically fill
-            in missing metadata with default values (True), raise an
-            error (False), or use the value in ``self.autofill`` (None),
-            by default None.
         update_kwargs : dict[str, Any]
             New values for fields of the indicated metadata.
 
@@ -1370,7 +1364,7 @@ class MetadataStorage:
         project_name_str = project_name.project_name if isinstance(
             project_name,
             ProjectMetadata) else project_name
-        for metadata in self.get_all(project_name_str, get_all_autofill):
+        for metadata in self.get_all(project_name_str, True):
             self.update(
                 metadata.project_name,
                 metadata.project_url,
