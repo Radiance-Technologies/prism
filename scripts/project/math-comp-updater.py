@@ -9,30 +9,9 @@ if __name__ == "__main__":
     module_location = Path(__file__).parent
     mds_file = (module_location.parents[1] / "dataset") / "agg_coq_repos.yml"
     mds = MetadataStorage.load(mds_file)
-    new_build_cmd = [
-        "make -C mathcomp/algebra",
-        "make -C mathcomp/character",
-        "make -C mathcomp/field",
-        "make -C mathcomp/fingroup",
-        "make -C mathcomp/solvable",
-        "make -C mathcomp/ssreflect"
-    ]
-    new_install_cmd = new_build_cmd + [
-        "make -C mathcomp/algebra install",
-        "make -C mathcomp/character install",
-        "make -C mathcomp/field install",
-        "make -C mathcomp/fingroup install",
-        "make -C mathcomp/solvable install",
-        "make -C mathcomp/ssreflect install"
-    ]
-    new_clean_cmd = [
-        "make -C mathcomp/algebra clean",
-        "make -C mathcomp/character clean",
-        "make -C mathcomp/field clean",
-        "make -C mathcomp/fingroup clean",
-        "make -C mathcomp/solvable clean",
-        "make -C mathcomp/ssreflect clean"
-    ]
+    new_build_cmd = ["make -C mathcomp all"]
+    new_install_cmd = new_build_cmd + ["make -C mathcomp install"]
+    new_clean_cmd = ["make -C mathcomp clean"]
     for record in mds.get_all("math-comp", True):
         print(record.build_cmd)
         print(record.install_cmd)
