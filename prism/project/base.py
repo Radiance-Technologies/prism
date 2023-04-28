@@ -1238,7 +1238,7 @@ class Project(ABC):
             assert isinstance(formula, LogicalPF)
             dev_constraint = VersionConstraint(
                 relop=RelOp.EQ,
-                version=Version.parse('= "dev"'))
+                version=Version.parse('"dev"'))
             formula = formula.map(
                 lambda pc: typing.cast(
                     PackageConstraint,
