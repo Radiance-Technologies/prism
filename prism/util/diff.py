@@ -3,17 +3,17 @@ Utilities for representing and parsing Git diffs.
 """
 
 import os
-import re
+import typing
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import ClassVar, List, Optional, Union
+from typing import ClassVar, Dict, List, Optional, Union
 
 from prism.util.radpytools.dataclasses import default_field
-from prism.util.re import regex_from_options
+from prism.util.re import re, regex_from_options
 
 
-@dataclass
+@dataclass(frozen=True)
 class Change:
     """
     A discrete change in a contiguous range of lines of a file.
@@ -53,9 +53,15 @@ class Change:
         Ensure consistent typing.
         """
         if isinstance(self.before_filename, str):
-            self.before_filename = Path(self.before_filename)
+            object.__setattr__(
+                self,
+                'before_filename',
+                Path(self.before_filename))
         if isinstance(self.after_filename, str):
-            self.after_filename = Path(self.after_filename)
+            object.__setattr__(
+                self,
+                'after_filename',
+                Path(self.after_filename))
 
     def __str__(self) -> str:
         """
@@ -105,7 +111,7 @@ class Change:
             and not self.removed_lines and not self.added_lines)
 
 
-@dataclass
+@dataclass(frozen=True)
 class GitDiff:
     """
     A diff between two commits.
@@ -166,6 +172,20 @@ class GitDiff:
         """
         return self.parse_changes(self.text)
 
+    @cached_property
+    def renames(self) -> Dict[Path, Path]:
+        """
+        Get a map of files renamed in this diff.
+        """
+        return typing.cast(
+            Dict[Path,
+                 Path],
+            {
+                c.before_filename: c.after_filename
+                for c in self.changes
+                if c.is_rename
+            })
+
     @classmethod
     def parse_changes(cls, text: str) -> List[Change]:
         """
@@ -187,8 +207,14 @@ class GitDiff:
         for match in cls.change_regex.finditer(text):
             if match["before_filename"] is not None:
                 assert match["after_filename"] is not None
-                context.before_filename = cls.mkpath(match["before_filename"])
-                context.after_filename = cls.mkpath(match["after_filename"])
+                object.__setattr__(
+                    context,
+                    'before_filename',
+                    cls.mkpath(match["before_filename"]))
+                object.__setattr__(
+                    context,
+                    'after_filename',
+                    cls.mkpath(match["after_filename"]))
             elif match["before_rename"] is not None:
                 assert match["after_rename"] is not None
                 changes.append(
@@ -197,12 +223,16 @@ class GitDiff:
                         Path(match["after_rename"])))
             elif match["before_start"] is not None:
                 assert match["after_start"] is not None
-                context.before_range = cls.mkrange(
-                    match["before_start"],
-                    match["before_count"])
-                context.after_range = cls.mkrange(
-                    match["after_start"],
-                    match["after_count"])
+                object.__setattr__(
+                    context,
+                    'before_range',
+                    cls.mkrange(match["before_start"],
+                                match["before_count"]))
+                object.__setattr__(
+                    context,
+                    'after_range',
+                    cls.mkrange(match["after_start"],
+                                match["after_count"]))
                 changes.append(
                     Change(
                         context.before_filename,
