@@ -51,8 +51,9 @@ def _process_config(config: Dict[str,
     }
     if "cache_root" in config:
         config["cache_root"] = Path(config["cache_root"])
-    if "repair_save_directory" in config:
-        config["repair_save_directory"] = Path(config["repair_save_directory"])
+    if "repair_instance_db_directory" in config:
+        config["repair_instance_db_directory"] = Path(
+            config["repair_instance_db_directory"])
     if "metadata_storage_file" in config:
         config["metadata_storage_file"] = Path(config["metadata_storage_file"])
     if "prepare_pairs" in config:
