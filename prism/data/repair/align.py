@@ -735,6 +735,89 @@ def get_aligned_commands(
     return aligned_commands
 
 
+def _file_offsets_from_aligned_commands(
+        is_left: bool,
+        aligned_commands: AlignedCommands) -> Dict[str,
+                                                   int]:
+    file_offsets: Dict[str,
+                       int] = {}
+    for a, b in aligned_commands:
+        if is_left:
+            indexed_command = a
+        else:
+            indexed_command = b
+        if indexed_command is not None:
+            idx, filename, _ = indexed_command
+        else:
+            continue
+        try:
+            offset = file_offsets[filename]
+        except KeyError:
+            offset = idx
+        file_offsets[filename] = min(idx, offset)
+    return file_offsets
+
+
+left_file_offsets_from_aligned_commands = partial(
+    _file_offsets_from_aligned_commands,
+    True)
+"""
+Get offsets of files from left items in pairs of aligned commands.
+"""
+
+right_file_offsets_from_aligned_commands = partial(
+    _file_offsets_from_aligned_commands,
+    False)
+"""
+Get offsets of files from right items in pairs of aligned commands.
+"""
+
+
+def _aligned_commands_to_dict(
+    is_left: bool,
+    aligned_commands: AlignedCommands
+) -> Dict[str,
+          Dict[int,
+               Tuple[VernacCommandData,
+                     Optional[IndexedCommand]]]]:
+    a_file_offsets = _file_offsets_from_aligned_commands(
+        is_left,
+        aligned_commands,
+    )
+    b_file_offsets = _file_offsets_from_aligned_commands(
+        not is_left,
+        aligned_commands,
+    )
+    result: Dict[str,
+                 Dict[int,
+                      Tuple[VernacCommandData,
+                            Optional[IndexedCommand]]]] = {}
+    for a, b in aligned_commands:
+        if not is_left:
+            b, a = a, b
+        if a is None:
+            continue
+        else:
+            aidx, filename, acmd = a
+            if b is not None:
+                bidx, bfilename, bcmd = b
+                b = (bidx - b_file_offsets[bfilename], bfilename, bcmd)
+            file_commands = result.setdefault(filename, dict())
+            file_commands[aidx - a_file_offsets[filename]] = (acmd, b)
+    return result
+
+
+left_aligned_commands_to_dict = partial(_aligned_commands_to_dict, True)
+"""
+Map left filenames to file-local indices and aligned commands.
+"""
+
+right_aligned_commands_to_dict = partial(_aligned_commands_to_dict, False)
+"""
+Map right filenames to file-local indices and aligned commands.
+"""
+
+
 def default_align(a: ProjectCommitData, b: ProjectCommitData) -> Assignment:
     """
     Compute the default alignment algorithm.
