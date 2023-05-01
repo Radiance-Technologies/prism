@@ -28,6 +28,7 @@ from prism.data.build_cache import (
     ProjectCommitData,
     VernacCommandData,
     VernacCommandDataList,
+    VernacDict,
 )
 from prism.data.repair.align import (
     AlignedCommands,
@@ -35,6 +36,7 @@ from prism.data.repair.align import (
     align_commits,
     default_align,
     get_aligned_commands,
+    left_file_offsets_from_aligned_commands,
 )
 from prism.data.repair.diff import compute_git_diff
 from prism.interface.coq.options import CoqWarningState, SerAPIOptions
@@ -176,6 +178,23 @@ class VernacCommandDataListDiff:
     A set of command indices in the original file indicating commands
     that should be removed.
     """
+    offsets: List[Tuple[Tuple[int,
+                              int,
+                              int],
+                        Tuple[int,
+                              int,
+                              int]]] = default_field([])
+    """
+    A list of pairs of tuples identifying character and line offsets.
+
+    The first tuple in each pair contains two character numbers
+    identifying a region paired with a character-level offset that
+    should be applied to each location after the region.
+    The second tuple in each pair contains two line numbers identifying
+    the same region paired with a line offset that should be applied to
+    each location after the region in concurrence with the character
+    offset
+    """
 
     @property
     def is_empty(self) -> bool:
@@ -194,7 +213,8 @@ class VernacCommandDataListDiff:
             self.added_commands.shallow_copy(),
             dict(self.affected_commands),
             dict(self.changed_commands),
-            set(self.dropped_commands))
+            set(self.dropped_commands),
+            list(self.offsets))
 
 
 @dataclass
@@ -311,6 +331,57 @@ class ProjectCommitDataDiff:
         """
         return all([v.is_empty for v in self.command_changes.values()])
 
+    def _patch_locations(self, patched_command_data: VernacDict) -> None:
+        """
+        Apply offsets in the patch to locations of commands.
+
+        The given `patched_command_data` is presumed to already be
+        repaired but for the offsets and sorted in canonical order (such
+        that nested commands appear in before the commands that surround
+        them).
+        """
+        for filename, change in self.command_changes.items():
+            # iterate in reverse order so that we can correctly detect
+            # nested commands and not need to offset the offsets
+            offsets = sorted(
+                change.offsets,
+                key=lambda p: p[0][0],
+                reverse=True)
+            if not offsets:
+                continue
+            commands = patched_command_data[filename]
+            for idx, command in enumerate(reversed(commands)):
+                idx = len(commands) - idx + 1
+                cmd_loc = command.location
+                for (
+                    (charno,
+                     charno_last,
+                     char_shift),
+                    (lineno,
+                     _lineno_last,
+                     line_shift),
+                ) in offsets:
+                    if cmd_loc.beg_charno >= charno_last:
+                        command.shift_location(line_shift, char_shift)
+                    elif cmd_loc.beg_charno > charno:
+                        assert cmd_loc.lineno_last < charno_last, \
+                            "Nested inner command cannot spill outside outer command"
+                        nested_line_shift = cmd_loc.lineno_last - cmd_loc.lineno + 1
+                        nested_char_shift = cmd_loc.end_charno - cmd_loc.beg_charno
+                        # shift subsequent and outer command(s)
+                        for j in range(idx + 1, len(commands)):
+                            commands[j].shift_location(
+                                nested_line_shift,
+                                nested_char_shift)
+                        # shift nested command to outer command's start
+                        command.shift_location(
+                            lineno - cmd_loc.lineno,
+                            charno - cmd_loc.beg_charno)
+                    elif cmd_loc.beg_charno < charno:
+                        assert cmd_loc.end_charno < charno, \
+                            "Unnested command cannot spill into another command"
+                        continue
+
     def patch(self, data: ProjectCommitData) -> ProjectCommitData:
         """
         Apply this diff to given project data.
@@ -399,6 +470,9 @@ class ProjectCommitDataDiff:
                 assert not added, "file cannot be empty if commands were added"
                 # the resulting file would be empty; remove it
                 result_command_data.pop(filename, None)
+        # Apply offsets
+        result.sort_commands()
+        self._patch_locations(result_command_data)
         result.file_dependencies = self.file_dependencies_diff.patch(
             data.file_dependencies)
         return result
@@ -437,18 +511,8 @@ class ProjectCommitDataDiff:
         """
         result = ProjectCommitDataDiff()
         changes = result.command_changes
-        a_file_offsets: Dict[str,
-                             int] = {}
-        for a, _ in aligned_commands:
-            if a is not None:
-                aidx, filename, _ = a
-            else:
-                continue
-            try:
-                offset = a_file_offsets[filename]
-            except KeyError:
-                offset = aidx
-            a_file_offsets[filename] = min(aidx, offset)
+        a_file_offsets = left_file_offsets_from_aligned_commands(
+            aligned_commands)
         for a, b in aligned_commands:
             if a is None:
                 # added command
@@ -495,10 +559,14 @@ class ProjectCommitDataDiff:
 
     @classmethod
     def from_alignment(
-            cls,
-            a: ProjectCommitData,
-            b: ProjectCommitData,
-            alignment: np.ndarray) -> 'ProjectCommitDataDiff':
+        cls,
+        a: ProjectCommitData,
+        b: ProjectCommitData,
+        alignment: np.ndarray,
+        return_aligned_commands: bool = False
+    ) -> Union['ProjectCommitDataDiff',
+               Tuple['ProjectCommitDataDiff',
+                     AlignedCommands]]:
         """
         Create a diff between two commits given a precomputed alignment.
 
@@ -525,20 +593,28 @@ class ProjectCommitDataDiff:
         # goals is necessary, but all tests indicate that it is.
         a.patch_goals()
         b.patch_goals()
-        diff = cls.from_aligned_commands(get_aligned_commands(a, b, alignment))
+        aligned_commands = get_aligned_commands(a, b, alignment)
+        diff = cls.from_aligned_commands(aligned_commands)
         diff.file_dependencies_diff = SerializableDataDiff.compute_diff(
             a.file_dependencies,
             b.file_dependencies)
-        return diff
+        if return_aligned_commands:
+            return diff, aligned_commands
+        else:
+            return diff
 
     @classmethod
     def from_commit_data(
-            cls,
-            a: ProjectCommitData,
-            b: ProjectCommitData,
-            align: AlignmentFunction,
-            diff: Optional[GitDiff] = None,
-            compute_diff: bool = True) -> 'ProjectCommitDataDiff':
+        cls,
+        a: ProjectCommitData,
+        b: ProjectCommitData,
+        align: AlignmentFunction,
+        diff: Optional[GitDiff] = None,
+        compute_diff: bool = True,
+        return_aligned_commands: bool = False
+    ) -> Union['ProjectCommitDataDiff',
+               Tuple['ProjectCommitDataDiff',
+                     AlignedCommands]]:
         """
         Create a diff between two commits.
 
@@ -561,12 +637,18 @@ class ProjectCommitDataDiff:
             entirety of `a` and `b`, which may be expensive depending on
             the alignment algorithm.
             By default True.
+        return_aligned_commands : bool, optional
+            If True, then return the alignment between the commands of
+            `a` and `b`.
 
         Returns
         -------
         ProjectCommitDataDiff
             The diff between `a` and `b` such that
             ``diff.patch(a).command_data == b.command_data``.
+        aligned_commands : Assignment, optional
+            If `return_aligned_commands` is True, then the aligned
+            commands are also returned.
         """
         if diff is None and compute_diff:
             diff = compute_git_diff(a, b)
@@ -574,7 +656,8 @@ class ProjectCommitDataDiff:
             alignment = align_commits(a, b, diff, align)
         else:
             alignment = align(a, b)
-        return cls.from_alignment(a, b, alignment)
+        data_diff = cls.from_alignment(a, b, alignment)
+        return data_diff
 
 
 @dataclass
@@ -1606,6 +1689,9 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
         align : Optional[AlignmentFunction], optional
             If `commit_diff` is None, then the alignment algorithm used
             to compute the diff, by default `default_align`.
+        kwargs
+            Additional keyword arguments to
+            `ProjectCommitDataDiff.from_commit_data`.
 
         Returns
         -------
@@ -1614,12 +1700,20 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
         """
         if align is None:
             align = default_align
+        diff = kwargs.pop('diff', None)
+        if diff is None:
+            diff = compute_git_diff(initial_state, final_state)
+        return_alignment = kwargs.pop('return_alignment', False) or False
         if commit_diff is None:
-            commit_diff = ProjectCommitDataDiff.from_commit_data(
-                initial_state,
-                final_state,
-                align,
-                **kwargs)
+            commit_diff = typing.cast(
+                ProjectCommitDataDiff,
+                ProjectCommitDataDiff.from_commit_data(
+                    initial_state,
+                    final_state,
+                    align,
+                    diff=diff,
+                    return_aligned_commands=return_alignment,
+                    **kwargs))
         if get_error_tags is None:
             get_error_tags = cls.default_get_error_tags
         broken_command_indices = {
@@ -1633,8 +1727,8 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
         else:
             broken_state_diff = ProjectCommitDataDiff(
                 {
-                    k: VernacCommandDataListDiff()
-                    for k in commit_diff.command_changes.keys()
+                    k: VernacCommandDataListDiff(offsets=list(v.offsets)) for k,
+                    v in commit_diff.command_changes.items()
                 },
                 commit_diff.file_dependencies_diff)
             for filename, added_idx in changeset.added_commands:
@@ -1656,10 +1750,51 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
             for filename, dropped_idx in changeset.dropped_commands:
                 broken_state_diff.command_changes[
                     filename].dropped_commands.add(dropped_idx)
-        broken_commands: List[VernacCommandData] = [
-            initial_state.command_data[f][idx] for f,
-            idx in broken_command_indices
-        ]
+        # "broken" commands are those that did not change
+        # However, their location may still have changed, and we wish
+        # to preserve that as otherwise its old location may clash with
+        # other changes.
+        # If the commmand stayed in the same file or not:
+        #   Shift it to the starting line of the changed version.
+        #   If it spans fewer lines, then do nothing else.
+        #   If it spans more lines, then shift all commands that appear
+        #   after the changed version by the difference.
+        # Note that the shifting occurs at patch time to avoid needing
+        # to reconstruct all of the SerializableDataDiffs
+        # Nested commands are shifted to before the "broken" command and
+        # increase the offset at which the broken command and all
+        # subsequent commands are shifted.
+        broken_commands = []
+        for f, idx in broken_command_indices:
+            initial_command = initial_state.command_data[f][idx]
+            broken_command = initial_command.shallow_copy()
+            broken_commands.append(broken_command)
+            repair = commit_diff.command_changes[f].changed_commands[idx]
+            repaired_command = repair.patch(broken_command)
+            repair_filename = repaired_command.location.filename
+            # update location but not text
+            new_location = repaired_command.spanning_location()
+            broken_command.command.location = broken_command.location.rename(
+                repair_filename)
+            (num_excess_lines,
+             num_excess_chars) = broken_command.relocate(new_location)
+            # recreate diff
+            repair = SerializableDataDiff[VernacCommandData].compute_diff(
+                initial_command,
+                broken_command)
+            broken_state_diff.command_changes[f].affected_commands[idx] = repair
+            # record offsets
+            if num_excess_chars > 0 or num_excess_lines > 0:
+                broken_state_diff.command_changes[f].offsets.append(
+                    (
+                        (
+                            new_location.beg_charno,
+                            new_location.end_charno,
+                            num_excess_chars),
+                        (
+                            new_location.lineno,
+                            new_location.lineno_last,
+                            num_excess_lines)))
         error_instance = cls._make_error_instance(
             initial_state,
             broken_state_diff,
@@ -1734,11 +1869,13 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
         # sort commands for reproducible indexing of commands in
         # produced diffs
         initial_state.sort_commands()
-        commit_diff = ProjectCommitDataDiff.from_commit_data(
-            initial_state,
-            repaired_state,
-            align,
-            **kwargs)
+        commit_diff = typing.cast(
+            ProjectCommitDataDiff,
+            ProjectCommitDataDiff.from_commit_data(
+                initial_state,
+                repaired_state,
+                align,
+                **kwargs))
         error_instances: List[ProjectCommitDataErrorInstance] = []
         for changeset in changeset_miner(initial_state, commit_diff):
             # make two partial diffs
@@ -2090,10 +2227,12 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
         # produced diffs
         broken_state.sort_commands()
         # the other partial diff repairs the broken state
-        repaired_state_diff = ProjectCommitDataDiff.from_commit_data(
-            broken_state,
-            repaired_state,
-            align)
+        repaired_state_diff = typing.cast(
+            ProjectCommitDataDiff,
+            ProjectCommitDataDiff.from_commit_data(
+                broken_state,
+                repaired_state,
+                align))
         # get the broken commands
         added = list(repaired_state_diff.added_commands)
         repaired = list(repaired_state_diff.changed_commands)
