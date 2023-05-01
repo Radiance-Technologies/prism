@@ -1,6 +1,7 @@
 """
 Test suite for `prism.data.repair.align`.
 """
+import typing
 import unittest
 from functools import partial
 from typing import Optional
@@ -70,18 +71,22 @@ class TestRepairInstance(unittest.TestCase):
         Verify that a diff captures the changes between two commits.
         """
         with self.subTest("patch_identity"):
-            diff = ProjectCommitDataDiff.from_commit_data(
-                self.initial_state,
-                self.initial_state,
-                default_align)
+            diff = typing.cast(
+                ProjectCommitDataDiff,
+                ProjectCommitDataDiff.from_commit_data(
+                    self.initial_state,
+                    self.initial_state,
+                    default_align))
             self._assert_commit_data_equal(
                 diff.patch(self.initial_state),
                 self.initial_state)
             self.assertTrue(diff.is_empty)
-        diff = ProjectCommitDataDiff.from_commit_data(
-            self.initial_state,
-            self.repaired_state,
-            default_align)
+        diff = typing.cast(
+            ProjectCommitDataDiff,
+            ProjectCommitDataDiff.from_commit_data(
+                self.initial_state,
+                self.repaired_state,
+                default_align))
         with self.subTest("patch"):
             patched_state = diff.patch(self.initial_state)
             patched_state.diff_goals()
@@ -114,10 +119,12 @@ class TestRepairInstance(unittest.TestCase):
             error_filter=filter_one)
 
         if self.diff is None:
-            self.diff = ProjectCommitDataDiff.from_commit_data(
-                self.initial_state,
-                self.repaired_state,
-                default_align)
+            self.diff = typing.cast(
+                ProjectCommitDataDiff,
+                ProjectCommitDataDiff.from_commit_data(
+                    self.initial_state,
+                    self.repaired_state,
+                    default_align))
 
         repairs = ProjectCommitDataRepairInstance.mine_repair_examples(
             self.initial_state,
