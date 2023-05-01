@@ -490,6 +490,46 @@ class VernacCommandData:
             y: x.union(y),
             (s.referenced_identifiers() for s in self.sorted_sentences()))
 
+    def relocate(self, new_location: SexpInfo.Loc) -> Tuple[int, int]:
+        """
+        Shift this command's location to the start of the given one.
+
+        Parameters
+        ----------
+        new_location : SexpInfo.Loc
+            The new location on which to base this command, presumed to
+            span the command and its proof(s).
+
+        Returns
+        -------
+        num_excess_lines : int
+            The number of lines in this command's current location in
+            excess of the new location.
+        num_excess_chars : int
+            The number of characters in this command's current location
+            in excess of the new location.
+        """
+        # NOTE: The bol_pos does not currently get shifted.
+        if new_location.filename != self.location.filename:
+            raise ValueError(
+                "Cannot shift location to another file. "
+                f"Expected {self.location.filename}, got {new_location.filename}"
+            )
+        # we assume that the command's location precedes any
+        # part of its proof
+        line_shift = new_location.lineno - self.location.lineno
+        char_shift = new_location.beg_charno - self.location.beg_charno
+        self.shift_location(line_shift, char_shift)
+        # calculate extra shift due to the new location being smaller
+        spanning_location = self.spanning_location()
+        num_excess_lines = max(
+            0,
+            spanning_location.lineno_last - new_location.lineno_last)
+        num_excess_chars = max(
+            0,
+            spanning_location.end_charno - new_location.end_charno)
+        return num_excess_lines, num_excess_chars
+
     def shallow_copy(self) -> 'VernacCommandData':
         """
         Get a shallow copy of this structure and its fields.
@@ -499,6 +539,19 @@ class VernacCommandData:
             self.command_error,
             self.command.shallow_copy(),
             [[s.shallow_copy() for s in p] for p in self.proofs])
+
+    def shift_location(self, line_offset: int, char_offset: int) -> None:
+        """
+        Shift the location of the command and its proof by some offset.
+        """
+        self.command.location = self.command.location.shift(
+            char_offset,
+            line_offset)
+        for proof in self.proofs:
+            for proof_sentence in proof:
+                proof_sentence.location = proof_sentence.location.shift(
+                    char_offset,
+                    line_offset)
 
     def sorted_sentences(
             self,
