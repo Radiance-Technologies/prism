@@ -498,7 +498,7 @@ class SexpInfo:
                 self.beg_charno,
                 self.end_charno)
 
-        def shift(self, offset: int) -> 'SexpInfo.Loc':
+        def shift(self, offset: int, line_offset: int = 0) -> 'SexpInfo.Loc':
             """
             Shift the character positions of this location.
 
@@ -506,7 +506,10 @@ class SexpInfo:
             ----------
             offset : int
                 The amount, positive or negative, by which this location
-                should be shifted.
+                should be shifted in terms of characters.
+            line_offset : int, optional
+                The amount, positive or negative, by which this location
+                should be shifted in terms of lines, by default 0.
 
             Returns
             -------
@@ -515,9 +518,9 @@ class SexpInfo:
             """
             return SexpInfo.Loc(
                 self.filename,
-                self.lineno,
+                self.lineno + line_offset,
                 self.bol_pos,
-                self.lineno_last,
+                self.lineno_last + line_offset,
                 self.bol_pos_last,
                 self.beg_charno + offset,
                 self.end_charno + offset)
