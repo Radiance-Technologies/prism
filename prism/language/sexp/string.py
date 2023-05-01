@@ -8,6 +8,7 @@ from typing import Callable, Iterator, List, Optional, Tuple
 
 from prism.language.sexp.exception import IllegalSexpOperationException
 from prism.language.sexp.node import SexpNode
+from prism.util.string import escape_backslash
 
 
 class SexpString(SexpNode):
@@ -35,7 +36,7 @@ class SexpString(SexpNode):
         content = self.content
         if (not (content.startswith('"') and content.endswith('"'))
                 and " " in content):
-            content = '"' + content + '"'
+            content = '"' + escape_backslash(content) + '"'
         return content
 
     @property
