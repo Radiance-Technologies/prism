@@ -1235,10 +1235,10 @@ class Project(ABC):
             formula[0])
         if dev:
             # remove dev constraints, presume them satisfied
-            assert isinstance(formula, LogicalPF)
+            assert isinstance(formula, PackageFormula)
             dev_constraint = VersionConstraint(
                 relop=RelOp.EQ,
-                version=Version.parse('"dev"'))
+                version=Version.parse('dev'))
             formula = formula.map(
                 lambda pc: typing.cast(
                     PackageConstraint,
