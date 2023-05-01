@@ -3,19 +3,19 @@
     "change": {
       "build_process": null,
       "diff": {
-        "text": "diff --git a\/exgcd.v b\/exgcd.v\nindex 7664a3b..f8b9c6b 100644\n--- a\/exgcd.v\n+++ b\/exgcd.v\n@@ -19 +18,0 @@ Require Import Znumtheory.\n-Require Import Bool.\n@@ -145,0 +145 @@ Hint Resolve Zneq_bool_true Zneq_bool_false Zle_bool_imp_le Zis_gcd_intro: zarit\n+\n@@ -165 +164,0 @@ Qed.\n-\n@@ -188 +187 @@ unfold Zwf; simpl; (intuition auto with zarith).\n-cutrewrite <- ((fst e')=(snd e')) in H5; auto with zarith.\n+replace (snd e') with (fst e') in H5; auto with zarith.\ndiff --git a\/totalhoarelogic.v b\/totalhoarelogic.v\nindex 2081db7..dde8818 100644\n--- a\/totalhoarelogic.v\n+++ b\/totalhoarelogic.v\n@@ -15 +14,0 @@ Require Export hoarelogicsemantics.\n-Require Wf.\n"
+        "text": "diff --git a\/exgcd.v b\/exgcd.v\nindex 7664a3b..06f7f01 100644\n--- a\/exgcd.v\n+++ b\/exgcd.v\n@@ -19 +18,0 @@ Require Import Znumtheory.\n-Require Import Bool.\n@@ -188 +187 @@ unfold Zwf; simpl; (intuition auto with zarith).\n-cutrewrite <- ((fst e')=(snd e')) in H5; auto with zarith.\n+replace (snd e') with (fst e') in H5; auto with zarith.\ndiff --git a\/totalhoarelogic.v b\/totalhoarelogic.v\nindex 2081db7..dde8818 100644\n--- a\/totalhoarelogic.v\n+++ b\/totalhoarelogic.v\n@@ -15 +14,0 @@ Require Export hoarelogicsemantics.\n-Require Wf.\n"
       },
       "environment": null
     },
     "error_location": [
       {
-        "beg_charno": 4179,
+        "beg_charno": 4158,
         "bol_pos": 4179,
         "bol_pos_last": 4253,
-        "end_charno": 4301,
+        "end_charno": 4280,
         "filename": "exgcd.v",
-        "lineno": 145,
-        "lineno_last": 147
+        "lineno": 144,
+        "lineno_last": 146
       }
     ],
     "initial_state": {
@@ -281,14 +281,14 @@
     },
     "project_name": "hoare-tut",
     "tags": [
-      "repair:one-file",
-      "error:one-file",
-      "repair:VernacStartTheoremProof",
-      "error:artificial:mined",
-      "repair:one-command",
-      "repair:artificial:mined",
+      "error:one-command",
       "error:VernacStartTheoremProof",
-      "error:one-command"
+      "repair:artificial:mined",
+      "error:one-file",
+      "repair:one-command",
+      "repair:one-file",
+      "error:artificial:mined",
+      "repair:VernacStartTheoremProof"
     ]
   },
   "repaired_state_or_diff": {
