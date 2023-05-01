@@ -5,11 +5,11 @@ Utility functions related to Git diffs useful for repair examples.
 import re
 import tempfile
 from pathlib import Path
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Set
 
 import seutil.bash as bash
 
-from prism.data.build_cache import ProjectCommitData
+from prism.data.build_cache import ProjectCommitData, VernacCommandData
 from prism.language.gallina.analyze import SexpInfo
 from prism.util.diff import Change, GitDiff
 
@@ -156,6 +156,37 @@ def commands_in_diff(data: ProjectCommitData,
             diff,
             is_before) for k,
         v in data.command_data.items()
+    }
+
+
+def get_changes_to_command(
+        command: VernacCommandData,
+        changes: Iterable[Change],
+        is_before: bool) -> Set[Change]:
+    """
+    Get the subset of changes to this command from a larger collection.
+
+    Parameters
+    ----------
+    command : VernacCommandData
+        A command.
+    changes : Iterable[Change]
+        A collection of changes.
+    is_before : bool
+        Whether the command should be considered to exist before or
+        after the change.
+
+    Returns
+    -------
+    Set[Change]
+        The subset of `changes` to the `command`.
+    """
+    command_location = command.spanning_location()
+    return {
+        c for c in changes
+        if is_location_in_change(command_location,
+                                 c,
+                                 is_before)
     }
 
 
