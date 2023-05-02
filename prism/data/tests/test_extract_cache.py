@@ -724,6 +724,96 @@ class TestExtractCache(unittest.TestCase):
                     ]))
 
     @pytest.mark.coq_all
+    def test_extract_set_program_mode(self):
+        """
+        Verify that commands are extracted when ``Program Mode`` is on.
+        """
+        with pushd(_COQ_EXAMPLES_PATH):
+            extracted_commands = CommandExtractor(
+                "program_mode.v",
+                typing.cast(
+                    List[CoqSentence],
+                    Project.extract_sentences(
+                        CoqDocument(
+                            "program_mode.v",
+                            CoqParser.parse_source("program_mode.v"),
+                            _COQ_EXAMPLES_PATH),
+                        sentence_extraction_method=SEM.HEURISTIC,
+                        return_locations=True,
+                        glom_proofs=False)),
+                serapi_options=SerAPIOptions.empty(),
+                opam_switch=self.test_switch).extracted_commands
+        self.assertEqual(len(extracted_commands), 11)
+        expected_ids = [
+            [],
+            [],
+            [],
+            [],
+            ['P'],
+            ['n',
+             'm',
+             'k'],
+            ["p",
+             "h"],
+            ["add"],
+            ["foo_obligation_1",
+             "foo_obligation_2",
+             "foo"],
+            [],
+            ["foo'_obligation_1",
+             "foo'_obligation_2",
+             "foo'"],
+        ]
+        self.assertEqual(
+            [c.identifier for c in extracted_commands],
+            expected_ids)
+        expected_derived = [
+            "Derive p SuchThat ((k*n)+(k*m) = p) As h.",
+            "rewrite <- Nat.mul_add_distr_l.",
+            "subst p.",
+            "reflexivity.",
+            "Qed.",
+        ]
+        self.assertEqual(
+            [c.text for c in extracted_commands[-5].sorted_sentences()],
+            expected_derived)
+        expected_definition = [
+            "Fixpoint add (n' m:nat) {struct n'} : nat := "
+            "match n' with "
+            "| O => m "
+            "| S p => S (add p m) "
+            "end."
+        ]
+        self.assertEqual(
+            [c.text for c in extracted_commands[-4].sorted_sentences()],
+            expected_definition)
+        expected_program = [
+            "Definition foo := let x := _ : unit in _ : x = tt.",
+            "Next Obligation.",
+            "exact tt.",
+            "Qed.",
+            "Next Obligation.",
+            "simpl; match goal with |- ?a = _ => now destruct a end.",
+            "Qed.",
+        ]
+        self.assertEqual(
+            [c.text for c in extracted_commands[-3].sorted_sentences()],
+            expected_program)
+        expected_obligation_tactic = [
+            "Obligation Tactic := try (exact tt); "
+            "try (simpl; match goal with |- ?a = _ => now destruct a end)."
+        ]
+        self.assertEqual(
+            [c.text for c in extracted_commands[-2].sorted_sentences()],
+            expected_obligation_tactic)
+        expected_program = [
+            "Definition foo' := let x := _ : unit in _ : x = tt."
+        ]
+        self.assertEqual(
+            [c.text for c in extracted_commands[-1].sorted_sentences()],
+            expected_program)
+
+    @pytest.mark.coq_all
     def test_bug_396(self):
         """
         Verify that certain character-escaped goals can be extracted.

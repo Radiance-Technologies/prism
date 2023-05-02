@@ -27,6 +27,7 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
+    TypeAlias,
     Union,
 )
 
@@ -58,7 +59,7 @@ from prism.data.util import get_project_func
 from prism.interface.coq.exception import CoqExn
 from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.interface.coq.ident import Identifier, get_all_qualified_idents
-from prism.interface.coq.options import SerAPIOptions
+from prism.interface.coq.options import CoqFlag, SerAPIOptions
 from prism.interface.coq.re_patterns import (
     ABORT_COMMAND_PATTERN,
     IDENT_PATTERN,
@@ -98,6 +99,20 @@ ProofSentenceState = Tuple[CoqSentence,
 ProofBlock = List[ProofSentenceState]
 
 _program_regex = re.compile("[Pp]rogram")
+
+_program_mode_regex = regex_from_options(
+    ['VernacDefinition',
+     'VernacFixpoint',
+     'VernacCoFixpoint'],
+    False,
+    False)
+"""
+Match command types that can generate obligations when ``Program Mode``
+is enabled.
+
+According to official documentation, this should only be definitions and
+fixpoints, but the documentation may be incomplete.
+"""
 
 _save_pattern = re.compile(rf"Save\s+(?P<ident>{IDENT_PATTERN.pattern})\s*.")
 
@@ -699,6 +714,13 @@ class CommandExtractor:
         is_program = any(
             _program_regex.search(attr) is not None
             for attr in vernac.attributes)
+        if not is_program and _program_mode_regex.match(
+                command_type) is not None:
+            program_mode_setting = serapi.query_setting("Program Mode")
+            assert program_mode_setting is not None, \
+                "Program Mode should be a valid flag name"
+            program_mode_setting = typing.cast(CoqFlag, program_mode_setting)
+            is_program = program_mode_setting.value
         # Check if we're dealing with a subproof
         is_subproof = (
             self.post_proof_id is not None
@@ -849,7 +871,7 @@ class CommandExtractor:
         if logger is not None:
             logger.warning(message)
         else:
-            warnings.warn(message)
+            warnings.warn(message, stacklevel=2)
         if proof_id in self.defined_lemmas:
             # add to the existing lemma as a new proof
             # block
@@ -1024,16 +1046,17 @@ class CommandExtractor:
         # Try to determine if all of the obligations were
         # immediately resolved.
         program_id = None
-        ids_set = set(ids)
+        candidates: List[str] = []
         for new_id in ids:
             match = OBLIGATION_ID_PATTERN.match(new_id)
-            if match is not None:
-                program_id = match.groupdict()['proof_id']
-                if program_id in ids_set:
-                    break
-                else:
-                    # reset
-                    program_id = None
+            if match is None:
+                # if an ID was generated that is not an obligation, then
+                # it must be the program
+                candidates.append(new_id)
+        if candidates:
+            assert len(candidates) == 1, \
+                "A program can only emit IDs for itself or obligations"
+            program_id = candidates.pop()
         if program_id is not None:
             # all obligations were resolved
             assert sentence.ast is not None, \
@@ -1805,7 +1828,7 @@ def extract_cache_new(
 
 # Abbreviation defined to satisfy conflicting autoformatting and style
 # requirements in cache_extract_commit_iterator.
-CTS = CommitTraversalStrategy
+CTS: TypeAlias = CommitTraversalStrategy
 
 
 def cache_extract_commit_iterator(
