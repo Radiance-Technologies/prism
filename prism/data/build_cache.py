@@ -1312,13 +1312,25 @@ class CoqProjectBuildCacheProtocol(Protocol):
         that the successful cache item is not shadowed.
         """
         file_path = self.get_path_from_metadata(metadata)
+        files_to_remove: List[Path] = []
         files_removed: List[Path] = []
-        for suffix in chain(self._error_suffixes.values(),
-                            self._error_timestamp_suffixes.values()):
-            file_to_remove = Path(str(file_path.with_suffix("")) + suffix)
-            if file_to_remove.exists():
-                os.remove(file_to_remove)
-                files_removed.append(file_to_remove)
+        for suffix_key in self._error_suffixes.keys():
+            error_file = Path(
+                str(file_path.with_suffix(""))
+                + self._error_suffixes[suffix_key])
+            timestamp_file = Path(
+                str(file_path.with_suffix(""))
+                + self._error_timestamp_suffixes[suffix_key])
+            if timestamp_file.exists():
+                with open(timestamp_file, "rt") as f:
+                    timestamp = float(f.read())
+                if timestamp < self.start_time:
+                    files_to_remove.append(timestamp_file)
+                    if error_file.exists():
+                        files_to_remove.append(error_file)
+        for file_to_remove in files_to_remove:
+            os.remove(file_to_remove)
+            files_removed.append(file_to_remove)
         return files_removed
 
     def contains(

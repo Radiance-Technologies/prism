@@ -1,6 +1,7 @@
 """
 Test suite for `prism.data.build_cache`.
 """
+import os
 import shutil
 import typing
 import unittest
@@ -14,6 +15,7 @@ import seutil.io as io
 from prism.data.build_cache import (
     CacheObjectStatus,
     CacheStatus,
+    CoqProjectBuildCache,
     CoqProjectBuildCacheProtocol,
     CoqProjectBuildCacheServer,
     ProjectBuildEnvironment,
@@ -327,50 +329,56 @@ class TestCoqProjectBuildCache(unittest.TestCase):
     def test_clear_error_files(self) -> None:
         """
         Verify clear_error_files method works as expected.
+
+        Once an error log is written, it should not be cleared by
+        clear_error_files until we artificially advance the cache's
+        start_time, then it should get deleted.
         """
         with TemporaryDirectory() as temp_dir:
-            with CoqProjectBuildCacheServer() as cache_server:
-                cache: CoqProjectBuildCacheProtocol = cache_server.Client(
-                    temp_dir)
-                metadata: ProjectMetadata = self.dataset.projects[
-                    "float"].metadata
-                float_commit_sha = metadata.commit_sha
-                assert float_commit_sha is not None
-                failed_build_result = ProjectBuildResult(
-                    1,
-                    "warning",
-                    "a build error happened")
-                writers = [
-                    cache.write_cache_error_log,
-                    cache.write_misc_error_log,
-                    cache.write_build_error_log
-                ]
-                messages = [
-                    "Float cache error",
-                    "Float misc error",
-                    failed_build_result
-                ]
-                expected_statuses = [
-                    CacheStatus.CACHE_ERROR,
-                    CacheStatus.OTHER_ERROR,
-                    CacheStatus.BUILD_ERROR
-                ]
-                for writer, message, expected_status in zip(
-                        writers, messages, expected_statuses):
-                    with self.subTest(str(expected_status)):
-                        writer(metadata, True, message)
-                        status = cache.list_status()
-                        self.assertEqual(
-                            status,
-                            [
-                                CacheObjectStatus(
-                                    "float",
-                                    float_commit_sha,
-                                    "8.10.2",
-                                    expected_status)
-                            ])
-                        cache.clear_error_files(metadata)
-                        self.assertCountEqual(cache.list_status(), [])
+            cache = CoqProjectBuildCache(temp_dir)
+            metadata: ProjectMetadata = self.dataset.projects["float"].metadata
+            float_commit_sha = metadata.commit_sha
+            assert float_commit_sha is not None
+            failed_build_result = ProjectBuildResult(
+                1,
+                "warning",
+                "a build error happened")
+            writers = [
+                cache.write_cache_error_log,
+                cache.write_misc_error_log,
+                cache.write_build_error_log
+            ]
+            messages = [
+                "Float cache error",
+                "Float misc error",
+                failed_build_result
+            ]
+            expected_statuses = [
+                CacheStatus.CACHE_ERROR,
+                CacheStatus.OTHER_ERROR,
+                CacheStatus.BUILD_ERROR
+            ]
+            for writer, message, expected_status in zip(
+                    writers, messages, expected_statuses):
+                with self.subTest(str(expected_status)):
+                    writer(metadata, True, message)
+                    status = cache.list_status()
+                    cache.clear_error_files(metadata)
+                    self.assertEqual(
+                        status,
+                        [
+                            CacheObjectStatus(
+                                "float",
+                                float_commit_sha,
+                                "8.10.2",
+                                expected_status)
+                        ])
+                    cache.start_time += 1.
+                    cache.clear_error_files(metadata)
+                    self.assertCountEqual(cache.list_status(), [])
+            self.assertEqual(
+                os.listdir((Path(temp_dir) / 'float') / float_commit_sha),
+                [])
 
     @classmethod
     def setUpClass(cls) -> None:
