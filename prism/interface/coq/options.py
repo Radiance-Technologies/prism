@@ -1053,12 +1053,13 @@ class SerAPIOptions:
             '-indices-matter',
             action='store_true',
             default=False,
-            help='Disable universe consistency checking')
+            help='Levels of indices (and nonuniform parameters) contribute '
+            'to the level of inductives.')
         parser.add_argument(
             '-impredicative-set',
             action='store_true',
             default=False,
-            help='Disable universe consistency checking')
+            help='Declare the sort Set to be impredicative')
         parsed_args, args = parser.parse_known_args(args)
         noinit = parsed_args.noinit
         if is_string:
