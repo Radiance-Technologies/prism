@@ -217,7 +217,7 @@ class Project(ABC):
         """
         Return the list of commands that build the project.
         """
-        cmd_list = self.metadata.build_cmd
+        cmd_list = list(self.metadata.build_cmd)
         for i in range(len(cmd_list)):
             if 'make' in cmd_list[i] and self.num_cores is not None:
                 cmd_list[i] = cmd_list[i] + " -j{0}".format(self.num_cores)
