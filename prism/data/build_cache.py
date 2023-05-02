@@ -1685,6 +1685,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
             If `block`, return ``"write complete"``; otherwise, return
             nothing
         """
+        self.clear_error_files(metadata)
         str_to_write = "\n".join(
             [
                 f"@@Exit code@@\n{build_result.exit_code}",
@@ -1721,6 +1722,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
             If `block`, return ``"write complete"``; otherwise, return
             nothing
         """
+        self.clear_error_files(metadata)
         return self._write_kernel(
             metadata,
             block,
@@ -1779,6 +1781,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
             If `block`, return "write complete"; otherwise, return
             nothing
         """
+        self.clear_error_files(metadata)
         return self._write_kernel(
             metadata,
             block,
