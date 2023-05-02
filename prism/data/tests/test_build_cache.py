@@ -1,6 +1,7 @@
 """
 Test suite for `prism.data.build_cache`.
 """
+import os
 import shutil
 import typing
 import unittest
@@ -324,14 +325,13 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                     status_list_failed,
                     expected_status_list_failed)
 
-    def test_clear_error_files(self):
+    def test_clear_error_files(self) -> None:
         """
         Verify clear_error_files method works as expected.
         """
         with TemporaryDirectory() as temp_dir:
             with CoqProjectBuildCacheServer() as cache_server:
-                cache: CoqProjectBuildCacheProtocol = CoqProjectBuildCacheClient(
-                    cache_server,
+                cache: CoqProjectBuildCacheProtocol = cache_server.Client(
                     temp_dir)
                 environment = ProjectBuildEnvironment(
                     OpamAPI.active_switch.export())
@@ -343,12 +343,14 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                     metadata,
                     {},
                     None,
+                    None,
+                    None,
                     environment,
                     ProjectBuildResult(0,
                                        "",
                                        ""))
                 failed_build_result = ProjectBuildResult(
-                    "1",
+                    1,
                     "warning",
                     "a build error happened")
                 writers = [
@@ -362,13 +364,13 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                     failed_build_result
                 ]
                 expected_statuses = [
-                    "cache error",
-                    "other error",
-                    "build error"
+                    CacheStatus.CACHE_ERROR,
+                    CacheStatus.OTHER_ERROR,
+                    CacheStatus.BUILD_ERROR
                 ]
                 for writer, message, expected_status in zip(
                         writers, messages, expected_statuses):
-                    with self.subTest(expected_status):
+                    with self.subTest(str(expected_status)):
                         writer(metadata, True, message)
                         status = cache.list_status()
                         self.assertEqual(
@@ -390,8 +392,11 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                                     "float",
                                     float_commit_sha,
                                     "8.10.2",
-                                    "success")
+                                    CacheStatus.SUCCESS)
                             ])
+                        # Clear the successful cache
+                        cache_path = cache.get_path_from_metadata(metadata)
+                        os.remove(cache_path)
 
     @classmethod
     def setUpClass(cls) -> None:

@@ -1200,16 +1200,23 @@ class CoqProjectBuildCacheProtocol(Protocol):
     Default coq versions to look for when getting cache status.
     """
     # yapf: disable
-    _error_suffixes: Dict[str,
+    _error_suffixes: dict[str,
                           str] = {
                               'build_error': "_build_error.txt",
                               'cache_error': "_cache_error.txt",
                               'misc_error': "_misc_error.txt"}
-    # yapf: enable
     """
     Map from error type to suffix that is applied to error log files for
     that type.
     """
+    _error_timestamp_suffixes: dict[str,
+                                    str] = {
+        k: v + ".timestamp" for k, v in _error_suffixes.items()}
+    """
+    Mapping form error type to suffix that is applied to error log file
+    timestamp files of that type.
+    """
+    # yapf: enable
 
     def __contains__(  # noqa: D105
             self,
@@ -1306,7 +1313,8 @@ class CoqProjectBuildCacheProtocol(Protocol):
         """
         file_path = self.get_path_from_metadata(metadata)
         files_removed: List[Path] = []
-        for suffix in self._error_suffixes.values():
+        for suffix in chain(self._error_suffixes.values(),
+                            self._error_timestamp_suffixes.values()):
             file_to_remove = Path(str(file_path.with_suffix("")) + suffix)
             if file_to_remove.exists():
                 os.remove(file_to_remove)
