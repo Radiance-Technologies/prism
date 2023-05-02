@@ -384,7 +384,7 @@ def strace_build(
         command = escape(command)
         strace_cmd = (
             'strace -e trace=execve -v -ff -s 100000000 -xx -ttt -o'
-            f' {logfname} bash -c "{command}"')
+            f" {logfname} bash -c $'{command}'")
 
         if use_dummy_coqc:
             strace_cmd = (
