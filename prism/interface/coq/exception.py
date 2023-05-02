@@ -76,10 +76,14 @@ class CoqExn(Exception):
             else:
                 command_text = ""
             if self.location.lineno != self.location.lineno_last:
-                line_text = f"lines {self.location.lineno}-{self.location.lineno_last}"
+                line_text = ''.join(
+                    [
+                        f"lines {self.location.lineno+1}",
+                        f"-{self.location.lineno_last+1}"
+                    ])
             else:
                 line_text = (
-                    f"line {self.location.lineno}, "
+                    f"line {self.location.lineno+1}, "
                     f"characters {self.location.column_start}"
                     f"-{self.location.column_end}")
             msg = ''.join(
