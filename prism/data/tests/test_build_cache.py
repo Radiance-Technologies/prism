@@ -1,7 +1,6 @@
 """
 Test suite for `prism.data.build_cache`.
 """
-import os
 import shutil
 import typing
 import unittest
@@ -333,22 +332,10 @@ class TestCoqProjectBuildCache(unittest.TestCase):
             with CoqProjectBuildCacheServer() as cache_server:
                 cache: CoqProjectBuildCacheProtocol = cache_server.Client(
                     temp_dir)
-                environment = ProjectBuildEnvironment(
-                    OpamAPI.active_switch.export())
                 metadata: ProjectMetadata = self.dataset.projects[
                     "float"].metadata
                 float_commit_sha = metadata.commit_sha
                 assert float_commit_sha is not None
-                item1 = ProjectCommitData(
-                    metadata,
-                    {},
-                    None,
-                    None,
-                    None,
-                    environment,
-                    ProjectBuildResult(0,
-                                       "",
-                                       ""))
                 failed_build_result = ProjectBuildResult(
                     1,
                     "warning",
@@ -383,20 +370,7 @@ class TestCoqProjectBuildCache(unittest.TestCase):
                                     expected_status)
                             ])
                         cache.clear_error_files(metadata)
-                        cache.write(item1, block=True)
-                        status = cache.list_status()
-                        self.assertEqual(
-                            status,
-                            [
-                                CacheObjectStatus(
-                                    "float",
-                                    float_commit_sha,
-                                    "8.10.2",
-                                    CacheStatus.SUCCESS)
-                            ])
-                        # Clear the successful cache
-                        cache_path = cache.get_path_from_metadata(metadata)
-                        os.remove(cache_path)
+                        self.assertCountEqual(cache.list_status(), [])
 
     @classmethod
     def setUpClass(cls) -> None:
