@@ -144,12 +144,14 @@ class Context:
             return NotImplemented
         return (
             self.revision,
-            self.coq_version if self.coq_version is not None else "None",
-            self.ocaml_version if self.ocaml_version is not None else "None"
-        ) < (
-            other.revision,
-            other.coq_version if other.coq_version is not None else "None",
-            other.ocaml_version if other.ocaml_version is not None else "None")
+            str(self.coq_version) if self.coq_version is not None else "None",
+            str(self.ocaml_version)
+            if self.ocaml_version is not None else "None") < (
+                other.revision,
+                str(other.coq_version)
+                if other.coq_version is not None else "None",
+                str(other.ocaml_version)
+                if other.ocaml_version is not None else "None")
 
     @property
     def commit_sha(self) -> Optional[str]:  # noqa: D102
@@ -201,6 +203,11 @@ class CommandSequence:
 
     def __hash__(self) -> int:  # noqa: D105
         return hash(tuple(self.commands))
+
+    def __lt__(self, other: object) -> bool:  # noqa: D105
+        if not isinstance(other, CommandSequence):
+            return NotImplemented
+        return ','.join(self.commands) < ','.join(other.commands)
 
 
 @dataclass(frozen=True)
@@ -1185,7 +1192,10 @@ class MetadataStorage:
                 field_value = sorted(field_value)
             result[f.name] = io.serialize(field_value, fmt)
         for f_name in self._special_dict_fields:
-            result[f_name] = io.serialize(list(getattr(self, f_name).items()))
+            result[f_name] = io.serialize(
+                sorted(list(getattr(self,
+                                    f_name).items()),
+                       key=lambda p: p[0]))
         for f_name in self._special_set_fields:
             f_serialized: Dict[str,
                                List[Any]] = {}
