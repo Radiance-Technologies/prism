@@ -2,6 +2,7 @@
 Defines a class for holding project metadata.
 """
 
+import logging
 import typing
 from dataclasses import asdict, dataclass, fields
 from typing import (
@@ -21,10 +22,14 @@ import seutil as su
 from prism.interface.coq.options import SerAPIOptions
 from prism.project.util import GitURL
 from prism.util.io import Fmt
+from prism.util.logging import default_log_level
 from prism.util.radpytools import PathLike
 from prism.util.radpytools.dataclasses import default_field
 
 from .version_info import version_info
+
+logger: logging.Logger = logging.getLogger(__name__)
+logger.setLevel(default_log_level())
 
 
 @dataclass
@@ -383,6 +388,25 @@ class ProjectMetadata:
         if self.project_url is not None:
             serialized['project_url'] = str(self.project_url)
         return serialized
+
+    @classmethod
+    def deserialize(  # noqa: D102
+            cls,
+            data: Dict[str,
+                       Any]) -> 'ProjectMetadata':
+        kwargs = {}
+        for f in fields(cls):
+            try:
+                kwargs[f.name] = data[f.name]
+            except KeyError:
+                pass
+        if 'coq_dependencies' in data:
+            logger.warn(
+                "The 'coq_dependencies' field is deprecated. "
+                "Use 'opam_dependencies' instead.")
+            opam_dependencies = kwargs.setdefault('opam_dependencies', [])
+            opam_dependencies.extend(data['coq_dependencies'])
+        return ProjectMetadata(**kwargs)
 
     @classmethod
     def dump(
