@@ -38,7 +38,7 @@ def main():
             lineno = 0
             for lineno, line in enumerate(lines):
                 stdscr.addstr(lineno, 0, line, curses.A_NORMAL)
-            stdscr.addstr(lineno + 1, 0, f"UPTIME: {time.time() - start}")
+            stdscr.addstr(lineno + 1, 0, f"UPTIME: {time.time() - start:.2f}")
             stdscr.addstr(lineno + 2, 0, "Enter 'q' to quit")
             ch = stdscr.getch()
             if ch == ord('q'):
