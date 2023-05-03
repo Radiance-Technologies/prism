@@ -1517,7 +1517,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
     def get_status_counts(self) -> dict[CacheStatus, int]:
         """
         Get count of each cache status in the cache.
-    
+
         Returns
         -------
         dict[CacheStatus, int]
@@ -1533,7 +1533,7 @@ class CoqProjectBuildCacheProtocol(Protocol):
     def get_status_message(self) -> str:
         """
         Get status message to display.
-    
+
         Returns
         -------
         str
@@ -1543,8 +1543,8 @@ class CoqProjectBuildCacheProtocol(Protocol):
         """
         message = ""
         counts = self.get_status_counts()
-        header = "".join(["-"]*10)
-        footer = "".join(["-"]*10)
+        header = "".join(["-"] * 10)
+        footer = "".join(["-"] * 10)
         body_parts = []
         for k, v in counts.items():
             body_parts.append(f"{k.name}: {v}")

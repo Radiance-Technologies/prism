@@ -1,7 +1,11 @@
 {
-    "split": {
-      "train": ["lambda"],
-      "test": ["float"],
-      "validation": []
-    }
+  "split": {
+    "train": [
+      "lambda"
+    ],
+    "test": [
+      "float"
+    ],
+    "validation": []
   }
+}
