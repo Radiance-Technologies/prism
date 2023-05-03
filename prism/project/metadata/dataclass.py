@@ -405,7 +405,9 @@ class ProjectMetadata:
                 "The 'coq_dependencies' field is deprecated. "
                 "Use 'opam_dependencies' instead.")
             opam_dependencies = kwargs.setdefault('opam_dependencies', [])
-            opam_dependencies.extend(data['coq_dependencies'])
+            opam_dependencies.extend(
+                su.io.deserialize(data['coq_dependencies'],
+                                  clz=List[str]))
         return ProjectMetadata(**kwargs)
 
     @classmethod
