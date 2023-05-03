@@ -397,7 +397,7 @@ class ProjectMetadata:
         kwargs = {}
         for f in fields(cls):
             try:
-                kwargs[f.name] = data[f.name]
+                kwargs[f.name] = su.io.deserialize(data[f.name], clz=f.type)
             except KeyError:
                 pass
         if 'coq_dependencies' in data:
