@@ -100,8 +100,7 @@ class TestProject(unittest.TestCase):
         for repo in metadata.opam_repos:
             switch.add_repo(*repo.split())
         cls.assertFalse(TestProject(), metadata.opam_dependencies)
-        cls.assertFalse(TestProject(), metadata.coq_dependencies)
-        for dep in chain(metadata.opam_dependencies, metadata.coq_dependencies):
+        for dep in chain(metadata.opam_dependencies):
             output = dep.split(".", maxsplit=1)
             if len(output) == 1:
                 pkg = output[0]

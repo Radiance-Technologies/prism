@@ -16,8 +16,6 @@
   commit_sha: 3d3bd31c7e4d1ea6f4b5a6815bca5c0a039b204f
   ignore_path_regex:
   - 'gstew5_games/test_suite/.*'
-  coq_dependencies:
-  - 'dependency_1'
   build_cmd:
   - 'make -j8'
   install_cmd:
@@ -37,8 +35,6 @@
   - 'pandas'
   ignore_path_regex:
   - 'gstew5_games/test_suite/.*'
-  coq_dependencies:
-  - 'dependency_1'
   build_cmd:
   - 'make -j8'
   install_cmd:

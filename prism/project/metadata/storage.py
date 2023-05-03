@@ -264,7 +264,6 @@ class MetadataStorage:
     # one-to-many overridable fields
     # match metadata field names exactly
     opam_repos: Dict[ContextID, Set[RepoID]] = default_field(dict())
-    coq_dependencies: Dict[ContextID, Set[PackageID]] = default_field(dict())
     opam_dependencies: Dict[ContextID, List[PackageID]] = default_field(dict())
     ignore_path_regex: Dict[ContextID, Set[str]] = default_field(dict())
     # meta-metadata
@@ -306,8 +305,7 @@ class MetadataStorage:
                               'install_cmd',
                               'clean_cmd'],
         'opam_repositories': ['opam_repos'],
-        'ocaml_packages': ['opam_dependencies',
-                           'coq_dependencies']
+        'ocaml_packages': ['opam_dependencies']
     }
     _attr_bidicts: ClassVar[Dict[str, str]]
     """
@@ -327,7 +325,6 @@ class MetadataStorage:
     """
     _special_set_fields: ClassVar[Set[str]] = {
         "opam_repos",
-        "coq_dependencies",
         "ignore_path_regex"
     }
     """

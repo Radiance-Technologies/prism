@@ -59,11 +59,6 @@ contexts:
         project_name: lambda
         repo_url: https://github.com/coq-contribs/lambda
   - 3
-coq_dependencies:
-  0:
-  - 0
-  2:
-  - 0
 default_build_cmd: []
 default_clean_cmd: []
 default_coq_version: 8.10.2

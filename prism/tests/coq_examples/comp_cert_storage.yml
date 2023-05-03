@@ -20,10 +20,6 @@ contexts:
         project_name: CompCert
         repo_url: https://github.com/AbsInt/CompCert
   - 0
-coq_dependencies:
-  0:
-  - 0
-  - 1
 default_build_cmd: []
 default_clean_cmd: []
 default_coq_version: 8.10.2
@@ -46,6 +42,8 @@ ocaml_packages:
   - 2
 opam_dependencies:
   0:
+  - 0
+  - 1
   - 2
 opam_repos:
   0:

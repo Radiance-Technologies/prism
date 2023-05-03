@@ -202,9 +202,6 @@ class TestMetadataStorage(unittest.TestCase):
             'ocaml_packages': 3,
             'opam_repositories': 2
         }
-        expected.coq_dependencies = {
-            0: {0}
-        }
         expected.opam_dependencies = {
             0: [1,
                 2]
@@ -325,25 +322,24 @@ class TestMetadataStorage(unittest.TestCase):
             self.assertEqual(updated_override, expected_override)
         with self.subTest("override_inherited"):
             # verify one can override a default through an update
-            new_field_value = {'coq-mathcomp-ssreflect',
-                               'coq-games'}
-            expected_override.coq_dependencies = new_field_value
+            new_field_value = ['coq-mathcomp-ssreflect', 'coq-games']
+            expected_override.opam_dependencies = new_field_value
             storage.update(
                 override,
                 cascade=False,
-                coq_dependencies=new_field_value)
+                opam_dependencies=new_field_value)
             updated_base = storage.populate(base_metadata)
             updated_override = storage.populate(override)
             self.assertEqual(updated_base, expected_base)
             self.assertEqual(updated_override, expected_override)
         with self.subTest("override_inherited"):
             # verify one can update an overridden attribute
-            new_field_value = {'coq-mathcomp-ssreflect'}
-            expected_base.coq_dependencies = new_field_value
+            new_field_value = ['coq-mathcomp-ssreflect']
+            expected_base.opam_dependencies = new_field_value
             storage.update(
                 base_metadata,
                 cascade=False,
-                coq_dependencies=new_field_value)
+                opam_dependencies=new_field_value)
             updated_base = storage.populate(base_metadata)
             updated_override = storage.populate(override)
             self.assertEqual(updated_base, expected_base)
@@ -360,17 +356,17 @@ class TestMetadataStorage(unittest.TestCase):
             self.assertEqual(updated_override, expected_override)
         with self.subTest("update_implied"):
             # verify one can update an implied context
-            new_field_value = {'coq-games'}
+            new_field_value = ['coq-games']
             expected_novel = copy(expected_base)
             expected_novel.project_url = override.project_url
             expected_novel.commit_sha = "fake_test_sha"
             storage.update(
                 expected_novel,
                 cascade=False,
-                coq_dependencies=new_field_value)
+                opam_dependencies=new_field_value)
             updated_base = storage.populate(base_metadata)
             updated_novel = storage.populate(expected_novel)
-            expected_novel.coq_dependencies = new_field_value
+            expected_novel.opam_dependencies = new_field_value
             updated_override = storage.populate(override)
             self.assertEqual(updated_novel, expected_novel)
             # verify other metadata is not affected
