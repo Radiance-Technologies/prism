@@ -1514,6 +1514,44 @@ class CoqProjectBuildCacheProtocol(Protocol):
         raise RuntimeError(
             "Unable to get a max timestamp value. This shouldn't happen.")
 
+    def get_status_counts(self) -> dict[CacheStatus, int]:
+        """
+        Get count of each cache status in the cache.
+    
+        Returns
+        -------
+        dict[CacheStatus, int]
+            Dictionary of each cache status and the number of
+            occurances of that status in the cache.
+        """
+        statuses = self.list_status()
+        counts = {status: 0 for status in CacheStatus}
+        for status_obj in statuses:
+            counts[status_obj.status] += 1
+        return counts
+
+    def get_status_message(self) -> str:
+        """
+        Get status message to display.
+    
+        Returns
+        -------
+        str
+            Message with a header, footer, and a line
+            for each `CacheObjectStatus` value and the
+            number of times they appear in the cache.
+        """
+        message = ""
+        counts = self.get_status_counts()
+        header = "".join(["-"]*10)
+        footer = "".join(["-"]*10)
+        body_parts = []
+        for k, v in counts.items():
+            body_parts.append(f"{k.name}: {v}")
+        message_parts = [header] + body_parts + [footer]
+        message = '\n'.join(message_parts)
+        return message
+
     def list_projects(self) -> List[str]:
         """
         Generate a list of projects in cache.
