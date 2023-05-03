@@ -270,9 +270,15 @@ if __name__ == "__main__":
         project_names = load_opam_projects()
     else:
         project_names = None
+
+    def default_coq_version_iterator(*ignore) -> List[str]:
+        """
+        Coq version iterator for when Coq versions are given as args.
+        """
+        return typing.cast(List[str], args.coq_versions)
+
     coq_version_iterator = (
-        lambda _,
-        __: args.coq_versions) if args.coq_versions else None
+        default_coq_version_iterator if args.coq_versions else None)
     max_num_commits: Optional[int] = \
         args.max_num_commits if args.max_num_commits else None
     if args.updated_md_storage_file:
