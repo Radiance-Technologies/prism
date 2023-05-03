@@ -267,7 +267,7 @@ class OpamSwitch:
             # maybe the original clone was deleted?
             dest.mkdir()
         command = escape(command)
-        command = f"bwrap --dev-bind / / --bind {src} {dest} -- bash -c $'{command}'"
+        command = f'bwrap --dev-bind / / --bind {src} {dest} -- bash -c "{command}"'
         return command, src, dest
 
     def export(  # noqa: C901

@@ -19,4 +19,4 @@ def escape(cmd: str) -> str:
     str
         The sanitized command.
     """
-    return S.escape(cmd)  # .replace("'", r"'\''")
+    return S.escape(cmd).replace("'", r"'\''")
