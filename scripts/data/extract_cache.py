@@ -35,7 +35,7 @@ def load_opam_projects() -> List[str]:
         Project names from opam_projects.txt
     """
     opam_projects_file_path = (
-        Path(__name__).parent.parent.parent / "dataset") / "opam_projects.txt"
+        Path(__file__).parents[2] / "dataset") / "opam_projects.txt"
     with open(opam_projects_file_path, "r") as f:
         projects_to_use = f.readlines()[1 :]
     return [p.strip() for p in projects_to_use]
