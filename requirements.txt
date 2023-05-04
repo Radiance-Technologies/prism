@@ -20,7 +20,7 @@ PyYAML
 recordclass <= 0.18.0.1
 scipy
 setuptools_scm
-seutil >= 0.7.1
+seutil == 0.8.6
 strace-parser
 tqdm
 traceback-with-variables
