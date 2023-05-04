@@ -385,13 +385,14 @@ def strace_build(
         strace_cmd = (
             'strace -e trace=execve -v -ff -s 100000000 -xx -ttt -o'
             f' {logfname} bash -c "{command}"')
+        env = dict(os.environ)
 
         if use_dummy_coqc:
-            strace_cmd = (
-                f'(\n export PATH={_DUMMY_COQC_PARENT_PATH.name}:$PATH; '
-                + strace_cmd + "\n)")
+            env_path = env.get('PATH', "")
+            env_path = ":".join([_DUMMY_COQC_PARENT_PATH.name, env_path])
+            env['PATH'] = env_path
 
-        r = opam_switch.run(strace_cmd, cwd=workdir, **kwargs)
+        r = opam_switch.run(strace_cmd, cwd=workdir, env=dict(env), **kwargs)
         if r.stdout is not None:
             for line in r.stdout.splitlines():
                 logging.debug(f"strace stdout: {line}")
