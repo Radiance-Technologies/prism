@@ -629,6 +629,9 @@ class OpamSwitch:
         if env is None:
             env = self.environ
         else:
+            env = dict(env)
+            env.pop('OPAMSWITCH', None)
+            env.pop('OPAMROOT', None)
             env = merge_environments(self.environ, env)
         src = None
         dest = None

@@ -389,10 +389,10 @@ def strace_build(
 
         if use_dummy_coqc:
             env_path = env.get('PATH', "")
-            env_path = ":".join([_DUMMY_COQC_PARENT_PATH.name, env_path])
+            env_path = os.pathsep.join([_DUMMY_COQC_PARENT_PATH.name, env_path])
             env['PATH'] = env_path
 
-        r = opam_switch.run(strace_cmd, cwd=workdir, env=dict(env), **kwargs)
+        r = opam_switch.run(strace_cmd, cwd=workdir, env=env, **kwargs)
         if r.stdout is not None:
             for line in r.stdout.splitlines():
                 logging.debug(f"strace stdout: {line}")

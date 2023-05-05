@@ -74,6 +74,9 @@ def merge_path(a: str, b: str) -> str:
 def merge_environments(a: Dict[str, str], b: Dict[str, str]) -> Dict[str, str]:
     """
     Take the union of two environments, taking care to merge PATHs.
+
+    The latter environment overrides the former in cases where they both
+    define the same variable.
     """
     result = a | b
     if 'PATH' in a and 'PATH' in b:
