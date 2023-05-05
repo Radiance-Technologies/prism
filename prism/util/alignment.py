@@ -179,8 +179,8 @@ def align_factory(
     functions into the alignment function.
     """
     if (numba):
-        calign = jit(calign)
-        cskip = jit(cskip)
+        calign = jit(calign, nopython=False)
+        cskip = jit(cskip, nopython=False)
 
     def kernel(D, BT, a, b):
 
