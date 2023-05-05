@@ -627,6 +627,8 @@ class OpamSwitch:
         """
         if env is None:
             env = self.environ
+        else:
+            env = self.environ | env
         src = None
         dest = None
         if self.is_clone:
