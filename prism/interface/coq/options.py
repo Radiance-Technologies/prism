@@ -900,11 +900,11 @@ class SerAPIOptions:
             options = ['--no_prelude'] if self.noinit else []
         options.append(self.iqr.as_serapi_args())
         if not is_pre_8_11:
-            options.extend(["-disallow-sprop"] if self.disallow_sprop else [])
-            options.extend(["-indices-matter"] if self.indices_matter else [])
+            options.extend(["--disallow-sprop"] if self.disallow_sprop else [])
+            options.extend(["--indices-matter"] if self.indices_matter else [])
         if not is_pre_8_16:
             options.extend(
-                ["-impredicative-set"] if self.impredicative_set else [])
+                ["--impredicative-set"] if self.impredicative_set else [])
         return ' '.join(options)
 
     def get_sertop_commands(
