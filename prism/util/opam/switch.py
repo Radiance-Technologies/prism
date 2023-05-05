@@ -17,6 +17,7 @@ from typing import Any, ClassVar, Dict, List, Optional, Tuple, Union
 from seutil import bash, io
 
 from prism.util.bash import escape
+from prism.util.env import merge_environments
 from prism.util.io import Fmt
 from prism.util.radpytools import PathLike
 from prism.util.radpytools.dataclasses import default_field
@@ -628,7 +629,7 @@ class OpamSwitch:
         if env is None:
             env = self.environ
         else:
-            env = self.environ | env
+            env = merge_environments(self.environ, env)
         src = None
         dest = None
         if self.is_clone:
