@@ -135,7 +135,6 @@ class LocDiff:
             b.beg_charno - a.beg_charno,
             b.end_charno - a.end_charno)
 
-
 @dataclass
 class VernacCommandDataListDiff:
     """
@@ -1776,6 +1775,9 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
             new_location = repaired_command.spanning_location()
             broken_command.command.location = broken_command.location.rename(
                 repair_filename)
+            for proof in broken_command.proofs:
+                for s in proof:
+                    s.location = s.location.rename(repair_filename)
             (num_excess_lines,
              num_excess_chars) = broken_command.relocate(new_location)
             # recreate diff
