@@ -52,7 +52,7 @@ else
       ;;
     "8.15.2")
       export COQ_VERSION=8.15.2
-      export SERAPI_VERSION=8.15.0+0.15.2
+      export SERAPI_VERSION=8.15.0+0.15.4
       ;;
     *)
       echo "${1} is not a supported version of Coq." && return 1
