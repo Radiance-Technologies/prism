@@ -260,6 +260,21 @@ class VernacSentence:
     def __repr__(self) -> str:  # noqa: D105
         return f"VernacSentence(text={self.text}, location={self.location})"
 
+    def discard_data(self) -> None:
+        """
+        Remove extracted data from the sentence.
+
+        Only the sentence's text and location are guaranteed to remain.
+        Note that this operation is performed in-place.
+        """
+        self.goals = None
+        self.ast = ""
+        self.feedback = []
+        self.command_type = ''
+        self.qualified_identifiers = []
+        self.goals_qualified_identifiers = {}
+        self.command_index = None
+
     def referenced_identifiers(self) -> Set[str]:
         """
         Get the set of identifiers referenced by this sentence.
@@ -397,6 +412,14 @@ class ProofSentence(VernacSentence):
     See `VernacSentence.command_index`.
     """
 
+    def __repr__(self) -> str:  # noqa: D105
+        return f"ProofSentence(text={self.text}, location={self.location})"
+
+    def discard_data(self) -> None:  # noqa: D102
+        super().discard_data()
+        self.proof_index = None
+        self.proof_step_index = None
+
     def serialize(self, fmt: Optional[Fmt] = None) -> Dict[str, Any]:
         """
         Serialize this configuration.
@@ -491,6 +514,17 @@ class VernacCommandData:
         result.
         """
         return '\n'.join(s.text for s in self.sorted_sentences())
+
+    def discard_data(self) -> None:
+        """
+        Remove extracted data from the command.
+
+        Only the text and location of each of the command's constituent
+        sentences are guaranteed to remain. Note that this operation is
+        performed in-place.
+        """
+        for sentence in self.sentences_iter():
+            sentence.discard_data()
 
     def referenced_identifiers(self) -> Set[str]:
         """
