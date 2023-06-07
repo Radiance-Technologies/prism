@@ -575,6 +575,16 @@ class VernacCommandData:
             spanning_location.end_charno - new_location.end_charno)
         return num_excess_lines, num_excess_chars
 
+    def sentences_iter(self) -> Iterator[VernacSentence]:
+        """
+        Get an iterator over the command's sentences.
+
+        The order of iteration is not guaranteed to be consistent.
+        """
+        yield from chain(
+            [self.command],
+            (sentence for proof in self.proofs for sentence in proof))
+
     def shallow_copy(self) -> 'VernacCommandData':
         """
         Get a shallow copy of this structure and its fields.
