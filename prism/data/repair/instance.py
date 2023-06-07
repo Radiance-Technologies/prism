@@ -593,6 +593,8 @@ class ProjectCommitDataDiff:
         # goals is necessary, but all tests indicate that it is.
         a.patch_goals()
         b.patch_goals()
+        a.sort_commands()
+        b.sort_commands()
         aligned_commands = get_aligned_commands(a, b, alignment)
         diff = cls.from_aligned_commands(aligned_commands)
         diff.file_dependencies_diff = SerializableDataDiff.compute_diff(
