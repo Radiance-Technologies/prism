@@ -337,7 +337,7 @@ class ProjectCommitDataDiff:
 
         The given `patched_command_data` is presumed to already be
         repaired but for the offsets and sorted in canonical order (such
-        that nested commands appear in before the commands that surround
+        that nested commands appear before the commands that surround
         them).
         """
         for filename, change in self.command_changes.items():
@@ -351,7 +351,7 @@ class ProjectCommitDataDiff:
                 continue
             commands = patched_command_data[filename]
             for idx, command in enumerate(reversed(commands)):
-                idx = len(commands) - idx + 1
+                idx = len(commands) - idx - 1
                 cmd_loc = command.location
                 for (
                     (charno,
