@@ -476,13 +476,11 @@ class VernacCommandData:
         Compare two commands based on location.
 
         One command is less than another if its location is a subset of
-        the other or if its location starts before the other.
+        the other or if its location ends before the other.
         """
         if not isinstance(other, VernacCommandData):
             return NotImplemented
-        return (
-            self.location.beg_charno < other.location.beg_charno
-            or self.spanning_location() in other.spanning_location())
+        return self.spanning_location() < other.spanning_location()
 
     def __repr__(self) -> str:  # noqa: D105
         return ''.join(
