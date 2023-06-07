@@ -562,6 +562,7 @@ class VernacCommandData:
         # part of its proof
         line_shift = new_location.lineno - self.location.lineno
         char_shift = new_location.beg_charno - self.location.beg_charno
+        # TODO: shift bol_pos as well
         self.shift_location(line_shift, char_shift)
         # calculate extra shift due to the new location being smaller
         spanning_location = self.spanning_location()
