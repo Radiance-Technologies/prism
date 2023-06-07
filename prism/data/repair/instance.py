@@ -1787,16 +1787,17 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
             broken_state_diff.command_changes[f].affected_commands[idx] = repair
             # record offsets
             if num_excess_chars > 0 or num_excess_lines > 0:
-                broken_state_diff.command_changes[f].offsets.append(
-                    (
+                broken_state_diff.command_changes[
+                    repair_filename].offsets.append(
                         (
-                            new_location.beg_charno,
-                            new_location.end_charno,
-                            num_excess_chars),
-                        (
-                            new_location.lineno,
-                            new_location.lineno_last,
-                            num_excess_lines)))
+                            (
+                                new_location.beg_charno,
+                                new_location.end_charno,
+                                num_excess_chars),
+                            (
+                                new_location.lineno,
+                                new_location.lineno_last,
+                                num_excess_lines)))
         error_instance = cls._make_error_instance(
             initial_state,
             broken_state_diff,
