@@ -145,6 +145,16 @@ class VernacSentence:
     A parsed sentence from a document.
     """
 
+    _primitive_fields: ClassVar[Set[str]] = {
+        'text',
+        'ast',
+        'command_type',
+        'feedback'
+    }
+    """
+    Attributes that do not require deserialization processing
+    """
+
     text: str
     """
     The text of this sentence.
@@ -323,7 +333,8 @@ class VernacSentence:
                             tp = Goals
                     else:
                         tp = f.type
-                    value = su.io.deserialize(value, clz=tp)
+                    if field_name not in cls._primitive_fields:
+                        value = su.io.deserialize(value, clz=tp)
                 if f.init:
                     fvs = field_values
                 else:
