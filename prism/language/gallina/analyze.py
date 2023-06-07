@@ -304,10 +304,11 @@ class SexpInfo:
             Return whether this location is less than another.
 
             The last possible character within the location is used for
-            the comparison.
+            the comparison. If a location is a subinterval of another,
+            then it is considered less than the other.
             """
             if isinstance(other, type(self)):
-                return self.end_charno <= other.beg_charno
+                return self.end_charno <= other.beg_charno or self in other
             elif isinstance(other, (int, float)):
                 return self.end_charno <= other
             else:
@@ -318,10 +319,11 @@ class SexpInfo:
             Return whether this location is greater than another.
 
             The last possible character within the location is used for
-            the comparison.
+            the comparison. If a location contains another as a
+            subinterval, then it is considered greater than the other.
             """
             if isinstance(other, type(self)):
-                return self.beg_charno >= other.end_charno
+                return self.beg_charno >= other.end_charno or other in self
             elif isinstance(other, (int, float)):
                 return self.beg_charno >= other
             else:
