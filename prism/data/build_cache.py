@@ -883,7 +883,7 @@ class VernacCommandDataList:
                 if linenos and sentence_lineno == linenos[-1]:
                     # sentence starts on same line as another ends
                     if lines:
-                        lines[-1] = lines[-1] + sentence_part
+                        lines[-1] = " ".join([lines[-1], sentence_part])
                     else:
                         lines.append(sentence_part)
                 else:
