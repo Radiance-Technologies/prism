@@ -109,6 +109,11 @@ class ErrorInstanceJob:
     The object used to log error messages and other debug messages
     encountered during mining.
     """
+    fast: bool
+    """
+    Whether to perform fast mining or not, i.e., whether to discard
+    unnecessary extracted data and yield only Git-based instances.
+    """
 
 
 @dataclass(frozen=True)
@@ -144,6 +149,10 @@ class RepairInstanceJob:
     """
     Object used to log errors and other debug messages during repair
     instance building
+    """
+    fast: bool
+    """
+    Whether to save only Git-compressed repair instances or not.
     """
 
 
@@ -658,7 +667,8 @@ def build_repair_instance(
         change_selection: ChangeSelection,
         repair_instance_db_directory: Path,
         miner: RepairMiner,
-        repair_mining_logger: RepairMiningLogger) -> BuildRepairInstanceOutput:
+        repair_mining_logger: RepairMiningLogger,
+        fast: bool) -> BuildRepairInstanceOutput:
     """
     Construct build repair instance from pairs of cache items.
 
@@ -680,6 +690,8 @@ def build_repair_instance(
     repair_mining_logger : RepairMiningLogger
         Object used to log errors and other debug messages during repair
         instance building
+    fast : bool
+        If True, then save only Git-compressed repair instances.
 
     Returns
     -------
@@ -716,7 +728,8 @@ def build_repair_instance(
                 change_selection,
                 repair_instance_db_directory,
                 repair_mining_logger,
-                repaired_state.project_metadata)
+                repaired_state.project_metadata,
+                fast)
     return result
 
 
@@ -744,18 +757,19 @@ def build_repair_instance_star(
         args.change_selection,
         args.repair_instance_db_directory,
         args.miner,
-        args.repair_mining_logger)
+        args.repair_mining_logger,
+        args.fast)
 
 
 def build_error_instances_from_label_pair(
-    label_a: CacheObjectStatus,
-    label_b: CacheObjectStatus,
-    cache_root: Path,
-    cache_fmt_extension: str,
-    changeset_miner: ChangeSetMiner,
-    repair_mining_logger: RepairMiningLogger
-) -> Union[List[AugmentedErrorInstance],
-           Except[None]]:
+        label_a: CacheObjectStatus,
+        label_b: CacheObjectStatus,
+        cache_root: Path,
+        cache_fmt_extension: str,
+        changeset_miner: ChangeSetMiner,
+        repair_mining_logger: RepairMiningLogger,
+        fast: bool) -> Union[List[AugmentedErrorInstance],
+                             Except[None]]:
     """
     Construct error instances from pairs of cache labels.
 
@@ -777,6 +791,12 @@ def build_error_instances_from_label_pair(
     repair_mining_logger : RepairMiningLogger
         The object used to log error messages and other debug messages
         encountered during mining.
+    fast : bool
+        If True, then accelerate mining by discarding extracted fields
+        that are not required for alignment and identification of
+        repairs, yielding only Git-based repair instances.
+        Otherwise, keep all data and yield commit-data-based repair
+        instances as well.
 
     Returns
     -------
@@ -800,7 +820,13 @@ def build_error_instances_from_label_pair(
         repair_mining_logger.write_debug_log(
             "build_error_instances_from_label_pair: Finished loading cache for"
             f" label b: {label_b}.")
-        initial_state.sort_commands()
+        if fast:
+            # discard ASTs, goals, hypotheses, feedback, and identifiers
+            # XXX: Could this be made temporary and restored at the end?
+            for _, command in initial_state.commands:
+                command.discard_data()
+            for _, command in repaired_state.commands:
+                command.discard_data()
         commit_diff = ProjectCommitDataDiff.from_commit_data(
             initial_state,
             repaired_state,
@@ -844,7 +870,8 @@ def build_error_instances_from_label_pair_star(
         args.cache_root,
         args.cache_fmt_extension,
         args.changeset_miner,
-        args.repair_mining_logger)
+        args.repair_mining_logger,
+        args.fast)
 
 
 def write_repair_instance(
@@ -852,7 +879,8 @@ def write_repair_instance(
         change_selection: ChangeSelection,
         repair_instance_db_directory: Path,
         repair_mining_logger: RepairMiningLogger,
-        repaired_state_metadata: ProjectMetadata):
+        repaired_state_metadata: ProjectMetadata,
+        fast: bool):
     """
     Write a repair instance to disk, or log an exception.
 
@@ -873,6 +901,8 @@ def write_repair_instance(
     repaired_state_metadata : ProjectMetadata
         Metadata for the repaired state, used to determine the
         information to record for this instance.
+    fast : bool
+        If True, then write only the Git-compressed repair instance.
 
     Raises
     ------
@@ -889,6 +919,7 @@ def write_repair_instance(
             assert initial_metadata.coq_version is not None
             assert repaired_state_metadata.commit_sha is not None
             assert repaired_state_metadata.coq_version is not None
+
             file_path = repair_instance_db.insert_record_get_path(
                 initial_metadata.project_name,
                 initial_metadata.commit_sha,
@@ -946,7 +977,8 @@ def build_repair_instance_mining_inputs(
                                       Except[None]],
         repair_instance_db_directory: Path,
         repair_miner: RepairMiner,
-        repair_mining_logger: RepairMiningLogger) -> List[RepairInstanceJob]:
+        repair_mining_logger: RepairMiningLogger,
+        fast: bool) -> List[RepairInstanceJob]:
     """
     Build a repair instance job from error instance results.
 
@@ -962,6 +994,8 @@ def build_repair_instance_mining_inputs(
     repair_mining_logger : RepairMiningLogger
         The object used to log errors and debug messages during repair
         mining
+    fast : bool
+        If True, then save only Git-compressed repair instances.
 
     Returns
     -------
@@ -982,7 +1016,8 @@ def build_repair_instance_mining_inputs(
             change_selection,
             repair_instance_db_directory,
             repair_miner,
-            repair_mining_logger)
+            repair_mining_logger,
+            fast)
         repair_instance_jobs.append(repair_instance_job)
     return repair_instance_jobs
 
@@ -996,7 +1031,8 @@ def mining_loop_worker(
                                                   ErrorInstanceEndSentinel]],
         repair_instance_db_directory: Path,
         repair_miner: RepairMiner,
-        skip_errors: bool):
+        skip_errors: bool,
+        fast: bool):
     """
     Perform either error instance or repair instance mining.
 
@@ -1015,11 +1051,13 @@ def mining_loop_worker(
         Path to database file containing repair instance records
     repair_miner : RepairMiner
         Function used to mine repairs
-    skip_errors : bool, optional
+    skip_errors : bool
         If true, allow repair mining to proceed even if an exception is
         encountered during error instance or repair mining. Other
         exceptions will not be ignored. If false, stop on exceptions in
         mining. By default, true.
+    fast : bool
+        If True, then save only Git-compressed repair instances.
     """
     # The order of the following blocks is important. We wish to keep
     # the size of the repair_instance_job_queue small so that we don't
@@ -1090,7 +1128,8 @@ def mining_loop_worker(
                 result,
                 repair_instance_db_directory,
                 repair_miner,
-                error_instance_job.repair_mining_logger)
+                error_instance_job.repair_mining_logger,
+                fast)
             for repair_instance_job in repair_instance_jobs:
                 repair_instance_job_queue.put(repair_instance_job)
             repair_instance_job_queue.put(ErrorInstanceEndSentinel())
@@ -1281,15 +1320,16 @@ def _serial_work(
         repair_mining_logger: RepairMiningLogger,
         db_directory: Path,
         repair_miner: RepairMiner,
-        skip_errors: bool):
-    for label_a, label_b in tqdm(
-            cache_label_pairs, desc="Error instance mining"):
+        skip_errors: bool,
+        fast: bool):
+    for label_a, label_b in tqdm(cache_label_pairs, desc="Mining commit pair"):
         new_error_instances = build_error_instances_from_label_pair(
             label_a,
             label_b,
             *cache_args,
             changeset_miner,
-            repair_mining_logger)
+            repair_mining_logger,
+            fast)
         if isinstance(new_error_instances, Except):
             raise RuntimeError(
                 f"Exception: {new_error_instances.exception}. "
@@ -1302,7 +1342,8 @@ def _serial_work(
                 change_selection,
                 db_directory,
                 repair_miner,
-                repair_mining_logger)
+                repair_mining_logger,
+                fast)
             if isinstance(result, Except) and not skip_errors:
                 raise RuntimeError(
                     f"Exception: {result.exception}. {result.trace}")
@@ -1318,14 +1359,16 @@ def _parallel_work(
         repair_instance_db_directory: Path,
         repair_miner: RepairMiner,
         max_workers: int,
-        skip_errors: bool):
+        skip_errors: bool,
+        fast: bool):
     error_instance_jobs = [
         ErrorInstanceJob(
             label_a,
             label_b,
             *cache_args,
             changeset_miner,
-            repair_mining_logger) for label_a,
+            repair_mining_logger,
+            fast) for label_a,
         label_b in cache_label_pairs
     ]
     control_queue: queue.Queue[StopWorkSentinel] = Queue()
@@ -1343,7 +1386,8 @@ def _parallel_work(
         worker_to_parent_queue,
         repair_instance_db_directory,
         repair_miner,
-        skip_errors
+        skip_errors,
+        fast
     ]
     worker_processes: List[Process] = []
     # Start processes
@@ -1401,7 +1445,8 @@ def repair_mining_loop(
         project_commit_hash_map: Optional[Dict[str,
                                                Optional[List[str]]]] = None,
         logging_level: int = logging.DEBUG,
-        skip_errors: bool = True):
+        skip_errors: bool = True,
+        fast: bool = False):
     """
     Mine repair instances from the given build cache.
 
@@ -1442,10 +1487,17 @@ def repair_mining_loop(
     logging_level : int, optional
         Logging level for the exception logger, by default DEBUG.
     skip_errors : bool, optional
-        If true, allow repair mining to proceed even if an exception is
+        If True, allow repair mining to proceed even if an exception is
         encountered during error instance or repair mining. Other
-        exceptions will not be ignored. If false, stop on exceptions in
-        mining. By default, true.
+        exceptions will not be ignored. If False, stop on exceptions in
+        mining. By default, True.
+    fast : bool, optional
+        If True, then accelerate mining by discarding extracted fields
+        that are not required for alignment and identification of
+        repairs, yielding only Git-based repair instances.
+        Otherwise, keep all data and yield commit-data-based repair
+        instances as well.
+        By default, False.
     """
     os.makedirs(str(repair_instance_db_directory), exist_ok=True)
     if metadata_storage_file is None:
@@ -1479,7 +1531,8 @@ def repair_mining_loop(
                 repair_mining_logger,
                 repair_instance_db_directory,
                 repair_miner,
-                skip_errors)
+                skip_errors,
+                fast)
         # ##############################################################
         # Parallel processing
         # ##############################################################
@@ -1492,4 +1545,5 @@ def repair_mining_loop(
                 repair_instance_db_directory,
                 repair_miner,
                 max_workers,
-                skip_errors)
+                skip_errors,
+                fast)

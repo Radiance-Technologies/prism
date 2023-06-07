@@ -14,5 +14,6 @@
     ]
   },
   "logging_level": "DEBUG",
-  "skip_errors": true
+  "skip_errors": true,
+  "fast": true
 }
