@@ -1169,7 +1169,10 @@ class CommandExtractor:
             otherwise.
         """
         match = SUBPROOF_ID_PATTERN.match(id_under_test)
-        return match is not None and match['proof_id'] == proof_id
+        matched_id = None if match is None else match['proof_id']
+        return (
+            matched_id is not None
+            and (matched_id == proof_id or matched_id == "legacy_pe"))
 
 
 def extract_vernac_commands(

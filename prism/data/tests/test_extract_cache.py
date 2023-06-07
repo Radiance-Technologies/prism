@@ -839,6 +839,28 @@ class TestExtractCache(unittest.TestCase):
             self.assertEqual(len(extracted_commands), 2)
 
     @pytest.mark.coq_all
+    def test_extract_subproofs(self):
+        """
+        Verify that subproofs are correctly extracted.
+        """
+        with pushd(_COQ_EXAMPLES_PATH):
+            extracted_commands = CommandExtractor(
+                "subproofs.v",
+                typing.cast(
+                    List[CoqSentence],
+                    Project.extract_sentences(
+                        CoqDocument(
+                            "subproofs.v",
+                            CoqParser.parse_source("subproofs.v"),
+                            _COQ_EXAMPLES_PATH),
+                        sentence_extraction_method=SEM.HEURISTIC,
+                        return_locations=True,
+                        glom_proofs=False)),
+                serapi_options=SerAPIOptions.empty(),
+                opam_switch=self.test_switch).extracted_commands
+            self.assertEqual(len(extracted_commands), 3)
+
+    @pytest.mark.coq_all
     def test_goals_reconstruction(self):
         """
         Test the reconstruction of Goals from GoalsDiff.
