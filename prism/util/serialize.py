@@ -3,6 +3,7 @@ Supply a protocol for serializable data.
 """
 
 import copy
+import tempfile
 import typing
 from dataclasses import dataclass, fields, is_dataclass
 from pathlib import Path
@@ -23,6 +24,7 @@ from typing import (
 import seutil as su
 import typing_inspect
 from diff_match_patch import diff_match_patch
+from fast_diff_match_patch import diff as fdmp_diff
 
 import prism.util.cyaml as cyaml
 from prism.util.copy import ShallowCopy
@@ -148,6 +150,7 @@ class SerializableDataDiff(Generic[_S]):
 
     diff: str
     _fmt: ClassVar[Fmt] = Fmt.yaml
+    _in_memory: ClassVar[bool] = False
 
     def patch(self, a: _S) -> _S:
         """
@@ -170,8 +173,19 @@ class SerializableDataDiff(Generic[_S]):
             clz = type(a)
             a = su.io.serialize(a, fmt=self._fmt)
             a_str = typing.cast(str, self.safe_dump(a))
-            patches = _dmp.patch_fromText(self.diff)
-            patched_a_str, _ = _dmp.patch_apply(patches, a_str)
+            if self._in_memory:
+                patches = _dmp.patch_fromText(self.diff)
+                patched_a_str, _ = _dmp.patch_apply(patches, a_str)
+            else:
+                with tempfile.NamedTemporaryFile('w') as atmp:
+                    with tempfile.NamedTemporaryFile('w') as patchfile:
+                        atmp.write(a_str)
+                        patchfile.write(self.diff)
+                        atmp.flush()
+                        patchfile.flush()
+                        r = su.bash.run(
+                            f"patch -p1 -o - {atmp.name} {patchfile.name}")
+                patched_a_str = r.stdout
             patched_a = self.safe_load(patched_a_str)
             patched_a = su.io.deserialize(patched_a, clz=clz, error="raise")
         elif isinstance(a, ShallowCopy):
@@ -199,8 +213,18 @@ class SerializableDataDiff(Generic[_S]):
         b = su.io.serialize(b, fmt=cls._fmt)
         a_str = typing.cast(str, cls.safe_dump(a))
         b_str = typing.cast(str, cls.safe_dump(b))
-        patches = _dmp.patch_make(a_str, b_str)
-        diff = _dmp.patch_toText(patches)
+        if cls._in_memory:
+            diff = fdmp_diff(a_str, b_str, as_patch=True, cleanup="Efficiency")
+        else:
+            with tempfile.NamedTemporaryFile('w') as atmp:
+                with tempfile.NamedTemporaryFile('w') as btmp:
+                    atmp.write(a_str)
+                    btmp.write(b_str)
+                    atmp.flush()
+                    btmp.flush()
+                    r = su.bash.run(
+                        f"git diff --no-index -U0 {atmp.name} {btmp.name}")
+            diff = r.stdout
         return SerializableDataDiff(diff)
 
     @classmethod
