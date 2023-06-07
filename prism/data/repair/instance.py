@@ -1776,8 +1776,8 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
             repair_filename = repaired_command.location.filename
             # update location but not text
             new_location = repaired_command.spanning_location()
-            broken_command.command.location = broken_command.location.rename(
-                repair_filename)
+            for sentence in broken_command.sentences_iter():
+                sentence.location = sentence.location.rename(repair_filename)
             (num_excess_lines,
              num_excess_chars) = broken_command.relocate(new_location)
             # recreate diff
