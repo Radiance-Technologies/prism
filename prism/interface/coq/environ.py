@@ -66,7 +66,7 @@ class OneInductive:
 
     Notes
     -----
-    This class loosel corresponds to the ``one_inductive_body`` type
+    This class loosely corresponds to the ``one_inductive_body`` type
     in ``coq/kernel/declarations.ml``.
     """
 
@@ -97,7 +97,7 @@ class MutualInductive:
 
     Notes
     -----
-    This class loosel corresponds to the ``mutual_inductive_body`` type
+    This class loosely corresponds to the ``mutual_inductive_body`` type
     in ``coq/kernel/declarations.ml``.
     """  # noqa: W505
 
