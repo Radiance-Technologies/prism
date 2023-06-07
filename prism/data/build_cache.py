@@ -385,7 +385,7 @@ class VernacSentence:
         from different documents can still be sorted together (although
         the significance of the results may be suspect).
         """
-        return [s for _, s in sorted([(s.location, s) for s in sentences])]
+        return sorted(sentences, key=lambda s: s.location)
 
 
 @dataclass
