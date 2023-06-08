@@ -3,7 +3,7 @@
     "change": {
       "build_process": null,
       "diff": {
-        "text": "diff --git a\/exgcd.v b\/exgcd.v\nindex 7664a3b..06f7f01 100644\n--- a\/exgcd.v\n+++ b\/exgcd.v\n@@ -19 +18,0 @@ Require Import Znumtheory.\n-Require Import Bool.\n@@ -188 +187 @@ unfold Zwf; simpl; (intuition auto with zarith).\n-cutrewrite <- ((fst e')=(snd e')) in H5; auto with zarith.\n+replace (snd e') with (fst e') in H5; auto with zarith.\ndiff --git a\/totalhoarelogic.v b\/totalhoarelogic.v\nindex 2081db7..dde8818 100644\n--- a\/totalhoarelogic.v\n+++ b\/totalhoarelogic.v\n@@ -15 +14,0 @@ Require Export hoarelogicsemantics.\n-Require Wf.\n"
+        "text": "diff --git a\/exgcd.v b\/exgcd.v\nindex 09f0cf5..4a10f8d 100644\n--- a\/exgcd.v\n+++ b\/exgcd.v\n@@ -19 +18,0 @@ Require Import Znumtheory.\n-Require Import Bool.\n@@ -188 +187 @@ unfold Zwf; simpl; (intuition auto with zarith).\n-cutrewrite <- ((fst e')=(snd e')) in H5; auto with zarith.\n+replace (snd e') with (fst e') in H5; auto with zarith.\ndiff --git a\/totalhoarelogic.v b\/totalhoarelogic.v\nindex 2081db7..dde8818 100644\n--- a\/totalhoarelogic.v\n+++ b\/totalhoarelogic.v\n@@ -15 +14,0 @@ Require Export hoarelogicsemantics.\n-Require Wf.\n"
       },
       "environment": null
     },
