@@ -147,7 +147,7 @@ OBLIGATION_ID_PATTERN = re.compile(
     rf"(?P<proof_id>{IDENT_PATTERN.pattern})_obligation_\d+")
 
 SUBPROOF_ID_PATTERN = re.compile(
-    rf"(?P<proof_id>{IDENT_PATTERN.pattern})_subproof\d*$")
+    rf"(?P<proof_id>{IDENT_PATTERN.pattern})_(?:subproof|subterm)\d*$")
 
 ABORT_COMMAND_PATTERN = re.compile("VernacAbort(?:All)?")
 

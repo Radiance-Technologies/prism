@@ -858,7 +858,7 @@ class TestExtractCache(unittest.TestCase):
                         glom_proofs=False)),
                 serapi_options=SerAPIOptions.empty(),
                 opam_switch=self.test_switch).extracted_commands
-            self.assertEqual(len(extracted_commands), 3)
+            self.assertEqual(len(extracted_commands), 4)
 
     @pytest.mark.coq_all
     def test_goals_reconstruction(self):
