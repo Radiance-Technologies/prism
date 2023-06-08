@@ -483,13 +483,15 @@ def _compute_diff_alignment(
     }
     if b_in_diff.file_dependencies is not None:
         b_in_diff.file_dependencies = {
-            rename_map[k]: [rename_map[f] for f in v]
+            # file dependencies may catch files that were not built
+            (rename_map[k] if k in b.command_data.keys() else k):
+            ([rename_map[f] for f in v] if k in b.command_data.keys() else v)
             for k,
             v in b_in_diff.file_dependencies.items()
-            # file dependencies may catch files that were not built
-            if k in b.command_data.keys()
         }
-    assert b_in_diff.files == [rename_map[f] for f in b.files]
+
+    assert b_in_diff.files == [rename_map[f] for f in b.files], \
+        "File dependency order should be invariant under renaming"
     # calculate alignment only for those items that are known to have
     # changed
     diff_alignment = align(a_in_diff, b_in_diff)
