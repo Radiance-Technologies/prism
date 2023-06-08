@@ -1084,8 +1084,7 @@ class ProjectCommitData(Serializable):
         Return the list of Coq files in the project.
 
         If `file_dependencies` is set, then the files will be listed in
-        dependency order. Otherwise, they will match the order of
-        iteration of `command_data`.
+        dependency order. Otherwise, they will be sorted alphabetically.
         """
         if self.file_dependencies is not None:
             G = nx.DiGraph()
@@ -1098,6 +1097,7 @@ class ProjectCommitData(Serializable):
             ]
         else:
             files = [k for k in self.command_data.keys()]
+            files.sort()
         return files
 
     @property
