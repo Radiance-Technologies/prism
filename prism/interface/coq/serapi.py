@@ -254,13 +254,11 @@ class SerAPI:
     def is_in_proof_mode(self) -> bool:
         """
         Return whether the interpreter is in proof mode.
-
-        Property alias for `has_open_goals`.
         """
         if self.is_dead:
             return False
         else:
-            return self.has_open_goals()
+            return self.has_open_goals() or self.get_conjecture_id() is not None
 
     @cached_property
     def serapi_version(self) -> Version:
