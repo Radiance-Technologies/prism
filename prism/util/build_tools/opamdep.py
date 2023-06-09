@@ -120,6 +120,9 @@ def guess_opam_packages(
     for prefix, suffix in libraries:
         # search local libraries first
         if local_mapping.search(prefix, suffix):
+            # TODO: match semantics of Q and R, i.e., non-exact matches
+            # are allowed for Q-bound libraries only if a From keyword
+            # is present
             continue
         # then search Coq standard libaries
         if coq_libraries is not None and coq_libraries.search(prefix, suffix):

@@ -433,29 +433,19 @@ class Project(ABC):
            serapi_options.
         """
         logger = self.logger.getChild('_check_serapi_option_health_post_build')
-        full_q_paths = list(
+        full_QR_paths = list(
             self._iqr_bound_directories(
                 False,
                 return_I=False,
                 return_Q=True,
-                return_R=False))
-        full_r_paths = list(
-            self._iqr_bound_directories(
-                False,
-                return_I=False,
-                return_Q=False,
                 return_R=True))
         for vo_file in glob.glob(f"{self.path}/**/*.vo", recursive=True):
             vo_file_path = Path(vo_file)
-            if full_r_paths and not any(full_path in vo_file_path.parents
-                                        for full_path in full_r_paths):
+            if full_QR_paths and not any(full_path in vo_file_path.parents
+                                         for full_path in full_QR_paths):
                 logger.debug(
-                    f"A .vo file ({vo_file_path}): has no matching R path")
-                return False
-            if full_q_paths and not any(full_path == vo_file_path.parent
-                                        for full_path in full_q_paths):
-                logger.debug(
-                    f"A .vo file ({vo_file_path}): has no matching Q path")
+                    f"A .vo file ({vo_file_path}) has no matching Q/R load path"
+                )
                 return False
         return True
 

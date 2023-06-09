@@ -3,7 +3,6 @@ Provides an abstraction of Coq library linking command-line options.
 """
 
 import argparse
-import glob
 import os
 import re
 import typing
@@ -62,6 +61,52 @@ class IQR:
         Get the options as they would appear on the command line.
         """
         return self.as_coq_args()
+
+    def _QR_bindings_iter(
+            self,
+            QR: Set[Tuple[str,
+                          str]],
+            root: Optional[PathLike] = None) -> Iterator[Tuple[Path,
+                                                               str]]:
+        """
+        Get an iterator over bound physical and logical library paths.
+
+        Parameters
+        ----------
+        QR : Set[Tuple[str, str]]
+            Either `Q` or `R` bindings.
+        root : Optional[PathLike], optional
+            The root from which to evaluate IQR flags, by default `pwd`.
+
+        Yields
+        ------
+        Tuple[Path, str]
+            A pair comprising a physical path bound to a fully qualified
+            logical library name.
+        """
+        # https://coq.inria.fr/refman/language/core/modules.html#libraries-and-filesystem
+        # https://coq.inria.fr/refman/proof-engine/vernacular-commands.html#compiled-files
+        if root is None:
+            root = self.pwd
+        root = Path(root)
+        for path, prefix in QR:
+            bound_path = root / path
+            for subdir, _, filenames in os.walk(bound_path):
+                subpath = get_relative_path(subdir, bound_path)
+                if all(IDENT_PATTERN.match(part) for part in subpath.parts):
+                    suffix = '.'.join(subpath.parts)
+                    if suffix:
+                        lib = '.'.join([prefix, suffix])
+                    else:
+                        lib = prefix
+                    yield subpath, lib
+                    # catch actual Coq files/libraries
+                    for filename in filenames:
+                        filepath = subpath / filename
+                        libname = filepath.stem
+                        if (filepath.suffix == '.v'
+                                and QUALIFIED_IDENT_PATTERN.match(libname)):
+                            yield filepath, '.'.join([lib, libname])
 
     def as_coq_args(self) -> str:
         """
@@ -126,17 +171,7 @@ class IQR:
             A pair comprising a physical path bound to a fully qualified
             logical library name.
         """
-        if root is None:
-            root = self.pwd
-        root = Path(root)
-        for path, prefix in self.Q:
-            bound_path = root / path
-            yield Path(path), prefix
-            for f in glob.glob(f"{bound_path}/*.v", recursive=False):
-                coq_file = Path(f)
-                suffix = coq_file.stem
-                if QUALIFIED_IDENT_PATTERN.match(suffix):
-                    yield coq_file, '.'.join([prefix, suffix])
+        return self._QR_bindings_iter(self.Q, root)
 
     def R_bindings_iter(
             self,
@@ -156,29 +191,7 @@ class IQR:
             A pair comprising a physical path bound to a fully qualified
             logical library name.
         """
-        # https://coq.inria.fr/refman/language/core/modules.html#libraries-and-filesystem
-        # https://coq.inria.fr/refman/proof-engine/vernacular-commands.html#compiled-files
-        if root is None:
-            root = self.pwd
-        root = Path(root)
-        for path, prefix in self.R:
-            bound_path = root / path
-            for subdir, _, filenames in os.walk(bound_path):
-                subpath = get_relative_path(subdir, bound_path)
-                if all(IDENT_PATTERN.match(part) for part in subpath.parts):
-                    suffix = '.'.join(subpath.parts)
-                    if suffix:
-                        lib = '.'.join([prefix, suffix])
-                    else:
-                        lib = prefix
-                    yield subpath, lib
-                    # catch actual Coq files/libraries
-                    for filename in filenames:
-                        filepath = subpath / filename
-                        libname = filepath.stem
-                        if (filepath.suffix == '.v'
-                                and QUALIFIED_IDENT_PATTERN.match(libname)):
-                            yield filepath, '.'.join([lib, libname])
+        return self._QR_bindings_iter(self.R, root)
 
     def union(self, other: 'IQR') -> 'IQR':
         """
