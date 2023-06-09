@@ -1795,11 +1795,11 @@ def extract_cache_new(
             build_cache_client.write(data, block)
         except ExtractVernacCommandsError:
             # Don't re-log extract_vernac_commands errors
-            pass
+            e = None
         except DefaultProcessProjectFallbackError:
             # Also don't re-log the not-implemented error from build
             # errors
-            pass
+            e = None
         except Exception as e:
             _handle_misc_error(
                 misc_error=e,
