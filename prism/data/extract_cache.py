@@ -73,6 +73,7 @@ from prism.language.heuristic.parser import CoqComment, CoqSentence
 from prism.language.sexp.node import SexpNode
 from prism.project.base import SEM, Project
 from prism.project.exception import MissingMetadataError, ProjectBuildError
+from prism.project.metadata import version_info
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import (
     ChangedCoqCommitIterator,
@@ -1609,6 +1610,8 @@ def _handle_misc_error(
     if isinstance(misc_error, UnsatisfiableConstraints):
         project_metadata = copy.copy(project_metadata)
         project_metadata.coq_version = coq_version
+        project_metadata.serapi_version = version_info.get_serapi_version(
+            coq_version)
     logger.exception(misc_error)
     logger_stream.flush()
     logged_text = logger_stream.getvalue()
@@ -1806,12 +1809,19 @@ def extract_cache_new(
                 coq_version=coq_version,
                 logger=extract_logger,
                 logger_stream=extract_logger_stream)
+        else:
+            e = None  # type: ignore
         finally:
             try:
-                if isinstance(commit_message, bytes):
-                    commit_message = commit_message.decode("utf-8")
+                assert commit_message is None or isinstance(commit_message, str)
+                project_metadata = project.metadata
+                if e is not None and isinstance(e, UnsatisfiableConstraints):
+                    project_metadata = copy.copy(project_metadata)
+                    project_metadata.coq_version = coq_version
+                    project_metadata.serapi_version = version_info.get_serapi_version(
+                        coq_version)
                 fallback_data = ProjectCommitData(
-                    project.metadata,
+                    project_metadata,
                     {},
                     commit_message,
                     comment_data,
