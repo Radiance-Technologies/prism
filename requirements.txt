@@ -4,7 +4,7 @@ fast-diff-match-patch
 GitPython
 gprof2dot
 graphviz
-leven
+levenshtein
 networkx
 numba
 numpy

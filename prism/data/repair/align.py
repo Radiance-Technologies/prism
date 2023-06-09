@@ -9,7 +9,7 @@ from functools import partial
 from typing import Callable, Dict, List, Optional, Tuple, TypeVar, Union
 
 import numpy as np
-from leven import levenshtein
+from Levenshtein import distance as levenshtein
 from scipy.optimize import linear_sum_assignment
 
 from prism.data.build_cache import (
