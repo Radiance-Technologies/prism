@@ -425,6 +425,33 @@ class SexpInfo:
             line_range = range(self.lineno, self.lineno_last + 1)
             return lineno in line_range
 
+        def intersects(self, other: 'SexpInfo.Loc') -> bool:
+            """
+            Return whether this location intersects another.
+
+            Parameters
+            ----------
+            other : SexpInfo.Loc
+                Another location.
+
+            Returns
+            -------
+            bool
+                True if this location intersects the `other`, False
+                otherwise.
+
+            Raises
+            ------
+            TypeError
+                If `other` is not an instance of `SexpInfo.Loc`.
+            """
+            if not isinstance(other, SexpInfo.Loc):
+                raise TypeError(f"Expected location, got {type(other)}")
+            elif other.filename != self.filename:
+                return False
+            return other in self or self in other or not (
+                other < self or self < other)
+
         def offset_byte_to_char(
                 self,
                 unicode_offsets: List[int]) -> 'SexpInfo.Loc':
