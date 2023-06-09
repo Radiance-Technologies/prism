@@ -1088,6 +1088,9 @@ class ProjectCommitData(Serializable):
         """
         if self.file_dependencies is not None:
             G = nx.DiGraph()
+            # sort and reverse in case there are no edges to match
+            # output of other branch
+            G.add_nodes_from(sorted(self.command_data.keys(), reverse=True))
             for f, deps in self.file_dependencies.items():
                 for dep in deps:
                     G.add_edge(f, dep)
