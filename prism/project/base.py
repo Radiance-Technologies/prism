@@ -82,6 +82,7 @@ from prism.util.radpytools import PathLike
 from prism.util.radpytools.os import pushd
 from prism.util.re import regex_from_options
 from prism.util.swim import SwitchManager
+from prism.util.swim.exception import UnsatisfiableConstraints
 
 logger: logging.Logger = logging.getLogger(__name__)
 logger.setLevel(default_log_level())
@@ -694,22 +695,31 @@ class Project(ABC):
         try:
             with self.managed_switch(**managed_switch_kwargs):
                 result = f()
-        except ProjectBuildError as e:
-            m = self._missing_dependency_pattern.search(
-                '\n'.join([e.stdout,
-                           e.stderr]))
-            if m is not None:
+        except (ProjectBuildError, UnsatisfiableConstraints) as e:
+            is_unsatisfiable = isinstance(e, UnsatisfiableConstraints)
+            m = None
+            if not is_unsatisfiable:
+                m = self._missing_dependency_pattern.search(
+                    '\n'.join([e.stdout,
+                               e.stderr]))
+            if m is not None or is_unsatisfiable:
                 # EVENT: <>.build
-                self.logger.debug("Missing dependencies prevented build")
+                if is_unsatisfiable:
+                    self.logger.debug(
+                        "Stale dependencies prevented switch acquisition")
+                else:
+                    self.logger.debug("Missing dependencies prevented build")
                 self.infer_opam_dependencies()
                 if switch_manager is not None:
                     # try to build again with fresh dependencies
-                    release = managed_switch_kwargs.get('release', True)
-                    if not release and original_switch != self.opam_switch:
-                        # release flawed switch if it is not already
-                        # released
-                        switch_manager.release_switch(self.opam_switch)
-                        self.opam_switch = original_switch
+                    if not is_unsatisfiable:
+                        # a switch was obtained
+                        release = managed_switch_kwargs.get('release', True)
+                        if not release and original_switch != self.opam_switch:
+                            # release flawed switch if it is not already
+                            # released
+                            switch_manager.release_switch(self.opam_switch)
+                            self.opam_switch = original_switch
                     # force reattempt build
                     with self.project_logger(logger.getChild('force-rebuild')):
                         # EVENT: <>.build.force-rebuild
