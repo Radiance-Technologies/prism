@@ -74,6 +74,7 @@ from prism.language.sexp.node import SexpNode
 from prism.project.base import SEM, Project
 from prism.project.exception import MissingMetadataError, ProjectBuildError
 from prism.project.metadata import version_info
+from prism.project.metadata.dataclass import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import (
     ChangedCoqCommitIterator,
@@ -1573,8 +1574,7 @@ def _handle_cache_error(
 def _handle_misc_error(
         misc_error: Exception,
         build_cache_client: CoqProjectBuildCacheProtocol,
-        project: ProjectRepo,
-        coq_version: str,
+        project_metadata: ProjectMetadata,
         block: bool,
         logger: logging.Logger,
         logger_stream: StringIO) -> None:
@@ -1587,11 +1587,9 @@ def _handle_misc_error(
         An unhandled error raised during cache extraction.
     build_cache_client : CoqProjectBuildCacheProtocol
         The cache.
-    project : ProjectRepo
-        The project checked out at the commit to be extracted.
-    coq_version : str
-        The version of Coq under which the `project` is built and its
-        commands extracted.
+    project_metadata : ProjectMetadata
+        The metadata corresponding to the extracted commit and
+        Coq version.
     block : bool
         Whether to use blocking cache writes
     logger : logging.Logger
@@ -1606,12 +1604,6 @@ def _handle_misc_error(
     if isinstance(misc_error, CalledProcessError):
         logger.critical(f"stdout:\n{misc_error.stdout}\n")
         logger.critical(f"stderr:\n{misc_error.stderr}\n")
-    project_metadata = project.metadata
-    if isinstance(misc_error, UnsatisfiableConstraints):
-        project_metadata = copy.copy(project_metadata)
-        project_metadata.coq_version = coq_version
-        project_metadata.serapi_version = version_info.get_serapi_version(
-            coq_version)
     logger.exception(misc_error)
     logger_stream.flush()
     logged_text = logger_stream.getvalue()
@@ -1795,31 +1787,30 @@ def extract_cache_new(
             build_cache_client.write(data, block)
         except ExtractVernacCommandsError:
             # Don't re-log extract_vernac_commands errors
-            e = None
+            project_metadata = project.metadata
         except DefaultProcessProjectFallbackError:
             # Also don't re-log the not-implemented error from build
             # errors
-            e = None
+            project_metadata = project.metadata
         except Exception as e:
+            project_metadata = project.metadata
+            if isinstance(e, UnsatisfiableConstraints):
+                project_metadata = copy.copy(project_metadata)
+                project_metadata.coq_version = coq_version
+                project_metadata.serapi_version = version_info.get_serapi_version(
+                    coq_version)
             _handle_misc_error(
                 misc_error=e,
                 build_cache_client=build_cache_client,
-                project=project,
+                project_metadata=project_metadata,
                 block=block,
-                coq_version=coq_version,
                 logger=extract_logger,
                 logger_stream=extract_logger_stream)
         else:
-            e = None  # type: ignore
+            project_metadata = project.metadata
         finally:
             try:
                 assert commit_message is None or isinstance(commit_message, str)
-                project_metadata = project.metadata
-                if e is not None and isinstance(e, UnsatisfiableConstraints):
-                    project_metadata = copy.copy(project_metadata)
-                    project_metadata.coq_version = coq_version
-                    project_metadata.serapi_version = version_info.get_serapi_version(
-                        coq_version)
                 fallback_data = ProjectCommitData(
                     project_metadata,
                     {},
