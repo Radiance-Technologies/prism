@@ -881,6 +881,12 @@ class SerAPI:
         inductives = []
         for induct in env_inductives:
             ker_name = induct[0]
+            if not OpamVersion.less_than(self.serapi_version, "8.15.0+0.15.3"):
+                # MutInd definition in ser_environ.ml was changed from
+                # MutInd of ModPath.t * Label.t
+                # to
+                # MutInd of KerName.t * KerName.t option
+                ker_name = ker_name[1]
             (qualid,
              modpath) = print_ker_name(
                  ker_name,
