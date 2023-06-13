@@ -52,6 +52,7 @@ class TestCoqProjectBaseDataset(unittest.TestCase):
                     project_path)
             except git.GitCommandError:
                 repo = git.Repo(project_path)
+            repo.git.checkout(cls.master_hashes[project_name])
             cls.repos[project_name] = repo
             # TODO: Use real metadata and test building
             cls.metadatas[project_name] = ProjectMetadata(
