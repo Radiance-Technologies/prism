@@ -12,7 +12,7 @@ from typing import Callable, Dict, Iterable, List, Optional
 
 from traceback_with_variables import activate_by_import  # noqa: F401
 
-from prism.data.extract_cache import (
+from prism.data.extraction.extract_cache import (
     CacheExtractor,
     cache_extract_commit_iterator,
 )

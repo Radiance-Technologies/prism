@@ -37,7 +37,8 @@ from seutil import io
 from tqdm.contrib.concurrent import process_map
 from traceback_with_variables import format_exc
 
-from prism.data.build_cache import (
+from prism.data.commit_map import Except, ProjectCommitUpdateMapper
+from prism.data.extraction.build_cache import (
     CacheStatus,
     CommandType,
     CommentDict,
@@ -54,7 +55,6 @@ from prism.data.build_cache import (
     VernacDict,
     VernacSentence,
 )
-from prism.data.commit_map import Except, ProjectCommitUpdateMapper
 from prism.data.util import get_project_func
 from prism.interface.coq.exception import CoqExn
 from prism.interface.coq.goals import Goals, GoalsDiff

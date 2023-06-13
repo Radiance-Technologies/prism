@@ -18,12 +18,12 @@ import pandas as pd
 from tqdm import tqdm
 from traceback_with_variables import format_exc
 
-from prism.data.build_cache import (
+from prism.data.commit_map import Except
+from prism.data.extraction.build_cache import (
     CacheObjectStatus,
     CoqProjectBuildCache,
     ProjectCommitData,
 )
-from prism.data.commit_map import Except
 from prism.data.repair.instance import (
     ChangeSelection,
     ChangeSetMiner,

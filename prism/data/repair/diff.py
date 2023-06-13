@@ -9,7 +9,10 @@ from typing import Dict, Iterable, List, Set
 
 import seutil.bash as bash
 
-from prism.data.build_cache import ProjectCommitData, VernacCommandData
+from prism.data.extraction.build_cache import (
+    ProjectCommitData,
+    VernacCommandData,
+)
 from prism.language.gallina.analyze import SexpInfo
 from prism.util.diff import Change, GitDiff
 

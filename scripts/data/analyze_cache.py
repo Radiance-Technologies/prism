@@ -7,7 +7,7 @@ from typing import Dict, Iterable, List, Tuple, Union
 from pandas import DataFrame
 from tqdm.contrib.concurrent import process_map
 
-from prism.data.build_cache import (
+from prism.data.extraction.build_cache import (
     CoqProjectBuildCache,
     ProjectCommitData,
     ProofSentence,

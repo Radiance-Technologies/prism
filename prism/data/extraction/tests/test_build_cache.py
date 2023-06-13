@@ -12,7 +12,8 @@ from typing import List, Optional, Tuple, Union
 
 import seutil.io as io
 
-from prism.data.build_cache import (
+from prism.data.dataset import CoqProjectBaseDataset
+from prism.data.extraction.build_cache import (
     CacheObjectStatus,
     CacheStatus,
     CoqProjectBuildCache,
@@ -25,7 +26,6 @@ from prism.data.build_cache import (
     VernacCommandDataList,
     VernacSentence,
 )
-from prism.data.dataset import CoqProjectBaseDataset
 from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.interface.coq.ident import Identifier, IdentType, get_all_idents
 from prism.interface.coq.serapi import SerAPI

@@ -12,7 +12,7 @@ import numpy as np
 from Levenshtein import distance as levenshtein
 from scipy.optimize import linear_sum_assignment
 
-from prism.data.build_cache import (
+from prism.data.extraction.build_cache import (
     ProjectCommitData,
     VernacCommandData,
     VernacCommandDataList,

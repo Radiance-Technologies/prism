@@ -13,7 +13,9 @@ from typing import List, Tuple
 
 import pytest
 
-from prism.data.build_cache import (
+from prism.data.dataset import CoqProjectBaseDataset
+from prism.data.document import CoqDocument
+from prism.data.extraction.build_cache import (
     CacheStatus,
     CommentDict,
     CoqProjectBuildCacheProtocol,
@@ -27,9 +29,7 @@ from prism.data.build_cache import (
     VernacDict,
     VernacSentence,
 )
-from prism.data.dataset import CoqProjectBaseDataset
-from prism.data.document import CoqDocument
-from prism.data.extract_cache import (
+from prism.data.extraction.extract_cache import (
     FALLBACK_EXCEPTION_MSG,
     CommandExtractor,
     extract_cache,
