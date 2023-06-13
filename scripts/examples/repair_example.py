@@ -8,10 +8,7 @@ from typing import Tuple
 
 import seutil
 
-from prism.data.extraction.build_cache import (
-    CoqProjectBuildCache,
-    VernacCommandData,
-)
+from prism.data.cache.server import CoqProjectBuildCache, VernacCommandData
 from prism.data.repair.align import assign_commits, default_command_distance
 from prism.data.repair.diff import compute_git_diff
 from prism.data.repair.instance import (

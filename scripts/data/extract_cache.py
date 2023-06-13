@@ -12,7 +12,7 @@ from typing import Callable, Dict, Iterable, List, Optional
 
 from traceback_with_variables import activate_by_import  # noqa: F401
 
-from prism.data.extraction.extract_cache import (
+from prism.data.cache.extractor import (
     CacheExtractor,
     cache_extract_commit_iterator,
 )
@@ -311,6 +311,7 @@ if __name__ == "__main__":
     if not log_dir.exists():
         log_dir.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(filename=log_file_path, force=True)
+    opam_roots: Optional[List[str]]
     if args.opam_root is not None:
         opam_roots = [args.opam_root]
     else:

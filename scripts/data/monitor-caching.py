@@ -6,7 +6,7 @@ import curses
 import time
 import traceback
 
-from prism.data.extraction.build_cache import CoqProjectBuildCache
+from prism.data.cache.server import CoqProjectBuildCache
 
 
 def main():

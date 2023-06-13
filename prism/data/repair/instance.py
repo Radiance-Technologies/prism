@@ -24,7 +24,7 @@ from typing import (
 import numpy as np
 from bidict import bidict
 
-from prism.data.extraction.build_cache import (
+from prism.data.cache.server import (
     ProjectCommitData,
     VernacCommandData,
     VernacCommandDataList,

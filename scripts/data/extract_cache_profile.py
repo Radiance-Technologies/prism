@@ -13,7 +13,7 @@ from typing import List
 import gprof2dot
 import pydot
 
-from prism.data.extraction.extract_cache import (
+from prism.data.cache.extractor import (
     CacheExtractor,
     cache_extract_commit_iterator,
 )
