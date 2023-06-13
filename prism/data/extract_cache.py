@@ -377,6 +377,7 @@ class CommandExtractor:
     """
     The open goals, if any, after execution of the most recent command.
     """
+    serapi: Optional[SerAPI] = default_field(None, init=False)
 
     def __post_init__(self, sentences: Optional[Iterable[CoqSentence]]):
         """
@@ -394,7 +395,33 @@ class CommandExtractor:
         """
         Perform the extraction.
         """
-        return self._extract_vernac_commands(sentences)
+        return self.extract_vernac_commands(sentences)
+
+    def __enter__(self) -> Callable[[CoqSentence], None]:
+        """
+        Initialize a context for an extraction session.
+        """
+        self.serapi = SerAPI(self.serapi_options, opam_switch=self.opam_switch)
+        get_identifiers = typing.cast(
+            Callable[[str],
+                     List[Identifier]],
+            partial(
+                get_all_qualified_idents,
+                self.serapi,
+                self.modpath,
+                ordered=True,
+                id_cache=self.expanded_ids))
+        return partial(
+            self._extract_vernac_sentence,
+            self.serapi,
+            get_identifiers)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """
+        Conclude a context for an extraction session.
+        """
+        self.serapi.shutdown()
+        self.serapi = None
 
     def _conclude_proof(
         self,
@@ -603,66 +630,6 @@ class CommandExtractor:
             else:
                 serapi.pull()
         return feedback, sexp
-
-    def _extract_vernac_commands(
-            self,
-            sentences: Iterable[CoqSentence]) -> VernacCommandDataList:
-        """
-        Compile Vernacular commands from a sequence of sentences.
-
-        Parameters
-        ----------
-        sentences : Iterable[CoqSentence]
-            A sequence of sentences derived from a document.
-
-        Returns
-        -------
-        VernacCommandDataList
-            The compiled vernacular commands.
-
-        See Also
-        --------
-        prism.project.iqr : For more information about IQR flags.
-        """
-        with SerAPI(self.serapi_options,
-                    opam_switch=self.opam_switch) as serapi:
-            get_identifiers = typing.cast(
-                Callable[[str],
-                         List[Identifier]],
-                partial(
-                    get_all_qualified_idents,
-                    serapi,
-                    self.modpath,
-                    ordered=True,
-                    id_cache=self.expanded_ids))
-            for sentence in sentences:
-                # TODO: Optionally filter queries out of results (and
-                # execution)
-                try:
-                    self._extract_vernac_sentence(
-                        serapi,
-                        get_identifiers,
-                        sentence)
-                except CoqExn as e:
-                    raise CoqExn(
-                        e.msg,
-                        e.full_sexp,
-                        sentence.location,
-                        sentence.text,
-                        e.query) from e
-                except Exception as e:
-                    # slight abuse of CoqExn
-                    raise CoqExn(
-                        str(e),
-                        "",
-                        sentence.location,
-                        sentence.text) from e
-        # assert that we have extracted all proofs
-        assert not self.conjectures
-        assert not self.partial_proof_stacks
-        assert not self.finished_proof_stacks
-        assert not self.programs
-        return self.extracted_commands
 
     def _extract_vernac_sentence(
             self,
@@ -1152,6 +1119,53 @@ class CommandExtractor:
         self.pre_proof_id = self.post_proof_id
         self.post_proof_id = serapi.get_conjecture_id()
         return ids
+
+    def extract_vernac_commands(
+            self,
+            sentences: Iterable[CoqSentence]) -> VernacCommandDataList:
+        """
+        Compile Vernacular commands from a sequence of sentences.
+
+        Parameters
+        ----------
+        sentences : Iterable[CoqSentence]
+            A sequence of sentences derived from a document.
+
+        Returns
+        -------
+        VernacCommandDataList
+            The compiled vernacular commands.
+
+        See Also
+        --------
+        prism.project.iqr : For more information about IQR flags.
+        """
+        with self as sentence_extractor:
+            for sentence in sentences:
+                # TODO: Optionally filter queries out of results (and
+                # execution)
+                try:
+                    sentence_extractor(sentence)
+                except CoqExn as e:
+                    raise CoqExn(
+                        e.msg,
+                        e.full_sexp,
+                        sentence.location,
+                        sentence.text,
+                        e.query) from e
+                except Exception as e:
+                    # slight abuse of CoqExn
+                    raise CoqExn(
+                        str(e),
+                        "",
+                        sentence.location,
+                        sentence.text) from e
+        # assert that we have extracted all proofs
+        assert not self.conjectures
+        assert not self.partial_proof_stacks
+        assert not self.finished_proof_stacks
+        assert not self.programs
+        return self.extracted_commands
 
     def is_subproof_of(self, proof_id: str, id_under_test: str) -> bool:
         """
