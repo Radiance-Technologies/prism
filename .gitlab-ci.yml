@@ -1,4 +1,6 @@
-image: "python:3.11"
+# Using the bullseye image due to
+# compatibility with opam 2.0.8-1
+image: "python:3.11-bullseye"
 
 variables:
     PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
