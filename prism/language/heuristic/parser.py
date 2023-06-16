@@ -55,6 +55,19 @@ class CoqSentence:
     def __len__(self) -> int:  # noqa: D105
         return len(self.text)
 
+    def __lt__(self, other: object) -> bool:
+        """
+        Compare based on location, treating None as negative infinity.
+        """
+        if not isinstance(other, CoqSentence):
+            return NotImplemented
+        if self.location is None:
+            return True
+        elif other.location is None:
+            return False
+        else:
+            return self.location < other.location
+
     def __str__(self) -> str:  # noqa: D105
         return self.text
 
@@ -78,6 +91,19 @@ class CoqComment:
 
     def __len__(self) -> int:  # noqa: D105
         return len(self.text)
+
+    def __lt__(self, other: object) -> bool:
+        """
+        Compare based on location, treating None as negative infinity.
+        """
+        if not isinstance(other, CoqComment):
+            return NotImplemented
+        if self.location is None:
+            return True
+        elif other.location is None:
+            return False
+        else:
+            return self.location < other.location
 
     def __str__(self) -> str:  # noqa: D105
         return self.text
