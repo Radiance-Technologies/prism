@@ -213,7 +213,7 @@ class CommandExtractor:
     """
     The logical library name of the filename.
     """
-    extracted_commands: VernacCommandDataList = default_field(
+    _extracted_commands: VernacCommandDataList = default_field(
         VernacCommandDataList(),
         init=False)
     """
@@ -333,6 +333,71 @@ class CommandExtractor:
         """
         self.serapi.shutdown()
         self.serapi = None
+        self.get_identifiers = None
+
+    @property
+    def extracted_commands(self) -> VernacCommandDataList:
+        """
+        The completely extracted commands in order of extraction.
+        """
+        return self._extracted_commands
+
+    @property
+    def extracted_sentences(self) -> List[CoqSentence]:
+        """
+        The extracted and pending sentences in order of location.
+        """
+        sentences = self._extracted_commands.to_CoqSentences()
+        # pending sentences will always occur after already compiled
+        # and extracted commands' sentences
+        sentences.extend(self.pending_sentences)
+        return sentences
+
+    @property
+    def is_pending_extraction(self) -> bool:
+        """
+        Whether the extractor is in the midst of extracting a command.
+        """
+        return bool(
+            self.conjectures or self.partial_proof_stacks
+            or self.finished_proof_stacks or self.programs)
+
+    @property
+    def num_extracted_commands(self) -> int:
+        """
+        The number of completely extracted commands.
+        """
+        return len(self._extracted_commands)
+
+    @property
+    def num_extracted_sentences(self) -> int:
+        """
+        The total number of sentences extracted thus far.
+
+        This count includes those sentences that are not yet compiled as
+        part of a command (e.g., as part of a lemma/proof).
+        """
+        return len(self.extracted_sentences)
+
+    @property
+    def pending_sentences(self) -> List[CoqSentence]:
+        """
+        Sentences belonging to the currently pending command extraction.
+        """
+        sentences: List[CoqSentence] = []
+        sentences.extend(s for s, _, _, _ in self.conjectures.values())
+        sentences.extend(
+            s for pb in self.partial_proof_stacks.values() for s,
+            _,
+            _,
+            _ in pb)
+        sentences.extend(
+            s.to_CoqSentence() for c in self.finished_proof_stacks.values()
+            for _,
+            pb in c for s in pb)
+        sentences.extend(s for s, _, _, _ in self.programs)
+        sentences.sort()
+        return sentences
 
     def _conclude_proof(
         self,
@@ -616,7 +681,7 @@ class CommandExtractor:
                 get_identifiers,
                 feedback)
             if program is not None:
-                self.extracted_commands.append(program)
+                self._record_extraction(serapi, program)
         elif proof_id_changed:
             self.post_goals = serapi.query_goals()
             if ids or is_proof_aborted:
@@ -632,7 +697,7 @@ class CommandExtractor:
                         is_proof_aborted,
                         get_identifiers)
                     if completed_lemma is not None:
-                        self.extracted_commands.append(completed_lemma)
+                        self._record_extraction(serapi, completed_lemma)
                     return
                 else:
                     # That's not supposed to happen...
@@ -720,7 +785,7 @@ class CommandExtractor:
                         pre_goals_or_diff,
                         get_identifiers,
                         feedback))
-            self.extracted_commands.append(command)
+            self._record_extraction(serapi, command)
 
     def _handle_anomalous_proof(
             self,
@@ -876,6 +941,16 @@ class CommandExtractor:
                     get_identifiers,
                     feedback))
         return proof
+
+    def _record_extraction(
+            self,
+            serapi: SerAPI,
+            command: VernacCommandData) -> None:
+        """
+        Note the extraction of a command and make a checkpoint.
+        """
+        self._extracted_commands.append(command)
+        serapi.push()
 
     def _start_program(
         self,
