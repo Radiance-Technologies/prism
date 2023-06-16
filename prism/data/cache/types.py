@@ -35,7 +35,7 @@ import seutil as su
 from prism.interface.coq.goals import GoalLocation, Goals, GoalsDiff
 from prism.interface.coq.ident import Identifier
 from prism.language.gallina.analyze import SexpInfo
-from prism.language.heuristic.parser import CoqComment
+from prism.language.heuristic.parser import CoqComment, CoqSentence
 from prism.language.sexp.node import SexpNode
 from prism.project.metadata.dataclass import ProjectMetadata
 from prism.util.io import Fmt
@@ -283,6 +283,12 @@ class VernacSentence:
             v in self.goals_qualified_identifiers.items()
         }
         return result
+
+    def to_CoqSentence(self) -> CoqSentence:
+        """
+        Return a `CoqSentence` consistent with this `VernacSentence`.
+        """
+        return CoqSentence(self.text, self.location, self.ast)
 
     @classmethod
     def deserialize(cls, data: Dict[str, Any]) -> 'VernacSentence':
@@ -618,6 +624,12 @@ class VernacCommandData:
         """
         return self.location.union(*[p.location for p in chain(*self.proofs)])
 
+    def to_CoqSentences(self) -> List[CoqSentence]:
+        """
+        Get `CoqSentence`s consistent with this command.
+        """
+        return [s.to_CoqSentence() for s in self.sorted_sentences()]
+
 
 @dataclass
 class VernacCommandDataList:
@@ -827,6 +839,14 @@ class VernacCommandDataList:
                                    command_idx=idx))
         sorted_sentences = VernacSentence.sort_sentences(sorted_sentences)
         return sorted_sentences
+
+    def to_CoqSentences(self) -> List[CoqSentence]:
+        """
+        Get `CoqSentence`s consistent with this list of commands.
+        """
+        sentences = [s for c in self.commands for s in c.to_CoqSentences()]
+        sentences.sort()
+        return sentences
 
     def write_coq_file(self, filepath: PathLike) -> None:
         """
