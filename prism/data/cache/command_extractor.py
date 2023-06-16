@@ -101,6 +101,13 @@ def _disabled_extract_vernac_sentence(_: CoqSentence) -> NoReturn:
     raise RuntimeError("Cannot extract without an active context.")
 
 
+def _disabled_get_identifiers(_: str) -> List[Identifier]:
+    """
+    Skip extraction of qualified identifiers.
+    """
+    return []
+
+
 serapi_id_align_ = align_factory(
     lambda x,
     y: 0. if x == y else 1.,
@@ -218,6 +225,18 @@ class CommandExtractor:
     """
     logger: Optional[logging.Logger] = None
     """
+    A logger for reporting errors, warnings, info, etc.
+    """
+    extract_goals: bool = True
+    """
+    Whether to extract goals and hypotheses, by default True.
+    """
+    extract_qualified_idents: bool = True
+    """
+    Whether to extract fully qualified identifiers, by default True.
+
+    Note that once an extraction context is created, any changes to this
+    field will not be reflected until the next context.
     """
     use_goals_diff: bool = True
     """
@@ -347,15 +366,18 @@ class CommandExtractor:
         self.serapi = SerAPI(self.serapi_options, opam_switch=self.opam_switch)
         # make a checkpoint to allow rolling back of first command
         self.serapi.push()
-        self.get_identifiers = typing.cast(
-            Callable[[str],
-                     List[Identifier]],
-            partial(
-                get_all_qualified_idents,
-                self.serapi,
-                self.modpath,
-                ordered=True,
-                id_cache=self.expanded_ids))
+        if self.extract_qualified_idents:
+            self.get_identifiers = typing.cast(
+                Callable[[str],
+                         List[Identifier]],
+                partial(
+                    get_all_qualified_idents,
+                    self.serapi,
+                    self.modpath,
+                    ordered=True,
+                    id_cache=self.expanded_ids))
+        else:
+            self.get_identifiers = _disabled_get_identifiers
         self.extract_vernac_sentence = partial(
             self._extract_vernac_sentence,
             self.serapi,
@@ -641,6 +663,18 @@ class CommandExtractor:
                 serapi.pull()
         return feedback, sexp
 
+    def _extract_post_goals(self, serapi: SerAPI) -> None:
+        """
+        Extract goals depending on the value of flag `extract_goals`.
+
+        Parameters
+        ----------
+        serapi : SerAPI
+            An active SerAPI session.
+        """
+        if self.extract_goals:
+            self.post_goals = serapi.query_goals()
+
     def _extract_vernac_sentence(
             self,
             serapi: SerAPI,
@@ -720,7 +754,7 @@ class CommandExtractor:
             if program is not None:
                 self._record_extraction(serapi, program)
         elif proof_id_changed:
-            self.post_goals = serapi.query_goals()
+            self._extract_post_goals(serapi)
             if ids or is_proof_aborted:
                 # a proof has concluded or been aborted
                 if self.pre_proof_id in self.partial_proof_stacks:
@@ -774,7 +808,7 @@ class CommandExtractor:
         elif self.post_proof_id is not None and (not ids or is_subproof):
             # we are continuing an open proof
             if self.post_proof_id in self.partial_proof_stacks:
-                self.post_goals = serapi.query_goals()
+                self._extract_post_goals(serapi)
                 proof_stack = self.partial_proof_stacks[self.post_proof_id]
                 proof_stack.append(
                     (sentence,

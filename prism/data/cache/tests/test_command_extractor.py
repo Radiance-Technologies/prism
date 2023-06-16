@@ -739,7 +739,76 @@ class TestCommandExtractor(unittest.TestCase):
             ]
             self.assertEqual(expected_goals_list, reconstructed_goals_list)
 
-    @pytest.mark.coq_8_10_2
+    @pytest.mark.coq_all
+    def test_skip_extraction(self) -> None:
+        """
+        Verify extraction of goals and qualified idents can be skipped.
+        """
+        with pushd(_COQ_EXAMPLES_PATH):
+            extracted_commands_no_goals_or_idents = CommandExtractor(
+                "simple.v",
+                typing.cast(
+                    List[CoqSentence],
+                    Project.extract_sentences(
+                        CoqDocument(
+                            "simple.v",
+                            CoqParser.parse_source("simple.v"),
+                            _COQ_EXAMPLES_PATH),
+                        sentence_extraction_method=SEM.HEURISTIC,
+                        return_locations=True,
+                        glom_proofs=False)),
+                serapi_options=SerAPIOptions.empty(),
+                extract_goals=False,
+                extract_qualified_idents=False,
+                opam_switch=self.test_switch).extracted_commands
+        expected_command_text = [
+            "Inductive seq : nat -> Set := "
+            "| niln : seq 0 "
+            "| consn : forall n : nat, nat -> seq n -> seq (S n).",
+            "Fixpoint length (n : nat) (s : seq n) {struct s} : nat := "
+            "match s with "
+            "| niln => 0 "
+            "| consn i _ s' => S (length i s') "
+            "end.",
+            "Let m := seq 0.",
+            "Theorem length_corr : forall (n : nat) (s : seq n), length n s = n.",
+            "Check length_corr.",
+            "Notation \"n .+1\" := (S n)(at level 2, "
+            "left associativity, format \"n .+1\"): nat_scope.",
+            "Coercion b2Prop (x : bool) := x = true."
+        ]
+        self.assertEqual(
+            [c.command.text for c in extracted_commands_no_goals_or_idents],
+            expected_command_text)
+        self.assertNotIn(
+            False,
+            [
+                s.goals is None
+                for c in extracted_commands_no_goals_or_idents
+                for s in c.sentences_iter()
+            ])
+        self.assertEqual(
+            [
+                0 for c in extracted_commands_no_goals_or_idents
+                for _ in c.sentences_iter()
+            ],
+            [
+                len(s.qualified_identifiers)
+                for c in extracted_commands_no_goals_or_idents
+                for s in c.sentences_iter()
+            ])
+        self.assertEqual(
+            [
+                0 for c in extracted_commands_no_goals_or_idents
+                for _ in c.sentences_iter()
+            ],
+            [
+                len(s.goals_qualified_identifiers)
+                for c in extracted_commands_no_goals_or_idents
+                for s in c.sentences_iter()
+            ])
+
+    @pytest.mark.coq_all
     def test_rollback(self) -> None:
         """
         Test rolling back extraction of commands and sentences.
