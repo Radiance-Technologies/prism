@@ -5,13 +5,16 @@ import logging
 import re
 import typing
 import warnings
+from bisect import bisect_left
 from dataclasses import InitVar, dataclass, field
 from functools import partial
+from pathlib import Path
 from typing import (
     Callable,
     Dict,
     Iterable,
     List,
+    NoReturn,
     Optional,
     Sequence,
     Tuple,
@@ -39,7 +42,7 @@ from prism.interface.coq.re_patterns import (
     SUBPROOF_ID_PATTERN,
 )
 from prism.interface.coq.serapi import AbstractSyntaxTree, SerAPI
-from prism.language.gallina.analyze import SexpAnalyzer
+from prism.language.gallina.analyze import SexpAnalyzer, SexpInfo
 from prism.language.heuristic.parser import CoqSentence
 from prism.language.sexp.node import SexpNode
 from prism.project.base import Project
@@ -84,6 +87,19 @@ ProofSentenceState = Tuple[CoqSentence,
                            CommandType,
                            Feedback]
 ProofBlock = List[ProofSentenceState]
+
+
+def _disabled_extract_vernac_sentence(_: CoqSentence) -> NoReturn:
+    """
+    Raise an error indicating extraction is disabled.
+
+    Raises
+    ------
+    RuntimeError
+        Always.
+    """
+    raise RuntimeError("Cannot extract without an active context.")
+
 
 serapi_id_align_ = align_factory(
     lambda x,
@@ -289,6 +305,22 @@ class CommandExtractor:
     The open goals, if any, after execution of the most recent command.
     """
     serapi: Optional[SerAPI] = default_field(None, init=False)
+    """
+    The SerAPI interactive session, defined only for the duration of the
+    extraction context.
+    """
+    get_identifiers: Optional[Callable[[str],
+                                       List[Identifier]]] = default_field(
+                                           None,
+                                           init=False)
+    """
+    A function that extracts identifiers from a given serialized AST,
+    defined only for the duration of the extraction context.
+    """
+    extract_vernac_sentence: Callable[[CoqSentence],
+                                      None] = default_field(
+                                          _disabled_extract_vernac_sentence,
+                                          init=False)
 
     def __post_init__(self, sentences: Optional[Iterable[CoqSentence]]):
         """
@@ -308,12 +340,14 @@ class CommandExtractor:
         """
         return self.extract_vernac_commands(sentences)
 
-    def __enter__(self) -> Callable[[CoqSentence], None]:
+    def __enter__(self) -> 'CommandExtractor':
         """
         Initialize a context for an extraction session.
         """
         self.serapi = SerAPI(self.serapi_options, opam_switch=self.opam_switch)
-        get_identifiers = typing.cast(
+        # make a checkpoint to allow rolling back of first command
+        self.serapi.push()
+        self.get_identifiers = typing.cast(
             Callable[[str],
                      List[Identifier]],
             partial(
@@ -322,18 +356,21 @@ class CommandExtractor:
                 self.modpath,
                 ordered=True,
                 id_cache=self.expanded_ids))
-        return partial(
+        self.extract_vernac_sentence = partial(
             self._extract_vernac_sentence,
             self.serapi,
-            get_identifiers)
+            self.get_identifiers)
+        return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         """
         Conclude a context for an extraction session.
         """
-        self.serapi.shutdown()
+        if self.serapi is not None:
+            self.serapi.shutdown()
         self.serapi = None
         self.get_identifiers = None
+        self.extract_vernac_sentence = _disabled_extract_vernac_sentence
 
     @property
     def extracted_commands(self) -> VernacCommandDataList:
@@ -1123,12 +1160,12 @@ class CommandExtractor:
         --------
         prism.project.iqr : For more information about IQR flags.
         """
-        with self as sentence_extractor:
+        with self as extractor:
             for sentence in sentences:
                 # TODO: Optionally filter queries out of results (and
                 # execution)
                 try:
-                    sentence_extractor(sentence)
+                    extractor.extract_vernac_sentence(sentence)
                 except CoqExn as e:
                     raise CoqExn(
                         e.msg,
@@ -1148,7 +1185,254 @@ class CommandExtractor:
         assert not self.partial_proof_stacks
         assert not self.finished_proof_stacks
         assert not self.programs
-        return self.extracted_commands
+        return self._extracted_commands
+
+    def rollback(
+        self,
+        num_commands: int = 1) -> Tuple[VernacCommandDataList,
+                                        List[CoqSentence]]:
+        """
+        Rollback the extraction/execution of Vernacular command(s).
+
+        Parameters
+        ----------
+        num_commands : int, optional
+            The number of unnested commands to rollback, by default 1.
+
+        Returns
+        -------
+        VernacCommandDataList
+            The rolled back command(s), if any.
+        List[CoqSentence]
+            The rolled back pending sentences, if any.
+
+        Raises
+        ------
+        RuntimeError
+            If an extraction context is not active.
+        IndexError
+            If `num_commands` is negative or larger than the number of
+            available commands to rollback.
+
+        Notes
+        -----
+        If the context is in the middle of extracting a command (e.g.,
+        because the command consists of multiple sentences arising from
+        a proof or set of obligations), then this command's extraction
+        is canceled and the state is rolled back to just after the prior
+        extracted command.
+        Consequently, if the context is in the middle of a nested proof,
+        then the entire nested proof will be rolled back.
+        """
+        if self.serapi is None:
+            raise RuntimeError("Cannot rollback outside of extraction context")
+        total_num_commands = self.num_extracted_commands + int(
+            self.is_pending_extraction)
+        if num_commands < 0:
+            raise IndexError(
+                f"num_commands must be positive, got {num_commands}")
+        elif num_commands >= total_num_commands:
+            raise IndexError(
+                "Too many commands to rollback, "
+                f"must be less than {total_num_commands}, got {num_commands}")
+        all_rolled_back_sentences: List[CoqSentence] = []
+        rolled_back_sentences: List[CoqSentence] = []
+        rolled_back_commands = VernacCommandDataList()
+        dummy_sentence = CoqSentence("", None, None)
+        if not self.serapi.frame_stack[-1]:
+            # remove empty frame stack
+            self.serapi.pop()
+        for i in range(num_commands):
+            self.serapi.pop()
+            if self.is_pending_extraction:
+                # roll back partial commands
+                rolled_back_sentences.extend(self.pending_sentences)
+                all_rolled_back_sentences.extend(rolled_back_sentences)
+                self.conjectures = {}
+                self.partial_proof_stacks = {}
+                self.finished_proof_stacks = {}
+                self.programs = []
+            else:
+                # no partial command extraction in progress
+                # just rollback the one command
+                rolled_back_commands.append(self._extracted_commands.pop())
+            all_rolled_back_sentences.extend(
+                rolled_back_commands.to_CoqSentences())
+            all_rolled_back_sentences.sort()
+            for i in range(len(self._extracted_commands) - 1, -1, -1):
+                # if a command is in the middle of the rolled back
+                # sentences, then it must be nested
+                command = self._extracted_commands[i]
+                dummy_sentence.location = command.location
+                if bisect_left(all_rolled_back_sentences, dummy_sentence) > 0:
+                    # nested command
+                    self._extracted_commands.pop()
+                    self.serapi.pop()
+                    rolled_back_commands.append(command)
+        rolled_back_commands = list(reversed(rolled_back_commands))
+        # by stopping at an unnested command boundary, we know that we
+        # are not in proof mode and thus have no goals nor proof ID
+        self.post_proof_id = None
+        self.post_goals = None
+        self._update_ids(self.serapi)
+        self.serapi.push()
+        return VernacCommandDataList(rolled_back_commands), rolled_back_sentences
+
+    def rollback_sentences(
+            self,
+            num_sentences: int) -> Tuple[VernacCommandDataList,
+                                         List[CoqSentence]]:
+        """
+        Rollback extraction/execution of sentences.
+
+        Parameters
+        ----------
+        num_sentences : int
+            The number of sentences to rollback.
+
+        Returns
+        -------
+        VernacCommandDataList
+            The rolled back command(s), if any.
+        List[CoqSentence]
+            The rolled back pending sentences, if any.
+            Note that if `num_sentences` results in a command being
+            partially rolled back, then this list will include both
+            pending sentences before the invocation of this method and
+            the rolled back sentences of the partially undone commands.
+
+        Raises
+        ------
+        RuntimeError
+            If an extraction context is not active and `num_sentences`
+            is positive.
+        IndexError
+            If `num_sentences` is negative or larger than the number of
+            available sentences to rollback.
+
+        See Also
+        --------
+        rollback
+        rollback_location
+        """
+        if num_sentences < 0:
+            raise IndexError(
+                f"num_sentences must be positive, got {num_sentences}")
+        elif num_sentences >= self.num_extracted_sentences:
+            raise IndexError(
+                "Too many sentences to rollback, "
+                f"must be less than {self.num_extracted_sentences}, "
+                f"got {num_sentences}")
+        # iteratively roll back until we've undone enough sentences
+        all_rolled_back_sentences: List[CoqSentence] = []
+        rolled_back_sentences: Optional[List[CoqSentence]] = None
+        rolled_back_commands = VernacCommandDataList()
+        while len(all_rolled_back_sentences) < num_sentences:
+            (more_rolled_back_commands,
+             more_rolled_back_sentences) = self.rollback(1)
+            rolled_back_commands.extend(more_rolled_back_commands)
+            all_rolled_back_sentences.extend(more_rolled_back_sentences)
+            if rolled_back_sentences is None:
+                rolled_back_sentences = more_rolled_back_sentences
+            else:
+                assert not more_rolled_back_sentences
+            all_rolled_back_sentences.extend(
+                more_rolled_back_commands.to_CoqSentences())
+        rolled_back_commands.sort()
+        if len(all_rolled_back_sentences) > num_sentences:
+            # replay rolled back sentences until we get to the desired
+            # number
+            assert rolled_back_sentences is not None
+            all_rolled_back_sentences.sort()
+            num_replayed = len(all_rolled_back_sentences) - num_sentences
+            for sentence in all_rolled_back_sentences[: num_replayed]:
+                self.extract_vernac_sentence(sentence)
+            if len(rolled_back_sentences) > num_sentences:
+                # no extracted commands were rolled back
+                rolled_back_sentences = rolled_back_sentences[num_replayed :]
+            else:
+                # find the last command that contains the location of
+                # the last executed sentence, which will be the
+                # outermost nested command that must be rolled back
+                sentence = all_rolled_back_sentences[num_replayed - 1]
+                partially_rolled_index = 0
+                for i, c in enumerate(rolled_back_commands):
+                    if sentence.location in c.spanning_location():
+                        partially_rolled_index = i
+                partially_rolled_commands = rolled_back_commands[:
+                                                                 partially_rolled_index
+                                                                 + 1]
+                # capture rolled back sentences of partially rolled back
+                # commands apart from fully rolled back commands
+                rolled_back_commands = rolled_back_commands[
+                    partially_rolled_index + 1 :]
+                partially_rolled_sentences = partially_rolled_commands.to_CoqSentences(
+                )
+                partially_rolled_sentences.sort()
+                partially_rolled_sentences = partially_rolled_sentences[
+                    num_replayed :]
+                partially_rolled_sentences.extend(rolled_back_sentences)
+                rolled_back_sentences = partially_rolled_sentences
+        if rolled_back_sentences is None:
+            rolled_back_sentences = []
+        return rolled_back_commands, rolled_back_sentences
+
+    def rollback_to_location(
+        self,
+        location: SexpInfo.Loc) -> Tuple[VernacCommandDataList,
+                                         List[CoqSentence]]:
+        """
+        Rollback extraction/execution to a given location.
+
+        Extraction will be rolled back to just after the last extracted
+        command that precedes the location.
+
+        Parameters
+        ----------
+        location : SexpInfo.Loc
+            A location in the document space from which all extracted
+            sentences are presumed to be taken.
+
+        Returns
+        -------
+        VernacCommandDataList
+            The rolled back command(s), if any.
+        List[CoqSentence]
+            The rolled back pending sentences, if any.
+            Note that if `location` results in a command being
+            partially rolled back, then this list will include both
+            pending sentences before the invocation of this method and
+            the rolled back sentences of the partially undone commands.
+
+        Raises
+        ------
+        RuntimeError
+            If an extraction context is not active or `location` does
+            not match `filename`.
+
+        See Also
+        --------
+        rollback
+        rollback_sentences
+        """
+        if Path(self.filename).resolve() != Path(location.filename).resolve():
+            raise RuntimeError(
+                "Given location file does not match extraction context. "
+                f"Expected {self.filename}, got {location.filename}")
+        sentences = self.extracted_sentences
+        # restrict location to just beginning line/character
+        dummy_sentence = CoqSentence("", None, None)
+        dummy_sentence.location = SexpInfo.Loc(
+            location.filename,
+            location.lineno,
+            location.bol_pos,
+            location.lineno,
+            location.bol_pos,
+            location.beg_charno,
+            location.beg_charno)
+        located_sentence_index: int = bisect_left(sentences, dummy_sentence)
+        num_to_rollback = len(sentences) - located_sentence_index
+        return self.rollback_sentences(num_to_rollback)
 
     def is_subproof_of(self, proof_id: str, id_under_test: str) -> bool:
         """

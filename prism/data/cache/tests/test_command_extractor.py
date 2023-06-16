@@ -5,6 +5,7 @@ Module containing tests for the extract_cache module.
 import typing
 import unittest
 from copy import deepcopy
+from itertools import chain
 from typing import List
 
 import pytest
@@ -20,6 +21,7 @@ from prism.data.document import CoqDocument
 from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.interface.coq.ident import Identifier, IdentType
 from prism.interface.coq.options import SerAPIOptions
+from prism.language.gallina.analyze import SexpInfo
 from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.parser import CoqSentence
 from prism.project.base import SEM, Project
@@ -736,6 +738,113 @@ class TestCommandExtractor(unittest.TestCase):
                 s.goals for s in sentences_reconstructed
             ]
             self.assertEqual(expected_goals_list, reconstructed_goals_list)
+
+    @pytest.mark.coq_8_10_2
+    def test_rollback(self) -> None:
+        """
+        Test rolling back extraction of commands and sentences.
+        """
+        with pushd(_COQ_EXAMPLES_PATH):
+            sentences = typing.cast(
+                List[CoqSentence],
+                Project.extract_sentences(
+                    CoqDocument(
+                        "nested.v",
+                        CoqParser.parse_source("nested.v"),
+                        _COQ_EXAMPLES_PATH),
+                    sentence_extraction_method=SEM.HEURISTIC,
+                    return_locations=True,
+                    glom_proofs=False))
+            with CommandExtractor("nested.v",
+                                  serapi_options=SerAPIOptions.empty(),
+                                  use_goals_diff=False,
+                                  opam_switch=self.test_switch) as extractor:
+                assert extractor.serapi is not None
+                for sentence in sentences:
+                    extractor.extract_vernac_sentence(sentence)
+                extracted_commands = VernacCommandDataList(
+                    list(extractor.extracted_commands))
+                extracted_sentences = extractor.extracted_sentences
+                with self.subTest("command"):
+                    with self.assertRaises(IndexError):
+                        extractor.rollback(30)
+                    with self.assertRaises(IndexError):
+                        extractor.rollback(-1)
+                    rolled_back_commands, rolled_back_sentences = extractor.rollback()
+                    self.assertFalse(rolled_back_sentences)
+                    self.assertEqual(
+                        rolled_back_commands,
+                        extracted_commands[-1 :])
+                    self.assertEqual(len(extractor.serapi.frame_stack), 7)
+                with self.subTest("nested_command"):
+                    # both the innter and outer nested proof should be
+                    # rolled back together
+                    rolled_back_commands, rolled_back_sentences = extractor.rollback()
+                    self.assertFalse(rolled_back_sentences)
+                    self.assertEqual(
+                        rolled_back_commands,
+                        extracted_commands[-3 :-1])
+                    self.assertEqual(len(extractor.serapi.frame_stack), 5)
+                with self.subTest("sentences"):
+                    with self.assertRaises(IndexError):
+                        extractor.rollback_sentences(30)
+                    with self.assertRaises(IndexError):
+                        extractor.rollback_sentences(-1)
+                    (rolled_back_commands,
+                     rolled_back_sentences) = extractor.rollback_sentences(2)
+                    self.assertEqual(
+                        rolled_back_commands,
+                        extracted_commands[-4 :-3])
+                    self.assertEqual(
+                        rolled_back_sentences,
+                        extracted_sentences[5 : 6])
+                    self.assertEqual(len(extractor.serapi.frame_stack), 3)
+                for sentence in chain(rolled_back_sentences,
+                                      rolled_back_commands.to_CoqSentences()):
+                    extractor.extract_vernac_sentence(sentence)
+                with self.subTest("location"):
+                    # rollback to the start of the proof of foobar
+                    bad_location = SexpInfo.Loc(
+                        "_nested.v",
+                        2,
+                        103,
+                        2,
+                        110,
+                        103,
+                        110)
+                    large_location = SexpInfo.Loc(
+                        "nested.v",
+                        2000,
+                        103000,
+                        2000,
+                        110000,
+                        103000,
+                        110000)
+                    location = SexpInfo.Loc(
+                        "nested.v",
+                        2,
+                        103,
+                        2,
+                        110,
+                        103,
+                        110)
+                    with self.assertRaises(RuntimeError):
+                        extractor.rollback_to_location(bad_location)
+                    (rolled_back_commands,
+                     rolled_back_sentences
+                     ) = extractor.rollback_to_location(large_location)
+                    self.assertFalse(rolled_back_commands)
+                    self.assertFalse(rolled_back_sentences)
+                    (rolled_back_commands,
+                     rolled_back_sentences
+                     ) = extractor.rollback_to_location(location)
+                    self.assertEqual(
+                        rolled_back_commands,
+                        extracted_commands[-4 :-3])
+                    self.assertEqual(
+                        rolled_back_sentences,
+                        extracted_sentences[2 : 6])
+                    extractor.pre_proof_id = "foobar"
 
 
 if __name__ == "__main__":
