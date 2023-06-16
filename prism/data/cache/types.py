@@ -798,11 +798,23 @@ class VernacCommandDataList:
             previous_goals = current_goals
             previous_goal_identifiers = current_goal_identifiers
 
+    def pop(self) -> VernacCommandData:
+        """
+        Remove and return the last command from the list.
+        """
+        return self.commands.pop()
+
     def shallow_copy(self) -> 'VernacCommandDataList':
         """
         Get a shallow copy of this list.
         """
         return VernacCommandDataList([c.shallow_copy() for c in self])
+
+    def sort(self) -> None:
+        """
+        Sort the list of commands in place.
+        """
+        self.commands.sort()
 
     def sorted_sentences(self) -> List[VernacSentence]:
         """
@@ -1114,7 +1126,7 @@ class ProjectCommitData(Serializable):
         Sort the commands of each file in-place.
         """
         for commands in self.command_data.values():
-            commands.commands.sort()
+            commands.sort()
 
     def sorted_sentences(self) -> Dict[str, List[VernacSentence]]:
         """
