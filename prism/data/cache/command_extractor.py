@@ -137,6 +137,8 @@ class CommandExtractor:
       no plugins define multi-block proofs).
       If any plugin does so, then each "obligation" is expected to be
       extracted as an unrelated command.
+    * No plugins define their own subproof equivalent or alter the
+      builtin naming scheme for subproofs.
     * No command can both end one proof and start another (this
       should be true based on the mutually exclusive ``VtStartProof``
       and ``VtQed`` Vernacular classes in
@@ -728,7 +730,8 @@ class CommandExtractor:
         """
         Handle anomalies dealing with inconsistent proof states.
 
-        Sometimes a conjecture may be reported as open
+        Sometimes a conjecture may be reported as open but in fact has
+        already been completed.
 
         Parameters
         ----------
