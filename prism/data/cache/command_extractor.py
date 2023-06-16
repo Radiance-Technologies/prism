@@ -71,14 +71,18 @@ _save_pattern = re.compile(rf"Save\s+(?P<ident>{IDENT_PATTERN.pattern})\s*.")
 
 _printing_options_pattern = re.compile(r"(?:Set|Unset)\s+Printing\s+.*\.")
 
+Feedback = List[str]
+
 SentenceState = Tuple[CoqSentence,
                       Optional[Union[Goals,
                                      GoalsDiff]],
-                      CommandType]
+                      CommandType,
+                      Feedback]
 ProofSentenceState = Tuple[CoqSentence,
                            Optional[Union[Goals,
                                           GoalsDiff]],
-                           CommandType]
+                           CommandType,
+                           Feedback]
 ProofBlock = List[ProofSentenceState]
 
 serapi_id_align_ = align_factory(
@@ -334,7 +338,6 @@ class CommandExtractor:
         is_proof_aborted: bool,
         get_identifiers: Callable[[str],
                                   List[Identifier]],
-        feedback: List[str],
     ) -> Optional[VernacCommandData]:
         r"""
         Complete accumulation of a proof/proved conjecture.
@@ -350,8 +353,6 @@ class CommandExtractor:
             A function that accepts a serialized AST and returns a list
             of fully qualified identifiers in the order of their
             appearance in the AST.
-        feedback : List[str]
-            Feedback from executing the `sentence`.
 
         Returns
         -------
@@ -372,8 +373,7 @@ class CommandExtractor:
             proof_block = self._process_proof_block(
                 self.partial_proof_stacks.pop(new_id,
                                               []),
-                get_identifiers,
-                feedback)
+                get_identifiers)
             new_proofs.append((new_id, proof_block))
         finished_proof_id = self.obligation_map.get(
             self.pre_proof_id,
@@ -398,7 +398,8 @@ class CommandExtractor:
                  unzip(self.finished_proof_stacks.pop(finished_proof_id)))
             (lemma,
              pre_goals_or_diff,
-             lemma_type) = self.conjectures.pop(finished_proof_id)
+             lemma_type,
+             feedback) = self.conjectures.pop(finished_proof_id)
             assert lemma.ast is not None, \
                 "The lemma must have an AST"
             assert lemma.location is not None, \
@@ -622,12 +623,12 @@ class CommandExtractor:
                     self.partial_proof_stacks[self.pre_proof_id].append(
                         (sentence,
                          pre_goals_or_diff,
-                         command_type))
+                         command_type,
+                         feedback))
                     completed_lemma = self._conclude_proof(
                         ids,
                         is_proof_aborted,
-                        get_identifiers,
-                        feedback)
+                        get_identifiers)
                     if completed_lemma is not None:
                         self.extracted_commands.append(completed_lemma)
                     return
@@ -654,19 +655,28 @@ class CommandExtractor:
                 self._start_proof_block(
                     (sentence,
                      pre_goals_or_diff,
-                     command_type))
+                     command_type,
+                     feedback))
             else:
                 # we are continuing a delayed proof
                 assert self.post_proof_id in self.partial_proof_stacks, \
                     f"{self.post_proof_id} should be in-progress"
                 proof_stack = self.partial_proof_stacks[self.post_proof_id]
-                proof_stack.append((sentence, pre_goals_or_diff, command_type))
+                proof_stack.append(
+                    (sentence,
+                     pre_goals_or_diff,
+                     command_type,
+                     feedback))
         elif self.post_proof_id is not None and (not ids or is_subproof):
             # we are continuing an open proof
             if self.post_proof_id in self.partial_proof_stacks:
                 self.post_goals = serapi.query_goals()
                 proof_stack = self.partial_proof_stacks[self.post_proof_id]
-                proof_stack.append((sentence, pre_goals_or_diff, command_type))
+                proof_stack.append(
+                    (sentence,
+                     pre_goals_or_diff,
+                     command_type,
+                     feedback))
             else:
                 assert self.post_proof_id in self.defined_lemmas, \
                     f"{self.post_proof_id} should be defined"
@@ -808,7 +818,8 @@ class CommandExtractor:
                     proof_stack.append(
                         (sentence,
                          pre_goals_or_diff,
-                         command_type))
+                         command_type,
+                         feedback))
                 program_id = typing.cast(str, m['proof_id'])
                 self.obligation_map[identifier] = program_id
         if program_id is not None:
@@ -817,19 +828,14 @@ class CommandExtractor:
                 # we completed the program
                 if self.pre_proof_id is None:
                     self.pre_proof_id = program_id
-                program = self._conclude_proof(
-                    ids,
-                    False,
-                    get_identifiers,
-                    feedback)
+                program = self._conclude_proof(ids, False, get_identifiers)
         return program
 
     def _process_proof_block(
             self,
             block: ProofBlock,
             get_identifiers: Callable[[str],
-                                      List[Identifier]],
-            feedback: List[str]) -> Proof:
+                                      List[Identifier]]) -> Proof:
         """
         Convert a proof block into the form expected for extraction.
 
@@ -842,8 +848,6 @@ class CommandExtractor:
             A function that accepts a serialized AST and returns a list
             of fully qualified identifiers in the order of their
             appearance in the AST.
-        feedback : List[str]
-            Feedback from executing the `sentence`.
 
         Returns
         -------
@@ -852,16 +856,8 @@ class CommandExtractor:
         """
         if not block:
             return []
-        proof_steps, goals, command_types = unzip(block)
         proof = []
-        tactic: CoqSentence
-        goal: Optional[Union[Goals, GoalsDiff]]
-        command_type: str
-        for (tactic,
-             goal,
-             command_type) in zip(proof_steps,
-                                  goals,
-                                  command_types):
+        for (tactic, goal, command_type, feedback) in block:
             assert tactic.ast is not None, \
                 "The tactic must have an AST"
             assert tactic.location is not None, \
@@ -951,7 +947,11 @@ class CommandExtractor:
                     feedback))
         else:
             # some obligations remain
-            self.programs.append((sentence, pre_goals_or_diff, command_type))
+            self.programs.append(
+                (sentence,
+                 pre_goals_or_diff,
+                 command_type,
+                 feedback))
             return None
 
     def _start_proof_block(self, sentence: SentenceState) -> None:
