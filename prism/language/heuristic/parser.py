@@ -47,7 +47,7 @@ class CoqSentence:
     """
     The location of the sentence in the original document.
     """
-    ast: Optional[SexpNode] = None
+    ast: Optional[Union[str, SexpNode]] = None
     """
     The abstract syntax tree of the sentence.
     """
