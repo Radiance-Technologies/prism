@@ -328,13 +328,13 @@ class VernacSentence:
 
     @staticmethod
     def sort_sentences(
-            sentences: List['VernacSentence']) -> List['VernacSentence']:
+            sentences: Iterable['VernacSentence']) -> List['VernacSentence']:
         """
         Sort the given sentences by their location.
 
         Parameters
         ----------
-        located_sentences : List[VernacSentence]
+        located_sentences : Iterable[VernacSentence]
             A list of sentences presumed to come from the same document.
 
         Returns
@@ -487,6 +487,17 @@ class VernacCommandData:
         """
         for sentence in self.sentences_iter():
             sentence.discard_data()
+
+    def proof_text(self) -> str:
+        """
+        Get the text of this command's proof(s), if any.
+
+        Each sentence in the proof(s) is joined by newlines in the
+        result. If this command does not have a proof, then the result
+        will be an empty string.
+        """
+        return '\n'.join(
+            s.text for s in VernacSentence.sort_sentences(chain(*self.proofs)))
 
     def referenced_identifiers(self) -> Set[str]:
         """
