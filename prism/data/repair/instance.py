@@ -582,12 +582,18 @@ class ProjectCommitDataDiff:
             A precomputed alignment between the commands of each project
             where ``(i,j)`` matches the ``i``-th command of `a` to the
             ``j``-th command of `b`.
+        return_aligned_commands : bool, optional
+            If True, then return the alignment between the commands of
+            `a` and `b`, by default False.
 
         Returns
         -------
         diff : ProjectCommitDataDiff
             The diff between `a` and `b` such that
             ``diff.patch(a).command_data == b.command_data``.
+        aligned_commands : AlignedCommands, optional
+            If `return_aligned_commands` is True, then the aligned
+            commands are also returned.
         """
         # NOTE (AG): I haven't been able to convince myself why patching
         # goals is necessary, but all tests indicate that it is.
@@ -641,14 +647,14 @@ class ProjectCommitDataDiff:
             By default True.
         return_aligned_commands : bool, optional
             If True, then return the alignment between the commands of
-            `a` and `b`.
+            `a` and `b`, by default False.
 
         Returns
         -------
         ProjectCommitDataDiff
             The diff between `a` and `b` such that
             ``diff.patch(a).command_data == b.command_data``.
-        aligned_commands : Assignment, optional
+        aligned_commands : AlignedCommands, optional
             If `return_aligned_commands` is True, then the aligned
             commands are also returned.
         """
@@ -658,7 +664,7 @@ class ProjectCommitDataDiff:
             alignment = align_commits(a, b, diff, align)
         else:
             alignment = align(a, b)
-        data_diff = cls.from_alignment(a, b, alignment)
+        data_diff = cls.from_alignment(a, b, alignment, return_aligned_commands)
         return data_diff
 
 
