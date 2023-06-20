@@ -1797,8 +1797,9 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
             broken_state_diff.command_changes[f].affected_commands[idx] = repair
             # record offsets
             if num_excess_chars > 0 or num_excess_lines > 0:
-                broken_state_diff.command_changes[
-                    repair_filename].offsets.append(
+                broken_state_diff.command_changes.setdefault(
+                    repair_filename,
+                    VernacCommandDataListDiff()).offsets.append(
                         (
                             (
                                 new_location.beg_charno,
