@@ -1527,18 +1527,22 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
         if (initial_environment is not None and final_environment is not None
                 and initial_opam_dependencies is not None
                 and final_opam_dependencies is not None):
-            initial_dependencies = set()
-            for dep in initial_opam_dependencies:
-                initial_dependencies.update(
-                    typing.cast(PackageFormula,
-                                PackageFormula.parse(dep)).packages)
-            repaired_dependencies = set()
-            for dep in final_opam_dependencies:
-                repaired_dependencies.update(
-                    typing.cast(PackageFormula,
-                                PackageFormula.parse(dep)).packages)
             initial_packages = dict(initial_environment.installed)
             final_packages = dict(final_environment.installed)
+            initial_dependencies = set()
+            for dep in initial_opam_dependencies:
+                for p in typing.cast(PackageFormula,
+                                     PackageFormula.parse(dep)).packages:
+                    if p in initial_packages:
+                        initial_dependencies.add(p)
+                    # else not a required dependency if not installed
+            repaired_dependencies = set()
+            for dep in final_opam_dependencies:
+                for p in typing.cast(PackageFormula,
+                                     PackageFormula.parse(dep)).packages:
+                    if p in final_packages:
+                        repaired_dependencies.add(p)
+                    # else not a required dependency if not installed
             tags.update(
                 {
                     f"dropped-dependency:{p}" for p in final_packages if
