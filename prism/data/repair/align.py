@@ -485,13 +485,10 @@ def _compute_diff_alignment(
         b_in_diff.file_dependencies = {
             # file dependencies may catch files that were not built
             (rename_map[k] if k in b.command_data.keys() else k):
-            ([rename_map[f] for f in v] if k in b.command_data.keys() else v)
+            ([rename_map[f] if f in b.command_data.keys() else f for f in v])
             for k,
             v in b_in_diff.file_dependencies.items()
         }
-
-    assert b_in_diff.files == [rename_map[f] for f in b.files], \
-        "File dependency order should be invariant under renaming"
     # calculate alignment only for those items that are known to have
     # changed
     diff_alignment = align(a_in_diff, b_in_diff)
@@ -617,11 +614,22 @@ def align_commits(
         ],
         axis=0)
     # get final indices of unchanged elements of b
+    # get map from a filenames to b filenames
+    # only need to cover files that exist in both commits
+    # since indices within added or dropped files will be considered
+    # "changed"
+    rename_map: Dict[str, str]
+    rename_map = {k: k for k in a.command_data.keys() if k in b.command_data}
+    for change in diff.changes:
+        if change.is_rename:
+            assert change.after_filename is not None
+            assert change.before_filename is not None
+            rename_map[str(change.before_filename)] = str(change.after_filename)
     unchanged_b_indices = np.concatenate(
         [
-            np.asarray(b_indices_not_in_diff[filename],
-                       dtype=int) + b_file_offsets[filename]
-            for filename in b_files
+            np.asarray(b_indices_not_in_diff[rename_map[filename]],
+                       dtype=int) + b_file_offsets[rename_map[filename]]
+            for filename in a_files
         ],
         axis=0)
     # Compute alignment
