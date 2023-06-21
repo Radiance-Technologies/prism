@@ -630,6 +630,7 @@ def align_commits(
             np.asarray(b_indices_not_in_diff[rename_map[filename]],
                        dtype=int) + b_file_offsets[rename_map[filename]]
             for filename in a_files
+            if filename in rename_map
         ],
         axis=0)
     # Compute alignment
