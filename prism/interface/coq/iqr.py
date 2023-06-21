@@ -1,9 +1,9 @@
 """
 Provides an abstraction of Coq library linking command-line options.
 """
-
 import argparse
 import os
+import pathlib
 import re
 import typing
 from dataclasses import dataclass
@@ -304,3 +304,62 @@ class IQR:
                  m.group('log')) for m in cls._r_regex.finditer(args)
             }
         return cls(I_, Q, R, pwd=pwd)
+
+    def get_local_modpath(self, filename: PathLike) -> str:
+        """
+        Infer the module path for the given file.
+
+        Parameters
+        ----------
+        filename : PathLike
+            The physical path to a project file relative to the project
+            root.
+        iqr : IQR
+            Arguments with which to initialize `sertop`, namely IQR
+            flags.
+
+        Returns
+        -------
+        modpath : str
+            The logical library path one would use if the indicated file
+            was imported or required in another.
+        """
+        # strip file extension, if any
+        if not isinstance(filename, pathlib.Path):
+            filename = pathlib.Path(filename)
+        filename = str(filename.with_suffix(''))
+        # identify the correct logical library prefix for this filename
+        matched = False
+        dot_log = None
+        for (phys, log) in (self.Q | self.R):
+            if filename.startswith(phys):
+                filename = filename[len(phys):]
+            else:
+                if phys == ".":
+                    dot_log = log
+                continue
+            # ensure that the filename gets separated from the logical
+            # prefix by a path separator (to be replaced with a period)
+            if filename[0] != os.path.sep:
+                sep = os.path.sep
+            else:
+                sep = ''
+            filename = sep.join([log, filename])
+            matched = True
+            break
+        if not matched and dot_log is not None:
+            # ensure that the filename gets separated from the logical
+            # prefix by a path separator (to be replaced with a period)
+            if filename[0] != os.path.sep:
+                sep = os.path.sep
+            else:
+                sep = ''
+            filename = sep.join([dot_log, filename])
+        # else we implicitly map the working directory to an empty
+        # logical prefix
+        # convert rest of physical path to logical
+        path = filename.split(os.path.sep)
+        if path == ['']:
+            path = []
+        modpath = ".".join([dirname.capitalize() for dirname in path])
+        return modpath

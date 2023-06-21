@@ -45,7 +45,6 @@ from prism.interface.coq.serapi import AbstractSyntaxTree, SerAPI
 from prism.language.gallina.analyze import SexpAnalyzer, SexpInfo
 from prism.language.heuristic.parser import CoqSentence
 from prism.language.sexp.node import SexpNode
-from prism.project.base import Project
 from prism.util.alignment import Alignment, align_factory
 from prism.util.opam.switch import OpamSwitch
 from prism.util.opam.version import OpamVersion
@@ -345,9 +344,8 @@ class CommandExtractor:
         """
         Initialize the `modpath`.
         """
-        self.modpath = Project.get_local_modpath(
-            self.filename,
-            self.serapi_options.iqr)
+        iqr = self.serapi_options.iqr
+        self.modpath = iqr.get_local_modpath(self.filename)
         if sentences is not None:
             self(sentences)
 
