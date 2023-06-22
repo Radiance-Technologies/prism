@@ -1232,7 +1232,7 @@ class Project(ABC):
             If given, then include a dependency on OCaml that matches
             the given major and minor components of `ocaml_version`.
         dev : bool, optional
-            If True, then default ``'= "dev"' constraints to ``true``.
+            If True, then default ``'= "dev"'`` constraints to ``true``.
             Otherwise, return the formula unchanged.
             By default True.
 
