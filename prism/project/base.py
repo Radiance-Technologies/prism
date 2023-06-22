@@ -165,7 +165,9 @@ class Project(ABC):
                 rf"[Cc]annot load (?P<unbound>{QUALIFIED_IDENT_PATTERN.pattern}): "
                 "no physical path bound to",
                 r"[Cc]annot find library "
-                rf"(?P<library>{QUALIFIED_IDENT_PATTERN.pattern})"
+                rf"(?P<library>{QUALIFIED_IDENT_PATTERN.pattern})",
+                # Opam patterns
+                "Missing dependency"
             ]
         ],
         False,
@@ -1892,6 +1894,14 @@ class Project(ABC):
             yield original_logger
         finally:
             self.logger = original_logger
+
+    @classmethod
+    def _is_dependency_error(cls, stdout: str, stderr: str) -> bool:
+        """
+        Return if a build command's output indicates dependency errors.
+        """
+        m = cls._missing_dependency_pattern.search('\n'.join([stdout, stderr]))
+        return m is not None
 
     @staticmethod
     def extract_sentences(
