@@ -874,7 +874,9 @@ class Project(ABC):
             rcode_out,
             stdout,
             stderr,
-            ignore_returncode=use_dummy_coqc)
+            ignore_returncode=use_dummy_coqc
+            and not self._is_dependency_error(stdout,
+                                              stderr))
         if use_dummy_coqc and cleanup:
             # clean project if we only generated empty files.
             try:
