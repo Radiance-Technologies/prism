@@ -172,6 +172,14 @@ class Project(ABC):
         ],
         False,
         False)
+    _incorrect_build_system_pattern = regex_from_options(
+        [
+            "[Nn]o package definitions found",
+            "[Nn]o targets specified and no makefile found",
+            "[Nn]o such file or directory"
+        ],
+        False,
+        False)
 
     coq_library_exts = ["*.vio", "*.vo", "*.vos", "*.vok"]
     """
@@ -533,6 +541,21 @@ class Project(ABC):
                     yield Path(p)
                 else:
                     yield self.path / p
+
+    def _is_build_system_error(self, stdout: str, stderr: str) -> bool:
+        """
+        Try to guess whether a build system error has occurred.
+
+        The function assumes that the given output does not imply a
+        dependency error since, if it did, then that would further imply
+        that build tools were successfully invoked.
+        """
+        m = self._incorrect_build_system_pattern.search(
+            '\n'.join([stdout,
+                       stderr]))
+        is_build_error_message = m is not None
+        is_anything_built = glob.glob(f"{self.path}/**/*.vo")
+        return is_build_error_message or not is_anything_built
 
     def _prepare_command(self, target: str) -> str:
         # wrap in parentheses to preserve operator precedence when
