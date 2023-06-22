@@ -1456,6 +1456,72 @@ class Project(ABC):
         kwargs['serapi_options'] = self.serapi_options
         return self.extract_sentences(document, **kwargs)
 
+    def infer_build_cmd(self) -> List[str]:
+        """
+        Try to infer a build command based on common templates.
+
+        Common templates involve Makefiles, opam files, and configure
+        scripts.
+        """
+        build_cmd = []
+        if glob.glob(f"{self.path}/*.opam") or glob.glob(f"{self.path}/opam"):
+            build_cmd.append("opam install .")
+        else:
+            if (self.path / "configure").exists():
+                build_cmd.append("./configure")
+            elif (self.path / "configure.sh").exists():
+                build_cmd.append("./configure.sh")
+            if (self.path / "Makefile").exists():
+                build_cmd.append("make")
+        if build_cmd:
+            with self.project_logger(logger):
+                # logs will have <>.infer_build_cmd
+                self._update_metadata(build_cmd=build_cmd)
+        else:
+            build_cmd = self.build_cmd
+        return build_cmd
+
+    def infer_clean_cmd(self) -> List[str]:
+        """
+        Try to infer a clean command based on common templates.
+
+        Common templates involve Makefiles, opam files, and configure
+        scripts.
+        """
+        clean_cmd = []
+        if glob.glob(f"{self.path}/*.opam") or glob.glob(f"{self.path}/opam"):
+            clean_cmd.append("opam remove .")
+        else:
+            if (self.path / "Makefile").exists():
+                clean_cmd.append("make clean")
+        if clean_cmd:
+            with self.project_logger(logger):
+                # logs will have <>.infer_clean_cmd
+                self._update_metadata(clean_cmd=clean_cmd)
+        else:
+            clean_cmd = self.clean_cmd
+        return clean_cmd
+
+    def infer_install_cmd(self) -> List[str]:
+        """
+        Try to infer an install command based on common templates.
+
+        Common templates involve Makefiles, opam files, and configure
+        scripts.
+        """
+        install_cmd = []
+        if not (glob.glob(f"{self.path}/*.opam")
+                or glob.glob(f"{self.path}/opam")) and (self.path
+                                                        / "Makefile").exists():
+            install_cmd.append("make install")
+        if install_cmd:
+            with self.project_logger(logger):
+                # logs will have <>.infer_install_cmd
+                self._update_metadata(install_cmd=install_cmd)
+        else:
+            install_cmd = self.build_cmd
+        return install_cmd
+
     def infer_metadata(
             self,
             fields_to_infer: Optional[Iterable[str]] = None) -> Dict[str,
