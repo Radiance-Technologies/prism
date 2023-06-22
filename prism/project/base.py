@@ -706,44 +706,93 @@ class Project(ABC):
             'switch_manager',
             self.switch_manager)
         original_switch = self.opam_switch
-        try:
-            with self.managed_switch(**managed_switch_kwargs):
-                result = f()
-        except (ProjectBuildError, UnsatisfiableConstraints) as e:
-            is_unsatisfiable = isinstance(e, UnsatisfiableConstraints)
-            m = None
-            if not is_unsatisfiable:
-                m = self._missing_dependency_pattern.search(
-                    '\n'.join([e.stdout,
-                               e.stderr]))
-            if m is not None or is_unsatisfiable:
-                # EVENT: <>.build
-                if is_unsatisfiable:
-                    self.logger.debug(
-                        "Stale dependencies prevented switch acquisition")
-                else:
-                    self.logger.debug("Missing dependencies prevented build")
-                self.infer_opam_dependencies()
-                if switch_manager is not None:
-                    # try to build again with fresh dependencies
-                    if not is_unsatisfiable:
-                        # a switch was obtained
-                        release = managed_switch_kwargs.get('release', True)
-                        if not release and original_switch != self.opam_switch:
-                            # release flawed switch if it is not already
-                            # released
-                            switch_manager.release_switch(self.opam_switch)
-                            self.opam_switch = original_switch
-                    # force reattempt build
-                    with self.project_logger(logger.getChild('force-rebuild')):
-                        # EVENT: <>.build.force-rebuild
+        was_unsatisfiable = False
+        was_dependency_error = False
+        was_build_system_error = False
+        logging_context = 'build'
+        while True:
+            try:
+                with self.project_logger(logger.getChild(logging_context)):
+                    with self.managed_switch(**managed_switch_kwargs):
+                        result = f()
+            except (ProjectBuildError, UnsatisfiableConstraints) as e:
+                # Possible stories:
+                # 1. Fail to get switch -> infer dependencies -> fail to
+                # get switch -> raise
+                # 2. Fail to get switch -> infer dependencies -> get
+                # switch -> fail to build due to missing dependencies
+                # (but infer IQR flags) -> re-infer dependencies using
+                # new IQR flags -> fail to build -> raise
+                # 3. Get switch -> fail to build due to build system
+                # -> infer build commands -> fail to build due to build
+                # system again -> raise
+                # 4. Get switch -> fail to build due to build system
+                # -> infer build commands -> fail to build due to
+                # missing dependencies (but infer IQR flags) -> infer
+                # dependencies -> get switch -> fail to build -> raise
+                # 5. Get switch -> fail to build due to missing
+                # dependencies -> infer dependencies -> fail to get
+                # switch -> raise
+                is_unsatisfiable = isinstance(e, UnsatisfiableConstraints)
+                is_dependency_error = (
+                    not is_unsatisfiable
+                    and self._is_dependency_error(e.stdout,
+                                                  e.stderr))
+                is_build_system_error = (
+                    not is_unsatisfiable and not is_dependency_error
+                    and self._is_build_system_error(e.stdout,
+                                                    e.stderr))
+                if (((was_unsatisfiable or was_dependency_error)
+                     and is_unsatisfiable)
+                        or (was_dependency_error and is_dependency_error
+                            and not was_unsatisfiable)
+                        or (was_build_system_error and is_build_system_error)):
+                    # trying again won't help
+                    raise e
+                elif is_unsatisfiable or is_dependency_error:
+                    # EVENT: <>.build
+                    if is_unsatisfiable:
+                        self.logger.debug(
+                            "Stale dependencies prevented switch acquisition")
+                    else:
+                        self.logger.debug(
+                            "Missing dependencies prevented build")
+                    self.infer_opam_dependencies()
+                    if switch_manager is not None:
+                        # try to build again with fresh dependencies
+                        if not is_unsatisfiable:
+                            # a switch was obtained
+                            release = managed_switch_kwargs.get('release', True)
+                            if not release and original_switch != self.opam_switch:
+                                # release flawed switch if it is not
+                                # already released
+                                switch_manager.release_switch(self.opam_switch)
+                                self.opam_switch = original_switch
+                        # force reattempt build
+                        # EVENT: <>.build.force-rebuild-depends
+                        logging_context = 'force-rebuild-depends'
                         self.logger.debug("Forcing Rebuild")
-                        with self.managed_switch(**managed_switch_kwargs):
-                            result = f()
+                    else:
+                        raise e
+                elif is_build_system_error:
+                    self.logger.debug("Incorrect build system detected")
+                    self.infer_build_cmd()
+                    self.infer_install_cmd()
+                    self.infer_clean_cmd()
+                    # we already have a switch with satisfactory
+                    # dependencies, no need to worry about switch
+                    # manager
+                    # force reattempt build in current switch
+                    # EVENT: <>.build.force-rebuild-commands
+                    logging_context = 'force-rebuild-commands'
+                    self.logger.debug("Forcing Rebuild")
                 else:
                     raise e
+                was_unsatisfiable = is_unsatisfiable
+                was_dependency_error = is_dependency_error
+                was_build_system_error = is_build_system_error
             else:
-                raise e
+                break
         return result
 
     def _build_debug(
