@@ -165,10 +165,12 @@ def extract_vernac_commands(
             file_list = [f for f in file_list if f in files_to_use]
         # Remove files that don't have corresponding .vo files
         final_file_list = []
+        iqr_flags = project.iqr_flags
+        assert iqr_flags is not None, \
+            "IQR flags must be defined"
         for filename in file_list:
-            path = Path(filename)
-            vo = path.parent / (path.stem + ".vo")
-            if not os.path.exists(vo):
+            vo = iqr_flags.get_local_libpath(filename)
+            if not project.path_exists(vo):
                 logging.info(
                     f"Skipped extraction for file {filename}. "
                     "No .vo file found.")
