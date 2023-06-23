@@ -7723,10 +7723,7 @@ serapi_options:
   289: -R . infotheo
   306: -Q theories LemmaOverloading
   313: -R . MathClasses
-  330: -R _build/default/_build/default/src SsrMultinomials -w -ambiguous-paths -w
-    -notation-overridden -w -redundant-canonical-projection -w -projection-no-head-constant
-    -w -deprecated-native-compiler-option -w -native-compiler-disabled
-  332: -R ../../../.opam/prism-8.13.2/.opam-switch/build/coq-mathcomp-multinomials.1.5.6/_build/default/src
+  330: -R ../../../.opam/prism-8.13.2/.opam-switch/build/coq-mathcomp-multinomials.1.5.6/_build/default/src
     SsrMultinomials -w -ambiguous-paths -w -notation-overridden -w -redundant-canonical-projection
     -w -projection-no-head-constant -w -deprecated-native-compiler-option -w -native-compiler-disabled
   347: -R theories Pocklington
