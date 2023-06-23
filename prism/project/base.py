@@ -1775,6 +1775,7 @@ class Project(ABC):
         serapi_options = SerAPIOptions.merge(
             [c.serapi_options for c in contexts],
             root=self.path)
+        serapi_options.iqr = serapi_options.iqr.relocate(self.path)
         logger.debug(f'Found serapi options: {serapi_options}')
         with self.project_logger(logger):
             # logs will have <>.infer_serapi_options
