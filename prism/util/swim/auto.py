@@ -3,6 +3,7 @@ Defines an adaptive switch manager that initializes itself.
 """
 
 from pathlib import Path
+import shutil
 from typing import Iterable, List, Optional
 
 from prism.util.opam import AssignedVariables, OpamSwitch
@@ -74,6 +75,13 @@ class AutoSwitchManager(AdaptiveSwitchManager):
                     switch = OpamSwitch(potential_switch.name, root)
                 except ValueError:
                     continue
+                except InterruptedError:
+                    # this switch is dirty.
+                    # since this ought to be the only switch manager
+                    # running at the moment, it must have been
+                    # an interrupted copy.
+                    # deleting it.
+                    shutil.rmtree(potential_switch)
                 else:
                     switches.append(switch)
         return switches

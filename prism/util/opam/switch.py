@@ -102,6 +102,9 @@ class OpamSwitch:
         object.__setattr__(self, 'name', switch_name)
         object.__setattr__(self, 'root', switch_root)
         object.__setattr__(self, '_is_external', self.is_external(self.name))
+        if (self.path / ".dirtyflag").exists():
+            raise InterruptedError("Switch exists, but is dirty \
+                and cannot be used.")
         # force computation of environment to validate switch exists
         self.env
 

@@ -5,6 +5,7 @@ import logging
 import shutil
 import subprocess
 import warnings
+import os
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import ClassVar, Generator, Optional, Union
@@ -144,7 +145,23 @@ class OpamAPI:
                 f"The proposed switch name '{clone_name}' already exists"
                 " or there's a file with that name.")
 
-        shutil.copytree(origin.path, destination, symlinks=True)
+        # the dirty flag indicates that the switch should be deleted
+        # if a switchmanager discovers it on startup.
+        # switch discovery is only done once at startup and shared
+        # between threads, so we don't have to worry about a partially
+        # copied switch being used unless the entire process
+        # is restarted.
+
+        dirty_flag_location =  destination / ".dirtyflag"
+
+        os.mkdir(destination)
+
+        with open(dirty_flag_location,"w") as f:
+            f.write(f"{os.getpid()}")
+
+        shutil.copytree(origin.path, destination, symlinks=True, dirs_exist_ok=True)
+
+        os.remove(dirty_flag_location)
 
         return OpamSwitch(clone_name, opam_root)
 
