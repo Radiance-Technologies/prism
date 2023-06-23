@@ -15,7 +15,6 @@ from contextlib import contextmanager
 from dataclasses import fields
 from enum import Enum, auto
 from functools import partial, partialmethod, reduce
-from itertools import chain
 from pathlib import Path
 from subprocess import CalledProcessError
 from typing import (
@@ -234,6 +233,18 @@ class Project(ABC):
         return cmd_list
 
     @property
+    def build_directory(self) -> Path:
+        """
+        The directory of the project where build artifacts are placed.
+
+        Normally presumed to be the root of the repository except when
+        known conventions of another build system (such as Dune) alter
+        its location.
+        """
+        dune_build_directory = self.dune_build_directory
+        return self.path if dune_build_directory is None else dune_build_directory
+
+    @property
     def clean_cmd(self) -> List[str]:
         """
         Return the list of commands that clean project build artifacts.
@@ -270,11 +281,27 @@ class Project(ABC):
         return self._coq_version
 
     @property
+    def dune_build_directory(self) -> Optional[Path]:
+        """
+        The path to the Dune build directory or None if not inside Dune.
+        """
+        iqr_flags = self.iqr_flags
+        return None if iqr_flags is None else iqr_flags.dune_build_directory
+
+    @property
     def ignore_path_regex(self) -> re.Pattern:
         """
         Get the regular expression that matches Coq filepaths to ignore.
         """
         return regex_from_options(self.metadata.ignore_path_regex, True, True)
+
+    @property
+    def inside_dune(self) -> bool:
+        """
+        Whether this project is currently a Dune project.
+        """
+        iqr_flags = self.iqr_flags
+        return False if iqr_flags is None else iqr_flags.inside_dune
 
     @property
     def install_cmd(self) -> List[str]:
@@ -416,18 +443,20 @@ class Project(ABC):
         """
         Check the integrity of SerAPI options before building.
 
-        Verify `serapi_options` exists and corresponds to existing
-        paths.
+        Verify `serapi_options` exists and corresponds to existing paths
+        in the project. Returns False if the integrity check fails.
         """
         logger = self.logger.getChild('_check_serapi_option_health_pre_build')
         if self.serapi_options is None:
             logger.debug("No serapi options")
             return False
-        # Check if current IQR flags map to current directories.
-        for physical_path in self._iqr_bound_directories(False):
+        # Check if current IQR flags map to current directories in the
+        # project
+        for physical_path in self._iqr_bound_directories(False,
+                                                         dune_invariant=True):
             if not physical_path.exists():
                 logger.debug(
-                    f"Missing physical path for iqr flag: {physical_path}")
+                    f"Missing physical path for IQR flag: {physical_path}")
                 return False
         return True
 
@@ -435,11 +464,14 @@ class Project(ABC):
         """
         Check the integrity of SerAPI options after building.
 
-        Verify two conditions are met for post-build `serapi_options`:
-
-        1. QR physical paths contain *.vo files;
-        2. All *.vo files' paths start with a physical path in
-           serapi_options.
+        Verify the following condition is met for post-build
+        `serapi_options`: all '.vo' files' paths in the build directory
+        start with a physical path in the IQR flags.
+        Furthermore, verify that if we are inside of a Dune project,
+        then the Dune build directory exists.
+        If the Dune build directory does not exist, then this implies
+        that the options are stale and point to an old path.
+        Returns False if the integrity check fails.
         """
         logger = self.logger.getChild('_check_serapi_option_health_post_build')
         full_QR_paths = list(
@@ -447,8 +479,13 @@ class Project(ABC):
                 False,
                 return_I=False,
                 return_Q=True,
-                return_R=True))
-        for vo_file in glob.glob(f"{self.path}/**/*.vo", recursive=True):
+                return_R=True,
+                dune_invariant=False))
+        if self.inside_dune and not self.path_exists(self.build_directory):
+            logger.debug("Cannot find Dune build directory.")
+            return False
+        for vo_file in glob.glob(f"{self.build_directory}/**/*.vo",
+                                 recursive=True):
             vo_file_path = Path(vo_file)
             if full_QR_paths and not any(full_path in vo_file_path.parents
                                          for full_path in full_QR_paths):
@@ -504,7 +541,8 @@ class Project(ABC):
             relative: bool,
             return_I: bool = True,
             return_Q: bool = True,
-            return_R: bool = True) -> Iterator[Path]:
+            return_R: bool = True,
+            dune_invariant: bool = True) -> Iterator[Path]:
         """
         Iterate over all physical paths in `serapi_options`.
 
@@ -522,25 +560,24 @@ class Project(ABC):
         return_R : bool, optional
             Flag controlling whether ``-R`` flag paths are returned, by
             default True
+        dune_invariant : bool, optional
+            If True, then return paths stripped of any Dune prefixes.
 
         Yields
         ------
         Path
             Physical paths from `serapi_options`.
         """
-        if self.serapi_options is None:
+        iqr_flags = self.iqr_flags
+        if iqr_flags is None:
             yield from []
         else:
-            iqr = self.serapi_options.iqr
-            for p in chain(iqr.I if return_I else (),
-                           (p for p,
-                            _ in iqr.Q) if return_Q else (),
-                           (p for p,
-                            _ in iqr.R) if return_R else ()):
-                if relative:
-                    yield Path(p)
-                else:
-                    yield self.path / p
+            yield from iqr_flags.bound_directories(
+                self.path if relative else None,
+                return_I,
+                return_Q,
+                return_R,
+                dune_invariant)
 
     def _is_build_system_error(self, stdout: str, stderr: str) -> bool:
         """
@@ -1255,7 +1292,7 @@ class Project(ABC):
                     "Please try rebuilding the project.")
             filtered = order_dependencies(
                 filtered,
-                str(self.serapi_options.iqr),
+                str(self.serapi_options.iqr.dune_invariant),
                 self.opam_switch,
                 cwd=str(self.path))
         else:
