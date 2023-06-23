@@ -22,6 +22,7 @@ from typing import (
 )
 
 import numba
+import tqdm
 
 from prism.data.cache.types import (
     CommandType,
@@ -1193,7 +1194,8 @@ class CommandExtractor:
         prism.project.iqr : For more information about IQR flags.
         """
         with self as extractor:
-            for sentence in sentences:
+            for sentence in tqdm.tqdm(sentences,
+                                      desc=f"Extracting {self.filename}"):
                 # TODO: Optionally filter queries out of results (and
                 # execution)
                 try:
