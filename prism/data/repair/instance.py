@@ -2188,9 +2188,9 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
         }
         repaired_command = repair.patch(broken_command)
         if repaired_command.command.text != broken_command.command.text:
-            tags.update("specification")
+            tags.add("specification")
         if repaired_command.proof_text() != broken_command.proof_text():
-            tags.update("proof")
+            tags.add("proof")
         tags.update(
             ProjectCommitDataErrorInstance.get_environment_tags(
                 initial_state.environment.switch_config
