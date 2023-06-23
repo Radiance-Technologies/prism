@@ -1819,9 +1819,24 @@ class Project(ABC):
         cmd = f"coqc {options.replace(',', ' ')} {filename}"
         return self.run(cmd, action=f"Make: {filename}", cwd=cwd)
 
-    def run(self,
+    def path_exists(self, path: PathLike) -> bool:
+        """
+        Return whether a given path exists.
+
+        Notes
+        -----
+        This function is preferred to `os.path.exists` as it accounts
+        for changes to the environment introduced by the project's
+        switch, which may be cloned and thus alter visible paths.
+        """
+        rcode, _, _ = self.run(f"test -e {path}", ignore_returncode=True)
+        return rcode == 0
+
+    def run(
+            self,
             cmd: str,
             action: Optional[str] = None,
+            ignore_returncode: bool = False,
             **kwargs) -> Tuple[int,
                                str,
                                str]:
@@ -1834,6 +1849,10 @@ class Project(ABC):
             An arbitrary command.
         action : Optional[str], optional
             A short description of the command, by default None.
+        ignore_returncode : bool, optional
+            If False, raise an error on nonzero returncodes.
+            If True, then do not raise an error.
+            By default False.
         kwargs : Dict[str, Any]
             Optional keywords arguments to `OpamSwitch.run`.
 
@@ -1858,7 +1877,8 @@ class Project(ABC):
         self._process_command_output(
             action,
             *result,
-            ExcType=ProjectCommandError)
+            ExcType=ProjectCommandError,
+            ignore_returncode=ignore_returncode)
         return result
 
     @contextmanager
