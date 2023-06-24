@@ -2,8 +2,8 @@
 Defines an adaptive switch manager that initializes itself.
 """
 
-from pathlib import Path
 import shutil
+from pathlib import Path
 from typing import Iterable, List, Optional
 
 from prism.util.opam import AssignedVariables, OpamSwitch

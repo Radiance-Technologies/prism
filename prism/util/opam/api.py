@@ -2,10 +2,10 @@
 Defines an interface for programmatically querying OPAM.
 """
 import logging
+import os
 import shutil
 import subprocess
 import warnings
-import os
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import ClassVar, Generator, Optional, Union
@@ -152,14 +152,18 @@ class OpamAPI:
         # copied switch being used unless the entire process
         # is restarted.
 
-        dirty_flag_location =  destination / ".dirtyflag"
+        dirty_flag_location = destination / ".dirtyflag"
 
         os.mkdir(destination)
 
-        with open(dirty_flag_location,"w") as f:
+        with open(dirty_flag_location, "w") as f:
             f.write(f"{os.getpid()}")
 
-        shutil.copytree(origin.path, destination, symlinks=True, dirs_exist_ok=True)
+        shutil.copytree(
+            origin.path,
+            destination,
+            symlinks=True,
+            dirs_exist_ok=True)
 
         os.remove(dirty_flag_location)
 
@@ -236,6 +240,19 @@ class OpamAPI:
             # Opam will refuse to remove it.
             # Delete the associated directory, taking care not to delete
             # (follow) any symlinks.
+
+            # if we get interrupted deleting this switch, it will
+            # get reused next time we're run, even if it's broken.
+
+            # unless we delete the most important part of the
+            # switch first, which causes it to fail to enumerate
+            # when autoswitchmanager checks it.
+
+            os.remove(switch.path / ".opam-switch/environment")
+
+            # now the switch will be ignored by autoswitchmanager
+            # and its derivatives.
+
             shutil.rmtree(switch.path)
         else:
             cls.run(f'opam switch remove {switch.name} -y', opam_root=opam_root)
