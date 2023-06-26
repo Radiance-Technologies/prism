@@ -573,7 +573,7 @@ class Project(ABC):
             yield from []
         else:
             yield from iqr_flags.bound_directories(
-                self.path if relative else None,
+                None if relative else self.path,
                 return_I,
                 return_Q,
                 return_R,
