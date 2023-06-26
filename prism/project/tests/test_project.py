@@ -25,6 +25,7 @@ from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
 from prism.tests import _COQ_EXAMPLES_PATH
 from prism.util.opam.switch import OpamSwitch
+from prism.util.radpytools.os import pushd
 
 
 class TestProject(unittest.TestCase):
@@ -108,6 +109,19 @@ class TestProject(unittest.TestCase):
             else:
                 pkg, ver = output
             switch.install(pkg, ver)
+        # set up test_extract_sentences
+        test_path = os.path.dirname(__file__)
+        repo_path = os.path.join(test_path, "circuits")
+        if not os.path.exists(repo_path):
+            test_repo = git.Repo.clone_from(
+                "https://github.com/coq-contribs/circuits",
+                repo_path)
+        else:
+            test_repo = git.Repo(repo_path)
+        # Checkout HEAD of master as of March 14, 2022
+        master_hash = "f2cec6067f2c58e280c5b460e113d738b387be15"
+        test_repo.git.checkout(master_hash)
+        cls.test_extract_sentences_repo_path = repo_path
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -117,6 +131,7 @@ class TestProject(unittest.TestCase):
         for repo_path in [cls.test_iqr_project.path,
                           cls.test_infer_opam_deps_project.path]:
             shutil.rmtree(repo_path)
+        shutil.rmtree(cls.test_extract_sentences_repo_path)
 
     def test_extract_sentences_heuristic(self):
         """
@@ -148,40 +163,25 @@ class TestProject(unittest.TestCase):
         """
         Test method for splitting Coq code using SERAPI.
         """
-        test_path = os.path.dirname(__file__)
-        repo_path = os.path.join(test_path, "circuits")
-        if not os.path.exists(repo_path):
-            test_repo = git.Repo.clone_from(
-                "https://github.com/coq-contribs/circuits",
-                repo_path)
-        else:
-            test_repo = git.Repo(repo_path)
-        # Checkout HEAD of master as of March 14, 2022
-        master_hash = "f2cec6067f2c58e280c5b460e113d738b387be15"
-        test_repo.git.checkout(master_hash)
-        old_dir = os.path.abspath(os.curdir)
-        os.chdir(repo_path)
-        subprocess.run("make")
-        document = CoqDocument(
-            name="ADDER/Adder.v",
-            project_path=repo_path,
-            serapi_options=SerAPIOptions.empty(repo_path))
-        with open(document.abspath, "rt") as f:
-            document.source_code = f.read()
-        sentences = Project.extract_sentences(
-            document,
-            sentence_extraction_method=SentenceExtractionMethod.SERAPI,
-            glom_proofs=False)
-        sentences = [str(s) for s in sentences]
-        for sentence in sentences:
-            self.assertTrue(
-                sentence.endswith('.') or sentence == '{' or sentence == "}"
-                or sentence.endswith("-") or sentence.endswith("+")
-                or sentence.endswith("*"))
-        # Clean up
-        os.chdir(old_dir)
-        del test_repo
-        shutil.rmtree(os.path.join(repo_path))
+        repo_path = self.test_extract_sentences_repo_path
+        with pushd(repo_path):
+            subprocess.run("make")
+            document = CoqDocument(
+                name="ADDER/Adder.v",
+                project_path=repo_path,
+                serapi_options=SerAPIOptions.empty(repo_path))
+            with open(document.abspath, "rt") as f:
+                document.source_code = f.read()
+            sentences = Project.extract_sentences(
+                document,
+                sentence_extraction_method=SentenceExtractionMethod.SERAPI,
+                glom_proofs=False)
+            sentences = [str(s) for s in sentences]
+            for sentence in sentences:
+                self.assertTrue(
+                    sentence.endswith('.') or sentence == '{' or sentence == "}"
+                    or sentence.endswith("-") or sentence.endswith("+")
+                    or sentence.endswith("*"))
 
     def test_extract_sentences_serapi_simple(self):
         """
