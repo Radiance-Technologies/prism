@@ -228,7 +228,6 @@ class VernacSentence:
         self.goals = None
         self.ast = ""
         self.feedback = []
-        self.command_type = ''
         self.qualified_identifiers = []
         self.goals_qualified_identifiers = {}
         self.command_index = None
