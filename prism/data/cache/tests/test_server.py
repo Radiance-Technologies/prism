@@ -17,12 +17,14 @@ from prism.data.cache.server import (
     CoqProjectBuildCacheServer,
 )
 from prism.data.cache.types import (
-    ProjectBuildEnvironment,
-    ProjectBuildResult,
-    ProjectCommitData,
     VernacCommandData,
     VernacCommandDataList,
     VernacSentence,
+)
+from prism.data.cache.types.project import (
+    ProjectBuildEnvironment,
+    ProjectBuildResult,
+    ProjectCommitData,
 )
 from prism.data.dataset import CoqProjectBaseDataset
 from prism.interface.coq.goals import Goals

@@ -24,7 +24,7 @@ from typing import (
 import numba
 import tqdm
 
-from prism.data.cache.types import (
+from prism.data.cache.types.command import (
     CommandType,
     Proof,
     ProofSentence,
@@ -301,6 +301,10 @@ class CommandExtractor:
     A map from conjecture/obligation IDs to the corresponding cache
     data structure.
     """
+    dir_abspath: Optional[PathLike] = None
+    """
+    An absolute path to the directory containing the code.
+    """
     local_ids: List[str] = default_field(['SerTop'], init=False)
     """
     The set of identifiers introduced in the interactive session.
@@ -347,6 +351,30 @@ class CommandExtractor:
         """
         iqr = self.serapi_options.iqr
         self.modpath = iqr.get_local_modpath(self.filename)
+
+        self.serapi = SerAPI(
+            self.serapi_options,
+            opam_switch=self.opam_switch,
+            cwd=(None if self.dir_abspath is None else str(self.dir_abspath)))
+
+        if self.extract_qualified_idents:
+            self.get_identifiers = typing.cast(
+                Callable[[str],
+                         List[Identifier]],
+                partial(
+                    get_all_qualified_idents,
+                    self.serapi,
+                    self.modpath,
+                    ordered=True,
+                    id_cache=self.expanded_ids))
+        else:
+            self.get_identifiers = _disabled_get_identifiers
+
+        self.extract_vernac_sentence = partial(
+            self._extract_vernac_sentence,
+            self.serapi,
+            self.get_identifiers)
+
         if sentences is not None:
             self(sentences)
 
@@ -362,25 +390,9 @@ class CommandExtractor:
         """
         Initialize a context for an extraction session.
         """
-        self.serapi = SerAPI(self.serapi_options, opam_switch=self.opam_switch)
         # make a checkpoint to allow rolling back of first command
+        assert self.serapi is not None
         self.serapi.push()
-        if self.extract_qualified_idents:
-            self.get_identifiers = typing.cast(
-                Callable[[str],
-                         List[Identifier]],
-                partial(
-                    get_all_qualified_idents,
-                    self.serapi,
-                    self.modpath,
-                    ordered=True,
-                    id_cache=self.expanded_ids))
-        else:
-            self.get_identifiers = _disabled_get_identifiers
-        self.extract_vernac_sentence = partial(
-            self._extract_vernac_sentence,
-            self.serapi,
-            self.get_identifiers)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):

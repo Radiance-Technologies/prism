@@ -19,7 +19,7 @@ from tqdm import tqdm
 from traceback_with_variables import format_exc
 
 from prism.data.cache.server import CacheObjectStatus, CoqProjectBuildCache
-from prism.data.cache.types import ProjectCommitData
+from prism.data.cache.types.project import ProjectCommitData
 from prism.data.commit_map import Except
 from prism.data.repair.instance import (
     ChangeSelection,
