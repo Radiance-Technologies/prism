@@ -17,12 +17,11 @@ from prism.data.cache.server import (
     CoqProjectBuildCacheProtocol,
     CoqProjectBuildCacheServer,
 )
-from prism.data.cache.types import (
-    CommentDict,
+from prism.data.cache.types import CommentDict, VernacDict
+from prism.data.cache.types.project import (
     ProjectBuildEnvironment,
     ProjectBuildResult,
     ProjectCommitData,
-    VernacDict,
 )
 from prism.data.dataset import CoqProjectBaseDataset
 from prism.project.base import SEM

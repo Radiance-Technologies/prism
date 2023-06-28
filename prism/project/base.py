@@ -35,12 +35,12 @@ from typing import (
 )
 
 import prism.util.build_tools.opamdep as opamdep
+from prism.data.cache.command_extractor import CommandExtractor
 from prism.data.document import CoqDocument
 from prism.interface.coq.exception import CoqExn
 from prism.interface.coq.iqr import IQR
 from prism.interface.coq.options import SerAPIOptions
 from prism.interface.coq.re_patterns import QUALIFIED_IDENT_PATTERN
-from prism.interface.coq.serapi import SerAPI
 from prism.language.gallina.analyze import SexpInfo
 from prism.language.gallina.parser import CoqParser
 from prism.language.heuristic.parser import (
@@ -835,7 +835,8 @@ class Project(ABC):
     def _build_debug(
         self,
         breakpoint: Optional[SexpInfo.Loc] = None,
-    ) -> Tuple[Optional[SerAPI],
+        use_serapi: Optional[bool] = False
+    ) -> Tuple[Optional[CommandExtractor],
                Optional[SexpInfo.Loc],
                Optional[str]]:
         """
@@ -892,7 +893,7 @@ class Project(ABC):
         shutil.copytree(self.path, temp_dir, symlinks=True)
         coqc_options = serapi_options.as_coq_args()
 
-        serapi = None
+        command_extractor = None
         fail_loc = breakpoint
         error_msg = None
         for file in file_list:
@@ -900,7 +901,7 @@ class Project(ABC):
                 self.make_single_file(temp_dir, file, coqc_options)
             except ProjectCommandError:
                 # stop at first error
-                (serapi,
+                (command_extractor,
                  fail_loc,
                  error_msg) = self.debug_file(file,
                                               serapi_options,
@@ -910,7 +911,7 @@ class Project(ABC):
                 shutil.copy(
                     (Path(temp_dir) / file).with_suffix(".vo"),
                     (Path(self.path) / file).with_suffix(".vo"))
-        return serapi, fail_loc, error_msg
+        return command_extractor, fail_loc, error_msg
 
     def _strace_build(
             self,
@@ -1062,8 +1063,9 @@ class Project(ABC):
     def build_debug(
         self,
         breakpoint: Optional[SexpInfo.Loc] = None,
+        use_serapi: Optional[bool] = False,
         **build_kwargs
-    ) -> Tuple[Optional[SerAPI],
+    ) -> Tuple[Optional[CommandExtractor],
                Optional[SexpInfo.Loc],
                Optional[str]]:
         """
@@ -1103,22 +1105,26 @@ class Project(ABC):
         ProjectCommandError
             If `make_single_file` fails to build a particular file.
         """
-        serapi = None
+        command_extractor = None
         fail_loc = None
         error_msg = None
         try:
             self.build(**build_kwargs)
         except ProjectBuildError:
-            serapi, fail_loc, error_msg = self._build_debug(breakpoint)
+            (command_extractor,
+             fail_loc,
+             error_msg) = self._build_debug(breakpoint,
+                                            use_serapi)
         else:
             assert self.serapi_options is not None, \
                 "The SerAPI options must be known"
             if breakpoint is not None:
-                serapi, fail_loc, error_msg = self.debug_file(
+                command_extractor, fail_loc, error_msg = self.debug_file(
                     breakpoint.filename,
                     self.serapi_options,
-                    breakpoint)
-        return serapi, fail_loc, error_msg
+                    breakpoint,
+                    use_serapi)
+        return command_extractor, fail_loc, error_msg
 
     def clean(self, **kwargs) -> Tuple[int, str, str]:
         """
@@ -1133,8 +1139,9 @@ class Project(ABC):
         self,
         file: PathLike,
         serapi_options: SerAPIOptions,
-        breakpoint: Optional[SexpInfo.Loc]
-    ) -> Tuple[SerAPI,
+        breakpoint: Optional[SexpInfo.Loc],
+        use_simple_serapi: Optional[bool] = True
+    ) -> Tuple[CommandExtractor,
                Optional[SexpInfo.Loc],
                Optional[str]]:
         """
@@ -1172,10 +1179,17 @@ class Project(ABC):
             If `breakpoint` was given but not reached due to an
             error encountered on the way.
         """
-        serapi = SerAPI(
-            serapi_options,
+        # So if we specify sentences it will
+        # call extract_vernac_commands, which
+        # will destruct the serapi session
+        # And we don't want that
+        command_extractor = CommandExtractor(
+            file,
+            serapi_options=serapi_options,
             opam_switch=self.opam_switch,
-            cwd=str(self.path))
+            dir_abspath=self.dir_abspath,
+        )
+
         sentences = typing.cast(
             List[CoqSentence],
             self.get_sentences(
@@ -1186,13 +1200,17 @@ class Project(ABC):
 
         fail_loc = breakpoint
         error_msg = None
+        assert command_extractor.serapi is not None
         for sentence in sentences:
             assert sentence.location is not None
             if (breakpoint is not None
                     and not (sentence.location < breakpoint)):
                 break
             try:
-                serapi.execute(sentence.text)
+                if use_simple_serapi:
+                    command_extractor.serapi.execute(sentence.text)
+                else:
+                    command_extractor.extract_vernac_sentence(sentence)
             except CoqExn as ce:
                 fail_loc = sentence.location
                 error_msg = ce.msg
@@ -1203,10 +1221,10 @@ class Project(ABC):
                     # yapf: enable
                     raise ExecutionError(fail_loc, error_msg) from ce
                 # Cancel addition of failed command
-                serapi.cancel([serapi.frame_stack[-1][-1]])
+                command_extractor.rollback()
                 break
 
-        return serapi, fail_loc, error_msg
+        return command_extractor, fail_loc, error_msg
 
     def depends_on(
             self,

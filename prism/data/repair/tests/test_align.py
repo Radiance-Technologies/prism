@@ -9,11 +9,11 @@ from typing import Dict, List
 import numpy as np
 
 from prism.data.cache.types import (
-    ProjectCommitData,
     VernacCommandData,
     VernacCommandDataList,
     VernacSentence,
 )
+from prism.data.cache.types.project import ProjectCommitData
 from prism.data.repair import align_commits, align_commits_per_file
 from prism.data.repair.diff import compute_git_diff
 from prism.language.gallina.analyze import SexpInfo

@@ -8,7 +8,8 @@ from typing import Optional
 
 import pytest
 
-from prism.data.cache.types import ProjectCommitData, VernacCommandData
+from prism.data.cache.types import VernacCommandData
+from prism.data.cache.types.project import ProjectCommitData
 from prism.data.repair.align import default_align
 from prism.data.repair.diff import compute_git_diff
 from prism.data.repair.instance import (
