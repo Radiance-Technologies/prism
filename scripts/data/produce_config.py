@@ -3,7 +3,7 @@ Module to produce config file.
 """
 import argparse
 import json
-import os
+from pathlib import Path
 
 from git import InvalidGitRepositoryError
 from git.repo import Repo
@@ -15,32 +15,33 @@ if __name__ == "__main__":
         "--repair_dir",
         type=str,
         default=None,
-        help="Root of repair directory.")
+        help="Root of repair directory."
+        " By default the checked out coq-pearls commit SHA")
     parser.add_argument(
         "--repo",
         type=str,
         help="Root coq-pearls repo",
-        default="./")
+        default=None)
     parser.add_argument("--file", type=str, help="Output file.", default=None)
     args = parser.parse_args()
+    repo = args.repo
+    if repo is None:
+        repo = Path(__file__).parent
     try:
-        repo = Repo(path=args.repo)
+        repo = Repo(path=repo)
     except InvalidGitRepositoryError:
-        repo = Repo(path=args.repo, search_parent_directories=True)
+        repo = Repo(path=repo, search_parent_directories=True)
     if args.repair_dir is None:
-        commit = repo.head.object.hexsha
+        repair_dir = repo.commit().hexsha
     else:
-        commit = args.repair_dir
-    file = args.file or os.path.join(
-        repo.git.rev_parse("--show-toplevel"),
-        'scripts',
-        'data',
-        "mine_repair_instances_config.json")
+        repair_dir = args.repair_dir
+    file = args.file or (
+        Path(__file__).parent / "mine_repair_instances_config.json")
     config = {
         "cache_root":
             args.cache_dir,
         "repair_instance_db_directory":
-            f"/workspace/pearls/repairs/{commit}",
+            f"/workspace/pearls/repairs/{repair_dir}",
         "cache_format_extension":
             "json",
         "prepare_pairs":
