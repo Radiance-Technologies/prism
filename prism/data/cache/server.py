@@ -20,7 +20,7 @@ from typing import (
     runtime_checkable,
 )
 
-from prism.data.cache.types import ProjectBuildResult, ProjectCommitData
+from prism.data.cache.types.project import ProjectBuildResult, ProjectCommitData
 from prism.project.metadata import ProjectMetadata
 from prism.util.io import Fmt, atomic_write, infer_fmt_from_ext
 from prism.util.manager import ManagedServer

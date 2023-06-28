@@ -42,11 +42,13 @@ from prism.data.cache.server import (
 )
 from prism.data.cache.types import (
     CommentDict,
+    VernacCommandDataList,
+    VernacDict,
+)
+from prism.data.cache.types.project import (
     ProjectBuildEnvironment,
     ProjectBuildResult,
     ProjectCommitData,
-    VernacCommandDataList,
-    VernacDict,
 )
 from prism.data.commit_map import Except, ProjectCommitUpdateMapper
 from prism.data.util import get_project_func

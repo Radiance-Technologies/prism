@@ -13,11 +13,11 @@ from Levenshtein import distance as levenshtein
 from scipy.optimize import linear_sum_assignment
 
 from prism.data.cache.types import (
-    ProjectCommitData,
     VernacCommandData,
     VernacCommandDataList,
     VernacSentence,
 )
+from prism.data.cache.types.project import ProjectCommitData
 from prism.data.repair.diff import commands_in_diff
 from prism.util.alignment import Alignment, lazy_align
 from prism.util.diff import GitDiff

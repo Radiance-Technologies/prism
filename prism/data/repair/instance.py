@@ -25,11 +25,11 @@ import numpy as np
 from bidict import bidict
 
 from prism.data.cache.types import (
-    ProjectCommitData,
     VernacCommandData,
     VernacCommandDataList,
     VernacDict,
 )
+from prism.data.cache.types.project import ProjectCommitData
 from prism.data.repair.align import (
     AlignedCommands,
     AlignmentFunction,
