@@ -57,9 +57,9 @@ from prism.interface.coq.re_patterns import QUALIFIED_IDENT_PATTERN
 from prism.language.heuristic.parser import CoqComment, CoqSentence
 from prism.project.base import SEM
 from prism.project.exception import MissingMetadataError, ProjectBuildError
-from prism.project.metadata import version_info
 from prism.project.metadata.dataclass import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
+from prism.project.metadata.version_info import version_info
 from prism.project.repo import (
     ChangedCoqCommitIterator,
     CommitTraversalStrategy,
@@ -167,10 +167,12 @@ def extract_vernac_commands(
             file_list = [f for f in file_list if f in files_to_use]
         # Remove files that don't have corresponding .vo files
         final_file_list = []
+        iqr_flags = project.iqr_flags
+        assert iqr_flags is not None, \
+            "IQR flags must be defined"
         for filename in file_list:
-            path = Path(filename)
-            vo = path.parent / (path.stem + ".vo")
-            if not os.path.exists(vo):
+            vo = iqr_flags.get_local_libpath(filename)
+            if not project.path_exists(vo):
                 logging.info(
                     f"Skipped extraction for file {filename}. "
                     "No .vo file found.")

@@ -85,7 +85,10 @@ class CoqContext:
         """
         Grab the internal Coq compiler args, if any.
         """
-        self.serapi_options = SerAPIOptions.parse_args(self.args, self.pwd)
+        self.serapi_options = SerAPIOptions.parse_args(
+            self.args,
+            self.pwd,
+            'INSIDE_DUNE' in self.env)
 
     def __str__(self) -> str:
         """

@@ -961,7 +961,8 @@ class SerAPIOptions:
             cls,
             args: Union[str,
                         List[str]],
-            pwd: PathLike = "") -> 'SerAPIOptions':
+            pwd: PathLike = "",
+            inside_dune: bool = False) -> 'SerAPIOptions':
         """
         Extract Coq options from command-line arguments.
 
@@ -972,6 +973,9 @@ class SerAPIOptions:
         pwd : PathLike, optional
             The directory in which the command was executed, by default
             an empty string.
+        inside_dune : bool, optional
+            Whether these arguments should be parsed in the context of a
+            Dune project, by default False.
 
         Returns
         -------
@@ -1065,7 +1069,7 @@ class SerAPIOptions:
         if is_string:
             # make robust to parsing serialized IQR flags with commas
             args = ' '.join(args)
-        iqr = IQR.parse_args(args, pwd)
+        iqr = IQR.parse_args(args, pwd, inside_dune)
         warnings = []
         for warning_option in parsed_args.w:
             warns = warning_option[0].split(',')

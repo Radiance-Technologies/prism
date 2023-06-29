@@ -582,12 +582,18 @@ class ProjectCommitDataDiff:
             A precomputed alignment between the commands of each project
             where ``(i,j)`` matches the ``i``-th command of `a` to the
             ``j``-th command of `b`.
+        return_aligned_commands : bool, optional
+            If True, then return the alignment between the commands of
+            `a` and `b`, by default False.
 
         Returns
         -------
         diff : ProjectCommitDataDiff
             The diff between `a` and `b` such that
             ``diff.patch(a).command_data == b.command_data``.
+        aligned_commands : AlignedCommands, optional
+            If `return_aligned_commands` is True, then the aligned
+            commands are also returned.
         """
         # NOTE (AG): I haven't been able to convince myself why patching
         # goals is necessary, but all tests indicate that it is.
@@ -641,14 +647,14 @@ class ProjectCommitDataDiff:
             By default True.
         return_aligned_commands : bool, optional
             If True, then return the alignment between the commands of
-            `a` and `b`.
+            `a` and `b`, by default False.
 
         Returns
         -------
         ProjectCommitDataDiff
             The diff between `a` and `b` such that
             ``diff.patch(a).command_data == b.command_data``.
-        aligned_commands : Assignment, optional
+        aligned_commands : AlignedCommands, optional
             If `return_aligned_commands` is True, then the aligned
             commands are also returned.
         """
@@ -658,7 +664,7 @@ class ProjectCommitDataDiff:
             alignment = align_commits(a, b, diff, align)
         else:
             alignment = align(a, b)
-        data_diff = cls.from_alignment(a, b, alignment)
+        data_diff = cls.from_alignment(a, b, alignment, return_aligned_commands)
         return data_diff
 
 
@@ -1521,18 +1527,22 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
         if (initial_environment is not None and final_environment is not None
                 and initial_opam_dependencies is not None
                 and final_opam_dependencies is not None):
-            initial_dependencies = set()
-            for dep in initial_opam_dependencies:
-                initial_dependencies.update(
-                    typing.cast(PackageFormula,
-                                PackageFormula.parse(dep)).packages)
-            repaired_dependencies = set()
-            for dep in final_opam_dependencies:
-                repaired_dependencies.update(
-                    typing.cast(PackageFormula,
-                                PackageFormula.parse(dep)).packages)
             initial_packages = dict(initial_environment.installed)
             final_packages = dict(final_environment.installed)
+            initial_dependencies = set()
+            for dep in initial_opam_dependencies:
+                for p in typing.cast(PackageFormula,
+                                     PackageFormula.parse(dep)).packages:
+                    if p in initial_packages:
+                        initial_dependencies.add(p)
+                    # else not a required dependency if not installed
+            repaired_dependencies = set()
+            for dep in final_opam_dependencies:
+                for p in typing.cast(PackageFormula,
+                                     PackageFormula.parse(dep)).packages:
+                    if p in final_packages:
+                        repaired_dependencies.add(p)
+                    # else not a required dependency if not installed
             tags.update(
                 {
                     f"dropped-dependency:{p}" for p in final_packages if
@@ -1787,8 +1797,9 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
             broken_state_diff.command_changes[f].affected_commands[idx] = repair
             # record offsets
             if num_excess_chars > 0 or num_excess_lines > 0:
-                broken_state_diff.command_changes[
-                    repair_filename].offsets.append(
+                broken_state_diff.command_changes.setdefault(
+                    repair_filename,
+                    VernacCommandDataListDiff()).offsets.append(
                         (
                             (
                                 new_location.beg_charno,
@@ -2175,6 +2186,11 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
             "one-command",
             "one-file"
         }
+        repaired_command = repair.patch(broken_command)
+        if repaired_command.command.text != broken_command.command.text:
+            tags.add("specification")
+        if repaired_command.proof_text() != broken_command.proof_text():
+            tags.add("proof")
         tags.update(
             ProjectCommitDataErrorInstance.get_environment_tags(
                 initial_state.environment.switch_config

@@ -15,7 +15,6 @@ from contextlib import contextmanager
 from dataclasses import fields
 from enum import Enum, auto
 from functools import partial, partialmethod, reduce
-from itertools import chain
 from pathlib import Path
 from subprocess import CalledProcessError
 from typing import (
@@ -165,8 +164,18 @@ class Project(ABC):
                 rf"[Cc]annot load (?P<unbound>{QUALIFIED_IDENT_PATTERN.pattern}): "
                 "no physical path bound to",
                 r"[Cc]annot find library "
-                rf"(?P<library>{QUALIFIED_IDENT_PATTERN.pattern})"
+                rf"(?P<library>{QUALIFIED_IDENT_PATTERN.pattern})",
+                # Opam patterns
+                "Missing dependency"
             ]
+        ],
+        False,
+        False)
+    _incorrect_build_system_pattern = regex_from_options(
+        [
+            "[Nn]o package definitions found",
+            "[Nn]o targets specified and no makefile found",
+            "[Nn]o such file or directory"
         ],
         False,
         False)
@@ -224,6 +233,18 @@ class Project(ABC):
         return cmd_list
 
     @property
+    def build_directory(self) -> Path:
+        """
+        The directory of the project where build artifacts are placed.
+
+        Normally presumed to be the root of the repository except when
+        known conventions of another build system (such as Dune) alter
+        its location.
+        """
+        dune_build_directory = self.dune_build_directory
+        return self.path if dune_build_directory is None else dune_build_directory
+
+    @property
     def clean_cmd(self) -> List[str]:
         """
         Return the list of commands that clean project build artifacts.
@@ -260,11 +281,27 @@ class Project(ABC):
         return self._coq_version
 
     @property
+    def dune_build_directory(self) -> Optional[Path]:
+        """
+        The path to the Dune build directory or None if not inside Dune.
+        """
+        iqr_flags = self.iqr_flags
+        return None if iqr_flags is None else iqr_flags.dune_build_directory
+
+    @property
     def ignore_path_regex(self) -> re.Pattern:
         """
         Get the regular expression that matches Coq filepaths to ignore.
         """
         return regex_from_options(self.metadata.ignore_path_regex, True, True)
+
+    @property
+    def inside_dune(self) -> bool:
+        """
+        Whether this project is currently a Dune project.
+        """
+        iqr_flags = self.iqr_flags
+        return False if iqr_flags is None else iqr_flags.inside_dune
 
     @property
     def install_cmd(self) -> List[str]:
@@ -406,18 +443,20 @@ class Project(ABC):
         """
         Check the integrity of SerAPI options before building.
 
-        Verify `serapi_options` exists and corresponds to existing
-        paths.
+        Verify `serapi_options` exists and corresponds to existing paths
+        in the project. Returns False if the integrity check fails.
         """
         logger = self.logger.getChild('_check_serapi_option_health_pre_build')
         if self.serapi_options is None:
             logger.debug("No serapi options")
             return False
-        # Check if current IQR flags map to current directories.
-        for physical_path in self._iqr_bound_directories(False):
+        # Check if current IQR flags map to current directories in the
+        # project
+        for physical_path in self._iqr_bound_directories(False,
+                                                         dune_invariant=True):
             if not physical_path.exists():
                 logger.debug(
-                    f"Missing physical path for iqr flag: {physical_path}")
+                    f"Missing physical path for IQR flag: {physical_path}")
                 return False
         return True
 
@@ -425,11 +464,14 @@ class Project(ABC):
         """
         Check the integrity of SerAPI options after building.
 
-        Verify two conditions are met for post-build `serapi_options`:
-
-        1. QR physical paths contain *.vo files;
-        2. All *.vo files' paths start with a physical path in
-           serapi_options.
+        Verify the following condition is met for post-build
+        `serapi_options`: all '.vo' files' paths in the build directory
+        start with a physical path in the IQR flags.
+        Furthermore, verify that if we are inside of a Dune project,
+        then the Dune build directory exists.
+        If the Dune build directory does not exist, then this implies
+        that the options are stale and point to an old path.
+        Returns False if the integrity check fails.
         """
         logger = self.logger.getChild('_check_serapi_option_health_post_build')
         full_QR_paths = list(
@@ -437,8 +479,13 @@ class Project(ABC):
                 False,
                 return_I=False,
                 return_Q=True,
-                return_R=True))
-        for vo_file in glob.glob(f"{self.path}/**/*.vo", recursive=True):
+                return_R=True,
+                dune_invariant=False))
+        if self.inside_dune and not self.path_exists(self.build_directory):
+            logger.debug("Cannot find Dune build directory.")
+            return False
+        for vo_file in glob.glob(f"{self.build_directory}/**/*.vo",
+                                 recursive=True):
             vo_file_path = Path(vo_file)
             if full_QR_paths and not any(full_path in vo_file_path.parents
                                          for full_path in full_QR_paths):
@@ -494,7 +541,8 @@ class Project(ABC):
             relative: bool,
             return_I: bool = True,
             return_Q: bool = True,
-            return_R: bool = True) -> Iterator[Path]:
+            return_R: bool = True,
+            dune_invariant: bool = True) -> Iterator[Path]:
         """
         Iterate over all physical paths in `serapi_options`.
 
@@ -512,25 +560,39 @@ class Project(ABC):
         return_R : bool, optional
             Flag controlling whether ``-R`` flag paths are returned, by
             default True
+        dune_invariant : bool, optional
+            If True, then return paths stripped of any Dune prefixes.
 
         Yields
         ------
         Path
             Physical paths from `serapi_options`.
         """
-        if self.serapi_options is None:
+        iqr_flags = self.iqr_flags
+        if iqr_flags is None:
             yield from []
         else:
-            iqr = self.serapi_options.iqr
-            for p in chain(iqr.I if return_I else (),
-                           (p for p,
-                            _ in iqr.Q) if return_Q else (),
-                           (p for p,
-                            _ in iqr.R) if return_R else ()):
-                if relative:
-                    yield Path(p)
-                else:
-                    yield self.path / p
+            yield from iqr_flags.bound_directories(
+                None if relative else self.path,
+                return_I,
+                return_Q,
+                return_R,
+                dune_invariant)
+
+    def _is_build_system_error(self, stdout: str, stderr: str) -> bool:
+        """
+        Try to guess whether a build system error has occurred.
+
+        The function assumes that the given output does not imply a
+        dependency error since, if it did, then that would further imply
+        that build tools were successfully invoked.
+        """
+        m = self._incorrect_build_system_pattern.search(
+            '\n'.join([stdout,
+                       stderr]))
+        is_build_error_message = m is not None
+        is_anything_built = glob.glob(f"{self.path}/**/*.vo")
+        return is_build_error_message or not is_anything_built
 
     def _prepare_command(self, target: str) -> str:
         # wrap in parentheses to preserve operator precedence when
@@ -681,44 +743,93 @@ class Project(ABC):
             'switch_manager',
             self.switch_manager)
         original_switch = self.opam_switch
-        try:
-            with self.managed_switch(**managed_switch_kwargs):
-                result = f()
-        except (ProjectBuildError, UnsatisfiableConstraints) as e:
-            is_unsatisfiable = isinstance(e, UnsatisfiableConstraints)
-            m = None
-            if not is_unsatisfiable:
-                m = self._missing_dependency_pattern.search(
-                    '\n'.join([e.stdout,
-                               e.stderr]))
-            if m is not None or is_unsatisfiable:
-                # EVENT: <>.build
-                if is_unsatisfiable:
-                    self.logger.debug(
-                        "Stale dependencies prevented switch acquisition")
-                else:
-                    self.logger.debug("Missing dependencies prevented build")
-                self.infer_opam_dependencies()
-                if switch_manager is not None:
-                    # try to build again with fresh dependencies
-                    if not is_unsatisfiable:
-                        # a switch was obtained
-                        release = managed_switch_kwargs.get('release', True)
-                        if not release and original_switch != self.opam_switch:
-                            # release flawed switch if it is not already
-                            # released
-                            switch_manager.release_switch(self.opam_switch)
-                            self.opam_switch = original_switch
-                    # force reattempt build
-                    with self.project_logger(logger.getChild('force-rebuild')):
-                        # EVENT: <>.build.force-rebuild
+        was_unsatisfiable = False
+        was_dependency_error = False
+        was_build_system_error = False
+        logging_context = 'build'
+        while True:
+            try:
+                with self.project_logger(logger.getChild(logging_context)):
+                    with self.managed_switch(**managed_switch_kwargs):
+                        result = f()
+            except (ProjectBuildError, UnsatisfiableConstraints) as e:
+                # Possible stories:
+                # 1. Fail to get switch -> infer dependencies -> fail to
+                # get switch -> raise
+                # 2. Fail to get switch -> infer dependencies -> get
+                # switch -> fail to build due to missing dependencies
+                # (but infer IQR flags) -> re-infer dependencies using
+                # new IQR flags -> fail to build -> raise
+                # 3. Get switch -> fail to build due to build system
+                # -> infer build commands -> fail to build due to build
+                # system again -> raise
+                # 4. Get switch -> fail to build due to build system
+                # -> infer build commands -> fail to build due to
+                # missing dependencies (but infer IQR flags) -> infer
+                # dependencies -> get switch -> fail to build -> raise
+                # 5. Get switch -> fail to build due to missing
+                # dependencies -> infer dependencies -> fail to get
+                # switch -> raise
+                is_unsatisfiable = isinstance(e, UnsatisfiableConstraints)
+                is_dependency_error = (
+                    not is_unsatisfiable
+                    and self._is_dependency_error(e.stdout,
+                                                  e.stderr))
+                is_build_system_error = (
+                    not is_unsatisfiable and not is_dependency_error
+                    and self._is_build_system_error(e.stdout,
+                                                    e.stderr))
+                if (((was_unsatisfiable or was_dependency_error)
+                     and is_unsatisfiable)
+                        or (was_dependency_error and is_dependency_error
+                            and not was_unsatisfiable)
+                        or (was_build_system_error and is_build_system_error)):
+                    # trying again won't help
+                    raise e
+                elif is_unsatisfiable or is_dependency_error:
+                    # EVENT: <>.build
+                    if is_unsatisfiable:
+                        self.logger.debug(
+                            "Stale dependencies prevented switch acquisition")
+                    else:
+                        self.logger.debug(
+                            "Missing dependencies prevented build")
+                    self.infer_opam_dependencies()
+                    if switch_manager is not None:
+                        # try to build again with fresh dependencies
+                        if not is_unsatisfiable:
+                            # a switch was obtained
+                            release = managed_switch_kwargs.get('release', True)
+                            if not release and original_switch != self.opam_switch:
+                                # release flawed switch if it is not
+                                # already released
+                                switch_manager.release_switch(self.opam_switch)
+                                self.opam_switch = original_switch
+                        # force reattempt build
+                        # EVENT: <>.build.force-rebuild-depends
+                        logging_context = 'force-rebuild-depends'
                         self.logger.debug("Forcing Rebuild")
-                        with self.managed_switch(**managed_switch_kwargs):
-                            result = f()
+                    else:
+                        raise e
+                elif is_build_system_error:
+                    self.logger.debug("Incorrect build system detected")
+                    self.infer_build_cmd()
+                    self.infer_install_cmd()
+                    self.infer_clean_cmd()
+                    # we already have a switch with satisfactory
+                    # dependencies, no need to worry about switch
+                    # manager
+                    # force reattempt build in current switch
+                    # EVENT: <>.build.force-rebuild-commands
+                    logging_context = 'force-rebuild-commands'
+                    self.logger.debug("Forcing Rebuild")
                 else:
                     raise e
+                was_unsatisfiable = is_unsatisfiable
+                was_dependency_error = is_dependency_error
+                was_build_system_error = is_build_system_error
             else:
-                raise e
+                break
         return result
 
     def _build_debug(
@@ -850,7 +961,9 @@ class Project(ABC):
             rcode_out,
             stdout,
             stderr,
-            ignore_returncode=use_dummy_coqc)
+            ignore_returncode=use_dummy_coqc
+            and not self._is_dependency_error(stdout,
+                                              stderr))
         if use_dummy_coqc and cleanup:
             # clean project if we only generated empty files.
             try:
@@ -1197,7 +1310,7 @@ class Project(ABC):
                     "Please try rebuilding the project.")
             filtered = order_dependencies(
                 filtered,
-                str(self.serapi_options.iqr),
+                str(self.serapi_options.iqr.dune_invariant),
                 self.opam_switch,
                 cwd=str(self.path))
         else:
@@ -1223,7 +1336,7 @@ class Project(ABC):
             If given, then include a dependency on OCaml that matches
             the given major and minor components of `ocaml_version`.
         dev : bool, optional
-            If True, then default ``'= "dev"' constraints to ``true``.
+            If True, then default ``'= "dev"'`` constraints to ``true``.
             Otherwise, return the formula unchanged.
             By default True.
 
@@ -1474,6 +1587,72 @@ class Project(ABC):
         kwargs['serapi_options'] = self.serapi_options
         return self.extract_sentences(document, **kwargs)
 
+    def infer_build_cmd(self) -> List[str]:
+        """
+        Try to infer a build command based on common templates.
+
+        Common templates involve Makefiles, opam files, and configure
+        scripts.
+        """
+        build_cmd = []
+        if glob.glob(f"{self.path}/*.opam") or glob.glob(f"{self.path}/opam"):
+            build_cmd.append("opam install .")
+        else:
+            if (self.path / "configure").exists():
+                build_cmd.append("./configure")
+            elif (self.path / "configure.sh").exists():
+                build_cmd.append("./configure.sh")
+            if (self.path / "Makefile").exists():
+                build_cmd.append("make")
+        if build_cmd:
+            with self.project_logger(logger):
+                # logs will have <>.infer_build_cmd
+                self._update_metadata(build_cmd=build_cmd)
+        else:
+            build_cmd = self.build_cmd
+        return build_cmd
+
+    def infer_clean_cmd(self) -> List[str]:
+        """
+        Try to infer a clean command based on common templates.
+
+        Common templates involve Makefiles, opam files, and configure
+        scripts.
+        """
+        clean_cmd = []
+        if glob.glob(f"{self.path}/*.opam") or glob.glob(f"{self.path}/opam"):
+            clean_cmd.append("opam remove .")
+        else:
+            if (self.path / "Makefile").exists():
+                clean_cmd.append("make clean")
+        if clean_cmd:
+            with self.project_logger(logger):
+                # logs will have <>.infer_clean_cmd
+                self._update_metadata(clean_cmd=clean_cmd)
+        else:
+            clean_cmd = self.clean_cmd
+        return clean_cmd
+
+    def infer_install_cmd(self) -> List[str]:
+        """
+        Try to infer an install command based on common templates.
+
+        Common templates involve Makefiles, opam files, and configure
+        scripts.
+        """
+        install_cmd = []
+        if not (glob.glob(f"{self.path}/*.opam")
+                or glob.glob(f"{self.path}/opam")) and (self.path
+                                                        / "Makefile").exists():
+            install_cmd.append("make install")
+        if install_cmd:
+            with self.project_logger(logger):
+                # logs will have <>.infer_install_cmd
+                self._update_metadata(install_cmd=install_cmd)
+        else:
+            install_cmd = self.build_cmd
+        return install_cmd
+
     def infer_metadata(
             self,
             fields_to_infer: Optional[Iterable[str]] = None) -> Dict[str,
@@ -1651,6 +1830,7 @@ class Project(ABC):
         serapi_options = SerAPIOptions.merge(
             [c.serapi_options for c in contexts],
             root=self.path)
+        serapi_options.iqr = serapi_options.iqr.relocate(self.path)
         logger.debug(f'Found serapi options: {serapi_options}')
         with self.project_logger(logger):
             # logs will have <>.infer_serapi_options
@@ -1694,9 +1874,24 @@ class Project(ABC):
         cmd = f"coqc {options.replace(',', ' ')} {filename}"
         return self.run(cmd, action=f"Make: {filename}", cwd=cwd)
 
-    def run(self,
+    def path_exists(self, path: PathLike) -> bool:
+        """
+        Return whether a given path exists.
+
+        Notes
+        -----
+        This function is preferred to `os.path.exists` as it accounts
+        for changes to the environment introduced by the project's
+        switch, which may be cloned and thus alter visible paths.
+        """
+        rcode, _, _ = self.run(f"test -e {path}", ignore_returncode=True)
+        return rcode == 0
+
+    def run(
+            self,
             cmd: str,
             action: Optional[str] = None,
+            ignore_returncode: bool = False,
             **kwargs) -> Tuple[int,
                                str,
                                str]:
@@ -1709,6 +1904,10 @@ class Project(ABC):
             An arbitrary command.
         action : Optional[str], optional
             A short description of the command, by default None.
+        ignore_returncode : bool, optional
+            If False, raise an error on nonzero returncodes.
+            If True, then do not raise an error.
+            By default False.
         kwargs : Dict[str, Any]
             Optional keywords arguments to `OpamSwitch.run`.
 
@@ -1733,7 +1932,8 @@ class Project(ABC):
         self._process_command_output(
             action,
             *result,
-            ExcType=ProjectCommandError)
+            ExcType=ProjectCommandError,
+            ignore_returncode=ignore_returncode)
         return result
 
     @contextmanager
@@ -1844,6 +2044,14 @@ class Project(ABC):
             yield original_logger
         finally:
             self.logger = original_logger
+
+    @classmethod
+    def _is_dependency_error(cls, stdout: str, stderr: str) -> bool:
+        """
+        Return if a build command's output indicates dependency errors.
+        """
+        m = cls._missing_dependency_pattern.search('\n'.join([stdout, stderr]))
+        return m is not None
 
     @staticmethod
     def extract_sentences(

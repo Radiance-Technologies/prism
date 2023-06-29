@@ -58,7 +58,8 @@ def is_location_in_change(
             or loc.contains_lineno(change_range.stop - 1)))
     loc_contains_empty_change = (
         not is_change_nonempty and loc.contains_lineno(change_range.start)
-        and change_range.start != loc.lineno)
+        and change_range.start != loc.lineno
+        and change_range.start != loc.lineno_last)
     return change_filename == loc.filename and (
         # if there is any intersection, then one endpoint lies in the
         # interval spanned by the change
@@ -191,6 +192,24 @@ def get_changes_to_command(
     }
 
 
+def _compute_git_diff_file_sub(m: re.Match) -> str:
+    """
+    Remove a temporary leading directory from a matched path.
+
+    A subroutine of `compute_git_diff`.
+    """
+    startpos = m.start()
+    # determine if the match corresponds to a change in file content
+    # (which will have a leading 'a' or 'b' literal)
+    # or simply a file rename (which will not)
+    if startpos > 0 and m.string[startpos - 1] in "ab":
+        # a change in file content, restore the trailing slash
+        return "/"
+    else:
+        # a rename, remove the trailing slash
+        return ""
+
+
 def compute_git_diff(a: ProjectCommitData, b: ProjectCommitData) -> GitDiff:
     """
     Compute a diff between extracted commits.
@@ -214,5 +233,5 @@ def compute_git_diff(a: ProjectCommitData, b: ProjectCommitData) -> GitDiff:
         b.write_coq_project(b_dir)
         r = bash.run(f"git diff --no-index -U0 {a_dir} {b_dir}")
     # remove temporary file paths
-    diff = re.sub(f"{a_dir}|{b_dir}", '', r.stdout)
+    diff = re.sub(f"(?:{a_dir}|{b_dir})/", _compute_git_diff_file_sub, r.stdout)
     return GitDiff(diff)

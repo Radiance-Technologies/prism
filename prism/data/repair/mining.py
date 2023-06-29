@@ -1368,14 +1368,12 @@ def _parallel_work(
             fast) for label_a,
         label_b in cache_label_pairs
     ]
-    control_queue: queue.Queue[StopWorkSentinel] = Queue()
-    error_instance_job_queue: queue.Queue[ErrorInstanceJob] = Queue()
-    repair_instance_job_queue: queue.Queue[Union[
-        RepairInstanceJob,
-        ErrorInstanceEndSentinel]] = Queue()
-    worker_to_parent_queue: queue.Queue[Union[
-        Except,
-        ErrorInstanceEndSentinel]] = Queue()
+    control_queue: Queue[StopWorkSentinel] = Queue()
+    error_instance_job_queue: Queue[ErrorInstanceJob] = Queue()
+    repair_instance_job_queue: Queue[Union[RepairInstanceJob,
+                                           ErrorInstanceEndSentinel]] = Queue()
+    worker_to_parent_queue: Queue[Union[Except,
+                                        ErrorInstanceEndSentinel]] = Queue()
     proc_args = [
         control_queue,
         error_instance_job_queue,
