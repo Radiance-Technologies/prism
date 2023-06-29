@@ -11,7 +11,7 @@ from typing import List
 import pytest
 
 from prism.data.cache.command_extractor import CommandExtractor
-from prism.data.cache.types.command import (
+from prism.data.cache.command_types.command import (
     GoalIdentifiers,
     HypothesisIndentifiers,
     VernacCommandDataList,
