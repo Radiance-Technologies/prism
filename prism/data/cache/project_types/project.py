@@ -13,7 +13,7 @@ from typing import ClassVar, Dict, List, Optional, Tuple
 import networkx as nx
 import setuptools_scm
 
-from prism.data.cache.types import (
+from prism.data.cache.command_types import (
     CommentDict,
     VernacCommandData,
     VernacDict,

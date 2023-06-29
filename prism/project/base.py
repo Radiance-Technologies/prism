@@ -1074,7 +1074,7 @@ class Project(ABC):
             file,
             serapi_options=serapi_options,
             opam_switch=self.opam_switch,
-            dir_abspath=self.dir_abspath,
+            cwd=self.path,
         )
 
         sentences = typing.cast(
@@ -1108,7 +1108,7 @@ class Project(ABC):
                     # yapf: enable
                     raise ExecutionError(fail_loc, error_msg) from ce
                 # Cancel addition of failed command
-                command_extractor.rollback()
+                command_extractor.rollback_sentences(1)
                 break
 
         return command_extractor, fail_loc, error_msg

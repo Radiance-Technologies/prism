@@ -34,21 +34,21 @@ from tqdm.contrib.concurrent import process_map
 from traceback_with_variables import format_exc
 
 from prism.data.cache.command_extractor import CommandExtractor
+from prism.data.cache.command_types import (
+    CommentDict,
+    VernacCommandDataList,
+    VernacDict,
+)
+from prism.data.cache.project_types.project import (
+    ProjectBuildEnvironment,
+    ProjectBuildResult,
+    ProjectCommitData,
+)
 from prism.data.cache.server import (
     CacheStatus,
     CoqProjectBuildCache,
     CoqProjectBuildCacheProtocol,
     CoqProjectBuildCacheServer,
-)
-from prism.data.cache.types import (
-    CommentDict,
-    VernacCommandDataList,
-    VernacDict,
-)
-from prism.data.cache.types.project import (
-    ProjectBuildEnvironment,
-    ProjectBuildResult,
-    ProjectCommitData,
 )
 from prism.data.commit_map import Except, ProjectCommitUpdateMapper
 from prism.data.util import get_project_func

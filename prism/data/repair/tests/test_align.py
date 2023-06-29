@@ -8,12 +8,12 @@ from typing import Dict, List
 
 import numpy as np
 
-from prism.data.cache.types import (
+from prism.data.cache.command_types import (
     VernacCommandData,
     VernacCommandDataList,
     VernacSentence,
 )
-from prism.data.cache.types.project import ProjectCommitData
+from prism.data.cache.project_types.project import ProjectCommitData
 from prism.data.repair import align_commits, align_commits_per_file
 from prism.data.repair.diff import compute_git_diff
 from prism.language.gallina.analyze import SexpInfo

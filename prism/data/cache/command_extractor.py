@@ -23,7 +23,7 @@ from typing import (
 
 import numba
 
-from prism.data.cache.types.command import (
+from prism.data.cache.command_types import (
     CommandType,
     Proof,
     ProofSentence,
@@ -300,7 +300,7 @@ class CommandExtractor:
     A map from conjecture/obligation IDs to the corresponding cache
     data structure.
     """
-    dir_abspath: Optional[PathLike] = None
+    cwd: Optional[PathLike] = None
     """
     An absolute path to the directory containing the code.
     """
@@ -354,7 +354,7 @@ class CommandExtractor:
         self.serapi = SerAPI(
             self.serapi_options,
             opam_switch=self.opam_switch,
-            cwd=(None if self.dir_abspath is None else str(self.dir_abspath)))
+            cwd=(None if self.cwd is None else str(self.cwd)))
 
         if self.extract_qualified_idents:
             self.get_identifiers = typing.cast(
