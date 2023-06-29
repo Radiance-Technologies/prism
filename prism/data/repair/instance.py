@@ -24,12 +24,12 @@ from typing import (
 import numpy as np
 from bidict import bidict
 
-from prism.data.cache.command_types import (
+from prism.data.cache.types.command import (
     VernacCommandData,
     VernacCommandDataList,
     VernacDict,
 )
-from prism.data.cache.project_types.project import ProjectCommitData
+from prism.data.cache.types.project import ProjectCommitData
 from prism.data.repair.align import (
     AlignedCommands,
     AlignmentFunction,

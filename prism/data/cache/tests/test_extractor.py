@@ -11,17 +11,17 @@ from typing import List, Tuple
 
 import pytest
 
-from prism.data.cache.command_types import CommentDict, VernacDict
 from prism.data.cache.extractor import FALLBACK_EXCEPTION_MSG, extract_cache
-from prism.data.cache.project_types.project import (
-    ProjectBuildEnvironment,
-    ProjectBuildResult,
-    ProjectCommitData,
-)
 from prism.data.cache.server import (
     CacheStatus,
     CoqProjectBuildCacheProtocol,
     CoqProjectBuildCacheServer,
+)
+from prism.data.cache.types.command import CommentDict, VernacDict
+from prism.data.cache.types.project import (
+    ProjectBuildEnvironment,
+    ProjectBuildResult,
+    ProjectCommitData,
 )
 from prism.data.dataset import CoqProjectBaseDataset
 from prism.project.base import SEM
