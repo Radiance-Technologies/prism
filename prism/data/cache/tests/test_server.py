@@ -9,22 +9,22 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import List
 
-from prism.data.cache.command_types import (
-    VernacCommandData,
-    VernacCommandDataList,
-    VernacSentence,
-)
-from prism.data.cache.project_types.project import (
-    ProjectBuildEnvironment,
-    ProjectBuildResult,
-    ProjectCommitData,
-)
 from prism.data.cache.server import (
     CacheObjectStatus,
     CacheStatus,
     CoqProjectBuildCache,
     CoqProjectBuildCacheProtocol,
     CoqProjectBuildCacheServer,
+)
+from prism.data.cache.types.command import (
+    VernacCommandData,
+    VernacCommandDataList,
+    VernacSentence,
+)
+from prism.data.cache.types.project import (
+    ProjectBuildEnvironment,
+    ProjectBuildResult,
+    ProjectCommitData,
 )
 from prism.data.dataset import CoqProjectBaseDataset
 from prism.interface.coq.goals import Goals

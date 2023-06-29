@@ -24,7 +24,7 @@ from typing import (
 import numba
 import tqdm
 
-from prism.data.cache.command_types import (
+from prism.data.cache.types.command import (
     CommandType,
     Proof,
     ProofSentence,

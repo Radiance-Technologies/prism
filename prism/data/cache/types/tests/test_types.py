@@ -10,7 +10,7 @@ from typing import List, Optional, Tuple, Union
 
 import seutil.io as io
 
-from prism.data.cache.command_types import VernacSentence
+from prism.data.cache.types.command import VernacSentence
 from prism.interface.coq.goals import Goals, GoalsDiff
 from prism.interface.coq.ident import Identifier, IdentType, get_all_idents
 from prism.interface.coq.serapi import SerAPI
