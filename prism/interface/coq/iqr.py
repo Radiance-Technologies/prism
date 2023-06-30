@@ -179,7 +179,7 @@ class IQR:
                  lib in self.R},
                 self._strip_dune_prefix(self.pwd))
         else:
-            return self.relocate("")
+            return self.relocate(self.pwd)
 
     def as_coq_args(self) -> str:
         """
