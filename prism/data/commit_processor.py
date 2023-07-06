@@ -1,24 +1,19 @@
 """
 Module for implementing process_commit functions passed to `CommitMap`.
 """
+import calendar
 import logging
 import traceback
 from abc import ABC, abstractmethod
+from datetime import datetime
 from functools import partial
 from subprocess import TimeoutExpired
-from typing import (
-    Callable,
-    Dict,
-    Generic,
-    Iterable,
-    List,
-    Optional,
-    Tuple,
-    TypeVar,
-)
+from typing import Callable, Generator, Generic, Iterable, TypeVar, cast
 
 from prism.project import ProjectRepo
 from prism.project.exception import ProjectBuildError
+from prism.project.repo import ChangedCoqCommitIterator
+from prism.project.repo import CommitTraversalStrategy as CTS
 from prism.util.swim import AutoSwitchManager, SwitchManager
 
 T = TypeVar("T")
@@ -64,20 +59,26 @@ class CommitProcessor(ABC, Generic[T]):
     """
 
     def __init__(
-            self,
-            checkout: bool = True,
-            default_coq_version: str = '8.10.2',
-            find_switch: bool = True,
-            infer_dependencies: bool = True,
-            build: bool = True,
-            raise_on_checkout_fail: bool = True,
-            raise_on_build_fail: bool = True,
-            raise_on_infer_dependencies_fail: bool = True,
-            raise_on_process_fail: bool = True,
-            raise_on_find_switch_fail: bool = True,
-            switch_manager: Optional[SwitchManager] = None,
-            commits: Optional[Dict[str,
-                                   List[str]]] = None):
+        self,
+        checkout: bool = True,
+        default_coq_version: str = '8.10.2',
+        find_switch: bool = True,
+        infer_dependencies: bool = True,
+        build: bool = True,
+        raise_on_checkout_fail: bool = True,
+        raise_on_build_fail: bool = True,
+        raise_on_infer_dependencies_fail: bool = True,
+        raise_on_process_fail: bool = True,
+        raise_on_find_switch_fail: bool = True,
+        switch_manager: SwitchManager | None = None,
+        commit_date_limit: bool = False,
+        commit_march_strategy: CTS = CTS.CURLICUE_NEW,
+        commits_to_start: dict[str,
+                               str | None] | None = None,
+        commits_to_use: dict[str,
+                             list[str] | None] | None = None,
+        max_num_commits: int | None = None,
+    ):
         """
         Initialize commit processor.
         """
@@ -94,15 +95,17 @@ class CommitProcessor(ABC, Generic[T]):
         if switch_manager is None:
             switch_manager = AutoSwitchManager()
         self.switch_manager = switch_manager
-        if commits is None:
-            commits = {}
-        self.commits = commits
+        self.commit_date_limit = commit_date_limit
+        self.commit_march_strategy = commit_march_strategy
+        self.commits_to_start = commits_to_start
+        self.commits_to_use = commits_to_use
+        self.max_num_commits = max_num_commits
 
     def __call__(
             self,
             project: ProjectRepo,
             commit: str,
-            results: Optional[T]) -> T:
+            results: T | None) -> T:
         """
         Prepare project and switch for process_commit method.
         """
@@ -110,7 +113,7 @@ class CommitProcessor(ABC, Generic[T]):
         try:
             if self.checkout:
                 project = self._checkout(project, commit)
-            if self.infer_dependencies:
+            if self.infer_dependencies and self.switch_manager is None:
                 project = self._infer_dependencies(project)
             if self.find_switch:
                 project = self._find_switch(project)
@@ -192,7 +195,7 @@ class CommitProcessor(ABC, Generic[T]):
                 raise
         return project
 
-    def _build(self, project: ProjectRepo) -> Optional[Tuple[int, str, str]]:
+    def _build(self, project: ProjectRepo) -> tuple[int, str, str] | None:
         """
         Call project build method.
         """
@@ -218,14 +221,20 @@ class CommitProcessor(ABC, Generic[T]):
         """
         Return function that can return commits given a project.
         """
-        return partial(CommitProcessor.commit_iterator, self.commits)
+        return partial(
+            CommitProcessor.commit_iterator,
+            starting_commit_sha=self.commits_to_start,
+            max_num_commits=self.max_num_commits,
+            march_strategy=self.commit_march_strategy,
+            date_limit=self.commit_date_limit,
+        )
 
     @abstractmethod
     def process_commit(
         self,
         project: ProjectRepo,
         commit: str,
-        results: Optional[T],
+        results: T | None,
     ) -> T:
         """
         Process project commit.
@@ -234,10 +243,16 @@ class CommitProcessor(ABC, Generic[T]):
 
     @staticmethod
     def commit_iterator(
-            commits: Dict[str,
-                          List[str]],
             project: ProjectRepo,
-            commit_limit: int = 1) -> List[str]:
+            starting_commit_sha: dict[str,
+                                      str | None] | str | None = None,
+            max_num_commits: int | None = None,
+            march_strategy: CTS = CTS.CURLICUE_NEW,
+            commits_to_use: dict[str,
+                                 list[str] | None] | list[str] | None = None,
+            date_limit: bool = False) -> Generator[str,
+                                                   None,
+                                                   None]:
         """
         Return commits for given project.
 
@@ -255,7 +270,29 @@ class CommitProcessor(ABC, Generic[T]):
         list of commits
             List of commits to iterate over for the given project.
         """
-        commit_range = commits.get(project.metadata.project_name, [])
-        if len(commits) > commit_limit:
-            commit_range = commit_range[: commit_limit]
-        return commit_range
+        if isinstance(starting_commit_sha, dict):
+            starting_commit_sha = starting_commit_sha.get(project.name, None)
+        starting_commit_sha = cast(str | None, starting_commit_sha)
+        if isinstance(commits_to_use, dict):
+            commits_to_use = commits_to_use.get(project.name, None)
+        commits_to_use = cast(list[str] | None, commits_to_use)
+        iterator = ChangedCoqCommitIterator(
+            project,
+            starting_commit_sha,
+            march_strategy)
+        limit_date = datetime(2019, 1, 1, 0, 0, 0)
+        limit_epoch = calendar.timegm(limit_date.timetuple())
+        i = 0
+        for item in iterator:
+            # get commit object
+            item = project.commit(item)
+            if commits_to_use is not None and item.hexsha not in commits_to_use:
+                continue
+            # Define the minimum date; convert it to seconds since epoch
+            # committed_date is in seconds since epoch
+            if not date_limit or (item.committed_date is not None
+                                  and item.committed_date >= limit_epoch):
+                i += 1
+                yield item.hexsha
+            if max_num_commits is not None and i >= max_num_commits:
+                break
