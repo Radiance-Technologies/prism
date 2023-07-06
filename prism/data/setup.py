@@ -4,8 +4,18 @@ Setup utilities, especially for repair mining.
 
 import typing
 from pathlib import Path
-from typing import Iterable, List, Optional, Tuple, Union
+from typing import (
+    Iterable,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+    Union,
+    cast,
+    overload,
+)
 
+from seutil import io
 from tqdm.contrib.concurrent import process_map
 
 from prism.project.base import SentenceExtractionMethod
@@ -15,6 +25,13 @@ from prism.project.repo import ProjectRepo
 from prism.util.opam.api import OpamAPI
 from prism.util.opam.switch import OpamSwitch
 from prism.util.radpytools import PathLike
+from prism.util.swim.auto import AutoSwitchManager
+from prism.util.swim.shared import (
+    SharedSwitchManager,
+    SharedSwitchManagerClient,
+    SharedSwitchManagerServer,
+    SwitchManagerProxy,
+)
 
 
 def _initialize_switch(args: Tuple[str, str, Optional[PathLike]]) -> OpamSwitch:
@@ -161,6 +178,67 @@ def create_default_switches(
     compilers = ['4.09.1' for _ in switches]
     switch_list = create_switches(switches, compilers, opam_root, n_procs)
     return switch_list
+
+
+@overload
+def setup_switches(
+    opam_root: PathLike | None = None,
+    max_switch_pool_size: int = 100,
+    n_init_switches: int = 7,
+    serial: Literal[False] = False
+) -> tuple[SwitchManagerProxy,
+           SharedSwitchManager]:
+    ...
+
+
+@overload
+def setup_switches(
+        opam_root: PathLike | None,
+        max_switch_pool_size: int,
+        n_init_switches: int,
+        serial: Literal[True]) -> AutoSwitchManager:
+    ...
+
+
+def setup_switches(
+    opam_root: PathLike | None = None,
+    max_switch_pool_size: int = 100,
+    n_init_switches: int = 7,
+    serial: bool = False
+) -> AutoSwitchManager | tuple[SwitchManagerProxy,
+                               SharedSwitchManager]:
+    """
+    Initialze switch manager.
+
+    Parameters
+    ----------
+    opam_root: PathLike | None, optional
+        Root of opam switch, by default None
+    max_switch_pool_size: int, optional
+        Maximum number of switches that can exist, by default 100.
+    n_init_switches: int, optional
+        Number of processes to initialize default switches with.
+    serial: bool, optional
+        Returns a shared switch manager and proxy if True,
+        otherwise just a switch manager. By default, False.
+    """
+    if opam_root is not None:
+        opam_roots = [opam_root]
+    else:
+        opam_roots = None
+    create_default_switches(n_init_switches, opam_roots)
+    if serial:
+        swim_server = None
+        swim = AutoSwitchManager(opam_roots=opam_roots)
+        return swim
+    else:
+        swim_server = SharedSwitchManagerServer(AutoSwitchManager)
+        swim = SharedSwitchManagerClient(
+            swim_server,
+            opam_roots=opam_roots,
+            max_pool_size=max_switch_pool_size,
+        )
+        return swim, swim_server
 
 
 def _initialize_project(
@@ -315,3 +393,24 @@ def initialize_projects(
         # do not make a subprocess if no concurrency
         initialized_projects = [_initialize_project(job) for job in job_list]
     return initialized_projects
+
+
+def load_target_commits_file(path: PathLike) -> dict[str, list[str] | None]:
+    """
+    Return project-keyed commits to use.
+    """
+    commits = cast(dict[str, list[str] | None | str], io.load(str(path)))
+    commits = {k: [v] if isinstance(v,
+                                    str) else v for k,
+               v in commits.items()}
+    return commits
+
+
+def load_default_commits_file(path: PathLike) -> dict[str, str | None]:
+    """
+    Return project-keyed commits to use as defaults.
+    """
+    commits = load_target_commits_file(path)
+    commits = {k: v.pop() if v else None for k,
+               v in commits.items()}
+    return commits
