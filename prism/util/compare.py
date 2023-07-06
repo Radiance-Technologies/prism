@@ -37,6 +37,18 @@ class Comparable(Protocol):
         ...
 
 
+@runtime_checkable
+class Eq(Protocol):
+    """
+    A protocol for objects implementing equality comparisons.
+
+    This class can be used with `isinstance` checks.
+    """
+
+    def __eq__(self, other: Any) -> bool:  # noqa: D105
+        ...
+
+
 @total_ordering
 class Top:
     """
