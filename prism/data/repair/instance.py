@@ -30,6 +30,7 @@ from prism.data.cache.types.command import (
     VernacDict,
 )
 from prism.data.cache.types.project import ProjectCommitData
+from prism.data.cache.types.command import VernacSentence
 from prism.data.repair.align import (
     AlignedCommands,
     AlignmentFunction,
@@ -37,11 +38,14 @@ from prism.data.repair.align import (
     default_align,
     get_aligned_commands,
     left_file_offsets_from_aligned_commands,
+    order_preserving_masked_alignment,
+    right_file_offsets_from_aligned_commands,
 )
 from prism.data.repair.diff import compute_git_diff
 from prism.interface.coq.options import CoqWarningState, SerAPIOptions
 from prism.language.gallina.analyze import SexpInfo
 from prism.project.metadata import ProjectMetadata
+from prism.util.alignment import Alignment
 from prism.util.diff import GitDiff
 from prism.util.opam import OpamSwitch, PackageFormula
 from prism.util.radpytools.dataclasses import Dataclass, default_field
@@ -137,12 +141,56 @@ class LocDiff:
 
 
 @dataclass
+class FileOffset:
+    """
+    An offset to a file caused by a changed command.
+
+    Note that a single command may induce multiple offsets as the
+    command may be partitioned into multiple contiguous regions by
+    nested commands, each of which may require an offset.
+    """
+
+    command_index: int
+    """
+    The index of the command whose modification induced the offset.
+    """
+    beg_charno: int
+    """
+    The beginning character number of the unmodified command segment.
+    """
+    end_charno: int
+    """
+    The ending character number of the unmodified command.
+    """
+    excess_charno: int
+    """
+    The number of excess characters in the modified command.
+    """
+    lineno: int
+    """
+    The beginning line number of the unmodified command.
+    """
+    lineno_last: int
+    """
+    The last line number of the unmodified command.
+    """
+    excess_lineno: int
+    """
+    The number of excess lines in the modified command.
+    """
+
+
+@dataclass
 class VernacCommandDataListDiff:
     """
     A change relative to a list of extracted Vernacular commands.
 
-    Each enumerated change should be independent such that one can
-    remove an element and obtain a valid diff.
+    Ideally, each enumerated change should be independent such that one
+    can remove an element and obtain a valid diff. Unfortunately, this
+    is not quite achievable as it does not account for shifting content
+    to account for the reverted changes. The `offsets` field helps with
+    tracking such information for subsequent accounting during the
+    patching process.
     """
 
     added_commands: VernacCommandDataList = default_field(
@@ -178,23 +226,14 @@ class VernacCommandDataListDiff:
     A set of command indices in the original file indicating commands
     that should be removed.
     """
-    offsets: List[Tuple[Tuple[int,
-                              int,
-                              int],
-                        Tuple[int,
-                              int,
-                              int]]] = default_field([])
+    offsets: List[FileOffset] = default_field([])
     """
-    A list of pairs of tuples identifying character and line offsets.
+    A list identifying character and line offsets.
 
-    The first tuple in each pair contains two character numbers
-    identifying a region paired with a character-level offset that
-    should be applied to each location after the region.
-    The second tuple in each pair contains two line numbers identifying
-    the same region paired with a line offset that should be applied to
-    each location after the region in concurrence with the character
-    offset
+    The offsets are generally expected to arise from dropped changes.
     """
+    # TODO: give ownership of logic around dropping changes to this
+    # class
 
     @property
     def is_empty(self) -> bool:
@@ -204,6 +243,235 @@ class VernacCommandDataListDiff:
         return not (
             self.added_commands or self.affected_commands
             or self.changed_commands or self.dropped_commands)
+
+    def drop_change(  # noqa: C901
+        self,
+        changed_command_idx: int,
+        initial_file: VernacCommandDataList,
+        final_state: ProjectCommitData,
+        local_alignment_dict: Dict[int,
+                                   Tuple[str,
+                                         int]]
+    ) -> Tuple[VernacCommandData, str,
+               List[FileOffset]]:
+        """
+        Drop a single change from the diff.
+
+        Parameters
+        ----------
+        changed_command_idx : int
+            The index of the command whose changes should be dropped.
+        initial_file : VernacCommandDataList
+            The initial list of commands to which this diff applies.
+        final_state : ProjectCommitData
+            The final state of the project after application of this and
+            all other diffs.
+        local_alignment_dict : Dict[int, Tuple[str, int]]
+            A file-local map that identifies each command in
+            `initial_file` by mapping its index to filenames and
+            file-level command indices in `final_state`.
+
+        Returns
+        -------
+        VernacCommandData
+            The reverted command whose changes were dropped.
+            Note that its location may differ from the originally
+            modified command.
+        str
+            The name of the file to which the changed command was moved.
+        List[FileOffset]
+            A list of offsets to be added to the diff of the file
+            identified by the returned name.
+        """
+        # TODO: refactor to reduce complexity
+        initial_command = initial_file[changed_command_idx]
+        broken_command = initial_command.shallow_copy()
+        repair = self.changed_commands.pop(changed_command_idx)
+        repaired_command = repair.patch(broken_command)
+        repair_filename = repaired_command.location.filename
+        final_file = final_state.command_data[repair_filename]
+        # get nested commands
+        all_broken_indices = dict(
+            enumerate(initial_file.get_covering(changed_command_idx)))
+        all_repaired_indices = dict(
+            enumerate(final_file.get_covering(repaired_command)))
+        all_broken_commands = VernacCommandDataList(
+            [
+                initial_file[idx]
+                if idx != changed_command_idx else broken_command
+                for idx in all_broken_indices.values()
+            ])
+        all_repaired_commands = VernacCommandDataList(
+            [final_file[idx] for idx in all_repaired_indices.values()])
+        repaired_command_index = None
+        for idx in all_repaired_indices.values():
+            if repaired_command.spanning_location(
+            ) == final_file[idx].spanning_location():
+                repaired_command_index = idx
+                break
+        assert repaired_command_index is not None, \
+            "The repaired command should be in its own covering set"
+        # get sentences indexed by command and sorted by location
+        all_indexed_broken_sentences = sorted(
+            (
+                (all_broken_indices[i],
+                 s) for i,
+                s in all_broken_commands.indexed_sentences_iter()),
+            key=lambda s: s[1])
+        all_indexed_repaired_sentences = sorted(
+            (
+                (all_repaired_indices[i],
+                 s) for i,
+                s in all_repaired_commands.indexed_sentences_iter()),
+            key=lambda s: s[1])
+        # compute mask of allowable sentence assignments
+        # do not allow alignment of sentences between commands that
+        # were not assigned to one another
+        alignment_mask = np.zeros(
+            (
+                len(all_indexed_broken_sentences),
+                len(all_indexed_repaired_sentences)),
+            dtype=bool)
+        for (i,
+             (broken_command_idx,
+              _)) in enumerate(all_indexed_broken_sentences):
+            for (j,
+                 (repaired_command_idx,
+                  _)) in enumerate(all_indexed_repaired_sentences):
+                if local_alignment_dict.get(broken_command_idx,
+                                            ("",
+                                             -1)) == (repair_filename,
+                                                      repaired_command_idx):
+                    alignment_mask[i, j] = True
+        # align sentences
+        all_broken_sentences = [s for _, s in all_indexed_broken_sentences]
+        all_repaired_sentences = [s for _, s in all_indexed_repaired_sentences]
+        alignment = order_preserving_masked_alignment(
+            all_broken_sentences,
+            all_repaired_sentences,
+            alignment_mask,
+            alpha=0.5)
+        aligned_sentences = typing.cast(
+            Alignment[Tuple[int,
+                            VernacSentence]],
+            [
+                (
+                    None if i is None else all_indexed_broken_sentences[i],
+                    None if j is None else all_indexed_repaired_sentences[j])
+                for i,
+                j in alignment
+            ])
+        # relocate each sentence in-place, recreate diff, and record
+        # offsets
+        assert all_repaired_sentences
+        target_location = None
+        broken_sentence_idx = -1
+        repaired_sentence_idx = -1
+        offsets: List[FileOffset] = []
+        # the offset for the current contiguous region
+        current_offset: Optional[FileOffset] = None
+        for indexed_broken_sentence, indexed_repaired_sentence in aligned_sentences:
+            # update location but not text
+            if indexed_repaired_sentence is not None:
+                repaired_command_idx, repaired_sentence = indexed_repaired_sentence
+                target_location = repaired_sentence.location
+                repaired_sentence_idx += 1
+            if indexed_broken_sentence is None:
+                # nothing to do
+                continue
+            newline_added = False
+            broken_sentence_idx += 1
+            broken_command_idx, broken_sentence = indexed_broken_sentence
+            broken_location = broken_sentence.location
+            if broken_command_idx != changed_command_idx:
+                # we do not relocate other commands here
+                target_location = None
+                if current_offset is not None:
+                    # end offset for contiguous region
+                    offsets.append(current_offset)
+                    current_offset = None
+                continue
+            elif target_location is None:
+                # start of new contiguous region
+                # find next valid repaired sentence
+                is_valid_alignment = False
+                next_valid_repaired_sentence_index = None
+                for (next_valid_repaired_sentence_index,  # noqa: B007
+                     is_valid_alignment) in enumerate(
+                         alignment_mask[broken_sentence_idx,
+                                        repaired_sentence_idx + 1 :]):
+                    if is_valid_alignment:
+                        break
+                if is_valid_alignment:
+                    assert next_valid_repaired_sentence_index is not None
+                    target_location = all_repaired_sentences[
+                        next_valid_repaired_sentence_index].location
+                else:
+                    # no further sentences to align with
+                    # use previous location as reference
+                    target_location = all_repaired_sentences[
+                        repaired_sentence_idx].location
+                    # insert immediately after
+                    target_location = SexpInfo.Loc(
+                        target_location.filename,
+                        target_location.lineno_last,
+                        target_location.bol_pos_last,
+                        target_location.lineno_last,
+                        target_location.bol_pos_last,
+                        target_location.end_charno,
+                        target_location.end_charno)
+                newline_added = True
+            elif indexed_repaired_sentence is None:
+                # continuing contiguous region
+                # insert immediately after
+                target_location = SexpInfo.Loc(
+                    target_location.filename,
+                    target_location.lineno_last,
+                    target_location.bol_pos_last,
+                    target_location.lineno_last,
+                    target_location.bol_pos_last,
+                    target_location.end_charno,
+                    target_location.end_charno)
+                newline_added = True
+            char_offset = target_location.beg_charno - broken_location.beg_charno
+            line_offset = target_location.lineno - broken_location.lineno
+            new_broken_location = broken_location.shift(
+                char_offset + newline_added,
+                line_offset + newline_added)
+            broken_sentence.location = new_broken_location.rename(
+                repair_filename)
+            num_excess_chars = max(
+                0,
+                new_broken_location.end_charno - target_location.end_charno)
+            num_excess_lines = max(
+                0,
+                new_broken_location.lineno_last - target_location.lineno_last)
+            if current_offset is None:
+                if num_excess_chars > 0 or num_excess_lines > 0:
+                    current_offset = FileOffset(
+                        repaired_command_index,
+                        target_location.beg_charno,
+                        target_location.end_charno,
+                        num_excess_chars,
+                        target_location.lineno,
+                        target_location.lineno_last,
+                        num_excess_lines)
+            else:
+                # expand existing offset
+                current_offset.end_charno = target_location.end_charno
+                current_offset.lineno_last = target_location.lineno_last
+                current_offset.excess_charno += num_excess_chars
+                current_offset.excess_lineno += num_excess_lines
+        if current_offset is not None:
+            # end offset for last contiguous region
+            offsets.append(current_offset)
+            current_offset = None
+        # recreate diff
+        repair = SerializableDataDiff[VernacCommandData].compute_diff(
+            initial_command,
+            broken_command)
+        self.affected_commands[changed_command_idx] = repair
+        return broken_command, repair_filename, offsets
 
     def shallow_copy(self) -> 'VernacCommandDataListDiff':
         """
@@ -345,42 +613,42 @@ class ProjectCommitDataDiff:
             # nested commands and not need to offset the offsets
             offsets = sorted(
                 change.offsets,
-                key=lambda p: p[0][0],
+                key=lambda p: p.beg_charno,
                 reverse=True)
             if not offsets:
                 continue
             commands = patched_command_data[filename]
-            for idx, command in enumerate(reversed(commands)):
+            for (idx,
+                 (command_index,
+                  sentence)) in enumerate(reversed(sorted(
+                      commands.indexed_sentences_iter(),
+                      key=lambda p: p[1]))):
                 idx = len(commands) - idx - 1
-                cmd_loc = command.location
-                for (
-                    (charno,
-                     charno_last,
-                     char_shift),
-                    (lineno,
-                     _lineno_last,
-                     line_shift),
-                ) in offsets:
-                    if cmd_loc.beg_charno >= charno_last:
-                        command.shift_location(line_shift, char_shift)
-                    elif cmd_loc.beg_charno > charno:
-                        assert cmd_loc.lineno_last < charno_last, \
-                            "Nested inner command cannot spill outside outer command"
-                        nested_line_shift = cmd_loc.lineno_last - cmd_loc.lineno + 1
-                        nested_char_shift = cmd_loc.end_charno - cmd_loc.beg_charno
-                        # shift subsequent and outer command(s)
-                        for j in range(idx + 1, len(commands)):
-                            commands[j].shift_location(
-                                nested_line_shift,
-                                nested_char_shift)
-                        # shift nested command to outer command's start
-                        command.shift_location(
-                            lineno - cmd_loc.lineno,
-                            charno - cmd_loc.beg_charno)
-                    elif cmd_loc.beg_charno < charno:
-                        assert cmd_loc.end_charno < charno, \
-                            "Unnested command cannot spill into another command"
+                sentence_loc = sentence.location
+                for offset in offsets:
+                    is_already_offset = command_index == offset.command_index
+                    if is_already_offset:
                         continue
+                    if sentence_loc.beg_charno >= offset.end_charno:
+                        # starts after offset region
+                        sentence.location = sentence.location.shift(
+                            offset.excess_charno,
+                            offset.excess_lineno)
+                        continue
+                    overlaps_right = (
+                        sentence_loc.beg_charno >= offset.beg_charno
+                        and sentence_loc.end_charno > offset.end_charno)
+                    overlaps_left = (
+                        sentence_loc.beg_charno < offset.beg_charno
+                        and sentence_loc.end_charno > offset.beg_charno)
+                    is_subinterval = (
+                        sentence_loc.beg_charno >= offset.beg_charno
+                        and sentence_loc.end_charno <= offset.end_charno)
+                    if overlaps_right or overlaps_left or is_subinterval:
+                        raise RuntimeError(
+                            "Sentences cannot overlap with offset region. "
+                            f"Offset: {offset}."
+                            f"Sentence: {sentence}")
 
     def patch(self, data: ProjectCommitData) -> ProjectCommitData:
         """
@@ -1715,17 +1983,29 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
         diff = kwargs.pop('diff', None)
         if diff is None:
             diff = compute_git_diff(initial_state, final_state)
-        return_alignment = kwargs.pop('return_alignment', False) or False
+        return_aligned_commands = kwargs.pop(
+            'return_aligned_commands',
+            True) or True
         if commit_diff is None:
-            commit_diff = typing.cast(
-                ProjectCommitDataDiff,
+            commit_diff, aligned_commands = typing.cast(
+                Tuple[ProjectCommitDataDiff, AlignedCommands],
                 ProjectCommitDataDiff.from_commit_data(
                     initial_state,
                     final_state,
                     align,
                     diff=diff,
-                    return_aligned_commands=return_alignment,
+                    return_aligned_commands=return_aligned_commands,
                     **kwargs))
+        else:
+            alignment = align_commits(initial_state, final_state, diff, align)
+            initial_state.patch_goals()
+            final_state.patch_goals()
+            initial_state.sort_commands()
+            final_state.sort_commands()
+            aligned_commands = get_aligned_commands(
+                initial_state,
+                final_state,
+                alignment)
         if get_error_tags is None:
             get_error_tags = cls.default_get_error_tags
         broken_command_indices = {
@@ -1759,6 +2039,11 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
                     changed_idx] = commit_diff.command_changes[
                         filename].changed_commands[changed_idx]
                 broken_command_indices.discard((filename, changed_idx))
+            # add in changed commands to actually be dropped later
+            for filename, changed_idx in broken_command_indices:
+                broken_state_diff.command_changes[filename].changed_commands[
+                    changed_idx] = commit_diff.command_changes[
+                        filename].changed_commands[changed_idx]
             for filename, dropped_idx in changeset.dropped_commands:
                 broken_state_diff.command_changes[
                     filename].dropped_commands.add(dropped_idx)
@@ -1767,48 +2052,64 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
         # to preserve that as otherwise its old location may clash with
         # other changes.
         # If the commmand stayed in the same file or not:
-        #   Shift it to the starting line of the changed version.
-        #   If it spans fewer lines, then do nothing else.
-        #   If it spans more lines, then shift all commands that appear
-        #   after the changed version by the difference.
+        #   Align the sentences of both versions (including nested
+        #   commands), and shift each sentence to the start of its
+        #   corresponding repaired version.
+        #   If it spans fewer lines/characters, then do nothing else.
+        #   If it spans more lines/characters, then shift all commands
+        #   that appear after the changed version by the difference.
         # Note that the shifting occurs at patch time to avoid needing
-        # to reconstruct all of the SerializableDataDiffs
-        # Nested commands are shifted to before the "broken" command and
-        # increase the offset at which the broken command and all
-        # subsequent commands are shifted.
-        broken_commands = []
+        # to reconstruct all of the SerializableDataDiffs.
+        # Nested commands introduce a significant complication.
+        # The following possibilities are considered for nested
+        # commands in two commits A and B where the former command x in
+        # A is presumed to be broken with the latter command y in B
+        # presumed to be its repaired version:
+        # * a nested command w in A is no longer nested in B: this
+        #   situation can be ignored as it will not impact the relative
+        #   alignment of sentences between x and y. y already accounts
+        #   for w's location, and w can be treated as an unrelated
+        #   command during patching
+        # * a nested command z in B was not nested in A: we can ignore
+        #   the corresponding command in A of z (if any), but z's
+        #   sentences must be taken into account when aligning x and y.
+        # * a nested command
+
+        # Treat sentences as the primary entities; no nesting to
+        # consider, should reduce to the previous implementation with
+        # sentence-based offsets and patching.
+        broken_file_offsets = left_file_offsets_from_aligned_commands(
+            aligned_commands)
+        repaired_file_offsets = right_file_offsets_from_aligned_commands(
+            aligned_commands)
+        global_alignment_dict: Dict[str,
+                                    Dict[int,
+                                         Tuple[str,
+                                               int]]] = {}
+        for a, b in aligned_commands:
+            if a is not None and b is not None:
+                aidx, afile, _ = a
+                bidx, bfile, _ = b
+                local_alignment_dict = global_alignment_dict.setdefault(
+                    afile,
+                    {})
+                local_alignment_dict[aidx - broken_file_offsets[afile]] = (
+                    bfile,
+                    bidx - repaired_file_offsets[bfile])
+        broken_commands: List[VernacCommandData] = []
         for f, idx in broken_command_indices:
-            initial_command = initial_state.command_data[f][idx]
-            broken_command = initial_command.shallow_copy()
+            broken_file = initial_state.command_data[f]
+            (broken_command,
+             repair_filename,
+             offsets) = broken_state_diff.command_changes[f].drop_change(
+                 idx,
+                 broken_file,
+                 final_state,
+                 global_alignment_dict[f])
             broken_commands.append(broken_command)
-            repair = commit_diff.command_changes[f].changed_commands[idx]
-            repaired_command = repair.patch(broken_command)
-            repair_filename = repaired_command.location.filename
-            # update location but not text
-            new_location = repaired_command.spanning_location()
-            for sentence in broken_command.sentences_iter():
-                sentence.location = sentence.location.rename(repair_filename)
-            (num_excess_lines,
-             num_excess_chars) = broken_command.relocate(new_location)
-            # recreate diff
-            repair = SerializableDataDiff[VernacCommandData].compute_diff(
-                initial_command,
-                broken_command)
-            broken_state_diff.command_changes[f].affected_commands[idx] = repair
-            # record offsets
-            if num_excess_chars > 0 or num_excess_lines > 0:
-                broken_state_diff.command_changes.setdefault(
-                    repair_filename,
-                    VernacCommandDataListDiff()).offsets.append(
-                        (
-                            (
-                                new_location.beg_charno,
-                                new_location.end_charno,
-                                num_excess_chars),
-                            (
-                                new_location.lineno,
-                                new_location.lineno_last,
-                                num_excess_lines)))
+            broken_state_diff.command_changes.setdefault(
+                repair_filename,
+                VernacCommandDataListDiff()).offsets.extend(offsets)
         error_instance = cls._make_error_instance(
             initial_state,
             broken_state_diff,
