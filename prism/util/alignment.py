@@ -2,35 +2,38 @@
 Provides (sequence) alignment algorithms and utilities.
 """
 import heapq
-from typing import Callable, List, Optional, Sequence, Tuple, TypeVar, Union
+import typing
+from typing import Callable, Optional, Sequence, Tuple, TypeVar, Union
 
 import numpy as np
 from numba import jit
 
+from prism.util.compare import Eq
+
 T = TypeVar('T')
-LeftMatch = Tuple[T, Optional[T]]
+LeftMatch = tuple[T, Optional[T]]
 """
 A pair of aligned items that is guaranteed to have a non-null left item.
 """
-RightMatch = Tuple[Optional[T], T]
+RightMatch = tuple[Optional[T], T]
 """
 A pair of aligned items that is guaranteed to have a non-null right
 item.
 """
-Alignment = List[Union[LeftMatch, RightMatch]]
+Alignment = list[LeftMatch[T] | RightMatch[T]]
 
 
 def lazy_align(
-        a: Sequence[T],
-        b: Sequence[T],
-        calign: Callable[[T,
-                          T],
-                         float],
-        cskip: Callable[[T],
-                        float],
-        return_cost: bool = False) -> Union[Tuple[float,
-                                                  Alignment],
-                                            Alignment]:
+    a: Sequence[T],
+    b: Sequence[T],
+    calign: Callable[[T,
+                      T],
+                     float],
+    cskip: Callable[[T],
+                    float],
+    return_cost: bool = False) -> Union[tuple[float,
+                                              Alignment[T]],
+                                        Alignment[T]]:
     """
     Align two sequences according to provided cost functions.
 
@@ -169,8 +172,8 @@ def align_factory(
                Sequence[T],
                bool],
               Union[Tuple[float,
-                          Alignment],
-                    Alignment]]:
+                          Alignment[T]],
+                    Alignment[T]]]:
     """
     Assemble an accelerated alignment function using the cost functions.
 
@@ -253,18 +256,26 @@ def align_factory(
     return align
 
 
-_fast_edit_distance_raw = align_factory(
-    lambda a,
-    b: 1.0 if a != b else 0.0,
-    lambda x: 1.0)
+_Eq = TypeVar('_Eq', bound=Eq)
+
+_fast_edit_distance_raw = typing.cast(
+    Callable[[Sequence[Eq],
+              Sequence[Eq],
+              bool],
+             Union[Tuple[float,
+                         Alignment[Eq]],
+                   Alignment[Eq]]],
+    align_factory(lambda a,
+                  b: 1.0 if a != b else 0.0,
+                  lambda x: 1.0))
 
 
 def fast_edit_distance(
-        a: str,
-        b: str,
-        return_alignment: bool = False) -> Union[Tuple[float,
-                                                       Alignment],
-                                                 float]:
+    a: Sequence[_Eq],
+    b: Sequence[_Eq],
+    return_alignment: bool = False) -> Union[Tuple[float,
+                                                   Alignment[_Eq]],
+                                             float]:
     """
     Compute the edit (Levenshtein) distance between two strings.
 
@@ -288,23 +299,29 @@ def fast_edit_distance(
     """
     # Converts strings to lists of ints, which should align faster.
     was_string = False
-    if (type(a) == type(b) and type(b) == str):
-        a = np.asarray([ord(c) for c in a])
-        b = np.asarray([ord(c) for c in b])
+    if (isinstance(a, str) and isinstance(b, str)):
+        a = np.asarray([ord(c) for c in a])  # type: ignore
+        b = np.asarray([ord(c) for c in b])  # type: ignore
         was_string = True
 
-    cost, al = _fast_edit_distance_raw(a, b, return_cost=True)
-
-    if (not was_string):
-        return al
+    (cost,
+     alignment) = typing.cast(
+         tuple[float,
+               Alignment[Eq]],
+         _fast_edit_distance_raw(a,
+                                 b,
+                                 True))
 
     if return_alignment:
-        alignment = [
-            (
-                chr(x) if x is not None else None,
-                chr(y) if y is not None else None) for x,
-            y in al
-        ]
+        if was_string:
+            alignment = [
+                (
+                    chr(x) if x is not None else None,
+                    chr(y) if y is not None else None) for x,
+                y in typing.cast(Alignment[int],
+                                 alignment)
+            ]
+        alignment = typing.cast(Alignment[_Eq], alignment)
         return cost, alignment
     else:
         return cost
