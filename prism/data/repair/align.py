@@ -226,7 +226,7 @@ def default_command_distance(
 def order_preserving_alignment(
         a: List[VernacSentence],
         b: List[VernacSentence],
-        alpha: float = 0.1) -> Alignment:
+        alpha: float = 0.1) -> Alignment[int]:
     """
     Align two lists of `VernacSentence`s.
 
@@ -246,7 +246,7 @@ def order_preserving_alignment(
 
     Returns
     -------
-    Alignment
+    Alignment[int]
         A list of tuples of `Optional` integers representing aligned
         one-indexed indices.
         For example, ``(0,0)`` matches the first element of `a` to the
@@ -299,8 +299,8 @@ def align_commits_per_file(
     if a.project_metadata.project_name != b.project_metadata.project_name:
         warnings.warn(
             "Cannot align files from different projects: "
-            f"{a.project_metadata.project_name} and {b.project_metadata.project_name}"
-        )
+            f"{a.project_metadata.project_name} and {b.project_metadata.project_name}",
+            stacklevel=2)
 
     # only attempt to align files present in both roots.
     alignable_files = a.command_data.keys() & b.command_data.keys()
