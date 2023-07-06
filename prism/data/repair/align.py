@@ -4,6 +4,7 @@ Tools for aligning the same proofs across commits.
 
 import enum
 import math
+import typing
 import warnings
 from functools import partial
 from typing import Callable, Dict, List, Optional, Tuple, TypeVar, Union
@@ -254,13 +255,79 @@ def order_preserving_alignment(
         Alternatively, ``(0,None)`` matches the first element of `a` to
         no element of `b`, skipping it.
     """
-    return lazy_align(
-        range(len(a)),
-        range(len(b)),
-        lambda x,
-        y: normalized_edit_distance(a[x].text,
-                                    b[y].text),
-        lambda _: alpha)
+    return typing.cast(
+        Alignment[int],
+        lazy_align(
+            range(len(a)),
+            range(len(b)),
+            lambda x,
+            y: normalized_edit_distance(a[x].text,
+                                        b[y].text),
+            lambda _: alpha))
+
+
+def order_preserving_masked_alignment(
+        a: List[VernacSentence],
+        b: List[VernacSentence],
+        mask: np.ndarray,
+        alpha: float = 0.1) -> Alignment[int]:
+    """
+    Align two lists of `VernacSentence`s.
+
+    The order of each sequence is preserved after alignment, i.e., the
+    resulting aligned indices are monotonically increasing.
+
+    Parameters
+    ----------
+    a, b : List[VernacSentence]
+        Sequences of `VernacSentence` to be aligned.
+        Only the plaintext of the sentences are used in the alignment.
+    mask : np.ndarray
+        A Boolean matrix where each row corresponds to an element of `a`
+        and each column to an element of `b` where a True value
+        indicates that the respective elements of `a` and `b` are
+        allowed to be matched and a False value indicates they are not.
+    alpha : float, optional
+        An optional hyperparameter, by default 0.1, that controls the
+        trade-off between skipping an element versus mismatching.
+        A value of 1.0 always mismatches and a value of 0.0 always
+        skips.
+
+    Returns
+    -------
+    Alignment[int]
+        A list of tuples of `Optional` integers representing aligned
+        one-indexed indices.
+        For example, ``(0,0)`` matches the first element of `a` to the
+        first element of `b`.
+        Alternatively, ``(0,None)`` matches the first element of `a` to
+        no element of `b`, skipping it.
+    """
+    if mask.ndim != 2:
+        raise ValueError(
+            f"mask must be a 2D matrix, got {mask.ndim} dimensions instead")
+    elif mask.shape[0] != len(a) or mask.shape[1] != len(b):
+        raise ValueError(
+            f"Expected mask of shape ({len(a)}, {len(b)}), "
+            f"got ({mask.shape[0]},{mask.shape[1]})")
+    indexed_alignment = typing.cast(
+        Alignment[tuple[int,
+                        int]],
+        lazy_align(
+            list(enumerate(range(len(a)))),
+            list(enumerate(range(len(b)))),
+            lambda x,
+            y: normalized_edit_distance(a[x[1]].text,
+                                        b[y[1]].text) if mask[x[0],
+                                                              y[0]] else 1.0,
+            lambda _: alpha))
+    return typing.cast(
+        Alignment[int],
+        [
+            (i[1] if i is not None else None,
+             j[1] if j is not None else None) for i,
+            j in indexed_alignment
+        ])
 
 
 def align_commits_per_file(
