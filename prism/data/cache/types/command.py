@@ -215,6 +215,14 @@ class VernacSentence:
                     goals_identifiers[goal_idx] = gids
         self.goals_qualified_identifiers = goals_identifiers
 
+    def __lt__(self, other: object) -> bool:
+        """
+        Compare based on location.
+        """
+        if not isinstance(other, VernacSentence):
+            return NotImplemented
+        return self.location < other.location
+
     def __repr__(self) -> str:  # noqa: D105
         return f"VernacSentence(text={self.text}, location={self.location})"
 
@@ -348,7 +356,7 @@ class VernacSentence:
         from different documents can still be sorted together (although
         the significance of the results may be suspect).
         """
-        return sorted(sentences, key=lambda s: s.location)
+        return sorted(sentences)
 
 
 @dataclass
