@@ -783,6 +783,98 @@ class VernacCommandDataList:
                 'VernacCommandDataList may only contain VernacCommandData')
         self.commands.extend(items)
 
+    def get_covering(
+        self,
+        subset: SupportsIndex | VernacCommandData
+        | Iterable[SupportsIndex | VernacCommandData]
+    ) -> Set[int]:
+        r"""
+        Get indices of commands covered by the indicated subset.
+
+        A command is covered by another if its location is entirely
+        within the span of the other.
+
+        Parameters
+        ----------
+        subset : SupportsIndex | VernacCommandData \
+                               | Iterable[SupportsIndex \
+                                        | VernacCommandData]
+            A collection of commands or indices of commands in this
+            list.
+
+        Returns
+        -------
+        Set[int]
+            The indices of commands covered by any command in or indexed
+            by `subset`.
+
+        Raises
+        ------
+        IndexError
+            If any of the indices in `subset` are outside the indexable
+            range of this list.
+        """
+        covered = set()
+        if not isinstance(subset, Iterable):
+            subset = [subset]
+        subset_command_locations = [
+            i.spanning_location()
+            if isinstance(i,
+                          VernacCommandData) else self[i].spanning_location()
+            for i in subset
+        ]
+        for i, candidate in enumerate(self):
+            for location in subset_command_locations:
+                if candidate.spanning_location() in location:
+                    covered.add(i)
+                    break
+        return covered
+
+    def index(self, item: object) -> int:
+        """
+        Get the index of the given (presumed) command.
+
+        Parameters
+        ----------
+        item : object
+            An object, presumably a `VernacCommandData`.
+
+        Returns
+        -------
+        int
+            The index of `item` in this list as determined by its text
+            and location.
+
+        Raises
+        ------
+        ValueError
+            If `item` is not in this list.
+        """
+        if not isinstance(item, VernacCommandData):
+            raise ValueError(f"{item} is not in list")
+        for index, command in enumerate(self):
+            if (command.spanning_location() == item.spanning_location()
+                    and command.all_text() == item.all_text()):
+                return index
+        raise ValueError(f"{item} is not in list")
+
+    def indexed_sentences_iter(self) -> Iterator[Tuple[int, VernacSentence]]:
+        """
+        Get an iterator over sentences indexed by commands.
+
+        Returns
+        -------
+        Iterator[Tuple[int, VernacSentence]]
+            An iterator over pairs of integers and sentences where each
+            integer gives the index in this list of the command that
+            contains the sentence.
+            The order of iteration follows ``iter(self)`` and
+            `VernacCommandData.sentences_iter`.
+        """
+        for i, c in enumerate(self):
+            for s in c.sentences_iter():
+                yield (i, s)
+
     def patch_goals(self) -> None:
         """
         Patch all goals in-place, removing `GoalsDiff`s from sentences.
