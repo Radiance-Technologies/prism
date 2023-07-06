@@ -308,7 +308,8 @@ class SexpInfo:
             then it is considered less than the other.
             """
             if isinstance(other, type(self)):
-                return self.end_charno <= other.beg_charno or self in other
+                return self.end_charno <= other.beg_charno or (
+                    self in other and self != other)
             elif isinstance(other, (int, float)):
                 return self.end_charno <= other
             else:
