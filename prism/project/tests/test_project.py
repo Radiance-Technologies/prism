@@ -19,6 +19,7 @@ import pytest
 from prism.data.document import CoqDocument
 from prism.interface.coq.iqr import IQR
 from prism.interface.coq.options import SerAPIOptions
+from prism.language.gallina.analyze import SexpInfo
 from prism.project.base import SEM, Project, SentenceExtractionMethod
 from prism.project.metadata.dataclass import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
@@ -28,13 +29,10 @@ from prism.util.opam.switch import OpamSwitch
 from prism.util.radpytools.os import pushd
 
 
-class TestProject(unittest.TestCase):
+class TestProjectSetup(unittest.TestCase):
     """
-    Test suite for Project class.
+    Setup infrastructure for project testing.
     """
-
-    test_iqr_project: Project
-    test_infer_opam_deps_project: Project
 
     @classmethod
     def setUpClass(cls):
@@ -97,10 +95,10 @@ class TestProject(unittest.TestCase):
         if switch.get_installed_version("coq") is None:
             coq_version = "8.10.2"
             switch.install("coq", coq_version)
-        cls.assertFalse(TestProject(), metadata.opam_repos)
+        cls.assertFalse(TestProjectSetup(), metadata.opam_repos)
         for repo in metadata.opam_repos:
             switch.add_repo(*repo.split())
-        cls.assertFalse(TestProject(), metadata.opam_dependencies)
+        cls.assertFalse(TestProjectSetup(), metadata.opam_dependencies)
         for dep in chain(metadata.opam_dependencies):
             output = dep.split(".", maxsplit=1)
             if len(output) == 1:
@@ -132,6 +130,29 @@ class TestProject(unittest.TestCase):
                           cls.test_infer_opam_deps_project.path]:
             shutil.rmtree(repo_path)
         shutil.rmtree(cls.test_extract_sentences_repo_path)
+
+
+class TestProject(TestProjectSetup):
+    """
+    Test suite for Project class.
+    """
+
+    test_iqr_project: Project
+    test_infer_opam_deps_project: Project
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        """
+        Set up the class.
+        """
+        super().setUpClass()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        """
+        Tear down the class.
+        """
+        return super().tearDownClass()
 
     def test_extract_sentences_heuristic(self):
         """
@@ -456,6 +477,98 @@ class TestProject(unittest.TestCase):
             "src/Reification/Sorting.v": [],
         }
         self.assertEqual(file_deps, expected_file_deps)
+
+
+class TestProjectBuildErrorHandling(TestProjectSetup):
+    """
+    Test suite for command line interface.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        """
+        Set up the class.
+        """
+        super().setUpClass()
+
+    def setUp(self) -> None:
+        """
+        Set up file with a failure for tests.
+        """
+        test_path = Path(__file__).parent
+        self.repo_path = test_path / "coq-sep-logic"
+        coq_sep_logic_path = self.repo_path
+        self.array_path = os.path.join(coq_sep_logic_path, "src/Array.v")
+
+        self.backup_array_path = os.path.join(
+            coq_sep_logic_path,
+            "src/Array_bak.not_v")
+        shutil.copy(self.array_path, self.backup_array_path)
+
+        with open(self.array_path, 'r+') as f:
+            lines = f.readlines()
+            # Add typo ListNotations -> ListNotattions in
+            #       Import List.ListNotations.
+            lines[11] = "  Import List.ListNotattions."
+            f.seek(0)
+            f.writelines(lines)
+            f.truncate()
+
+        lineno, bol_pos = 11, 290
+        lineno_last, bol_pos_last = 11, 290
+        beg_charno, end_charno = 292, 318
+        self.up_to = SexpInfo.Loc(
+            "src/Array.v",
+            lineno,
+            bol_pos,
+            lineno_last,
+            bol_pos_last,
+            beg_charno,
+            end_charno)
+
+        return
+
+    def tearDown(self) -> None:
+        """
+        Replace clean version of "Redexes.v".
+        """
+        shutil.copy(self.backup_array_path, self.array_path)
+        return super().tearDown()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        """
+        Tear down the class.
+        """
+        return super().tearDownClass()
+
+    def test_instantiation_project_up_to_line(self):
+        """
+        Test ability to build a project up to a specific line.
+        """
+        metadata = ProjectMetadata.load(
+            _COQ_EXAMPLES_PATH / "coq_sep_logic.yml")[0]
+        storage = MetadataStorage()
+        storage.insert(metadata.at_level(0))
+        storage.insert(metadata)
+
+        project = ProjectRepo(
+            self.repo_path,
+            storage,
+            sentence_extraction_method=SEM.HEURISTIC)
+
+        project.clean()
+
+        command_extractor, _, _ = project.build_debug(self.up_to)
+        files = os.listdir(os.path.join(self.repo_path, "src"))
+        print(files)
+        self.assertTrue('Mem.vo' in files)
+        self.assertTrue('Pred.vo' in files)
+        self.assertTrue('Cancel.vo' in files)
+        self.assertIsNotNone(command_extractor)
+        assert command_extractor is not None
+        assert command_extractor.serapi is not None
+        self.assertTrue(command_extractor.serapi.is_alive)
 
 
 if __name__ == "__main__":

@@ -1221,7 +1221,11 @@ class Project(ABC):
                     # yapf: enable
                     raise ExecutionError(fail_loc, error_msg) from ce
                 # Cancel addition of failed command
-                command_extractor.rollback_sentences(1)
+                if use_simple_serapi:
+                    command_extractor.serapi.cancel(
+                        [command_extractor.serapi.frame_stack[-1][-1]])
+                else:
+                    command_extractor.rollback_sentences(1)
                 break
 
         return command_extractor, fail_loc, error_msg
