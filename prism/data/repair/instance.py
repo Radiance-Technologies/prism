@@ -361,7 +361,7 @@ class VernacCommandDataListDiff:
                 for i,
                 j in alignment
             ])
-        # relocate each sentence in-place, recreate diff, and record
+        # relocate each sentence, recreate diff, and record
         # offsets
         assert all_repaired_sentences
         target_location = None
@@ -370,6 +370,9 @@ class VernacCommandDataListDiff:
         offsets: List[FileOffset] = []
         # the offset for the current contiguous region
         current_offset: Optional[FileOffset] = None
+        # track the cumulative offset for subsequent sentences
+        num_excess_chars = 0
+        num_excess_lines = 0
         for indexed_broken_sentence, indexed_repaired_sentence in aligned_sentences:
             # update location but not text
             if indexed_repaired_sentence is not None:
@@ -379,7 +382,6 @@ class VernacCommandDataListDiff:
             if indexed_broken_sentence is None:
                 # nothing to do
                 continue
-            newline_added = False
             broken_sentence_idx += 1
             broken_command_idx, broken_sentence = indexed_broken_sentence
             broken_location = broken_sentence.location
@@ -389,6 +391,8 @@ class VernacCommandDataListDiff:
                 if current_offset is not None:
                     # end offset for contiguous region
                     offsets.append(current_offset)
+                    num_excess_chars = current_offset.excess_charno
+                    num_excess_lines = current_offset.excess_lineno
                     current_offset = None
                 continue
             elif target_location is None:
@@ -420,7 +424,9 @@ class VernacCommandDataListDiff:
                         target_location.bol_pos_last,
                         target_location.end_charno,
                         target_location.end_charno)
-                newline_added = True
+                # add newline
+                num_excess_chars += 1
+                num_excess_lines += 1
             elif indexed_repaired_sentence is None:
                 # continuing contiguous region
                 # insert immediately after
@@ -432,12 +438,14 @@ class VernacCommandDataListDiff:
                     target_location.bol_pos_last,
                     target_location.end_charno,
                     target_location.end_charno)
-                newline_added = True
+                # add newline
+                num_excess_chars += 1
+                num_excess_lines += 1
             char_offset = target_location.beg_charno - broken_location.beg_charno
             line_offset = target_location.lineno - broken_location.lineno
             new_broken_location = broken_location.shift(
-                char_offset + newline_added,
-                line_offset + newline_added)
+                char_offset + num_excess_chars,
+                line_offset + num_excess_lines)
             broken_sentence.location = new_broken_location.rename(
                 repair_filename)
             num_excess_chars = max(
@@ -460,13 +468,14 @@ class VernacCommandDataListDiff:
                 # expand existing offset
                 current_offset.end_charno = target_location.end_charno
                 current_offset.lineno_last = target_location.lineno_last
-                current_offset.excess_charno += num_excess_chars
-                current_offset.excess_lineno += num_excess_lines
+                current_offset.excess_charno = num_excess_chars
+                current_offset.excess_lineno = num_excess_lines
         if current_offset is not None:
             # end offset for last contiguous region
             offsets.append(current_offset)
             current_offset = None
         # recreate diff
+        broken_command.proxy_location = repaired_command.spanning_location()
         repair = SerializableDataDiff[VernacCommandData].compute_diff(
             initial_command,
             broken_command)
@@ -618,12 +627,9 @@ class ProjectCommitDataDiff:
             if not offsets:
                 continue
             commands = patched_command_data[filename]
-            for (idx,
-                 (command_index,
-                  sentence)) in enumerate(reversed(sorted(
-                      commands.indexed_sentences_iter(),
-                      key=lambda p: p[1]))):
-                idx = len(commands) - idx - 1
+            for (command_index,
+                 sentence) in reversed(sorted(commands.indexed_sentences_iter(),
+                                              key=lambda p: p[1])):
                 sentence_loc = sentence.location
                 for offset in offsets:
                     is_already_offset = command_index == offset.command_index
@@ -649,6 +655,9 @@ class ProjectCommitDataDiff:
                             "Sentences cannot overlap with offset region. "
                             f"Offset: {offset}."
                             f"Sentence: {sentence}")
+            # drop proxy locations
+            for offset in offsets:
+                commands[offset.command_index].proxy_location = None
 
     def patch(self, data: ProjectCommitData) -> ProjectCommitData:
         """
@@ -750,8 +759,10 @@ class ProjectCommitDataDiff:
         Get a shallow copy of this structure and its fields.
         """
         return ProjectCommitDataDiff(
-            {k: v.shallow_copy() for k,
-             v in self.command_changes.items()},
+            {
+                k: v.shallow_copy() for k,
+                v in self.command_changes.items()
+            },
             self.file_dependencies_diff)
 
     @classmethod
