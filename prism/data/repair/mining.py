@@ -1,6 +1,7 @@
 """
 Mine repair instances by looping over existing project build cache.
 """
+import enum
 import logging
 import os
 import queue
@@ -64,13 +65,12 @@ Signature of the function used to create repair instances.
 """
 ProjectCommitHashMap = Optional[Dict[str, Optional[List[str]]]]
 PreparePairsReturn = List[Tuple[CacheObjectStatus, CacheObjectStatus]]
-# yapf: disable
-PreparePairsFunction = Callable[[Path,
-                                 str,
-                                 MetadataStorage,
-                                 ProjectCommitHashMap],
-                                PreparePairsReturn]
-# yapf: enable
+PreparePairsFunction = Callable[
+    [Path,
+     str,
+     MetadataStorage,
+     ProjectCommitHashMap],
+    PreparePairsReturn]
 """
 Signature of the function used to prepare cache item label pairs for
 repair instance mining.
@@ -87,12 +87,20 @@ AugmentedErrorInstance = Tuple[ProjectCommitDataErrorInstance,
 A tuple containing an error instance, with the repaired state used to
 produce it, and the corresponding change selection.
 """
+AugmentedChangeSelectionList = Tuple[ProjectCommitData,
+                                     ProjectCommitData,
+                                     ProjectCommitDataDiff,
+                                     List[ChangeSelection]]
+"""
+A tuple containing a list of changesets along with the states and diff
+to which each changeset corresponds.
+"""
 
 
 @dataclass(frozen=True)
-class ErrorInstanceJob:
+class ChangeSetMiningJob:
     """
-    Job for creating error instances.
+    Job for mining changesets for later creation of error instances.
     """
 
     label_a: CacheObjectStatus
@@ -124,6 +132,37 @@ class ErrorInstanceJob:
     """
     Whether to perform fast mining or not, i.e., whether to discard
     unnecessary extracted data and yield only Git-based instances.
+    """
+
+
+@dataclass(frozen=True)
+class ErrorInstanceJob:
+    """
+    Job for creating error instances.
+    """
+
+    initial_state: ProjectCommitData
+    """
+    A state of the project.
+    """
+    repaired_state: ProjectCommitData
+    """
+    A state based on the `initial_state` that contains at least one
+    change to a command.
+    """
+    diff: ProjectCommitDataDiff
+    """
+    A precomputed diff between `initial_state` and `final_state`.
+    """
+    change_selection: ChangeSelection
+    """
+    The change selection that gives rise to this error instance and
+    repaired state
+    """
+    repair_mining_logger: 'RepairMiningLogger'
+    """
+    The object used to log error messages and other debug messages
+    encountered during mining.
     """
 
 
@@ -161,10 +200,6 @@ class RepairInstanceJob:
     Object used to log errors and other debug messages during repair
     instance building
     """
-    fast: bool
-    """
-    Whether to save only Git-compressed repair instances or not.
-    """
 
 
 class StopWorkSentinel:
@@ -175,12 +210,113 @@ class StopWorkSentinel:
     pass
 
 
-class ErrorInstanceEndSentinel:
+class JobStatus(enum.Enum):
     """
-    Place on repair job queue to indicate the end of the job group.
+    An enum to communicate status of a parallel job.
     """
 
-    pass
+    QUEUED = enum.auto()
+    """
+    Symbolizes the start of a job.
+    """
+    PROGRESSED = enum.auto()
+    """
+    Symbolizes the completion of a jobs' subtask.
+    """
+    COMPLETED = enum.auto()
+    """
+    Symbolizes the conclusion of a job (technically, the dequeuing of
+    each of its subtasks).
+    """
+
+
+class JobType(enum.Enum):
+    """
+    The type of a parallel job.
+    """
+
+    ERROR_INSTANCE = enum.auto()
+    """
+    Error instance creation.
+    """
+    REPAIR_INSTANCE = enum.auto()
+    """
+    Repair instance creation.
+    """
+
+
+@dataclass(frozen=True)
+class JobID:
+    """
+    Identifies a job.
+    """
+
+    label_a: CacheObjectStatus
+    label_b: CacheObjectStatus
+    job_type: JobType
+
+    def __str__(self) -> str:  # noqa: D105
+        job_type = "errors" if self.job_type == JobType.ERROR_INSTANCE else "repairs"
+        return (
+            f"Mining {job_type}: {self.label_a.project}"
+            f"@{self.label_a.commit_hash[:8]}({self.label_a.coq_version})"
+            f"..{self.label_b.commit_hash[:8]}({self.label_b.coq_version})")
+
+
+@dataclass(frozen=True)
+class JobStatusMessage:
+    """
+    Place in worker-parent queue to communicate job completions.
+    """
+
+    job_id: JobID
+    job_size: int
+    status: JobStatus
+
+    @classmethod
+    def from_job(
+            cls,
+            job: Union[ErrorInstanceJob,
+                       RepairInstanceJob],
+            size: int,
+            status: JobStatus) -> 'JobStatusMessage':
+        """
+        Create a message for a given job.
+        """
+        if isinstance(job, ErrorInstanceJob):
+            job_id = JobID(
+                CacheObjectStatus.from_metadata(
+                    job.initial_state.project_metadata),
+                CacheObjectStatus.from_metadata(
+                    job.repaired_state.project_metadata),
+                JobType.ERROR_INSTANCE)
+        else:
+            job_id = JobID(
+                CacheObjectStatus.from_metadata(
+                    job.error_instance.project_metadata),
+                CacheObjectStatus.from_metadata(
+                    job.repaired_state.project_metadata),
+                JobType.REPAIR_INSTANCE)
+        return JobStatusMessage(job_id, size, status)
+
+
+class LoopControl(enum.Enum):
+    """
+    Control-flow enums for managing the main mining loop.
+    """
+
+    PASS = enum.auto()
+    """
+    Continue with the current iteration.
+    """
+    CONTINUE = enum.auto()
+    """
+    Continue to the next iteration without completing the current one.
+    """
+    BREAK = enum.auto()
+    """
+    Break out of the loop.
+    """
 
 
 class CommitPairDBRecord(NamedTuple):
@@ -939,8 +1075,7 @@ def build_repair_instance(
         change_selection: ChangeSelection,
         repair_instance_db_directory: Path,
         miner: RepairMiner,
-        repair_mining_logger: RepairMiningLogger,
-        fast: bool) -> BuildRepairInstanceOutput:
+        repair_mining_logger: RepairMiningLogger) -> BuildRepairInstanceOutput:
     """
     Construct build repair instance from pairs of cache items.
 
@@ -962,8 +1097,6 @@ def build_repair_instance(
     repair_mining_logger : RepairMiningLogger
         Object used to log errors and other debug messages during repair
         instance building
-    fast : bool
-        If True, then save only Git-compressed repair instances.
 
     Returns
     -------
@@ -987,6 +1120,7 @@ def build_repair_instance(
                 result = None
     except Exception as e:
         result = Except(None, e, format_exc(e))
+        repair_mining_logger.write_exception_log(result)
     finally:
         if result is not None:
             write_repair_instance(
@@ -994,8 +1128,7 @@ def build_repair_instance(
                 change_selection,
                 repair_instance_db_directory,
                 repair_mining_logger,
-                repaired_state.project_metadata,
-                fast)
+                repaired_state.project_metadata)
     return result
 
 
@@ -1023,18 +1156,90 @@ def build_repair_instance_star(
         args.change_selection,
         args.repair_instance_db_directory,
         args.miner,
-        args.repair_mining_logger,
-        args.fast)
+        args.repair_mining_logger)
 
 
-def build_error_instances_from_label_pair(
+def build_error_instance(
+    initial_state: ProjectCommitData,
+    repaired_state: ProjectCommitData,
+    diff: ProjectCommitDataDiff,
+    changeset: ChangeSelection,
+    repair_mining_logger: RepairMiningLogger
+) -> Union[AugmentedErrorInstance,
+           Except[None]]:
+    """
+    Construct an error instance from a pair of cache items.
+
+    Parameters
+    ----------
+    initial_state : ProjectCommitData
+        An initial state that may or may not contain an error.
+    repaired_state : ProjectCommitData
+        A state based on `initial_state`.
+    diff : ProjectCommitDataDiff
+        A precomputed diff between `initial_state` and `repaired_state`.
+    changeset : ChangeSelection
+        A selection of changes from `diff`.
+    repair_mining_logger : RepairMiningLogger
+        Object used to log errors and other debug messages during repair
+        instance building
+
+    Returns
+    -------
+    AugmentedErrorInstance | Except[None]
+        An augmented error instance if successful or Excep[None] if an
+        error was encountered.
+    """
+    try:
+        error_instance = ProjectCommitDataErrorInstance.make_error_instance(
+            initial_state,
+            repaired_state,
+            diff,
+            changeset,
+            ProjectCommitDataErrorInstance.default_get_error_tags)
+    except Exception as e:
+        result = Except(None, e, format_exc(e))
+        repair_mining_logger.write_exception_log(result)
+    else:
+        result = (error_instance, repaired_state, changeset)
+    return result
+
+
+def build_error_instance_star(
+        args: ErrorInstanceJob) -> Union[AugmentedErrorInstance,
+                                         Except[None]]:
+    """
+    Split arguments and call build_repair_instance.
+
+    Parameters
+    ----------
+    args : RepairInstanceJob
+        Bundled arguments for build_repair_instance
+
+    Returns
+    -------
+    BuildRepairInstanceOutput
+        If repair mining was successful, return the output
+        If repair mining raise an error, return an Except[None]
+        If there was no error but no repair instance was produced,
+        return None
+    """
+    return build_error_instance(
+        args.initial_state,
+        args.repaired_state,
+        args.diff,
+        args.change_selection,
+        args.repair_mining_logger)
+
+
+def mine_changesets_from_label_pair(
         label_a: CacheObjectStatus,
         label_b: CacheObjectStatus,
         cache_root: Path,
         cache_fmt_extension: str,
         changeset_miner: ChangeSetMiner,
         repair_mining_logger: RepairMiningLogger,
-        fast: bool) -> Union[List[AugmentedErrorInstance],
+        fast: bool) -> Union[AugmentedChangeSelectionList,
                              Except[None]]:
     """
     Construct error instances from pairs of cache labels.
@@ -1066,8 +1271,8 @@ def build_error_instances_from_label_pair(
 
     Returns
     -------
-    Union[List[AugmentedErrorInstance], Except[None]]
-        A list of augmented error instances if successful or an
+    Union[AugmentedChangeSelectionList, Except[None]]
+        An augmented list of selected changesets if successful or an
         Except[None] object if there's an error.
     """
     try:
@@ -1093,29 +1298,27 @@ def build_error_instances_from_label_pair(
                 command.discard_data()
             for _, command in repaired_state.commands:
                 command.discard_data()
-        commit_diff = ProjectCommitDataDiff.from_commit_data(
-            initial_state,
-            repaired_state,
-            default_align)
-        error_instances: List[AugmentedErrorInstance] = []
-        for changeset in changeset_miner(initial_state, commit_diff):
-            error_instance = ProjectCommitDataErrorInstance.make_error_instance(
+        commit_diff = typing.cast(
+            ProjectCommitDataDiff,
+            ProjectCommitDataDiff.from_commit_data(
                 initial_state,
                 repaired_state,
-                commit_diff,
-                changeset,
-                ProjectCommitDataErrorInstance.default_get_error_tags)
-            error_instances.append((error_instance, repaired_state, changeset))
-        result = error_instances
+                default_align))
+        result = (
+            initial_state,
+            repaired_state,
+            commit_diff,
+            list(changeset_miner(initial_state,
+                                 commit_diff)))
     except Exception as e:
         result = Except(None, e, format_exc(e))
         repair_mining_logger.write_exception_log(result)
     return result
 
 
-def build_error_instances_from_label_pair_star(
-    args: ErrorInstanceJob) -> Union[List[AugmentedErrorInstance],
-                                     Except[None]]:
+def mine_changesets_from_label_pair_star(
+    args: ChangeSetMiningJob) -> Union[AugmentedChangeSelectionList,
+                                       Except[None]]:
     """
     Split arguments and call build_error_instances_from_label_pair.
 
@@ -1130,7 +1333,7 @@ def build_error_instances_from_label_pair_star(
         A list of augmented error instances if successful or an
         Except[None] object if there's an error.
     """
-    return build_error_instances_from_label_pair(
+    return mine_changesets_from_label_pair(
         args.label_a,
         args.label_b,
         args.cache_root,
@@ -1145,8 +1348,7 @@ def write_repair_instance(
         change_selection: ChangeSelection,
         repair_instance_db_directory: Path,
         repair_mining_logger: RepairMiningLogger,
-        repaired_state_metadata: ProjectMetadata,
-        fast: bool):
+        repaired_state_metadata: ProjectMetadata):
     """
     Write a repair instance to disk, or log an exception.
 
@@ -1167,8 +1369,6 @@ def write_repair_instance(
     repaired_state_metadata : ProjectMetadata
         Metadata for the repaired state, used to determine the
         information to record for this instance.
-    fast : bool
-        If True, then write only the Git-compressed repair instance.
 
     Raises
     ------
@@ -1236,19 +1436,57 @@ def _get_consecutive_commit_hashes(
     ]
 
 
-def build_repair_instance_mining_inputs(
-        error_instance_results: Union[List[AugmentedErrorInstance],
-                                      Except[None]],
-        repair_instance_db_directory: Path,
-        repair_miner: RepairMiner,
-        repair_mining_logger: RepairMiningLogger,
-        fast: bool) -> List[RepairInstanceJob]:
+def build_error_instance_creation_inputs(
+        changeset_mining_results: Union[AugmentedChangeSelectionList,
+                                        Except[None]],
+        repair_mining_logger: RepairMiningLogger) -> List[ErrorInstanceJob]:
     """
     Build a repair instance job from error instance results.
 
     Parameters
     ----------
-    error_instance_results : Union[List[AugmentedErrorInstance],
+    changest_mining_results : Union[AugmentedChangeSelectionList,
+                                   Except[None]]
+        The output of the changeset miner.
+    repair_mining_logger : RepairMiningLogger
+        The object used to log errors and debug messages during repair
+        mining
+
+    Returns
+    -------
+    List[ErrorInstanceJob]
+        A list of prepared error instance creation jobs for dispatch to
+        worker functions
+    """
+    error_instance_jobs: List[ErrorInstanceJob] = []
+    if isinstance(changeset_mining_results, Except):
+        return []
+    initial_state, repaired_state, diff, change_selections = changeset_mining_results
+    for change_selection in change_selections:
+        error_instance_job = ErrorInstanceJob(
+            initial_state,
+            repaired_state,
+            diff,
+            change_selection,
+            repair_mining_logger)
+        error_instance_jobs.append(error_instance_job)
+    return error_instance_jobs
+
+
+def build_repair_instance_mining_inputs(
+        error_instance_results: Union[AugmentedErrorInstance,
+                                      List[AugmentedErrorInstance],
+                                      Except[None]],
+        repair_instance_db_directory: Path,
+        repair_miner: RepairMiner,
+        repair_mining_logger: RepairMiningLogger) -> List[RepairInstanceJob]:
+    r"""
+    Build a repair instance job from error instance results.
+
+    Parameters
+    ----------
+    error_instance_results : Union[AugmentedErrorInstance, \
+                                   List[AugmentedErrorInstance], \
                                    Except[None]]
         The output of the error instance builder
     repair_instance_db_file : Path
@@ -1258,8 +1496,6 @@ def build_repair_instance_mining_inputs(
     repair_mining_logger : RepairMiningLogger
         The object used to log errors and debug messages during repair
         mining
-    fast : bool
-        If True, then save only Git-compressed repair instances.
 
     Returns
     -------
@@ -1270,6 +1506,8 @@ def build_repair_instance_mining_inputs(
     repair_instance_jobs: List[RepairInstanceJob] = []
     if isinstance(error_instance_results, Except):
         return []
+    elif not isinstance(error_instance_results, list):
+        error_instance_results = [error_instance_results]
     for error_instance_result in error_instance_results:
         if isinstance(error_instance_result, Except):
             continue
@@ -1280,23 +1518,153 @@ def build_repair_instance_mining_inputs(
             change_selection,
             repair_instance_db_directory,
             repair_miner,
-            repair_mining_logger,
-            fast)
+            repair_mining_logger)
         repair_instance_jobs.append(repair_instance_job)
     return repair_instance_jobs
 
 
-def mining_loop_worker(
-        control_queue: queue.Queue[StopWorkSentinel],
-        error_instance_job_queue: queue.Queue[ErrorInstanceJob],
-        repair_instance_job_queue: queue.Queue[Union[RepairInstanceJob,
-                                                     ErrorInstanceEndSentinel]],
+def _mine_repairs(
+        repair_instance_job_queue: queue.Queue[RepairInstanceJob],
         worker_to_parent_queue: queue.Queue[Union[Except,
-                                                  ErrorInstanceEndSentinel]],
+                                                  JobStatusMessage]],
+        skip_errors: bool) -> LoopControl:
+    """
+    Mine repairs from mined errors.
+    """
+    try:
+        repair_job = repair_instance_job_queue.get_nowait()
+    except Empty:
+        return LoopControl.PASS
+    else:
+        if isinstance(repair_job, RepairInstanceJob):
+            result = build_repair_instance_star(repair_job)
+            if not skip_errors and isinstance(result, Except):
+                worker_to_parent_queue.put(result)
+                return LoopControl.BREAK
+            worker_to_parent_queue.put(
+                JobStatusMessage.from_job(repair_job,
+                                          1,
+                                          JobStatus.PROGRESSED))
+        else:
+            raise RuntimeError(
+                f"Unexpected type {type(repair_job)} for repair_job.")
+        # Don't automatically go to building error instances. Focus
+        # on clearing the repair instance queue out.
+        return LoopControl.CONTINUE
+
+
+def _mine_errors(
+        error_instance_job_queue: queue.Queue[Union[ErrorInstanceJob,
+                                                    JobStatusMessage]],
+        repair_instance_job_queue: queue.Queue[RepairInstanceJob],
+        worker_to_parent_queue: queue.Queue[Union[Except,
+                                                  JobStatusMessage]],
         repair_instance_db_directory: Path,
         repair_miner: RepairMiner,
-        skip_errors: bool,
-        fast: bool):
+        skip_errors: bool) -> LoopControl:
+    """
+    Mine errors from mined changesets.
+    """
+    try:
+        error_instance_job = error_instance_job_queue.get_nowait()
+    except Empty:
+        return LoopControl.PASS
+    else:
+        if isinstance(error_instance_job, ErrorInstanceJob):
+            result = build_error_instance_star(error_instance_job)
+            if not skip_errors and isinstance(result, Except):
+                worker_to_parent_queue.put(result)
+                return LoopControl.PASS
+            # If skip_errors is true and result is an Except, the
+            # following will immediately return an empty list.
+            repair_instance_jobs = build_repair_instance_mining_inputs(
+                result,
+                repair_instance_db_directory,
+                repair_miner,
+                error_instance_job.repair_mining_logger)
+            for repair_instance_job in repair_instance_jobs:
+                repair_instance_job_queue.put(repair_instance_job)
+            worker_to_parent_queue.put(
+                JobStatusMessage.from_job(
+                    error_instance_job,
+                    1,
+                    JobStatus.PROGRESSED))
+        elif isinstance(error_instance_job, JobStatusMessage):
+            worker_to_parent_queue.put(error_instance_job)
+        else:
+            raise RuntimeError(
+                f"Unexpected type {type(error_instance_job)} "
+                "for error_instance_job.")
+        # Don't automatically go to mining changesets. Focus
+        # on clearing the error instance queue out.
+        return LoopControl.CONTINUE
+
+
+def _mine_changesets(
+        changeset_mining_job_queue: queue.Queue[ChangeSetMiningJob],
+        error_instance_job_queue: queue.Queue[Union[ErrorInstanceJob,
+                                                    JobStatusMessage]],
+        worker_to_parent_queue: queue.Queue[Union[Except,
+                                                  JobStatusMessage]],
+        skip_errors: bool) -> LoopControl:
+    """
+    Mine changesets for inducing (presumed) errors.
+    """
+    try:
+        changeset_mining_job = changeset_mining_job_queue.get_nowait()
+    except Empty:
+        pass
+    else:
+        result = mine_changesets_from_label_pair_star(changeset_mining_job)
+        if not skip_errors and isinstance(result, Except):
+            worker_to_parent_queue.put(result)
+            return LoopControl.BREAK
+        # If skip_errors is true and result is an Except, the
+        # following will immediately return an empty list.
+        error_instance_jobs = build_error_instance_creation_inputs(
+            result,
+            changeset_mining_job.repair_mining_logger)
+        # inform parent of job start before queueing any subtasks
+        worker_to_parent_queue.put(
+            JobStatusMessage(
+                JobID(
+                    changeset_mining_job.label_a,
+                    changeset_mining_job.label_b,
+                    JobType.ERROR_INSTANCE),
+                len(error_instance_jobs),
+                JobStatus.QUEUED))
+        worker_to_parent_queue.put(
+            JobStatusMessage(
+                JobID(
+                    changeset_mining_job.label_a,
+                    changeset_mining_job.label_b,
+                    JobType.REPAIR_INSTANCE),
+                len(error_instance_jobs),
+                JobStatus.QUEUED))
+        for error_instance_job in error_instance_jobs:
+            error_instance_job_queue.put(error_instance_job)
+        error_instance_job_queue.put(
+            JobStatusMessage(
+                JobID(
+                    changeset_mining_job.label_a,
+                    changeset_mining_job.label_b,
+                    JobType.ERROR_INSTANCE),
+                0,
+                JobStatus.COMPLETED))
+    return LoopControl.PASS
+
+
+def mining_loop_worker(
+        control_queue: queue.Queue[StopWorkSentinel],
+        changeset_mining_job_queue: queue.Queue[ChangeSetMiningJob],
+        error_instance_job_queue: queue.Queue[Union[ErrorInstanceJob,
+                                                    JobStatusMessage]],
+        repair_instance_job_queue: queue.Queue[RepairInstanceJob],
+        worker_to_parent_queue: queue.Queue[Union[Except,
+                                                  JobStatusMessage]],
+        repair_instance_db_directory: Path,
+        repair_miner: RepairMiner,
+        skip_errors: bool) -> None:
     """
     Perform either error instance or repair instance mining.
 
@@ -1304,6 +1672,8 @@ def mining_loop_worker(
     ----------
     control_queue : Queue
         Queue from which to retrieve control messages, if any
+    changeset_mining_job_queue : Queue
+        Queue from which to retrieve changeset mining jobs
     error_instance_job_queue : Queue
         Queue from which to retrieve error instance creation jobs
     repair_instance_job_queue : Queue
@@ -1320,8 +1690,6 @@ def mining_loop_worker(
         encountered during error instance or repair mining. Other
         exceptions will not be ignored. If false, stop on exceptions in
         mining. By default, true.
-    fast : bool
-        If True, then save only Git-compressed repair instances.
     """
     # The order of the following blocks is important. We wish to keep
     # the size of the repair_instance_job_queue small so that we don't
@@ -1335,6 +1703,7 @@ def mining_loop_worker(
         select.select(
             [
                 control_queue._reader,  # type: ignore
+                changeset_mining_job_queue._reader,  # type: ignore
                 error_instance_job_queue._reader,  # type: ignore
                 repair_instance_job_queue._reader  # type: ignore
             ],
@@ -1355,48 +1724,41 @@ def mining_loop_worker(
         # ########################
         # Repair instance creation
         # ########################
-        try:
-            repair_job = repair_instance_job_queue.get_nowait()
-        except Empty:
-            pass
-        else:
-            if isinstance(repair_job, RepairInstanceJob):
-                result = build_repair_instance_star(repair_job)
-                if not skip_errors and isinstance(result, Except):
-                    worker_to_parent_queue.put(result)
-                    break
-            elif isinstance(repair_job, ErrorInstanceEndSentinel):
-                worker_to_parent_queue.put(repair_job)
-            else:
-                raise RuntimeError(
-                    f"Unexpected type {type(repair_job)} for repair_job.")
-            # Don't automatically go to building error instances. Focus
-            # on clearing the repair instance queue out.
-            continue
+        match _mine_repairs(repair_instance_job_queue,
+                            worker_to_parent_queue,
+                            skip_errors):
+            case LoopControl.BREAK:
+                break
+            case LoopControl.CONTINUE:
+                continue
+            case LoopControl.PASS:
+                pass
         # #######################
         # Error instance creation
         # #######################
-        try:
-            error_instance_job = error_instance_job_queue.get_nowait()
-        except Empty:
-            pass
-        else:
-            result = build_error_instances_from_label_pair_star(
-                error_instance_job)
-            if not skip_errors and isinstance(result, Except):
-                worker_to_parent_queue.put(result)
+        match _mine_errors(error_instance_job_queue,
+                           repair_instance_job_queue,
+                           worker_to_parent_queue,
+                           repair_instance_db_directory,
+                           repair_miner,
+                           skip_errors):
+            case LoopControl.BREAK:
                 break
-            # If skip_errors is true and result is an Except, the
-            # following will immediately return an empty list.
-            repair_instance_jobs = build_repair_instance_mining_inputs(
-                result,
-                repair_instance_db_directory,
-                repair_miner,
-                error_instance_job.repair_mining_logger,
-                fast)
-            for repair_instance_job in repair_instance_jobs:
-                repair_instance_job_queue.put(repair_instance_job)
-            repair_instance_job_queue.put(ErrorInstanceEndSentinel())
+            case LoopControl.CONTINUE:
+                continue
+            case LoopControl.PASS:
+                pass
+        # #######################
+        # Changeset mining
+        # #######################
+        match _mine_changesets(changeset_mining_job_queue,
+                               error_instance_job_queue,
+                               worker_to_parent_queue,
+                               skip_errors):
+            case LoopControl.BREAK:
+                break
+            case _:
+                pass
 
 
 def mining_loop_worker_star(args: tuple):
@@ -1587,18 +1949,30 @@ def _serial_work(
         skip_errors: bool,
         fast: bool):
     for label_a, label_b in tqdm(cache_label_pairs, desc="Mining commit pair"):
-        new_error_instances = build_error_instances_from_label_pair(
+        changesets = mine_changesets_from_label_pair(
             label_a,
             label_b,
             *cache_args,
             changeset_miner,
             repair_mining_logger,
             fast)
-        if isinstance(new_error_instances, Except):
+        if isinstance(changesets, Except):
             raise RuntimeError(
-                f"Exception: {new_error_instances.exception}. "
-                f"{new_error_instances.trace}")
-        for result in tqdm(new_error_instances, desc="Repair instance mining"):
+                f"Exception: {changesets.exception}. "
+                f"{changesets.trace}")
+        (initial_state, repaired_state, commit_diff, changesets) = changesets
+        for changeset in tqdm(changesets, desc="Repair instance mining"):
+            result = build_error_instance(
+                initial_state,
+                repaired_state,
+                commit_diff,
+                changeset,
+                repair_mining_logger)
+            if isinstance(result, Except):
+                if not skip_errors:
+                    raise RuntimeError(
+                        f"Exception: {result.exception}. {result.trace}")
+                continue
             (error_instance, repaired_state, change_selection) = result
             result = build_repair_instance(
                 error_instance,
@@ -1606,11 +1980,60 @@ def _serial_work(
                 change_selection,
                 db_directory,
                 repair_miner,
-                repair_mining_logger,
-                fast)
+                repair_mining_logger)
             if isinstance(result, Except) and not skip_errors:
                 raise RuntimeError(
                     f"Exception: {result.exception}. {result.trace}")
+
+
+def _process_parallel_worker_message(
+    progress_bars: Dict[JobID,
+                        tqdm],
+    worker_msg: Union[JobStatusMessage,
+                      Except[None]]) -> Union[bool,
+                                              Except[None]]:
+    """
+    Process messages received from workers.
+
+    Parameters
+    ----------
+    progress_bars : Dict[JobID, tqdm]
+        A map from job IDs to progress bars.
+    worker_msg : Union[JobStatusMessage, Except[None]]
+        A message from a worker or a captured exception.
+
+    Returns
+    -------
+    bool | Except[None]
+        If a status message is received, then return True if the status
+        indicates completion and False otherwise.
+        If a captured exception is received, then return it.
+        If an exception occurs during handling of the worker's message,
+        then it is also captured and returned.
+    """
+    try:
+        if isinstance(worker_msg, Except):
+            return worker_msg
+        elif worker_msg.status == JobStatus.COMPLETED:
+            # a completion may arrive before each subtask
+            return True
+        elif worker_msg.status == JobStatus.QUEUED:
+            assert worker_msg.job_id not in progress_bars, \
+                f"This job has already been queued: {worker_msg.job_id}"
+            progress_bars[worker_msg.job_id] = tqdm(
+                total=worker_msg.job_size,
+                desc=str(worker_msg.job_id),
+                position=len(progress_bars))
+        elif worker_msg.status == JobStatus.PROGRESSED:
+            assert worker_msg.job_id in progress_bars, \
+                f"This job has not been queued: {worker_msg.job_id}"
+            pbar = progress_bars[worker_msg.job_id]
+            pbar.update(worker_msg.job_size)
+            if pbar.n == pbar.total:
+                pbar.close()
+    except Exception as e:
+        return Except(None, e, format_exc(e))
+    return False
 
 
 def _parallel_work(
@@ -1625,8 +2048,8 @@ def _parallel_work(
         max_workers: int,
         skip_errors: bool,
         fast: bool):
-    error_instance_jobs = [
-        ErrorInstanceJob(
+    changeset_mining_jobs = [
+        ChangeSetMiningJob(
             label_a,
             label_b,
             *cache_args,
@@ -1636,20 +2059,20 @@ def _parallel_work(
         label_b in cache_label_pairs
     ]
     control_queue: Queue[StopWorkSentinel] = Queue()
-    error_instance_job_queue: Queue[ErrorInstanceJob] = Queue()
-    repair_instance_job_queue: Queue[Union[RepairInstanceJob,
-                                           ErrorInstanceEndSentinel]] = Queue()
-    worker_to_parent_queue: Queue[Union[Except,
-                                        ErrorInstanceEndSentinel]] = Queue()
+    changeset_mining_job_queue: Queue[ChangeSetMiningJob] = Queue()
+    error_instance_job_queue: Queue[Union[ErrorInstanceJob,
+                                          JobStatusMessage]] = Queue()
+    repair_instance_job_queue: Queue[RepairInstanceJob] = Queue()
+    worker_to_parent_queue: Queue[Union[Except, JobStatusMessage]] = Queue()
     proc_args = [
         control_queue,
+        changeset_mining_job_queue,
         error_instance_job_queue,
         repair_instance_job_queue,
         worker_to_parent_queue,
         repair_instance_db_directory,
         repair_miner,
-        skip_errors,
-        fast
+        skip_errors
     ]
     worker_processes: List[Process] = []
     # Start processes
@@ -1658,14 +2081,17 @@ def _parallel_work(
         worker_process.start()
         worker_processes.append(worker_process)
     # Load initial job queue
-    for error_instance_job in error_instance_jobs:
-        error_instance_job_queue.put(error_instance_job)
-    expected_sentinels = len(error_instance_jobs)
+    for changeset_mining_job in changeset_mining_jobs:
+        changeset_mining_job_queue.put(changeset_mining_job)
+    expected_sentinels = len(changeset_mining_jobs)
     observed_sentinels = 0
     # Wait until work is finished or until we get a ctrl+c
     delayed_exception = None
+    progress_bars: Dict[JobID,
+                        tqdm] = {}
     try:
-        while observed_sentinels < expected_sentinels:
+        while (observed_sentinels < expected_sentinels
+               or any(pbar.n < pbar.total for pbar in progress_bars.values())):
             # Don't do anything until there's something to read.
             select.select(
                 [worker_to_parent_queue._reader],  # type: ignore
@@ -1676,11 +2102,14 @@ def _parallel_work(
             except Empty:
                 pass
             else:
-                if isinstance(worker_msg, Except):
-                    delayed_exception = worker_msg
-                    break
-                else:
+                job_completed = _process_parallel_worker_message(
+                    progress_bars,
+                    worker_msg)
+                if isinstance(job_completed, bool) and job_completed:
                     observed_sentinels += 1
+                elif not isinstance(job_completed, bool):
+                    assert isinstance(job_completed, Except)
+                    delayed_exception = job_completed
     except KeyboardInterrupt:
         pass
     # ...then stop the workers and their processes
