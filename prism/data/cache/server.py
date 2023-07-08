@@ -55,7 +55,7 @@ class CacheStatus(IntEnum):
     """
 
 
-@dataclass
+@dataclass(frozen=True)
 class CacheObjectStatus:
     """
     Dataclass storing status information for (project, commit, version).
@@ -82,6 +82,23 @@ class CacheObjectStatus:
         * cache error
         * other error
     """
+
+    @classmethod
+    def from_metadata(
+            cls,
+            metadata: ProjectMetadata,
+            status: CacheStatus = CacheStatus.SUCCESS) -> 'CacheObjectStatus':
+        """
+        Create an object of this type from `ProjectMetadata`.
+        """
+        if metadata.commit_sha is None or metadata.coq_version is None:
+            raise ValueError(
+                "The metadata's Coq version and commit SHA must be defined")
+        return cls(
+            metadata.project_name,
+            metadata.commit_sha,
+            metadata.coq_version,
+            status)
 
 
 @runtime_checkable
@@ -455,7 +472,9 @@ class CoqProjectBuildCacheProtocol(Protocol):
             occurances of that status in the cache.
         """
         statuses = self.list_status()
-        counts = {status: 0 for status in CacheStatus}
+        counts = {
+            status: 0 for status in CacheStatus
+        }
         for status_obj in statuses:
             counts[status_obj.status] += 1
         return counts
