@@ -437,6 +437,14 @@ class VernacCommandData:
     with a separate obligation of the conjecture stated in `command`.
     Tactics and goals are captured here.
     """
+    proxy_location: Optional[SexpInfo.Loc] = None
+    """
+    A spanning location for use in comparisons.
+
+    If set, then the proxy location is used in place of the location
+    derived from the command's sentences when calling
+    `spanning_location`.
+    """
 
     def __hash__(self) -> int:  # noqa: D105
         # do not include the error
@@ -631,7 +639,11 @@ class VernacCommandData:
         """
         Get a location spanning the command and any associated proofs.
         """
-        return self.location.union(*[p.location for p in chain(*self.proofs)])
+        if self.proxy_location is None:
+            return self.location.union(
+                *[p.location for p in chain(*self.proofs)])
+        else:
+            return self.proxy_location
 
     def to_CoqSentences(self) -> List[CoqSentence]:
         """
