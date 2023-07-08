@@ -7,4 +7,4 @@ mypy
 pre-commit
 types-PyYAML
 types-ujson
-yapf
+yapf >= 0.40.1

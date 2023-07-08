@@ -4,7 +4,7 @@ repos:
     hooks:
       - id: isort
   - repo: https://github.com/google/yapf
-    rev: d3873c0693fe08e6233177c2f342af62547dcaa6
+    rev: v0.40.1
     hooks:
       - id: yapf
         additional_dependencies: [toml, tomli]
