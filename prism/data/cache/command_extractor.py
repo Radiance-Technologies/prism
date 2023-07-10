@@ -381,7 +381,6 @@ class CommandExtractor:
             self(sentences)
 
         # make a checkpoint to allow rolling back of first command
-        assert self.serapi is not None
         self.serapi.push()
 
     def __call__(
@@ -396,6 +395,9 @@ class CommandExtractor:
         """
         Initialize a context for an extraction session.
         """
+        if self.serapi is None:
+            raise RuntimeError(
+                "Cannot perform extraction. The SerAPI session has ended.")
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
