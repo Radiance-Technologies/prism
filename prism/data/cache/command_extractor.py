@@ -358,6 +358,8 @@ class CommandExtractor:
             self.serapi_options,
             opam_switch=self.opam_switch,
             cwd=(None if self.cwd is None else str(self.cwd)))
+        # make a checkpoint to allow rolling back of first command
+        self.serapi.push()
 
         if self.extract_qualified_idents:
             self.get_identifiers = typing.cast(
@@ -379,9 +381,6 @@ class CommandExtractor:
 
         if sentences is not None:
             self(sentences)
-
-        # make a checkpoint to allow rolling back of first command
-        self.serapi.push()
 
     def __call__(
             self,
