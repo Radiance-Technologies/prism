@@ -303,7 +303,9 @@ class CommandExtractor:
     """
     cwd: Optional[PathLike] = None
     """
-    An absolute path to the directory containing the code.
+    A path to the directory containing the code.
+
+    If not absolute, then relative to the current working directory.
     """
     local_ids: List[str] = default_field(['SerTop'], init=False)
     """
@@ -378,6 +380,10 @@ class CommandExtractor:
         if sentences is not None:
             self(sentences)
 
+        # make a checkpoint to allow rolling back of first command
+        assert self.serapi is not None
+        self.serapi.push()
+
     def __call__(
             self,
             sentences: Iterable[CoqSentence]) -> VernacCommandDataList:
@@ -390,9 +396,6 @@ class CommandExtractor:
         """
         Initialize a context for an extraction session.
         """
-        # make a checkpoint to allow rolling back of first command
-        assert self.serapi is not None
-        self.serapi.push()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
