@@ -309,7 +309,8 @@ class SexpInfo:
             """
             if isinstance(other, type(self)):
                 return self.end_charno <= other.beg_charno or (
-                    self in other and self != other)
+                    self in other and self.beg_charno != other.beg_charno
+                    and self.end_charno != other.end_charno)
             elif isinstance(other, (int, float)):
                 return self.end_charno <= other
             else:
@@ -324,7 +325,9 @@ class SexpInfo:
             subinterval, then it is considered greater than the other.
             """
             if isinstance(other, type(self)):
-                return self.beg_charno >= other.end_charno or other in self
+                return self.beg_charno >= other.end_charno or (
+                    other in self and self.beg_charno != other.beg_charno
+                    and self.end_charno != other.end_charno)
             elif isinstance(other, (int, float)):
                 return self.beg_charno >= other
             else:

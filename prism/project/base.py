@@ -903,9 +903,11 @@ class Project(ABC):
                 # stop at first error
                 (command_extractor,
                  fail_loc,
-                 error_msg) = self.debug_file(file,
-                                              serapi_options,
-                                              breakpoint)
+                 error_msg) = self.debug_file(
+                     file,
+                     serapi_options,
+                     breakpoint,
+                     use_simple_serapi=use_serapi)
                 break
             else:
                 shutil.copy(

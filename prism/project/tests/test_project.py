@@ -140,20 +140,6 @@ class TestProject(TestProjectSetup):
     test_iqr_project: Project
     test_infer_opam_deps_project: Project
 
-    @classmethod
-    def setUpClass(cls) -> None:
-        """
-        Set up the class.
-        """
-        super().setUpClass()
-
-    @classmethod
-    def tearDownClass(cls) -> None:
-        """
-        Tear down the class.
-        """
-        return super().tearDownClass()
-
     def test_extract_sentences_heuristic(self):
         """
         Test method for splitting Coq code by sentence.
@@ -484,13 +470,6 @@ class TestProjectBuildErrorHandling(TestProjectSetup):
     Test suite for command line interface.
     """
 
-    @classmethod
-    def setUpClass(cls) -> None:
-        """
-        Set up the class.
-        """
-        super().setUpClass()
-
     def setUp(self) -> None:
         """
         Set up file with a failure for tests.
@@ -526,6 +505,18 @@ class TestProjectBuildErrorHandling(TestProjectSetup):
             beg_charno,
             end_charno)
 
+        lineno, bol_pos = 10, 274
+        lineno_last, bol_pos_last = 10, 274
+        beg_charno, end_charno = 274, 288
+        self.last_good_cmd_loc = SexpInfo.Loc(
+            "src/Array.v",
+            lineno,
+            bol_pos,
+            lineno_last,
+            bol_pos_last,
+            beg_charno,
+            end_charno)
+
         return
 
     def tearDown(self) -> None:
@@ -534,13 +525,6 @@ class TestProjectBuildErrorHandling(TestProjectSetup):
         """
         shutil.copy(self.backup_array_path, self.array_path)
         return super().tearDown()
-
-    @classmethod
-    def tearDownClass(cls) -> None:
-        """
-        Tear down the class.
-        """
-        return super().tearDownClass()
 
     def test_instantiation_project_up_to_line(self):
         """
@@ -561,7 +545,6 @@ class TestProjectBuildErrorHandling(TestProjectSetup):
 
         command_extractor, _, _ = project.build_debug(self.up_to)
         files = os.listdir(os.path.join(self.repo_path, "src"))
-        print(files)
         self.assertTrue('Mem.vo' in files)
         self.assertTrue('Pred.vo' in files)
         self.assertTrue('Cancel.vo' in files)
@@ -569,6 +552,9 @@ class TestProjectBuildErrorHandling(TestProjectSetup):
         assert command_extractor is not None
         assert command_extractor.serapi is not None
         self.assertTrue(command_extractor.serapi.is_alive)
+        self.assertEqual(
+            self.last_good_cmd_loc,
+            command_extractor.extracted_commands[-1].command.location)
 
 
 if __name__ == "__main__":
