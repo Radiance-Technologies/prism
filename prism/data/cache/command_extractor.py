@@ -467,9 +467,11 @@ class CommandExtractor:
             _,
             _ in pb)
         sentences.extend(
-            s.to_CoqSentence() for c in self.finished_proof_stacks.values()
+            s.to_CoqSentence()
+            for c in self.finished_proof_stacks.values()
             for _,
-            pb in c for s in pb)
+            pb in c
+            for s in pb)
         sentences.extend(s for s, _, _, _ in self.programs)
         sentences.sort()
         return sentences

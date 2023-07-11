@@ -1441,8 +1441,10 @@ class Project(ABC):
             self.coq_options,
             self.opam_switch,
             str(self.path))
-        return {u: sorted(N.keys()) for u,
-                N in G.adjacency()}
+        return {
+            u: sorted(N.keys()) for u,
+            N in G.adjacency()
+        }
 
     def get_file_list(
             self,

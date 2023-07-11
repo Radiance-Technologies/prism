@@ -218,8 +218,10 @@ class ProjectCommitData(Serializable):
         """
         Get the number of commands in each file in this commit.
         """
-        return {k: len(v) for k,
-                v in self.command_data.items()}
+        return {
+            k: len(v) for k,
+            v in self.command_data.items()
+        }
 
     def shallow_copy(self) -> 'ProjectCommitData':
         """
@@ -227,8 +229,10 @@ class ProjectCommitData(Serializable):
         """
         return ProjectCommitData(
             copy.copy(self.project_metadata),
-            {k: v.shallow_copy() for k,
-             v in self.command_data.items()},
+            {
+                k: v.shallow_copy() for k,
+                v in self.command_data.items()
+            },
             self.commit_message,
             dict(self.comment_data) if self.comment_data is not None else None,
             dict(self.file_dependencies)
