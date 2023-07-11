@@ -198,7 +198,9 @@ def thresholded_edit_distance(
     worst possible alignment.
     """
     if threshold >= 1:
-        warnings.warn("A threshold greater than 1 will not have any effect")
+        warnings.warn(
+            "A threshold greater than 1 will not have any effect",
+            stacklevel=2)
     normed_distance = partial(normalized_edit_distance, norm=norm)
     return thresholded_distance(normed_distance, a, b, threshold)
 
@@ -318,8 +320,10 @@ def order_preserving_masked_alignment(
             list(enumerate(range(len(b)))),
             lambda x,
             y: normalized_edit_distance(a[x[1]].text,
-                                        b[y[1]].text) if mask[x[0],
-                                                              y[0]] else 1.0,
+                                        b[y[1]].text)
+            if mask[x[0],
+                    y[0]] else max(4 * alpha,
+                                   1.0),
             lambda _: alpha))
     return typing.cast(
         Alignment[int],
@@ -515,8 +519,7 @@ def _compute_diff_alignment(
     a_in_diff = ProjectCommitData(
         a.project_metadata,
         {
-            k: VernacCommandDataList([v[i] for i in a_indices_in_diff[k]])
-            for k,
+            k: VernacCommandDataList([v[i] for i in a_indices_in_diff[k]]) for k,
             v in a.command_data.items()
         },
         a.commit_message,
@@ -527,8 +530,7 @@ def _compute_diff_alignment(
     b_in_diff = ProjectCommitData(
         b.project_metadata,
         {
-            k: VernacCommandDataList([v[i] for i in b_indices_in_diff[k]])
-            for k,
+            k: VernacCommandDataList([v[i] for i in b_indices_in_diff[k]]) for k,
             v in b.command_data.items()
         },
         b.commit_message,
@@ -537,8 +539,10 @@ def _compute_diff_alignment(
         b.environment,
         b.build_result)
     # rename files in b to match those renamed in a
-    rename_map: Dict[str,
-                     str] = {k: k for k in b.command_data.keys()}
+    rename_map: Dict[str, str]
+    rename_map = {
+        k: k for k in b.command_data.keys()
+    }
     for change in diff.changes:
         if change.is_rename:
             assert change.after_filename is not None
@@ -552,8 +556,11 @@ def _compute_diff_alignment(
         b_in_diff.file_dependencies = {
             # file dependencies may catch files that were not built
             (rename_map[k] if k in b.command_data.keys() else k):
-            ([rename_map[f] if f in b.command_data.keys() else f for f in v])
-            for k,
+                (
+                    [
+                        rename_map[f] if f in b.command_data.keys() else f
+                        for f in v
+                    ]) for k,
             v in b_in_diff.file_dependencies.items()
         }
     # calculate alignment only for those items that are known to have
@@ -603,10 +610,14 @@ def align_commits(
     b_indices_in_diff = commands_in_diff(b, diff, False)
     a_files = a.files
     b_files = b.files
-    a_file_sizes = {k: len(v) for k,
-                    v in a.command_data.items()}
-    b_file_sizes = {k: len(v) for k,
-                    v in b.command_data.items()}
+    a_file_sizes = {
+        k: len(v) for k,
+        v in a.command_data.items()
+    }
+    b_file_sizes = {
+        k: len(v) for k,
+        v in b.command_data.items()
+    }
     a_indices_not_in_diff = {
         k: [i for i in range(a_file_sizes[k]) if not fast_contains(v,
                                                                    i)] for k,
@@ -619,23 +630,25 @@ def align_commits(
     }
     # sort unchanged indices by command location
     a_indices_not_in_diff = {
-        k: [
-            i for _,
-            i in sorted(
-                zip([a.command_data[k][i] for i in v],
-                    v),
-                key=lambda p: p[0])
-        ] for k,
+        k:
+            [
+                i for _,
+                i in sorted(
+                    zip([a.command_data[k][i] for i in v],
+                        v),
+                    key=lambda p: p[0])
+            ] for k,
         v in a_indices_not_in_diff.items()
     }
     b_indices_not_in_diff = {
-        k: [
-            i for _,
-            i in sorted(
-                zip([b.command_data[k][i] for i in v],
-                    v),
-                key=lambda p: p[0])
-        ] for k,
+        k:
+            [
+                i for _,
+                i in sorted(
+                    zip([b.command_data[k][i] for i in v],
+                        v),
+                    key=lambda p: p[0])
+            ] for k,
         v in b_indices_not_in_diff.items()
     }
     # calculate alignment only for those items that are known to have
@@ -686,7 +699,9 @@ def align_commits(
     # since indices within added or dropped files will be considered
     # "changed"
     rename_map: Dict[str, str]
-    rename_map = {k: k for k in a.command_data.keys() if k in b.command_data}
+    rename_map = {
+        k: k for k in a.command_data.keys() if k in b.command_data
+    }
     for change in diff.changes:
         if change.is_rename:
             assert change.after_filename is not None
