@@ -303,7 +303,7 @@ class VernacCommandDataListDiff:
             ])
         all_repaired_commands = VernacCommandDataList(
             [final_file[idx] for idx in all_repaired_indices.values()])
-        repaired_command_index = None
+        repaired_command_index: Optional[int] = None
         for idx in all_repaired_indices.values():
             if repaired_command.spanning_location(
             ) == final_file[idx].spanning_location():
@@ -364,116 +364,175 @@ class VernacCommandDataListDiff:
         # relocate each sentence, recreate diff, and record
         # offsets
         assert all_repaired_sentences
-        target_location = None
-        broken_sentence_idx = -1
-        repaired_sentence_idx = -1
         offsets: List[FileOffset] = []
-        # the offset for the current contiguous region
-        current_offset: Optional[FileOffset] = None
-        # track the cumulative offset for subsequent sentences
+        # align contiguous regions and shift locations collectively
+        current_broken_region: Optional[SexpInfo.Loc] = None
+        current_repaired_region: Optional[SexpInfo.Loc] = None
+        # track the cumulative offset for subsequent offset regions
         num_excess_chars = 0
         num_excess_lines = 0
-        for indexed_broken_sentence, indexed_repaired_sentence in aligned_sentences:
-            # update location but not text
-            if indexed_repaired_sentence is not None:
-                repaired_command_idx, repaired_sentence = indexed_repaired_sentence
-                target_location = repaired_sentence.location
-                repaired_sentence_idx += 1
-            if indexed_broken_sentence is None:
-                # nothing to do
-                continue
-            broken_sentence_idx += 1
-            broken_command_idx, broken_sentence = indexed_broken_sentence
-            broken_location = broken_sentence.location
-            if broken_command_idx != changed_command_idx:
-                # we do not relocate other commands here
-                target_location = None
-                if current_offset is not None:
-                    # end offset for contiguous region
-                    offsets.append(current_offset)
-                    num_excess_chars = current_offset.excess_charno
-                    num_excess_lines = current_offset.excess_lineno
-                    current_offset = None
-                continue
-            elif target_location is None:
-                # start of new contiguous region
-                # find next valid repaired sentence
-                is_valid_alignment = False
-                next_valid_repaired_sentence_index = None
-                for (next_valid_repaired_sentence_index,  # noqa: B007
-                     is_valid_alignment) in enumerate(
-                         alignment_mask[broken_sentence_idx,
-                                        repaired_sentence_idx + 1 :]):
-                    if is_valid_alignment:
-                        break
-                if is_valid_alignment:
-                    assert next_valid_repaired_sentence_index is not None
-                    target_location = all_repaired_sentences[
-                        next_valid_repaired_sentence_index].location
-                else:
-                    # no further sentences to align with
-                    # use previous location as reference
-                    target_location = all_repaired_sentences[
-                        repaired_sentence_idx].location
-                    # insert immediately after
-                    target_location = SexpInfo.Loc(
-                        target_location.filename,
-                        target_location.lineno_last,
-                        target_location.bol_pos_last,
-                        target_location.lineno_last,
-                        target_location.bol_pos_last,
-                        target_location.end_charno,
-                        target_location.end_charno)
-                # add newline
-                num_excess_chars += 1
-                num_excess_lines += 1
-            elif indexed_repaired_sentence is None:
-                # continuing contiguous region
-                # insert immediately after
-                target_location = SexpInfo.Loc(
-                    target_location.filename,
-                    target_location.lineno_last,
-                    target_location.bol_pos_last,
-                    target_location.lineno_last,
-                    target_location.bol_pos_last,
-                    target_location.end_charno,
-                    target_location.end_charno)
-                # add newline
-                num_excess_chars += 1
-                num_excess_lines += 1
-            char_offset = target_location.beg_charno - broken_location.beg_charno
-            line_offset = target_location.lineno - broken_location.lineno
-            new_broken_location = broken_location.shift(
-                char_offset + num_excess_chars,
-                line_offset + num_excess_lines)
-            broken_sentence.location = new_broken_location.rename(
-                repair_filename)
-            num_excess_chars = max(
-                0,
-                new_broken_location.end_charno - target_location.end_charno)
-            num_excess_lines = max(
-                0,
-                new_broken_location.lineno_last - target_location.lineno_last)
-            if current_offset is None:
-                if num_excess_chars > 0 or num_excess_lines > 0:
-                    current_offset = FileOffset(
-                        repaired_command_index,
-                        target_location.beg_charno,
-                        target_location.end_charno,
-                        num_excess_chars,
-                        target_location.lineno,
-                        target_location.lineno_last,
-                        num_excess_lines)
+
+        def _start_region(
+                broken_sentence: Optional[VernacSentence],
+                repaired_sentence: Optional[VernacSentence]) -> None:
+            """
+            Start a new pair of aligned contiguous regions.
+            """
+            nonlocal current_broken_region
+            nonlocal current_repaired_region
+            if broken_sentence is None:
+                assert current_broken_region is not None
+                current_broken_region = current_broken_region.next
             else:
-                # expand existing offset
-                current_offset.end_charno = target_location.end_charno
-                current_offset.lineno_last = target_location.lineno_last
-                current_offset.excess_charno = num_excess_chars
-                current_offset.excess_lineno = num_excess_lines
-        if current_offset is not None:
-            # end offset for last contiguous region
-            offsets.append(current_offset)
-            current_offset = None
+                current_broken_region = broken_sentence.location
+            if repaired_sentence is None:
+                assert current_repaired_region is not None
+                current_repaired_region = current_repaired_region.next
+            else:
+                current_repaired_region = repaired_sentence.location
+
+        def _apply_region_offset(broken_sentence: VernacSentence) -> None:
+            """
+            Apply the offset for the current region to a given sentence.
+            """
+            nonlocal current_broken_region
+            nonlocal current_repaired_region
+            assert current_broken_region is not None
+            assert current_repaired_region is not None
+            broken_location = broken_sentence.location.shift(
+                current_repaired_region.beg_charno
+                - current_broken_region.beg_charno + num_excess_chars,
+                current_repaired_region.lineno - current_broken_region.lineno
+                + num_excess_lines)
+            broken_sentence.location = broken_location.rename(
+                current_repaired_region.filename)
+
+        def _expand_region(
+                broken_sentence: Optional[VernacSentence],
+                repaired_sentence: Optional[VernacSentence]) -> None:
+            """
+            Expand the current pairs of contiguous regions.
+            """
+            nonlocal current_broken_region
+            nonlocal current_repaired_region
+            assert current_broken_region is not None
+            assert current_repaired_region is not None
+            if broken_sentence is not None:
+                current_broken_region = current_broken_region.union(
+                    broken_sentence.location)
+            if repaired_sentence is not None:
+                current_repaired_region = current_repaired_region.union(
+                    repaired_sentence.location)
+
+        def _end_region() -> None:
+            """
+            End this region and record its final offset.
+            """
+            nonlocal current_broken_region
+            nonlocal current_repaired_region
+            nonlocal num_excess_chars
+            nonlocal num_excess_lines
+            assert current_broken_region is not None
+            assert current_repaired_region is not None
+            new_offset = FileOffset(
+                typing.cast(int,
+                            repaired_command_index),
+                current_repaired_region.beg_charno,
+                current_repaired_region.end_charno,
+                current_broken_region.num_chars
+                - current_repaired_region.num_chars,
+                current_repaired_region.lineno,
+                current_repaired_region.lineno_last,
+                current_broken_region.num_lines
+                - current_repaired_region.num_lines)
+            offsets.append(new_offset)
+            num_excess_chars += new_offset.excess_charno
+            num_excess_lines += new_offset.excess_lineno
+
+        skipped_last_broken_sentence = False
+        skipped_last_repaired_sentence = False
+        for indexed_broken_sentence, indexed_repaired_sentence in aligned_sentences:
+            skipped_broken = (
+                indexed_broken_sentence is None
+                or indexed_broken_sentence[0] != changed_command_idx)
+            skipped_repaired = (
+                indexed_repaired_sentence is None
+                or indexed_repaired_sentence[0] != repaired_command_index)
+            is_unbroken = (
+                (skipped_broken and indexed_broken_sentence is not None)
+                or (skipped_repaired and indexed_repaired_sentence is not None))
+            if is_unbroken:
+                skipped_broken = True
+                skipped_repaired = True
+                if current_broken_region is not None:
+                    _end_region()
+            elif skipped_broken and not skipped_repaired:
+                assert indexed_repaired_sentence is not None
+                (
+                    repaired_command_idx,
+                    repaired_sentence) = indexed_repaired_sentence
+                if skipped_last_repaired_sentence:
+                    _end_region()
+                    _start_region(None, repaired_sentence)
+                else:
+                    _expand_region(None, repaired_sentence)
+            elif not skipped_broken and skipped_repaired:
+                assert indexed_broken_sentence is not None
+                (broken_command_idx, broken_sentence) = indexed_broken_sentence
+                if skipped_last_broken_sentence:
+                    assert current_repaired_region is not None
+                    _end_region()
+                    _start_region(broken_sentence, None)
+                else:
+                    _expand_region(broken_sentence, None)
+                _apply_region_offset(broken_sentence)
+            else:
+                assert indexed_broken_sentence is not None
+                assert indexed_repaired_sentence is not None
+                (broken_command_idx, broken_sentence) = indexed_broken_sentence
+                (
+                    repaired_command_idx,
+                    repaired_sentence) = indexed_repaired_sentence
+                if skipped_last_broken_sentence or skipped_last_repaired_sentence:
+                    _end_region()
+                    _start_region(broken_sentence, repaired_sentence)
+                elif current_broken_region is not None:
+                    _expand_region(broken_sentence, repaired_sentence)
+                else:
+                    _start_region(broken_sentence, repaired_sentence)
+                _apply_region_offset(broken_sentence)
+            skipped_last_broken_sentence = skipped_broken
+            skipped_last_repaired_sentence = skipped_repaired
+
+        if current_broken_region or current_repaired_region:
+            # accumulate final offset if current region is non-empty
+            _end_region()
+
+        def _order_invariant() -> bool:
+            """
+            Return True if the order of broken commands has not changed.
+
+            Defined as a function so that it can be optimized out (sans
+            the cost of function definition) along with the following
+            assertion.
+            """
+            relocated_ordering = sorted(
+                (
+                    (i,
+                     s)
+                    for i,
+                    s in all_indexed_broken_sentences
+                    if i == changed_command_idx),
+                key=lambda p: p[1])
+            original_ordering = [
+                (i,
+                 s) for i,
+                s in all_indexed_broken_sentences if i == changed_command_idx
+            ]
+            return relocated_ordering != original_ordering
+
+        assert _order_invariant(), \
+            "The order of broken commands should not be changed after relocation"
         # recreate diff
         broken_command.proxy_location = repaired_command.spanning_location()
         repair = SerializableDataDiff[VernacCommandData].compute_diff(
@@ -652,9 +711,9 @@ class ProjectCommitDataDiff:
                         and sentence_loc.end_charno <= offset.end_charno)
                     if overlaps_right or overlaps_left or is_subinterval:
                         raise RuntimeError(
-                            "Sentences cannot overlap with offset region. "
-                            f"Offset: {offset}."
-                            f"Sentence: {sentence}")
+                            "Sentences cannot overlap with offset region."
+                            f" Offset: {offset}."
+                            f" Sentence: {sentence}")
             # drop proxy locations
             for offset in offsets:
                 commands[offset.command_index].proxy_location = None
