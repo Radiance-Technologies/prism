@@ -281,6 +281,14 @@ class SexpInfo:
         The ending character offset from the start of the file.
         """
 
+        def __bool__(self) -> bool:
+            """
+            Return True if the location is non-empty, False otherwise.
+
+            A location is non-empty if it spans at least one character.
+            """
+            return self.end_charno > self.beg_charno
+
         def __contains__(self, other: object) -> bool:
             """
             Return whether this location contains another.
@@ -383,6 +391,34 @@ class SexpInfo:
             Get the column of the first character of this location.
             """
             return self.beg_charno - self.bol_pos
+
+        @property
+        def next(self) -> 'SexpInfo.Loc':
+            """
+            Get the location immediately after this one.
+            """
+            return SexpInfo.Loc(
+                self.filename,
+                self.lineno_last,
+                self.bol_pos_last,
+                self.lineno_last,
+                self.bol_pos_last,
+                self.end_charno,
+                self.end_charno)
+
+        @property
+        def num_chars(self) -> int:
+            """
+            The number of characters spanned by this location.
+            """
+            return self.end_charno - self.beg_charno
+
+        @property
+        def num_lines(self) -> int:
+            """
+            The number of lines spanned by this location.
+            """
+            return self.lineno_last + 1 - self.lineno
 
         def contains_charno_range(
                 self,
