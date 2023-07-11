@@ -620,8 +620,8 @@ class TestCommandExtractor(unittest.TestCase):
         """
         Verify that certain character-escaped goals can be extracted.
 
-        Otherwise, one obtained a lexer error because a value was
-        escaped twice.
+        Otherwise, one obtains a lexer error because a value was escaped
+        twice.
         """
         with pushd(_COQ_EXAMPLES_PATH):
             extracted_commands = CommandExtractor(
@@ -639,6 +639,32 @@ class TestCommandExtractor(unittest.TestCase):
                 serapi_options=SerAPIOptions.empty(),
                 opam_switch=self.test_switch).extracted_commands
             self.assertEqual(len(extracted_commands), 2)
+
+    @pytest.mark.coq_all
+    def test_bug_7900(self):
+        """
+        Verify that certain tactics are not inferred as commands.
+
+        Otherwise, an extra command is extracted that actually
+        corresponds to a rewrite tactic.
+        """
+        filename = "bug_7900.v"
+        with pushd(_COQ_EXAMPLES_PATH):
+            extracted_commands = CommandExtractor(
+                filename,
+                typing.cast(
+                    List[CoqSentence],
+                    Project.extract_sentences(
+                        CoqDocument(
+                            filename,
+                            CoqParser.parse_source(filename),
+                            _COQ_EXAMPLES_PATH),
+                        sentence_extraction_method=SEM.HEURISTIC,
+                        return_locations=True,
+                        glom_proofs=False)),
+                serapi_options=SerAPIOptions.empty(),
+                opam_switch=self.test_switch).extracted_commands
+            self.assertEqual(len(extracted_commands), 9)
 
     @pytest.mark.coq_all
     def test_extract_subproofs(self):

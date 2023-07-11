@@ -40,6 +40,7 @@ from prism.interface.coq.re_patterns import (
     ABORT_COMMAND_PATTERN,
     IDENT_PATTERN,
     OBLIGATION_ID_PATTERN,
+    REWRITE_SCHEME_ID_PATTERN,
     SUBPROOF_ID_PATTERN,
 )
 from prism.interface.coq.serapi import AbstractSyntaxTree, SerAPI
@@ -1502,7 +1503,10 @@ class CommandExtractor:
             otherwise.
         """
         match = SUBPROOF_ID_PATTERN.match(id_under_test)
-        matched_id = None if match is None else match['proof_id']
-        return (
-            matched_id is not None
-            and (matched_id == proof_id or matched_id == "legacy_pe"))
+        if match is None:
+            is_subproof = REWRITE_SCHEME_ID_PATTERN.match(
+                id_under_test) is not None
+        else:
+            matched_id = match['proof_id']
+            is_subproof = matched_id == proof_id or matched_id == "legacy_pe"
+        return is_subproof

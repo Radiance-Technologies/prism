@@ -149,6 +149,29 @@ OBLIGATION_ID_PATTERN = re.compile(
 SUBPROOF_ID_PATTERN = re.compile(
     rf"(?P<proof_id>{IDENT_PATTERN.pattern})_(?:subproof|subterm)\d*$")
 
+REWRITE_SCHEME_ID_PATTERN = regex_from_options(
+    [
+        "_sym_internal",
+        "_sym_involutive",
+        "_rew_r_dep",
+        "_rew_dep",
+        "_rew_fwd_dep",
+        "_rew_fwd_r_dep",
+        "_rew_r",
+        "_rew",
+        "_congr",
+    ],
+    False,
+    False,
+    False,
+    False)
+
+REWRITE_SCHEME_ID_PATTERN = re.compile(
+    f"internal_{IDENT_PATTERN.pattern}{REWRITE_SCHEME_ID_PATTERN}")
+"""
+Special identifiers emitted as side-effects of certain rewrite tactics.
+"""
+
 ABORT_COMMAND_PATTERN = re.compile("VernacAbort(?:All)?")
 
 LOCATE_QUALID_PATTERN = re.compile(
