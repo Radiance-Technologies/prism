@@ -529,7 +529,7 @@ class VernacCommandDataListDiff:
                  s) for i,
                 s in all_indexed_broken_sentences if i == changed_command_idx
             ]
-            return relocated_ordering != original_ordering
+            return relocated_ordering == original_ordering
 
         assert _order_invariant(), \
             "The order of broken commands should not be changed after relocation"
