@@ -28,9 +28,9 @@ from prism.data.cache.types.command import (
     VernacCommandData,
     VernacCommandDataList,
     VernacDict,
+    VernacSentence,
 )
 from prism.data.cache.types.project import ProjectCommitData
-from prism.data.cache.types.command import VernacSentence
 from prism.data.repair.align import (
     AlignedCommands,
     AlignmentFunction,
