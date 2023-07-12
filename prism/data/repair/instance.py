@@ -464,8 +464,6 @@ class VernacCommandDataListDiff:
             if is_unbroken:
                 skipped_broken = True
                 skipped_repaired = True
-                if current_broken_region is not None:
-                    _end_region()
             elif skipped_broken and not skipped_repaired:
                 assert indexed_repaired_sentence is not None
                 (
