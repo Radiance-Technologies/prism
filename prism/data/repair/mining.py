@@ -1292,14 +1292,14 @@ def mine_changesets_from_label_pair(
             label_a.commit_hash,
             label_a.coq_version)
         repair_mining_logger.write_debug_log(
-            "build_error_instances_from_label_pair: Finished loading cache for"
+            "mine_changesets_from_label_pair: Finished loading cache for"
             f" label a: {label_a}.")
         repaired_state = cache.get(
             label_b.project,
             label_b.commit_hash,
             label_b.coq_version)
         repair_mining_logger.write_debug_log(
-            "build_error_instances_from_label_pair: Finished loading cache for"
+            "mine_changesets_from_label_pair: Finished loading cache for"
             f" label b: {label_b}.")
         if fast:
             # discard ASTs, goals, hypotheses, feedback, and identifiers
@@ -1330,12 +1330,12 @@ def mine_changesets_from_label_pair_star(
     args: ChangeSetMiningJob) -> Union[AugmentedChangeSelectionList,
                                        Except[None]]:
     """
-    Split arguments and call build_error_instances_from_label_pair.
+    Split arguments and call mine_changesets_from_label_pair.
 
     Parameters
     ----------
     args : ErrorInstanceJob
-        Bundled arguments for build_error_instances_from_label_pair.
+        Bundled arguments for mine_changesets_from_label_pair.
 
     Returns
     -------
