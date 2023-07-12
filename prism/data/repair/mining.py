@@ -1535,7 +1535,7 @@ def build_repair_instance_mining_inputs(
 
 def _mine_repairs(
         repair_instance_job_queue: queue.Queue[RepairInstanceJob],
-        worker_to_parent_queue: queue.Queue[Union[Except,
+        worker_to_parent_queue: queue.Queue[Union[Except[None],
                                                   JobStatusMessage]],
         skip_errors: bool) -> LoopControl:
     """
@@ -1567,7 +1567,7 @@ def _mine_errors(
         error_instance_job_queue: queue.Queue[Union[ErrorInstanceJob,
                                                     JobStatusMessage]],
         repair_instance_job_queue: queue.Queue[RepairInstanceJob],
-        worker_to_parent_queue: queue.Queue[Union[Except,
+        worker_to_parent_queue: queue.Queue[Union[Except[None],
                                                   JobStatusMessage]],
         repair_instance_db_directory: Path,
         repair_miner: RepairMiner,
@@ -1614,7 +1614,7 @@ def _mine_changesets(
         changeset_mining_job_queue: queue.Queue[ChangeSetMiningJob],
         error_instance_job_queue: queue.Queue[Union[ErrorInstanceJob,
                                                     JobStatusMessage]],
-        worker_to_parent_queue: queue.Queue[Union[Except,
+        worker_to_parent_queue: queue.Queue[Union[Except[None],
                                                   JobStatusMessage]],
         skip_errors: bool) -> LoopControl:
     """
@@ -1670,7 +1670,7 @@ def mining_loop_worker(
         error_instance_job_queue: queue.Queue[Union[ErrorInstanceJob,
                                                     JobStatusMessage]],
         repair_instance_job_queue: queue.Queue[RepairInstanceJob],
-        worker_to_parent_queue: queue.Queue[Union[Except,
+        worker_to_parent_queue: queue.Queue[Union[Except[None],
                                                   JobStatusMessage]],
         repair_instance_db_directory: Path,
         repair_miner: RepairMiner,
@@ -2073,7 +2073,8 @@ def _parallel_work(
     error_instance_job_queue: Queue[Union[ErrorInstanceJob,
                                           JobStatusMessage]] = Queue()
     repair_instance_job_queue: Queue[RepairInstanceJob] = Queue()
-    worker_to_parent_queue: Queue[Union[Except, JobStatusMessage]] = Queue()
+    worker_to_parent_queue: Queue[Union[Except[None],
+                                        JobStatusMessage]] = Queue()
     proc_args = [
         control_queue,
         changeset_mining_job_queue,
