@@ -262,6 +262,30 @@ class JobID:
             f"@{self.label_a.commit_hash[:8]}({self.label_a.coq_version})"
             f"..{self.label_b.commit_hash[:8]}({self.label_b.coq_version})")
 
+    @classmethod
+    def from_job(
+            cls,
+            job: Union[ErrorInstanceJob,
+                       RepairInstanceJob]) -> 'JobID':
+        """
+        Create a job ID for a given job.
+        """
+        if isinstance(job, ErrorInstanceJob):
+            job_id = JobID(
+                CacheObjectStatus.from_metadata(
+                    job.initial_state.project_metadata),
+                CacheObjectStatus.from_metadata(
+                    job.repaired_state.project_metadata),
+                JobType.ERROR_INSTANCE)
+        else:
+            job_id = JobID(
+                CacheObjectStatus.from_metadata(
+                    job.error_instance.project_metadata),
+                CacheObjectStatus.from_metadata(
+                    job.repaired_state.project_metadata),
+                JobType.REPAIR_INSTANCE)
+        return job_id
+
 
 @dataclass(frozen=True)
 class JobStatusMessage:
@@ -283,21 +307,7 @@ class JobStatusMessage:
         """
         Create a message for a given job.
         """
-        if isinstance(job, ErrorInstanceJob):
-            job_id = JobID(
-                CacheObjectStatus.from_metadata(
-                    job.initial_state.project_metadata),
-                CacheObjectStatus.from_metadata(
-                    job.repaired_state.project_metadata),
-                JobType.ERROR_INSTANCE)
-        else:
-            job_id = JobID(
-                CacheObjectStatus.from_metadata(
-                    job.error_instance.project_metadata),
-                CacheObjectStatus.from_metadata(
-                    job.repaired_state.project_metadata),
-                JobType.REPAIR_INSTANCE)
-        return JobStatusMessage(job_id, size, status)
+        return JobStatusMessage(JobID.from_job(job), size, status)
 
 
 class LoopControl(enum.Enum):
