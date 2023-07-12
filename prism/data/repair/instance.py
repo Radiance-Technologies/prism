@@ -22,7 +22,6 @@ from typing import (
 )
 
 import numpy as np
-from bidict import bidict
 
 from prism.data.cache.types.command import (
     VernacCommandData,
@@ -1911,8 +1910,20 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
         Update tags for an error instance given before/after QR flags.
         """
         tags = set()
-        initial_qr_dict = bidict(initial_qr)
-        broken_qr_dict = bidict(broken_qr)
+        initial_qr_dict: Dict[str,
+                              Set[str]] = {}
+        initial_qr_dict_inv: Dict[str,
+                                  Set[str]] = {}
+        for phys, log in initial_qr:
+            initial_qr_dict.setdefault(phys, set()).add(log)
+            initial_qr_dict_inv.setdefault(log, set()).add(phys)
+        broken_qr_dict: Dict[str,
+                             Set[str]] = {}
+        broken_qr_dict_inv: Dict[str,
+                                 Set[str]] = {}
+        for phys, log in broken_qr:
+            broken_qr_dict.setdefault(phys, set()).add(log)
+            broken_qr_dict_inv.setdefault(log, set()).add(phys)
         for physical, logical in initial_qr:
             if physical in broken_qr_dict:
                 new_logical = broken_qr_dict[physical]
@@ -1920,11 +1931,11 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
                     tags.add(
                         f"changed-logical-{'Q' if is_Q else 'R'}-path:"
                         f"{physical}({logical} -> {new_logical})")
-            elif logical not in broken_qr_dict.inv:
+            elif logical not in broken_qr_dict_inv:
                 tags.add(
                     f"dropped-{'Q' if is_Q else 'R'}-path:{physical},{logical}")
-            if logical in broken_qr_dict.inv:
-                new_physical = broken_qr_dict.inv[logical]
+            if logical in broken_qr_dict_inv:
+                new_physical = broken_qr_dict_inv[logical]
                 if new_physical != physical:
                     tags.add(
                         f"changed-physical-{'Q' if is_Q else 'R'}-path:"
@@ -1935,7 +1946,7 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
                     f"{physical},{logical}")
         for physical, logical in broken_qr.difference(initial_qr):
             if (physical not in initial_qr_dict
-                    and logical not in initial_qr_dict.inv):
+                    and logical not in initial_qr_dict_inv):
                 tags.add(
                     f"added-{'Q' if is_Q else 'R'}-path:{physical},{logical}")
         return tags
