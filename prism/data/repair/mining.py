@@ -12,7 +12,19 @@ from pathlib import Path
 from queue import Empty
 from tempfile import TemporaryDirectory
 from types import TracebackType
-from typing import Callable, Dict, Iterable, List, Optional, Tuple, Type, Union
+from typing import (
+    Callable,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    NamedTuple,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    Union,
+)
 
 import pandas as pd
 from tqdm import tqdm
@@ -169,6 +181,193 @@ class ErrorInstanceEndSentinel:
     pass
 
 
+class CommitPairDBRecord(NamedTuple):
+    """
+    A unique ID for a pair of commits in the repair instance database.
+    """
+
+    project_name: str
+    """
+    The name of the project to which the repair instance belongs.
+    """
+    initial_commit_sha: str
+    """
+    The initial commit from which the repair instance was mined.
+    """
+    repaired_commit_sha: str
+    """
+    The final commit from which the repair instance was mined.
+    """
+    initial_coq_version: str
+    """
+    The Coq version for which data for the initial commit was extracted.
+    """
+    repaired_coq_version: str
+    """
+    The Coq version for which data for the final commit was extracted.
+    """
+
+    def asdict(self) -> Dict[str, str]:
+        """
+        Get the record sans `id`.
+        """
+        return self._asdict()
+
+    @classmethod
+    def from_metadata(
+            cls,
+            initial_metadata: ProjectMetadata,
+            repaired_metadata: ProjectMetadata) -> 'CommitPairDBRecord':
+        """
+        Create a commit pair record from a pair of commits' metadata.
+
+        Raises
+        ------
+        ValueError
+            If the given metadata come from different projects.
+        TypeError
+            If any of the commit SHAs for Coq versions in the given
+            metadata are `None``.
+        """
+        if initial_metadata.project_name != repaired_metadata.project_name:
+            raise ValueError(
+                "Cannot create commit pair from different projects "
+                f"{initial_metadata.project_name} and {repaired_metadata.project_name}"
+            )
+        if initial_metadata.commit_sha is None:
+            raise TypeError("Initial commit SHA must not be None")
+        if repaired_metadata.commit_sha is None:
+            raise TypeError("Repaired commit SHA must not be None")
+        if initial_metadata.coq_version is None:
+            raise TypeError("Initial commit SHA must not be None")
+        if repaired_metadata.coq_version is None:
+            raise TypeError("Repaired commit SHA must not be None")
+        return cls(
+            initial_metadata.project_name,
+            initial_metadata.commit_sha,
+            repaired_metadata.commit_sha,
+            initial_metadata.coq_version,
+            repaired_metadata.coq_version)
+
+    @classmethod
+    def from_repair_instance_record(
+            cls,
+            record: 'RepairInstanceDBRecord') -> 'CommitPairDBRecord':
+        """
+        Create a commit pair record from a repair instance record.
+        """
+        return cls(*record[: 5])
+
+
+class RepairInstanceDBRecord(NamedTuple):
+    """
+    A row in a repair instance database.
+    """
+
+    project_name: str
+    """
+    The name of the project to which the repair instance belongs.
+    """
+    initial_commit_sha: str
+    """
+    The initial commit from which the repair instance was mined.
+    """
+    repaired_commit_sha: str
+    """
+    The final commit from which the repair instance was mined.
+    """
+    initial_coq_version: str
+    """
+    The Coq version for which data for the initial commit was extracted.
+    """
+    repaired_coq_version: str
+    """
+    The Coq version for which data for the final commit was extracted.
+    """
+    added_commands: str
+    """
+    A serialized list of command IDs added between the commits.
+    """
+    affected_commands: str
+    """
+    A serialized list of command IDs affected between the commits.
+
+    A command was affected if its extracted data other than its text was
+    changed.
+    """
+    changed_commands: str
+    """
+    A serialized list of command IDs whose text changed between commits.
+    """
+    dropped_commands: str
+    """
+    A serialized list of command IDs that were dropped between commits.
+    """
+    id: Optional[int] = None
+    """
+    A surrogate primary key.
+    """
+    file_name: Optional[str] = None
+    """
+    The path to the repair instance corresponding to this record.
+
+    The path is relative to the root directory of the repair instance
+    database.
+    """
+
+    def __eq__(self, other: object) -> bool:
+        """
+        Test equality of two records according to natural primary keys.
+        """
+        if not isinstance(other, RepairInstanceDBRecord):
+            return NotImplemented
+        return typing.cast(tuple, self[:-2]) == other[:-2]
+
+    @property
+    def commit_pair(self) -> CommitPairDBRecord:
+        """
+        The pair of commits from which this instance was mined.
+        """
+        return CommitPairDBRecord.from_repair_instance_record(self)
+
+    def asdict(self) -> Dict[str, str]:
+        """
+        Get the record sans `id`.
+        """
+        return self._asdict()
+
+    @classmethod
+    def from_row(
+        cls,
+        row: Tuple[int,
+                   str,
+                   str,
+                   str,
+                   str,
+                   str,
+                   str,
+                   str,
+                   str,
+                   str,
+                   str]
+    ) -> 'RepairInstanceDBRecord':
+        """
+        Create a record from a raw database row.
+        """
+        return cls(
+            id=row[0],
+            project_name=row[1],
+            initial_commit_sha=row[2],
+            repaired_commit_sha=row[3],
+            initial_coq_version=row[4],
+            repaired_coq_version=row[5],
+            added_commands=row[6],
+            affected_commands=row[7],
+            changed_commands=row[8],
+            dropped_commands=row[9],
+            file_name=row[10])
+
+
 class RepairInstanceDB:
     """
     Database for storing information about saved repair instances.
@@ -177,6 +376,9 @@ class RepairInstanceDB:
     identifying details of a repair instance to the filename that stores
     the serialized, saved repair instance.
     """
+
+    # TODO: Normalize database using CommitPairDBRecord and
+    # object-relational DB (sqlalchemy)
 
     _sql_create_records_table = """
         CREATE TABLE IF NOT EXISTS records (
@@ -192,6 +394,20 @@ class RepairInstanceDB:
             dropped_commands text,
             file_name text NOT NULL
         );"""
+    _sql_create_natural_primary_key = """
+        CREATE UNIQUE INDEX natural_primary_key
+        ON records(
+            project_name,
+            initial_commit_sha,
+            repaired_commit_sha,
+            initial_coq_version,
+            repaired_coq_version,
+            added_commands,
+            affected_commands,
+            changed_commands,
+            dropped_commands
+        );
+        """
     _sql_insert_record = """
         INSERT INTO records (
             project_name,
@@ -249,6 +465,11 @@ class RepairInstanceDB:
         WHERE
             file_name = :file_name
         ORDER BY id;"""
+    _sql_get_all_records = """
+        SELECT *
+        FROM records
+        ORDER BY id;
+        """
     _fmt: Fmt = Fmt.json
 
     def __init__(self, db_directory: PathLike):
@@ -311,36 +532,65 @@ class RepairInstanceDB:
         Create the one table this database requires.
         """
         self.cursor.execute(self._sql_create_records_table)
+        self.cursor.execute(self._sql_create_natural_primary_key)
         self.connection.commit()
+
+    def get(self, record: RepairInstanceDBRecord) -> RepairInstanceDBRecord:
+        """
+        Get a complete record from the database.
+        """
+        record_dict = record.asdict()
+        record_dict.pop("id")
+        record_dict.pop("file_name")
+        self.cursor.execute(self._sql_get_record, record_dict)
+        rows = self.cursor.fetchall()
+        if not rows:
+            return RepairInstanceDBRecord(*record[:-2])
+        assert len(rows) == 1, \
+            "There are duplicate rows in the records table."
+        return RepairInstanceDBRecord.from_row(rows[0])
+
+    def get_repairs(self,
+                    record: CommitPairDBRecord) -> Set[RepairInstanceDBRecord]:
+        """
+        Get all repair instances associated with a commit pair.
+        """
+        self.cursor.execute(
+            self._sql_get_records_for_commit_pair,
+            record.asdict())
+        rows = self.cursor.fetchall()
+        records = {RepairInstanceDBRecord.from_row(row) for row in rows}
+        return records
+
+    def insert(self, record: RepairInstanceDBRecord) -> int:
+        """
+        Insert a new record into the database.
+
+        Raises
+        ------
+        sqlite3.IntegrityError
+            If this record already exists in the database.
+        """
+        record_dict = record.asdict()
+        record_dict.pop("id")
+        self.cursor.execute(self._sql_insert_record, record_dict)
+        self.connection.commit()
+        inserted_row = self.get(record)
+        assert inserted_row.id is not None, \
+            "No id was returned after the last record insertion."
+        return inserted_row.id
 
     def insert_record_get_path(
             self,
-            project_name: str,
-            initial_commit_sha: str,
-            repaired_commit_sha: str,
-            initial_coq_version: str,
-            repaired_coq_version: str,
+            commit_pair: CommitPairDBRecord,
             change_selection: ChangeSelection) -> Path:
         """
         Insert a repair instance record into the database.
 
         Parameters
         ----------
-        project_name : str
-            The name of the project identifying the record being
-            inserted
-        initial_commit_sha : str
-            The commit hash for the initial commit identifying the
-            record being inserted
-        repaired_commit_sha : str
-            The commit hash for the repaired commit identifying the
-            record being inserted
-        initial_coq_version : str
-            The Coq version for the initial cache item identifying the
-            record being inserted
-        repaired_coq_version : str
-            The Coq version for the repaired cache item identifying the
-            record being inserted
+        commit_pair : CommitPairDBRecord
+            A commit pair used for mining repairs.
         change_selection : ChangeSelection
             The selected changes that further identify the record
 
@@ -361,44 +611,14 @@ class RepairInstanceDB:
         #   name, commit sha pair, and Coq version pair
         # * Update the row with the newly-computed file name.
         # * Return the new file name.
-        cache_id_label = {
-            "project_name": project_name,
-            "initial_commit_sha": initial_commit_sha,
-            "repaired_commit_sha": repaired_commit_sha,
-            "initial_coq_version": initial_coq_version,
-            "repaired_coq_version": repaired_coq_version
-        }
-        record = {
-            **cache_id_label,
-            **change_selection.as_joined_dict()
-        }
-        record['file_name'] = "repair-n"
-        self.cursor.execute(self._sql_insert_record, record)
-        self.connection.commit()
-        inserted_row = self.get_record(
-            project_name,
-            initial_commit_sha,
-            repaired_commit_sha,
-            initial_coq_version,
-            repaired_coq_version,
-            change_selection)
-        if inserted_row is None:
-            raise RuntimeError(
-                "No id was returned after the last record insertion.")
-        recent_id = inserted_row["id"]
-        self.cursor.execute(
-            self._sql_get_records_for_commit_pair,
-            cache_id_label)
-        label_related_rows = self.cursor.fetchall()
-        row_ids = sorted([row[0] for row in label_related_rows])
-        change_index = row_ids.index(recent_id)
-        new_file_name = self.get_file_name(
-            project_name,
-            initial_commit_sha,
-            repaired_commit_sha,
-            initial_coq_version,
-            repaired_coq_version,
-            change_index)
+        record = RepairInstanceDBRecord(
+            *commit_pair,
+            file_name="record-n",
+            **change_selection.as_joined_dict())  # type: ignore
+        recent_id = self.insert(record)
+        associated_repairs = self.get_repairs(commit_pair)
+        change_index = len(associated_repairs) - 1
+        new_file_name = self.get_file_name(commit_pair, change_index)
         self.cursor.execute(
             self._sql_update_file_name,
             {
@@ -409,41 +629,23 @@ class RepairInstanceDB:
         return self.db_directory / new_file_name
 
     def get_record(
-        self,
-        project_name: str,
-        initial_commit_sha: str,
-        repaired_commit_sha: str,
-        initial_coq_version: str,
-        repaired_coq_version: str,
-        change_selection: ChangeSelection) -> Optional[Dict[str,
-                                                            Union[int,
-                                                                  str]]]:
+            self,
+            commit_pair: CommitPairDBRecord,
+            change_selection: ChangeSelection
+    ) -> Optional[RepairInstanceDBRecord]:
         """
         Get a record from the records table if it exists.
 
         Parameters
         ----------
-        project_name : str
-            The name of the project identifying the record being
-            inserted
-        initial_commit_sha : str
-            The commit hash for the initial commit identifying the
-            record being inserted
-        repaired_commit_sha : str
-            The commit hash for the repaired commit identifying the
-            record being inserted
-        initial_coq_version : str
-            The Coq version for the initial cache item identifying the
-            record being inserted
-        repaired_coq_version : str
-            The Coq version for the repaired cache item identifying the
-            record being inserted
+        commit_pair : CommitPairDBRecord
+            A commit pair used for mining repairs.
         change_selection : ChangeSelection
             The selected changes that further identify the record
 
         Returns
         -------
-        Optional[Dict[str, str]]
+        Optional[RepairInstanceDBRecord]
             The record as a dictionary, or None if no record was found
 
         Raises
@@ -452,27 +654,15 @@ class RepairInstanceDB:
             If multiple records are found for the query. This shouldn't
             be able to happen, and if it does, it indicates a bug.
         """
-        record_to_get = {
-            "project_name": project_name,
-            "initial_commit_sha": initial_commit_sha,
-            "repaired_commit_sha": repaired_commit_sha,
-            "initial_coq_version": initial_coq_version,
-            "repaired_coq_version": repaired_coq_version,
-            **change_selection.as_joined_dict()
-        }
-        self.cursor.execute(self._sql_get_record, record_to_get)
-        records = self.cursor.fetchall()
-        if not records:
-            return None
-        if len(records) > 1:
-            raise RuntimeError("There are duplicate rows in the records table.")
-        record = records[0]
-        return self._record_to_dictionary(record)
+        record_to_get = RepairInstanceDBRecord(
+            *commit_pair,
+            file_name="record-n",
+            **change_selection.as_joined_dict())  # type: ignore
+        return self.get(record_to_get)
 
     def get_record_from_file_name(self,
-                                  file_name: str) -> Optional[Dict[str,
-                                                                   Union[int,
-                                                                         str]]]:
+                                  file_name: str
+                                  ) -> Optional[RepairInstanceDBRecord]:
         """
         Get a record from the records table for a particular file name.
 
@@ -495,45 +685,45 @@ class RepairInstanceDB:
         self.cursor.execute(
             self._sql_get_record_for_filename,
             {"file_name": file_name})
-        records = self.cursor.fetchall()
-        if not records:
+        rows = self.cursor.fetchall()
+        if not rows:
             return None
-        if len(records) > 1:
+        if len(rows) > 1:
             raise RuntimeError(
                 f"There is more than 1 row for file {file_name}.")
-        return self._record_to_dictionary(records[0])
+        return RepairInstanceDBRecord.from_row(rows[0])
+
+    def get_records_iter(self) -> Iterator[RepairInstanceDBRecord]:
+        """
+        Get an iterator over the database's records.
+
+        The records will be ordered by the numeric surrogate primary key
+        that identifies each record (i.e., the records will be ordered
+        by the order in which they were originally inserted).
+        """
+        self.cursor.execute(self._sql_get_all_records)
+        records = self.cursor.fetchall()
+        if not records:
+            yield from []
+        else:
+            yield from (RepairInstanceDBRecord.from_row(row) for row in records)
 
     @classmethod
     def get_file_name(
             cls,
-            project_name: str,
-            initial_commit_sha: str,
-            repaired_commit_sha: str,
-            initial_coq_version: str,
-            repaired_coq_version: str,
+            commit_pair: CommitPairDBRecord,
             change_index: int) -> Path:
         """
         Get the canonical filename for the identified repair example.
 
         Parameters
         ----------
-        project_name : str
-            The name of the project identifying the record being
-            inserted
-        initial_commit_sha : str
-            The commit hash for the initial commit identifying the
-            record being inserted
-        repaired_commit_sha : str
-            The commit hash for the repaired commit identifying the
-            record being inserted
-        initial_coq_version : str
-            The Coq version for the initial cache item identifying the
-            record being inserted
-        repaired_coq_version : str
-            The Coq version for the repaired cache item identifying the
-            record being inserted
+        commit_pair : CommitPairDBRecord
+            A commit pair used for mining repairs.
         change_index : int
-            The index of the change as it was created.
+            The index of a change between the indicated pair of commits.
+            By definition, this index gives the order by which repairs
+            were mined from the commit pair.
 
         Returns
         -------
@@ -544,15 +734,17 @@ class RepairInstanceDB:
         filename: PathLike = "-".join(
             [
                 "repair",
-                project_name,
-                initial_commit_sha,
-                repaired_commit_sha,
-                CoqProjectBuildCache.format_coq_version(initial_coq_version),
-                CoqProjectBuildCache.format_coq_version(repaired_coq_version),
+                commit_pair.project_name,
+                commit_pair.initial_commit_sha,
+                commit_pair.repaired_commit_sha,
+                CoqProjectBuildCache.format_coq_version(
+                    commit_pair.initial_coq_version),
+                CoqProjectBuildCache.format_coq_version(
+                    commit_pair.repaired_coq_version),
                 str(change_index)
             ])
         filename = append_suffix(filename, f".{cls._fmt.exts[0]}")
-        filename = project_name / filename
+        filename = commit_pair.project_name / filename
         return filename
 
     @classmethod
@@ -574,36 +766,6 @@ class RepairInstanceDB:
         """
         file_name = Path(file_name)
         return with_suffixes(file_name, [".git", file_name.suffix])
-
-    @staticmethod
-    def _record_to_dictionary(
-        record: Tuple[int,
-                      str,
-                      str,
-                      str,
-                      str,
-                      str,
-                      str,
-                      str,
-                      str,
-                      str,
-                      str]
-    ) -> Dict[str,
-              Union[int,
-                    str]]:
-        return {
-            'id': record[0],
-            'project_name': record[1],
-            'initial_commit_sha': record[2],
-            'repaired_commit_sha': record[3],
-            'initial_coq_version': record[4],
-            'repaired_coq_version': record[5],
-            'added_commands': record[6],
-            'affected_commands': record[7],
-            'changed_commands': record[8],
-            'dropped_commands': record[9],
-            'file_name': record[10]
-        }
 
 
 class RepairMiningLogger:
@@ -702,17 +864,11 @@ def build_repair_instance(
     try:
         with RepairInstanceDB(repair_instance_db_directory) as db_instance:
             initial_metadata = error_instance.project_metadata
-            assert initial_metadata.commit_sha is not None
-            assert initial_metadata.coq_version is not None
             repaired_metadata = repaired_state.project_metadata
-            assert repaired_metadata.commit_sha is not None
-            assert repaired_metadata.coq_version is not None
-            if db_instance.get_record(initial_metadata.project_name,
-                                      initial_metadata.commit_sha,
-                                      repaired_metadata.commit_sha,
-                                      initial_metadata.coq_version,
-                                      repaired_metadata.coq_version,
-                                      change_selection) is None:
+            commit_pair = CommitPairDBRecord.from_metadata(
+                initial_metadata,
+                repaired_metadata)
+            if db_instance.get_record(commit_pair, change_selection) is None:
                 result = miner(error_instance, repaired_state)
             else:
                 result = None
@@ -918,11 +1074,9 @@ def write_repair_instance(
             assert repaired_state_metadata.coq_version is not None
 
             file_path = repair_instance_db.insert_record_get_path(
-                initial_metadata.project_name,
-                initial_metadata.commit_sha,
-                repaired_state_metadata.commit_sha,
-                initial_metadata.coq_version,
-                repaired_state_metadata.coq_version,
+                CommitPairDBRecord.from_metadata(
+                    initial_metadata,
+                    repaired_state_metadata),
                 change_selection)
             atomic_write(
                 file_path,

@@ -7,7 +7,11 @@ import unittest
 from pathlib import Path
 
 from prism.data.repair.instance import ChangeSelection
-from prism.data.repair.mining import RepairInstanceDB
+from prism.data.repair.mining import (
+    CommitPairDBRecord,
+    RepairInstanceDB,
+    RepairInstanceDBRecord,
+)
 
 
 class TestRepairInstanceDB(unittest.TestCase):
@@ -16,13 +20,12 @@ class TestRepairInstanceDB(unittest.TestCase):
     """
 
     _test_db_path = Path("test_db")
-    _cache_label = {
-        "project_name": "test_project",
-        "initial_commit_sha": "abcde",
-        "repaired_commit_sha": "12345",
-        "initial_coq_version": "8.10.2",
-        "repaired_coq_version": "8.10.2"
-    }
+    _commit_pair = CommitPairDBRecord(
+        project_name="test_project",
+        initial_commit_sha="abcde",
+        repaired_commit_sha="12345",
+        initial_coq_version="8.10.2",
+        repaired_coq_version="8.10.2")
     _change_selection = ChangeSelection(
         [("a",
           1),
@@ -45,8 +48,8 @@ class TestRepairInstanceDB(unittest.TestCase):
          ("d",
           4)])
     _expected_relative_filename = RepairInstanceDB.get_file_name(
-        change_index=0,
-        **_cache_label)
+        _commit_pair,
+        change_index=0)
     _expected_absolute_filename = _test_db_path / _expected_relative_filename
     _expected_record = (
         1,
@@ -79,7 +82,7 @@ class TestRepairInstanceDB(unittest.TestCase):
         """
         with RepairInstanceDB(self._test_db_path) as db:
             path: Path = db.insert_record_get_path(
-                **self._cache_label,
+                self._commit_pair,
                 change_selection=self._change_selection)
             db.cursor.execute("SELECT * FROM records")
             result = db.cursor.fetchall()
@@ -89,11 +92,11 @@ class TestRepairInstanceDB(unittest.TestCase):
             assert isinstance(change_selection.added_commands, list)
             change_selection.added_commands.append(("y", 25))
             db.insert_record_get_path(
-                **self._cache_label,
+                self._commit_pair,
                 change_selection=change_selection)
             change_selection.added_commands.append(("z", 26))
             db.insert_record_get_path(
-                **self._cache_label,
+                self._commit_pair,
                 change_selection=change_selection)
             db.cursor.execute("SELECT * FROM records WHERE id = 3")
             result = db.cursor.fetchone()
@@ -105,24 +108,24 @@ class TestRepairInstanceDB(unittest.TestCase):
         """
         with RepairInstanceDB(self._test_db_path) as db:
             db.insert_record_get_path(
-                **self._cache_label,
+                self._commit_pair,
                 change_selection=self._change_selection)
             record = db.get_record(
-                **self._cache_label,
+                self._commit_pair,
                 change_selection=self._change_selection)
-            expected_record = {
-                'id': 1,
-                **self._cache_label,
+            expected_record = RepairInstanceDBRecord(
+                *self._commit_pair,
                 **{
                     'added_commands': 'a 1 b 2',
                     'affected_commands': 'a 1',
                     'changed_commands': 'a 1 b 2 c 3',
                     'dropped_commands': 'a 1 b 2 c 3 d 4',
                     'file_name': str(self._expected_relative_filename)
-                }
-            }
+                },
+                id=1,
+            )
             assert record is not None
-            self.assertDictEqual(record, expected_record)
+            self.assertEqual(record, expected_record)
 
     def tearDown(self):
         """
