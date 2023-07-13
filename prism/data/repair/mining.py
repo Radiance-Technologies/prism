@@ -7,6 +7,7 @@ import queue
 import select
 import shutil
 import sqlite3
+import typing
 from dataclasses import asdict, dataclass
 from multiprocessing import Process, Queue
 from pathlib import Path
@@ -743,10 +744,7 @@ class RepairInstanceDB:
         """
         self.cursor.execute(self._sql_get_all_records)
         records = self.cursor.fetchall()
-        if not records:
-            yield from []
-        else:
-            yield from (RepairInstanceDBRecord.from_row(row) for row in records)
+        yield from (RepairInstanceDBRecord.from_row(row) for row in records)
 
     def merge(self,
               other: 'RepairInstanceDB',
