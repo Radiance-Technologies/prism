@@ -5,6 +5,7 @@ import logging
 import os
 import queue
 import select
+import shutil
 import sqlite3
 from dataclasses import asdict, dataclass
 from multiprocessing import Process, Queue
@@ -482,6 +483,23 @@ class RepairInstanceDB:
         self.cursor = self.connection.cursor()
         self.create_table()
 
+    def __contains__(self, record: object) -> bool:
+        """
+        Return whether the database contains the given object.
+
+        Raises
+        ------
+        TypeError
+            If `record` is not a `CommitPairDBRecord` or
+            `RepairInstanceDBRecord`.
+        """
+        if not isinstance(record, (CommitPairDBRecord, RepairInstanceDBRecord)):
+            raise TypeError(f"Unsupported record type: {type(record)}")
+        elif isinstance(record, RepairInstanceDBRecord):
+            return self.get(record).id is not None
+        else:
+            return len(self.get_repairs(record)) > 0
+
     def __enter__(self) -> 'RepairInstanceDB':
         """
         Provide an entry point for the context manager.
@@ -538,6 +556,9 @@ class RepairInstanceDB:
     def get(self, record: RepairInstanceDBRecord) -> RepairInstanceDBRecord:
         """
         Get a complete record from the database.
+
+        If the record is not contained in the database, then its ID and
+        filename will each be None.
         """
         record_dict = record.asdict()
         record_dict.pop("id")
@@ -582,22 +603,29 @@ class RepairInstanceDB:
 
     def insert_record_get_path(
             self,
-            commit_pair: CommitPairDBRecord,
-            change_selection: ChangeSelection) -> Path:
+            record: Union[CommitPairDBRecord,
+                          RepairInstanceDBRecord],
+            change_selection: Optional[ChangeSelection] = None) -> Path:
         """
         Insert a repair instance record into the database.
 
         Parameters
         ----------
-        commit_pair : CommitPairDBRecord
-            A commit pair used for mining repairs.
-        change_selection : ChangeSelection
-            The selected changes that further identify the record
+        record : CommitPairDBRecord | RepairInstanceDBRecord
+            A commit pair used for mining repairs or a mined repair
+            record itself.
+        change_selection : Optional[ChangeSelection], optional
+            The selected changes that further identify the record,
+            by default None.
 
         Returns
         -------
         Path
             The reserved absolute path to the new repair instance file.
+        ValueError
+            If `change_selection` is None and `record` is an instance of
+            `CommitPairDBRecord` or if `change_selection` is not None
+            and `record` is an instance of `RepairInstanceDBRecord`.
         """
         # Summary:
         # * Insert a record with a place-holder file name.
@@ -611,10 +639,22 @@ class RepairInstanceDB:
         #   name, commit sha pair, and Coq version pair
         # * Update the row with the newly-computed file name.
         # * Return the new file name.
-        record = RepairInstanceDBRecord(
-            *commit_pair,
-            file_name="record-n",
-            **change_selection.as_joined_dict())  # type: ignore
+        if isinstance(record, CommitPairDBRecord):
+            if change_selection is None:
+                raise ValueError(
+                    "A change selection must be specified for the commit pair"
+                    f" {record}")
+            commit_pair = record
+            record = RepairInstanceDBRecord(
+                *commit_pair,
+                file_name="record-n",
+                **change_selection.as_joined_dict())  # type: ignore
+        else:
+            commit_pair = record.commit_pair
+            if change_selection is not None:
+                raise ValueError(
+                    "An additional change selection must not be specified for the"
+                    f" record from commit pair {record.commit_pair}")
         recent_id = self.insert(record)
         associated_repairs = self.get_repairs(commit_pair)
         change_index = len(associated_repairs) - 1
@@ -708,6 +748,54 @@ class RepairInstanceDB:
         else:
             yield from (RepairInstanceDBRecord.from_row(row) for row in records)
 
+    def merge(self,
+              other: 'RepairInstanceDB',
+              copy: bool = True) -> List[Tuple[Path,
+                                               Path]]:
+        """
+        Add all non-duplicate records in another database to this one.
+
+        Repair instance files will also be copied to their appropriate
+        location in this database.
+
+        Parameters
+        ----------
+        other : RepairInstanceDB
+            Another repair instance database.
+        copy : bool, optional
+            If True, then go ahead and copy repair instance files from
+            the `other` database to this one.
+
+        Returns
+        -------
+        List[Tuple[Path, Path]]
+            A list of pairs of paths mapping repair instance files
+            indexed by `other` to their new locations indexed in `self`
+            after the merge.
+
+        Raises
+        ------
+        FileNotFoundError
+            If `copy` is True but one of the repair instance files could
+            not be found.
+        """
+        path_map: List[Tuple[Path, Path]] = []
+        for record in other.get_records_iter():
+            if record not in self:
+                try:
+                    new_path = self.insert_record_get_path(record)
+                except sqlite3.IntegrityError:
+                    # the record already exists in the database
+                    pass
+                else:
+                    assert record.file_name is not None, \
+                        "The old file path must be defined"
+                    old_path = other.db_directory / record.file_name
+                    if copy:
+                        shutil.copy2(old_path, new_path)
+                    path_map.append((old_path, new_path))
+        return path_map
+
     @classmethod
     def get_file_name(
             cls,
@@ -766,6 +854,33 @@ class RepairInstanceDB:
         """
         file_name = Path(file_name)
         return with_suffixes(file_name, [".git", file_name.suffix])
+
+    @classmethod
+    def union(
+            cls,
+            db_directory: PathLike,
+            *databases: 'RepairInstanceDB') -> 'RepairInstanceDB':
+        """
+        Merge multiple repair instance databases in a new database.
+
+        Parameters
+        ----------
+        db_directory : PathLike
+            The root directory of the merged database.
+        databases : tuple of RepairInstanceDB
+            An iterable collection of one or more repair instance
+            databases.
+
+        Returns
+        -------
+        RepairInstanceDB
+            The union of each of the given databases rooted at the given
+            directory.
+        """
+        result = RepairInstanceDB(db_directory)
+        for database in databases:
+            result.merge(database)
+        return result
 
 
 class RepairMiningLogger:
