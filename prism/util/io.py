@@ -7,7 +7,7 @@ import shutil
 import tempfile
 import typing
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, Optional, Union
+from typing import IO, TYPE_CHECKING, Optional, TextIO, Union
 
 import ujson
 import yaml
@@ -15,6 +15,7 @@ from seutil.io import Fmt, FmtProperty
 
 from prism.util.path import append_suffix
 from prism.util.radpytools.path import PathLike
+from prism.util.tempfile import PermissiveNamedTemporaryFile
 
 if TYPE_CHECKING:
     from prism.util.serialize import Serializable
@@ -198,10 +199,11 @@ def atomic_write(
     # Ensure that we write atomically.
     # First, we write to a temporary file so that if we get
     # interrupted, we aren't left with a corrupted file.
-    with tempfile.NamedTemporaryFile("w",
-                                     delete=False,
-                                     dir=directory,
-                                     encoding='utf-8') as f:
+    with typing.cast(TextIO,
+                     PermissiveNamedTemporaryFile("w",
+                                                  delete=False,
+                                                  dir=directory,
+                                                  encoding='utf-8')) as f:
         if isinstance(file_contents, str):
             f.write(file_contents)
     f_name = f.name
@@ -250,7 +252,7 @@ def uncompress(src: PathLike,
 
     Returns
     -------
-    Optional[tempfile.TemporaryFile]
+    Optional[IO[bytes]]
         If `dest` is None, then a temporary file handle is returned.
         The file will be deleted automatically when this handle goes out
         of scope, so the caller should make sure to assign the result to
