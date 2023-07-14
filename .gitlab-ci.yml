@@ -1,6 +1,6 @@
 # Using the bullseye image due to
 # compatibility with opam 2.0.8-1
-image: "python:3.11-bullseye"
+image: "rsngit.radiancetech.com:5005/pearls/coq-pearls:opam_deps"
 
 variables:
     PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
@@ -23,7 +23,7 @@ stages:
 
 before_script:
   - apt-get -y update
-  - apt-get -y install pkg-config make opam strace
+  - apt-get -y install pkg-config make strace
   - apt-get -y install time
   - pip install virtualenv
   - virtualenv venv
@@ -72,11 +72,6 @@ precommit:
   interruptible: true
   stage: test
   script:
-    - export OPAMROOT=${PWD}/.opam
-    - |
-      if [ ! -d ${OPAMROOT} ]; then
-        opam init --disable-sandboxing --verbose
-      fi
     - eval $(opam env)
     - make test_${COQ_VERSION}
   artifacts:
