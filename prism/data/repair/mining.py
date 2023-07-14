@@ -543,7 +543,7 @@ class RepairInstanceDB:
             file_name text NOT NULL
         );"""
     _sql_create_natural_primary_key = """
-        CREATE UNIQUE INDEX natural_primary_key
+        CREATE UNIQUE INDEX IF NOT EXISTS natural_primary_key
         ON records(
             project_name,
             initial_commit_sha,
