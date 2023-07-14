@@ -818,8 +818,7 @@ class RepairInstanceDB:
     def get_record(
             self,
             commit_pair: CommitPairDBRecord,
-            change_selection: ChangeSelection
-    ) -> Optional[RepairInstanceDBRecord]:
+            change_selection: ChangeSelection) -> RepairInstanceDBRecord:
         """
         Get a record from the records table if it exists.
 
@@ -832,8 +831,9 @@ class RepairInstanceDB:
 
         Returns
         -------
-        Optional[RepairInstanceDBRecord]
-            The record as a dictionary, or None if no record was found
+        RepairInstanceDBRecord
+            The record as a dictionary with an ID of None if the record
+            was not found.
 
         Raises
         ------
@@ -1124,7 +1124,7 @@ def build_repair_instance(
             commit_pair = CommitPairDBRecord.from_metadata(
                 initial_metadata,
                 repaired_metadata)
-            if db_instance.get_record(commit_pair, change_selection) is None:
+            if db_instance.get_record(commit_pair, change_selection).id is None:
                 result = miner(error_instance, repaired_state)
             else:
                 result = None
