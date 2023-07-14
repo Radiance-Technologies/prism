@@ -1924,22 +1924,37 @@ class ProjectCommitDataErrorInstance(ErrorInstance[ProjectCommitData,
         for phys, log in broken_qr:
             broken_qr_dict.setdefault(phys, set()).add(log)
             broken_qr_dict_inv.setdefault(log, set()).add(phys)
+
+        def _check_changes(
+                is_logical: bool,
+                initial_dict: Dict[str,
+                                   Set[str]],
+                broken_dict: Dict[str,
+                                  Set[str]]) -> None:
+            tp = 'logical' if is_logical else 'physical'
+            for key, values in initial_dict.items():
+                if key in broken_dict:
+                    new_values = broken_dict[key]
+                    if values != new_values:
+                        value: Union[str, Set[str]]
+                        new_value: Union[str, Set[str]]
+                        if len(values) > 1 or len(new_values) > 1:
+                            value = values
+                            new_value = new_values
+                        else:
+                            value = next(iter(values))
+                            new_value = next(iter(new_values))
+                        tags.add(
+                            f"changed-{tp}-{'Q' if is_Q else 'R'}-path:"
+                            f"{key}({value} -> {new_value})")
+
+        _check_changes(True, initial_qr_dict, broken_qr_dict)
+        _check_changes(False, initial_qr_dict_inv, broken_qr_dict_inv)
+
         for physical, logical in initial_qr:
-            if physical in broken_qr_dict:
-                new_logical = broken_qr_dict[physical]
-                if new_logical != logical:
-                    tags.add(
-                        f"changed-logical-{'Q' if is_Q else 'R'}-path:"
-                        f"{physical}({logical} -> {new_logical})")
-            elif logical not in broken_qr_dict_inv:
+            if physical not in broken_qr_dict and logical not in broken_qr_dict_inv:
                 tags.add(
                     f"dropped-{'Q' if is_Q else 'R'}-path:{physical},{logical}")
-            if logical in broken_qr_dict_inv:
-                new_physical = broken_qr_dict_inv[logical]
-                if new_physical != physical:
-                    tags.add(
-                        f"changed-physical-{'Q' if is_Q else 'R'}-path:"
-                        f"{logical}({physical} -> {new_physical})")
             if (physical, logical) in broken_rq:
                 tags.add(
                     f"changed-{'Q' if is_Q else 'R'}-to-{'R' if is_Q else 'Q'}:"
