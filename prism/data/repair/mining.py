@@ -769,6 +769,9 @@ class RepairInstanceDB:
         -------
         Path
             The reserved absolute path to the new repair instance file.
+
+        Raises
+        ------
         ValueError
             If `change_selection` is None and `record` is an instance of
             `CommitPairDBRecord` or if `change_selection` is not None
