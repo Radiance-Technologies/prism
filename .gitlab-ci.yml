@@ -16,7 +16,6 @@ cache:
   paths:
     - .cache/pip
     - venv/
-    - .opam
 
 stages:
   - test
