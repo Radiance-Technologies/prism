@@ -22,6 +22,7 @@ from typing import (
 )
 
 import numpy as np
+from seutil import io
 
 from prism.data.cache.types.command import (
     VernacCommandData,
@@ -549,6 +550,49 @@ class VernacCommandDataListDiff:
             set(self.dropped_commands),
             list(self.offsets))
 
+    @classmethod
+    def deserialize(cls, data: dict) -> 'VernacCommandDataListDiff':
+        """
+        Account for non-string keys in json deserialization.
+
+        Also account for lack of support for generic dataclasses in
+        `seutil` deserialization.
+        """
+        added_commands = io.deserialize(
+            data['added_commands'],
+            clz=VernacCommandDataList,
+            error='raise')
+        affected_commands = {
+            int(k): v for k,
+            v in io.deserialize(
+                data['affected_commands'],
+                clz=Dict[str,
+                         SerializableDataDiff],
+                error='raise').items()
+        }
+        changed_commands = {
+            int(k): v for k,
+            v in io.deserialize(
+                data['changed_commands'],
+                clz=Dict[str,
+                         SerializableDataDiff],
+                error='raise').items()
+        }
+        dropped_commands = io.deserialize(
+            data['dropped_commands'],
+            clz=Set[int],
+            error='raise')
+        offsets = io.deserialize(
+            data['offsets'],
+            clz=List[FileOffset],
+            error='raise')
+        return VernacCommandDataListDiff(
+            added_commands,
+            affected_commands,
+            changed_commands,
+            dropped_commands,
+            offsets)
+
 
 @dataclass
 class ProjectCommitDataDiff:
@@ -820,6 +864,22 @@ class ProjectCommitDataDiff:
                 v in self.command_changes.items()
             },
             self.file_dependencies_diff)
+
+    @classmethod
+    def deserialize(cls, data: dict) -> 'ProjectCommitDataDiff':
+        """
+        Account for lack of support for generic dataclasses in `seutil`.
+        """
+        return ProjectCommitDataDiff(
+            io.deserialize(
+                data['command_changes'],
+                clz=Dict[str,
+                         VernacCommandDataListDiff],
+                error='raise'),
+            io.deserialize(
+                data['file_dependencies_diff'],
+                clz=SerializableDataDiff,
+                error='raise'))
 
     @classmethod
     def from_aligned_commands(
