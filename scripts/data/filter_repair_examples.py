@@ -9,16 +9,127 @@ filtered examples.
 
 import argparse
 import os
+import sys
+import textwrap
 import typing
+from contextlib import contextmanager
+from functools import partial
+from io import TextIOWrapper
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, Generator, TextIO
 
+import tqdm
 from seutil import io
+from tqdm.contrib.concurrent import process_map
 
 # for faster deserialization
 import prism.util.io  # noqa: F401
+from prism.util.path import with_suffixes
+from prism.util.radpytools import unzip
+from prism.util.radpytools.path import PathLike
 
 REPAIR_SUFFIX: Final[list[str]] = ['.git', '.json']
+UNCOMPRESSED_REPAIR_SUFFIX: Final[list[str]] = ['.json']
+COMPRESSED_REPAIR_SUFFIX: Final[list[str]] = ['.json', '.gz']
+INDENT = ' ' * 4
+
+
+@contextmanager
+def fopen(
+        filename: PathLike | None) -> Generator[TextIO | TextIOWrapper,
+                                                None,
+                                                None]:
+    """
+    Open a file or stdout for writing.
+    """
+    f: TextIO | TextIOWrapper
+    if filename is not None:
+        f = open(filename, mode='w')
+    else:
+        f = sys.stdout
+    try:
+        yield f
+    finally:
+        if f is not sys.stdout:
+            f.close()
+
+
+def get_diffs(filepath: Path, example: dict) -> tuple[str, str]:
+    """
+    Get the diffs representing the error and repair.
+    """
+    full_filepath = with_suffixes(filepath, UNCOMPRESSED_REPAIR_SUFFIX)
+    error_diff = example['error']['change']['diff']['text']
+    if isinstance(example['repaired_state_or_diff'],
+                  dict) and 'diff' in example['repaired_state_or_diff']:
+        repair_diff = example['repaired_state_or_diff']['diff']['text']
+    elif full_filepath.exists() or with_suffixes(
+            full_filepath,
+            COMPRESSED_REPAIR_SUFFIX).exists():
+        from prism.data.repair.instance import ProjectCommitDataRepairInstance
+        full_example = ProjectCommitDataRepairInstance.load(full_filepath)
+        repair_diff = full_example.repaired_git_diff.text
+    else:
+        repair_diff = (
+            "Repair reconstruction from commit "
+            "SHA not implemented")
+    return error_diff, repair_diff
+
+
+def filter_repair_instance_file(
+        tags_filter: set[str],
+        return_diff: bool,
+        filepath: Path) -> tuple[bool,
+                                 str | None]:
+    """
+    Filter a repair instance file.
+
+    Parameters
+    ----------
+    tags_filter : set of str
+        A set of tags.
+    return_diff : bool
+        Whether to return the formatted diffs that show the error and
+        repair.
+    filepath : Path
+        The path to a Git-based repair instance file.
+
+    Returns
+    -------
+    passes_filter : bool
+        True if at least one tag in the filter is used by the repair
+        instance, False otherwise.
+    diff : str | None
+        A formatted message containing the error and repair diffs or
+        None if `return_diff` is False.
+    """
+    passes_filter = False
+    diff = None
+    example = None
+    if tags_filter:
+        # Avoid overhead of GitRepairInstance
+        # deserialization
+        example = typing.cast(dict[str, Any], io.load(filepath))
+        tags = set(example['error']['tags'])
+        if tags.intersection(tags_filter):
+            passes_filter = True
+    else:
+        passes_filter = True
+    if passes_filter and return_diff:
+        if example is None:
+            example = typing.cast(dict[str, Any], io.load(filepath))
+        error_diff, repair_diff = get_diffs(filepath, example)
+        diff = '\n'.join(
+            [
+                "Introduction of error:",
+                textwrap.indent(error_diff,
+                                INDENT),
+                "Application of repair:",
+                textwrap.indent(repair_diff,
+                                INDENT)
+            ])
+    return passes_filter, diff
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(Path(__file__).stem, description=__doc__)
@@ -29,37 +140,85 @@ if __name__ == '__main__':
     parser.add_argument(
         '-t',
         '--tags',
-        action='append',
         default=[],
-        help='Tag(s) by which examples will be filtered according to an exact match.'
-    )
+        help='Tag(s) by which examples will be filtered according to an exact match.',
+        nargs='+')
     parser.add_argument(
         '-c',
         '--count',
         default=False,
         action='store_true',
-        help='Count the number of filtered examples.')
+        help='Count the number of filtered examples. Silences other output.')
+    parser.add_argument(
+        '-v',
+        '--verbose',
+        action='store_true',
+        default=False,
+        help='Print the Git diff for each filtered example')
+    parser.add_argument(
+        '-n',
+        '--nworkers',
+        type=int,
+        default=1,
+        help='The number of processes to use to filter examples.')
+    parser.add_argument(
+        '-o',
+        '--output',
+        type=Path,
+        default=None,
+        help="Output results to file")
     args = parser.parse_args()
 
     tags_filter = set(args.tags)
     do_count: bool = args.count
+    verbose: bool = args.verbose
     directory: Path = args.directory
+    num_workers: int = args.nworkers
+    output_file: Path | None = args.output
 
-    filtered_examples: list[Path] = []
-    for subdir, _, filenames in os.walk(directory):
-        for filename in filenames:
+    candidates: list[Path] = []
+    for (subdir, _, filenames) in os.walk(directory):
+        for filename in tqdm.tqdm(
+                filenames,
+                desc=f"Scanning for repair instance files in {subdir}",
+                position=1):
             filepath = Path(subdir) / filename
             if filepath.suffixes[-2 :] == REPAIR_SUFFIX:
-                if tags_filter:
-                    # Avoid overhead of GitRepairInstance
-                    # deserialization
-                    example = typing.cast(dict[str, Any], io.load(filepath))
-                    tags = set(example['error']['tags'])
-                    if tags.intersection(tags_filter):
-                        filtered_examples.append(filepath)
-                else:
-                    filtered_examples.append(filepath)
-    if do_count:
-        print(len(filtered_examples))
+                candidates.append(filepath)
+    filter_file = partial(filter_repair_instance_file, tags_filter, verbose)
+    filter_results = process_map(
+        filter_file,
+        candidates,
+        max_workers=num_workers,
+        desc="Filtering discovered repair instance files")
+    if filter_results:
+        (filtered_examples,
+         diffs) = typing.cast(
+             tuple[list[Path],
+                   list[str]],
+             unzip(
+                 (c,
+                  d) for c,
+                 (p,
+                  d) in zip(candidates,
+                            filter_results) if p))
     else:
-        print(*[f.stem for f in filtered_examples], sep='\n')
+        print("No repair examples match the given filters")
+        exit()
+
+    with fopen(output_file) as f:
+        if do_count:
+            print(len(filtered_examples), file=f)
+        elif verbose:
+            print(
+                *[
+                    '\n'.join([f.name,
+                               textwrap.indent(diff,
+                                               INDENT)]) for f,
+                    diff in zip(filtered_examples,
+                                diffs)
+                ],
+                sep='\n',
+                file=f)
+        else:
+            print(*[f.name for f in filtered_examples], sep='\n', file=f)
