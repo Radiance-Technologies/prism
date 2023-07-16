@@ -2417,6 +2417,51 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
                 f"got {type(self.repaired_state_or_diff)}")
 
     @property
+    def initial_state(self) -> ProjectCommitData:
+        """
+        The commit data for the initial state.
+        """
+        error = typing.cast(ProjectCommitDataErrorInstance, self.error)
+        return typing.cast(
+            ProjectCommitDataState,
+            error.initial_state).offset_state
+
+    @property
+    def error_git_diff(self) -> GitDiff:
+        """
+        A Git diff that captures the introduction of the error.
+        """
+        return compute_git_diff(self.initial_state, self.error_state)
+
+    @property
+    def error_state(self) -> ProjectCommitData:
+        """
+        The commit data for the broken state.
+        """
+        error = typing.cast(ProjectCommitDataErrorInstance, self.error)
+        return error.error_state
+
+    @property
+    def repaired_git_diff(self) -> GitDiff:
+        """
+        A Git diff that captures the introduction of the repair.
+        """
+        return compute_git_diff(self.error_state, self.repaired_state)
+
+    @property
+    def repaired_state(self) -> ProjectCommitData:
+        """
+        The commit data for the repaired state.
+        """
+        if isinstance(self.repaired_state_or_diff, ProjectCommitDataStateDiff):
+            result = self.repaired_state_or_diff.diff.patch(self.error_state)
+        else:
+            result = typing.cast(
+                ProjectCommitDataState,
+                self.repaired_state_or_diff).offset_state
+        return result
+
+    @property
     def tags(self) -> Set[str]:
         """
         The set of tags assigned to this repair instance.
