@@ -15,7 +15,6 @@ cache:
   key: $CI_JOB_NAME
   paths:
     - .cache/pip
-    - venv/
 
 stages:
   - test
