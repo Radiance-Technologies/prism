@@ -24,10 +24,8 @@ before_script:
   - apt-get -y update
   - apt-get -y install pkg-config make strace
   - apt-get -y install time
-  - pip install virtualenv
-  - virtualenv venv
-  - source venv/bin/activate
-  - export VENV=venv
+  - source /var/venv/bin/activate
+  - export VENV=/var/venv
   - make install
 
 precommit:
@@ -36,8 +34,6 @@ precommit:
   before_script:
     # Global before_script does not get prepended
     # Track https://gitlab.com/gitlab-org/gitlab/-/issues/258606
-    - pip install virtualenv
-    - virtualenv venv
     - source venv/bin/activate
     - which ssh-agent || apt-get install openssh-client -qqy
     - eval `ssh-agent -s`

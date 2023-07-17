@@ -18,3 +18,11 @@ RUN eval $(opam env) && \
     source setup_coq.sh 8.13.2 -n && \
     source setup_coq.sh 8.14.1 -n && \
     source setup_coq.sh 8.15.2 -n
+
+COPY requirements.txt /var/requirements.txt
+
+RUN cd /var && \
+    pip3 install virtualenv && \
+    virtualenv venv && \
+    source venv/bin/activate && \
+    pip install -r /var/requirements.txt
