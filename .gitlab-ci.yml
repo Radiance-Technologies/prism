@@ -1,6 +1,6 @@
 # Using the bullseye image due to
 # compatibility with opam 2.0.8-1
-image: "rsngit.radiancetech.com:5005/pearls/coq-pearls:opam_deps"
+image: "rsngit.radiancetech.com:5005/pearls/coq-pearls"
 
 variables:
     PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
