@@ -1721,7 +1721,8 @@ def mining_loop_worker(
                 repair_instance_job_queue._reader  # type: ignore
             ],
             [],
-            [])
+            [],
+            30)
 
         # #######################
         # Handle control messages
@@ -2110,7 +2111,8 @@ def _parallel_work(
             select.select(
                 [worker_to_parent_queue._reader],  # type: ignore
                 [],
-                [])
+                [],
+                30)
             try:
                 worker_msg = worker_to_parent_queue.get_nowait()
             except Empty:
