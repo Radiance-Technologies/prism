@@ -78,8 +78,9 @@ def get_diffs(filepath: Path, example: dict) -> tuple[str, str]:
 
 def filter_repair_instance_file(
         tags_filter: set[str],
-        return_diff: bool,
+        verbose: bool,
         filepath: Path) -> tuple[bool,
+                                 str | None,
                                  str | None]:
     """
     Filter a repair instance file.
@@ -88,7 +89,7 @@ def filter_repair_instance_file(
     ----------
     tags_filter : set of str
         A set of tags.
-    return_diff : bool
+    verbose : bool
         Whether to return the formatted diffs that show the error and
         repair.
     filepath : Path
@@ -101,11 +102,16 @@ def filter_repair_instance_file(
         instance, False otherwise.
     diff : str | None
         A formatted message containing the error and repair diffs or
-        None if `return_diff` is False.
+        None if `verbose` is False.
+    tags : set[str] | None
+        The set of tags associated with the instance or None if
+        `verbose` is False.
     """
     passes_filter = False
     diff = None
     example = None
+    tags = None
+    formatted_tags = None
     if tags_filter:
         # Avoid overhead of GitRepairInstance
         # deserialization
@@ -115,9 +121,11 @@ def filter_repair_instance_file(
             passes_filter = True
     else:
         passes_filter = True
-    if passes_filter and return_diff:
+    if passes_filter and verbose:
         if example is None:
             example = typing.cast(dict[str, Any], io.load(filepath))
+        if tags is None:
+            tags = set(example['error']['tags'])
         error_diff, repair_diff = get_diffs(filepath, example)
         diff = '\n'.join(
             [
@@ -128,7 +136,11 @@ def filter_repair_instance_file(
                 textwrap.indent(repair_diff,
                                 INDENT)
             ])
-    return passes_filter, diff
+        formatted_tags = '\n'.join(
+            ["Tags:",
+             textwrap.indent('\n'.join(tags),
+                             INDENT)])
+    return passes_filter, diff, formatted_tags
 
 
 if __name__ == '__main__':
@@ -190,18 +202,25 @@ if __name__ == '__main__':
         filter_file,
         candidates,
         max_workers=num_workers,
-        desc="Filtering discovered repair instance files")
+        desc="Filtering discovered repair instance files",
+        chunksize=2)
+    filter_results = [
+        (c,
+         d,
+         t) for c,
+        (p,
+         d,
+         t) in zip(candidates,
+                   filter_results) if p
+    ]
     if filter_results:
         (filtered_examples,
-         diffs) = typing.cast(
+         diffs,
+         tags) = typing.cast(
              tuple[list[Path],
+                   list[str],
                    list[str]],
-             unzip(
-                 (c,
-                  d) for c,
-                 (p,
-                  d) in zip(candidates,
-                            filter_results) if p))
+             unzip(filter_results))
     else:
         print("No repair examples match the given filters")
         exit()
@@ -212,11 +231,18 @@ if __name__ == '__main__':
         elif verbose:
             print(
                 *[
-                    '\n'.join([f.name,
-                               textwrap.indent(diff,
-                                               INDENT)]) for f,
-                    diff in zip(filtered_examples,
-                                diffs)
+                    '\n'.join(
+                        [
+                            f.name,
+                            textwrap.indent(tag,
+                                            INDENT),
+                            textwrap.indent(diff,
+                                            INDENT)
+                        ]) for f,
+                    diff,
+                    tag in zip(filtered_examples,
+                               diffs,
+                               tags)
                 ],
                 sep='\n',
                 file=f)
