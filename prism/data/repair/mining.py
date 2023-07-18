@@ -619,6 +619,21 @@ class RepairInstanceDB:
         ORDER BY id;
         """
     _fmt: Fmt = Fmt.json
+    """
+    The serialization format to use for saving/loading repair examples.
+    """
+    _exts: List[List[str]] = sum(
+        [
+            [[f'.{ext}'],
+             ['.git',
+              f'.{ext}'],
+             [f'.{ext}',
+              '.gz']] for ext in _fmt.exts
+        ],
+        start=[])
+    """
+    Possible file extensions for save repair examples.
+    """
 
     def __init__(self, db_directory: PathLike):
         self.db_directory = Path(db_directory)
@@ -939,7 +954,16 @@ class RepairInstanceDB:
                         "The old file path must be defined"
                     old_path = other.db_directory / record.file_name
                     if copy:
-                        shutil.copy2(old_path, new_path)
+                        new_path.parent.mkdir(parents=True, exist_ok=True)
+                        for suffixes in self._exts:
+                            try:
+                                shutil.copy2(
+                                    with_suffixes(old_path,
+                                                  suffixes),
+                                    with_suffixes(new_path,
+                                                  suffixes))
+                            except FileNotFoundError:
+                                pass
                     path_map.append((old_path, new_path))
         return path_map
 
