@@ -33,7 +33,7 @@ precommit:
   before_script:
     # Global before_script does not get prepended
     # Track https://gitlab.com/gitlab-org/gitlab/-/issues/258606
-    - source venv/bin/activate
+    - source /var/venv/bin/activate
     - which ssh-agent || apt-get install openssh-client -qqy
     - eval `ssh-agent -s`
     - echo "${PRECOMMIT_CI_PRIVATE_KEY}" | base64 -d | ssh-add - > /dev/null # add ssh key
