@@ -1587,7 +1587,7 @@ def _mine_errors(
             result = build_error_instance_star(error_instance_job)
             if not skip_errors and isinstance(result, Except):
                 worker_to_parent_queue.put(result)
-                return LoopControl.PASS
+                return LoopControl.BREAK
             # If skip_errors is true and result is an Except, the
             # following will immediately return an empty list.
             repair_instance_jobs = build_repair_instance_mining_inputs(
