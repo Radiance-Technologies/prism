@@ -12,12 +12,13 @@ if __name__ == "__main__":
     parser.add_argument(
         '-d',
         '--directories',
-        action='append',
         default=[],
-        help='Root directories of repair instance databases')
+        help='Root directories of repair instance databases',
+        nargs='+')
     parser.add_argument(
         '-o',
         '--output',
+        required=True,
         type=Path,
         help="The path at which the merged database should be written.")
     args = parser.parse_args()
@@ -26,7 +27,8 @@ if __name__ == "__main__":
         parser.error("Not enough repair instance databases. Need at least two.")
     databases = [RepairInstanceDB(d) for d in directories]
     try:
-        RepairInstanceDB.union(args.output,)
+        RepairInstanceDB.union(args.output, *databases)
     except Exception:
         for db in databases:
             db.__exit__(*sys.exc_info())
+        raise
