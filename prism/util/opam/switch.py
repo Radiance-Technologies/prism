@@ -176,6 +176,18 @@ class OpamSwitch:
         return environ
 
     @property
+    def exists(self) -> bool:
+        """
+        Return True if the switch exists, False otherwise.
+        """
+        try:
+            OpamSwitch(self.name, self.root)
+        except ValueError:
+            return False
+        else:
+            return True
+
+    @property
     def is_clone(self) -> bool:
         """
         Return whether this switch is a clone or not.
