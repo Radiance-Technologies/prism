@@ -1387,7 +1387,7 @@ class Project(ABC):
             formula = formula.map(
                 lambda pc: typing.cast(
                     PackageConstraint,
-                    PackageConstraint.parse(f"{pc.package_name} {{ true }}"))
+                    PackageConstraint.parse(f'"{pc.package_name}" {{ true }}'))
                 if pc.version_constraint == dev_constraint else pc)
         return formula
 
