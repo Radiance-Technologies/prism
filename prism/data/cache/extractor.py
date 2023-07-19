@@ -65,6 +65,7 @@ from prism.project.repo import (
     CommitTraversalStrategy,
     ProjectRepo,
 )
+from prism.util.io import Fmt
 from prism.util.opam.version import OpamVersion, Version
 from prism.util.radpytools import PathLike
 from prism.util.radpytools.os import pushd
@@ -856,7 +857,7 @@ class CacheExtractor:
         files_to_use: Optional[Dict[str,
                                     Iterable[str]]] = None,
         cache_fmt_ext: Optional[str] = None,
-        mds_fmt: Optional[str] = None,
+        mds_fmt: Optional[Fmt] = None,
         coq_version_stop_callback: Callable[
             [CoqProjectBuildCacheProtocol,
              str,
