@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import ClassVar, Generator, Optional, Union
 
+from prism.util.exception import raise_
 from prism.util.radpytools import PathLike
 
 from .switch import OpamSwitch
@@ -219,7 +220,13 @@ class OpamAPI:
             # Opam will refuse to remove it.
             # Delete the associated directory, taking care not to delete
             # (follow) any symlinks.
-            shutil.rmtree(switch.path)
+            shutil.rmtree(
+                switch.path,
+                onerror=lambda _f,
+                _p,
+                _e: raise_(
+                    ValueError(
+                        f"The compiler switch {switch.name} does not exist.")))
         else:
             cls.run(f'opam switch remove {switch.name} -y', opam_root=opam_root)
 

@@ -4,7 +4,7 @@ Provides general-purpose exception utilities.
 
 import copy
 from dataclasses import dataclass
-from typing import Generic, Optional, TypeVar
+from typing import Generic, NoReturn, Optional, TypeVar
 
 T = TypeVar('T')
 
@@ -37,3 +37,12 @@ class Except(Generic[T]):
         Copy the exception object, deleting the traceback.
         """
         self.exception = copy.copy(self.exception)
+
+
+def raise_(exc: Exception) -> NoReturn:
+    """
+    Raise the given exception.
+
+    Useful for raising exceptions in lambda functions.
+    """
+    raise exc
