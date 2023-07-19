@@ -381,7 +381,7 @@ class ProjectCommitUpdateMapper(ProjectCommitMapper[T]):
                 exception = typing.cast(Except[T], result)
                 value = result.value
             if value is None:
-                warnings.warn(f"No results found for {p.name}")
+                warnings.warn(f"No results found for {p.name}", stacklevel=2)
                 p_storage = p.metadata_storage
             else:
                 value = typing.cast(Tuple[T, MetadataStorage], value)
