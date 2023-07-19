@@ -26,7 +26,7 @@ class TestEvict(unittest.TestCase):
         OpamAPI.init_root(cls.root.name, disable_sandboxing=True)
         OpamAPI.create_switch("test", None, opam_root=cls.root.name)
         # give our shared manager the root+switch to play with
-        cls.manager = AutoSwitchManager([cls.root.name], max_pool_size=1)
+        cls.manager = AutoSwitchManager([cls.root.name], max_pool_size=2)
 
     @classmethod
     def tearDownClass(cls) -> None:
