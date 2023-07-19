@@ -7,7 +7,7 @@ import tempfile
 import time
 from pathlib import Path
 from subprocess import CalledProcessError
-from typing import Dict, Optional
+from typing import Dict, Optional, Set
 
 from prism.util.compare import Top
 from prism.util.opam import (
@@ -45,10 +45,34 @@ class AdaptiveSwitchManager(SwitchManager):
 
     def __init__(self, *args, max_pool_size=1000, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self._temporary_switches = set()
+        self._temporary_switches: Set[OpamSwitch] = set()
         self._last_used: Dict[OpamSwitch,
                               float] = {}
         self._max_pool_size = max_pool_size
+
+    @synchronizedmethod(semlock_name="_lock")
+    def _add_managed_switch(self, switch: OpamSwitch) -> None:
+        """
+        Add a switch to the managed pool.
+
+        Parameters
+        ----------
+        switch : OpamSwitch
+            An opam switch whose management should be given to this
+            `SwitchManager`.
+
+        Notes
+        -----
+        If the pool exceeds its maximum capacity after the addition of
+        the `switch`, then a switch will be automatically removed.
+        A removed switch is irreversibly deleted.
+        In certain circumstances, this may include the `switch` just
+        added, thus rendering the object invalid.
+        """
+        self._last_used[switch] = time.time()
+        self.switches.add(switch)
+        if (len(self.switches) > self._max_pool_size):
+            self._evict()
 
     def _clone_switch(self, switch: OpamSwitch) -> OpamSwitch:
         """
@@ -59,9 +83,6 @@ class AdaptiveSwitchManager(SwitchManager):
         with tempfile.TemporaryDirectory(prefix=prefix, dir=switch.root) as d:
             clone_dir = Path(d)
         clone = OpamAPI.clone_switch(switch.name, clone_dir.name, switch.root)
-        # it's okay if this is clobbered by multiple threads.
-        # if a clobber occurs, the times must have been CLOSE.
-        self._last_used[switch] = time.time()
         return clone
 
     @synchronizedmethod(semlock_name="_lock")
@@ -91,7 +112,6 @@ class AdaptiveSwitchManager(SwitchManager):
             return
 
         lru = sorted(self._last_used, key=lambda x: self._last_used[x])[0]
-
         switch_path = lru.path
 
         OpamAPI.remove_switch(lru)
@@ -102,6 +122,7 @@ class AdaptiveSwitchManager(SwitchManager):
         # incorrect behavior in cached methods
         os.makedirs(switch_path)
 
+        self._last_used.pop(lru)
         self.switches.remove(lru)
 
     def get_switch(
@@ -177,10 +198,9 @@ class AdaptiveSwitchManager(SwitchManager):
                 OpamAPI.remove_switch(clone)
                 raise UnsatisfiableConstraints(formula)
             else:
-                with self._lock:
-                    self.switches.add(clone)
-                    if (len(self.switches) > self._max_pool_size):
-                        self._evict()
+                self._add_managed_switch(clone)
+                # make sure clone was not evicted
+                if clone.exists:
                     closest_switch = clone
         # return a temporary clone
         clone = self._clone_switch(closest_switch)
