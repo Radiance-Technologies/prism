@@ -2005,7 +2005,7 @@ class Project(ABC):
         """
         dependency_formula = self.get_dependency_formula(coq_version)
         managed_switch_requested = (
-            coq_version is not None and variables is not None)
+            coq_version is not None or variables is not None)
         if variables is None:
             variables = {}
         if switch_manager is None:
