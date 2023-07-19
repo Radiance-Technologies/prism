@@ -739,9 +739,11 @@ class Project(ABC):
         self.logger.debug("Performing Project Build")
         if managed_switch_kwargs is None:
             managed_switch_kwargs = {}
+        self_switch_manager = self.switch_manager
+        backup_managed_switch_kwargs = dict(managed_switch_kwargs)
         switch_manager = managed_switch_kwargs.get(
             'switch_manager',
-            self.switch_manager)
+            self_switch_manager)
         original_switch = self.opam_switch
         was_unsatisfiable = False
         was_dependency_error = False
@@ -753,6 +755,9 @@ class Project(ABC):
                     with self.managed_switch(**managed_switch_kwargs):
                         result = f()
             except (ProjectBuildError, UnsatisfiableConstraints) as e:
+                # restore switch managers
+                managed_switch_kwargs.update(backup_managed_switch_kwargs)
+                self.switch_manager = self_switch_manager
                 # Possible stories:
                 # 1. Fail to get switch -> infer dependencies -> fail to
                 # get switch -> raise
@@ -820,6 +825,8 @@ class Project(ABC):
                     # dependencies, no need to worry about switch
                     # manager
                     # force reattempt build in current switch
+                    self.switch_manager = None
+                    managed_switch_kwargs = {}
                     # EVENT: <>.build.force-rebuild-commands
                     logging_context = 'force-rebuild-commands'
                     self.logger.debug("Forcing Rebuild")
@@ -829,6 +836,8 @@ class Project(ABC):
                 was_dependency_error = is_dependency_error
                 was_build_system_error = is_build_system_error
             else:
+                # restore switch manager if unset
+                self.switch_manager = self_switch_manager
                 break
         return result
 
