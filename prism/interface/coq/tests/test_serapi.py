@@ -446,7 +446,8 @@ class TestSerAPI(unittest.TestCase):
                 self.assertTrue(serapi.is_in_proof_mode)
         nested_sentences = self.sentences['nested']
         with self.subTest("nested"):
-            with SerAPI(opam_switch=self.test_switch) as serapi:
+            with SerAPI(opam_switch=self.test_switch,
+                        topfile="test.v") as serapi:
                 self.assertFalse(serapi.has_open_goals())
                 serapi.execute(nested_sentences[0])
                 self.assertFalse(serapi.has_open_goals())
@@ -516,30 +517,30 @@ class TestSerAPI(unittest.TestCase):
         """
         expected_keys = {
             'nat',
-            'SerTop.nat',
+            'test.nat',
             'Datatypes.nat',
             'Init.Datatypes.nat',
             'Coq.Init.Datatypes.nat',
             'tree',
-            'SerTop.tree',
+            'test.tree',
             'foo',
-            'SerTop.foo',
+            'test.foo',
             'A',
             'B',
-            'SerTop.A',
-            'SerTop.B'
+            'test.A',
+            'test.B'
         }
         expected_tree_ind = {
-            'physical_path': '<interactive>:tree',
+            'physical_path': 'test/test.v:tree',
             'short_id': 'tree',
-            'full_id': 'SerTop.tree',
+            'full_id': 'test.tree',
             'blocks':
                 [
                     {
                         'short_id':
                             'tree',
                         'full_id':
-                            'SerTop.tree',
+                            'test.tree',
                         'constructors':
                             [('node',
                               'forall (_ : A) (_ : forest), tree')]
@@ -548,7 +549,7 @@ class TestSerAPI(unittest.TestCase):
                         'short_id':
                             'forest',
                         'full_id':
-                            'SerTop.forest',
+                            'test.forest',
                         'constructors':
                             [
                                 ('leaf',
@@ -562,9 +563,9 @@ class TestSerAPI(unittest.TestCase):
             'is_record': False
         }
         expected_A_const = {
-            'physical_path': '<interactive>:A',
+            'physical_path': 'test/test.v:A',
             'short_id': 'A',
-            'full_id': 'SerTop.A',
+            'full_id': 'test.A',
             'term': None,
             'type': 'Set',
             'sort': 'Type',
@@ -572,18 +573,18 @@ class TestSerAPI(unittest.TestCase):
         }
         expected_nat_ind = {
             'physical_path':
-                '<interactive>:nat',
+                'test/test.v:nat',
             'short_id':
                 'nat',
             'full_id':
-                'SerTop.nat',
+                'test.nat',
             'blocks':
                 [
                     {
                         'short_id':
                             'nat',
                         'full_id':
-                            'SerTop.nat',
+                            'test.nat',
                         'constructors':
                             [('O',
                               'nat'),
@@ -592,7 +593,9 @@ class TestSerAPI(unittest.TestCase):
                     }
                 ],
         }
-        with SerAPI(max_wait_time=240, opam_switch=self.test_switch) as serapi:
+        with SerAPI(max_wait_time=240,
+                    opam_switch=self.test_switch,
+                    topfile="test/test.v") as serapi:
             serapi.execute(
                 "Inductive nat : Type := O : nat | S (n : nat) : nat.")
             serapi.execute("Lemma foo : unit.")

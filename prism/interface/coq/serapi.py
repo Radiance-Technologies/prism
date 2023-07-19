@@ -101,6 +101,10 @@ class SerAPI:
     Whether to shorten and replace locations with a filler token or to
     yield full location information, by default False.
     """
+    topfile: InitVar[Optional[PathLike]] = None
+    """
+    Set the toplevel name as though compiling `topfile`.
+    """
     max_wait_time: InitVar[int] = 30
     """
     The timeout for responses from the spawned SerAPI process.
@@ -148,6 +152,7 @@ class SerAPI:
             sertop_options: SerAPIOptions,
             opam_switch: Optional[OpamSwitch],
             omit_loc: bool,
+            topfile: Optional[PathLike],
             timeout: int,
             cwd: Optional[str]):
         """
@@ -159,9 +164,22 @@ class SerAPI:
             cwd = os.getcwd()
         self._switch = opam_switch
         self._cwd = cwd
+        if OpamVersion.less_than(self.serapi_version, "8.11.0+0.11.1"):
+            # NOTE: technically, support for topfile was added in
+            # serapi 8.10.0+0.7.2, but a bug prevents other queries
+            # (namely query_goals) from working correctly.
+            # So, we simply forbid using that version.
+            topfile = None
+        if topfile is None:
+            self._top_physical = None
+            self._top_logical = None
+        else:
+            self._top_physical = Path(topfile)
+            self._top_logical = self._top_physical.stem
         sertop_args = sertop_options.as_serapi_args(self.serapi_version)
+        topfile_arg = "" if topfile is None else f"--topfile {topfile}"
         try:
-            cmd = f"sertop --implicit --print0 {sertop_args}"
+            cmd = f"sertop --implicit --print0 {sertop_args} {topfile_arg}"
             if omit_loc:
                 cmd = cmd + " --omit_loc"
             if opam_switch.is_clone:
@@ -289,6 +307,30 @@ class SerAPI:
         Set the timeout for responses from the SerAPI process.
         """
         self._proc.timeout = timeout
+
+    @property
+    def top_logical(self) -> str:
+        """
+        The toplevel logical library path associated with this session.
+        """
+        return "SerTop" if self._top_logical is None else self._top_logical
+
+    @property
+    def top_physical(self) -> PathLike:
+        """
+        The toplevel physical library path associated with this session.
+        """
+        return "<interactive>" if self._top_physical is None else self._top_physical
+
+    @property
+    def top_prefix(self) -> str:
+        """
+        The qualified identifier prefix for the current session.
+
+        The prefix includes the period that joins it to a local
+        identifier.
+        """
+        return f"{self.top_logical}."
 
     @property
     def working_directory(self) -> str:
@@ -777,17 +819,9 @@ class SerAPI:
                 self.ast_cache[cmd] = ast
         return ast
 
-    def _query_env(
-            self,
-            current_file: Optional[PathLike] = None) -> Environment:
+    def _query_env(self) -> Environment:
         """
         Query the global environment.
-
-        Parameters
-        ----------
-        current_file : Optional[PathLike], optional
-            The file from which commands for the current SerAPI session
-            are drawn, by default None.
 
         Returns
         -------
@@ -804,8 +838,11 @@ class SerAPI:
             raise RuntimeError(
                 "Querying the environment is not supported in SerAPI "
                 f"version {self.serapi_version}.")
-        if current_file is None:
+        current_file = str(self.top_physical)
+        if current_file == "SerTop.v":
             current_file = "<interactive>"
+        current_lib = self.top_logical
+        current_lib_prefix = self.top_prefix
         responses, _, _ = self.send("(Query () Env)")
         # Refer to coq/kernel/environ.mli
         env = responses[1][2][1][0][1]
@@ -823,9 +860,9 @@ class SerAPI:
                  self.serapi_version,
                  return_modpath=True)
             assert isinstance(modpath, SexpNode)
-            if qualid.startswith("SerTop."):
-                logical_path = "SerTop"
-                physical_path = str(current_file)
+            if qualid.startswith(current_lib_prefix):
+                logical_path = current_lib
+                physical_path = current_file
             else:
                 logical_path = mod_path_file(modpath)
                 assert qualid.startswith(logical_path)
@@ -895,9 +932,9 @@ class SerAPI:
             assert isinstance(modpath, SexpNode)
             short_ident = self.query_qualid(qualid)
             assert short_ident is not None
-            if qualid.startswith("SerTop."):
-                logical_path = "SerTop"
-                physical_path = str(current_file)
+            if qualid.startswith(current_lib_prefix):
+                logical_path = current_lib
+                physical_path = current_file
             else:
                 logical_path = mod_path_file(modpath)
                 physical_path = os.path.relpath(
@@ -954,15 +991,9 @@ class SerAPI:
 
         return Environment(constants, inductives)
 
-    def query_env(self, current_file: Optional[PathLike] = None) -> Environment:
+    def query_env(self) -> Environment:
         """
         Query the global environment.
-
-        Parameters
-        ----------
-        current_file : Optional[PathLike], optional
-            The file from which commands for the current SerAPI session
-            are drawn, by default None.
 
         Returns
         -------
@@ -982,7 +1013,7 @@ class SerAPI:
         if allow_strictprop is not None and not allow_strictprop.value:
             settings.append(CoqFlag("Allow StrictProp", True))
         with self.settings(settings):
-            env = self._query_env(current_file)
+            env = self._query_env()
         return env
 
     def query_full_qualid(self, qualid: str) -> Optional[str]:
@@ -1252,8 +1283,10 @@ class SerAPI:
         ['nat', 'Datatypes.nat']
         """
         responses, _, _ = self.send(f'(Query () (Locate "{qualid}"))')
-        if responses[1][2][1] == SexpList() and qualid.startswith("SerTop."):
-            qualid = qualid[len("SerTop."):]
+        current_lib_prefix = self.top_prefix
+        if responses[1][2][1] == SexpList() and qualid.startswith(
+                current_lib_prefix):
+            qualid = qualid[len(current_lib_prefix):]
             responses, _, _ = self.send(f'(Query () (Locate "{qualid}"))')
         qualids = []
         for qid in responses[1][2][1]:
