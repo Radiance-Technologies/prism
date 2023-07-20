@@ -2383,6 +2383,10 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
     environment.
     """
 
+    # HACK: Identify the repaired commit SHA in a tag so that it can be
+    # preserved in GitRepairInstances.
+    # TODO: Remove this hack by actually including metadata in
+    # ProjectCommitDataDiff (would likely render BuildProcess redundant)
     _repair_commit_tag: ClassVar[str] = "repair:commit:"
 
     def __post_init__(self):
@@ -2417,6 +2421,13 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
                 f"got {type(self.repaired_state_or_diff)}")
 
     @property
+    def initial_commit_sha(self) -> Optional[str]:
+        """
+        Get the commit of the initial state from which this was sourced.
+        """
+        return self.error.initial_state.project_state.project_metadata.commit_sha
+
+    @property
     def initial_state(self) -> ProjectCommitData:
         """
         The commit data for the initial state.
@@ -2447,6 +2458,18 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
         A Git diff that captures the introduction of the repair.
         """
         return compute_git_diff(self.error_state, self.repaired_state)
+
+    @property
+    def repaired_commit_sha(self) -> Optional[str]:
+        """
+        Get the commit of the final state from which this was sourced.
+        """
+        repaired_commit_sha = None
+        for tag in self.tags:
+            if tag.startswith(self._repair_commit_tag):
+                repaired_commit_sha = tag[len(self._repair_commit_tag):]
+                break
+        return repaired_commit_sha
 
     @property
     def repaired_state(self) -> ProjectCommitData:
@@ -2489,12 +2512,7 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
                 ProjectCommitDataStateDiff,
                 self.repaired_state_or_diff,
                 ProjectStateDiff)
-            repaired_commit_sha = None
-            tag = None
-            for tag in self.tags:
-                if tag.startswith(self._repair_commit_tag):
-                    repaired_commit_sha = tag[len(self._repair_commit_tag):]
-                    break
+            repaired_commit_sha = self.repaired_commit_sha
             if repaired_commit_sha is not None:
                 # we can just save the commit SHA instead of the diff
                 repaired = GitProjectState(
@@ -2505,8 +2523,9 @@ class ProjectCommitDataRepairInstance(RepairInstance[ProjectCommitData,
                     repaired.environment
                     if repaired.environment != error.environment else None)
                 # remove the now-redundant tag
-                assert tag is not None
-                error.tags.discard(tag)
+                error.tags.discard(
+                    ''.join([self._repair_commit_tag,
+                             repaired_commit_sha]))
             else:
                 repaired = typing.cast(ProjectCommitDataStateDiff, repaired)
                 repaired = repaired.compress(
