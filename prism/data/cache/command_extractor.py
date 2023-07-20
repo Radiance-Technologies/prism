@@ -149,11 +149,13 @@ class CommandExtractor:
     -----
     The accuracy of this extraction depends upon a few assumptions:
 
-    * No lemma emits an identifier before it is defined (i.e.,
-      before it is proved).
+    * No lemma emits a non-reserved identifier before it is defined
+      (i.e.,before it is proved).
       Neither a verbose info message nor ``Print All.`` command should
       indicate the lemma (or program, or other conjecture) is defined
       before its proof(s) are complete.
+      Reserved identifiers include subproof IDs and certain rewrite
+      tactic productions (e.g., ``internal_eq_rew_dep``).
     * No plugin defines their own ``Abort`` or ``Abort All``
       equivalents, i.e., no plugin concludes a proof without emitting
       an identifier.
