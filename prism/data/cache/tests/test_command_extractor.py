@@ -623,15 +623,16 @@ class TestCommandExtractor(unittest.TestCase):
         Otherwise, one obtains a lexer error because a value was escaped
         twice.
         """
+        filename = "bug_396.v"
         with pushd(_COQ_EXAMPLES_PATH):
             extracted_commands = CommandExtractor(
-                "bug-396.v",
+                filename,
                 typing.cast(
                     List[CoqSentence],
                     Project.extract_sentences(
                         CoqDocument(
-                            "bug-396.v",
-                            CoqParser.parse_source("bug-396.v"),
+                            filename,
+                            CoqParser.parse_source(filename),
                             _COQ_EXAMPLES_PATH),
                         sentence_extraction_method=SEM.HEURISTIC,
                         return_locations=True,

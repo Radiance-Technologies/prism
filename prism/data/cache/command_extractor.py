@@ -377,6 +377,7 @@ class CommandExtractor:
                     self.serapi,
                     self.modpath,
                     ordered=True,
+                    toppath=self.serapi.top_logical,
                     id_cache=self.expanded_ids))
         else:
             self.get_identifiers = _disabled_get_identifiers
