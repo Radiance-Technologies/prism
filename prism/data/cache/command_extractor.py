@@ -308,7 +308,7 @@ class CommandExtractor:
 
     If not absolute, then relative to the current working directory.
     """
-    local_ids: List[str] = default_field(['SerTop'], init=False)
+    local_ids: List[str] = default_field([], init=False)
     """
     The set of identifiers introduced in the interactive session.
     """
@@ -358,9 +358,13 @@ class CommandExtractor:
         self.serapi = SerAPI(
             self.serapi_options,
             opam_switch=self.opam_switch,
-            cwd=(None if self.cwd is None else str(self.cwd)))
+            cwd=(None if self.cwd is None else str(self.cwd)),
+            topfile=self.filename)
         # make a checkpoint to allow rolling back of first command
         self.serapi.push()
+        # record the default local library ID so it does not get
+        # mistaken as a newly emitted ID
+        self.local_ids.append(self.serapi.top_logical)
 
         if self.extract_qualified_idents:
             self.get_identifiers = typing.cast(
