@@ -515,32 +515,34 @@ class TestSerAPI(unittest.TestCase):
         | leaf : B -> forest
         | cons : tree -> forest -> forest.
         """
+        top_physical = "test/test.v" if self.update_8_11 else "<interactive>"
+        top_logical = "test" if self.update_8_11 else "SerTop"
         expected_keys = {
             'nat',
-            'test.nat',
+            f'{top_logical}.nat',
             'Datatypes.nat',
             'Init.Datatypes.nat',
             'Coq.Init.Datatypes.nat',
             'tree',
-            'test.tree',
+            f'{top_logical}.tree',
             'foo',
-            'test.foo',
+            f'{top_logical}.foo',
             'A',
             'B',
-            'test.A',
-            'test.B'
+            f'{top_logical}.A',
+            f'{top_logical}.B'
         }
         expected_tree_ind = {
-            'physical_path': 'test/test.v:tree',
+            'physical_path': f'{top_physical}:tree',
             'short_id': 'tree',
-            'full_id': 'test.tree',
+            'full_id': f'{top_logical}.tree',
             'blocks':
                 [
                     {
                         'short_id':
                             'tree',
                         'full_id':
-                            'test.tree',
+                            f'{top_logical}.tree',
                         'constructors':
                             [('node',
                               'forall (_ : A) (_ : forest), tree')]
@@ -549,7 +551,7 @@ class TestSerAPI(unittest.TestCase):
                         'short_id':
                             'forest',
                         'full_id':
-                            'test.forest',
+                            f'{top_logical}.forest',
                         'constructors':
                             [
                                 ('leaf',
@@ -563,9 +565,9 @@ class TestSerAPI(unittest.TestCase):
             'is_record': False
         }
         expected_A_const = {
-            'physical_path': 'test/test.v:A',
+            'physical_path': f'{top_physical}:A',
             'short_id': 'A',
-            'full_id': 'test.A',
+            'full_id': f'{top_logical}.A',
             'term': None,
             'type': 'Set',
             'sort': 'Type',
@@ -573,18 +575,18 @@ class TestSerAPI(unittest.TestCase):
         }
         expected_nat_ind = {
             'physical_path':
-                'test/test.v:nat',
+                f'{top_physical}:nat',
             'short_id':
                 'nat',
             'full_id':
-                'test.nat',
+                f'{top_logical}.nat',
             'blocks':
                 [
                     {
                         'short_id':
                             'nat',
                         'full_id':
-                            'test.nat',
+                            f'{top_logical}.nat',
                         'constructors':
                             [('O',
                               'nat'),
