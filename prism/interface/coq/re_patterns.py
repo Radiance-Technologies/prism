@@ -43,7 +43,7 @@ TYPE_PATTERN = re.compile(
     r'\(Pp_tag constr.type\(Pp_string (?P<type>"(?:\\"|[^"])*?"|[^\(\)\s"]*)\)\)'
 )
 
-_ident_init_pattern = f"(?:{LETTER.pattern}|{IDENTSEP.pattern})"
+IDENT_INIT_PATTERN = re.compile(f"(?:{LETTER.pattern}|{IDENTSEP.pattern})")
 """
 A valid initial character for a Coq identifier.
 
@@ -53,7 +53,8 @@ See `is_valid_ident_initial` in
 https://github.com/coq/coq/blob/master/clib/unicode.ml for more
 information.
 """
-_ident_trailing_pattern = f"(?:{_ident_init_pattern}|{IDENTPART.pattern})"
+IDENT_TRAILING_PATTERN = re.compile(
+    f"(?:{IDENT_INIT_PATTERN.pattern}|{IDENTPART.pattern})")
 """
 A valid non-initial character for a Coq identifier.
 
@@ -61,7 +62,8 @@ See `is_valid_ident_trailing` in
 https://github.com/coq/coq/blob/master/clib/unicode.ml for more
 information.
 """
-IDENT_PATTERN = re.compile(f"{_ident_init_pattern}{_ident_trailing_pattern}*")
+IDENT_PATTERN = re.compile(
+    f"{IDENT_INIT_PATTERN.pattern}{IDENT_TRAILING_PATTERN.pattern}*")
 """
 An unqualified identifier.
 """

@@ -49,6 +49,8 @@ from prism.interface.coq.options import (
 )
 from prism.interface.coq.re_patterns import (
     ADDED_STATE_PATTERN,
+    IDENT_INIT_PATTERN,
+    IDENT_TRAILING_PATTERN,
     LOCATE_QUALID_PATTERN,
     NAMED_DEF_ASSUM_PATTERN,
     NEW_IDENT_PATTERN,
@@ -147,7 +149,7 @@ class SerAPI:
     The switch in which `sertop` is being executed.
     """
 
-    def __post_init__(
+    def __post_init__(  # noqa: C901
             self,
             sertop_options: SerAPIOptions,
             opam_switch: Optional[OpamSwitch],
@@ -173,11 +175,17 @@ class SerAPI:
         if topfile is None:
             self._top_physical = None
             self._top_logical = None
+            topfile_arg = ""
         else:
             self._top_physical = Path(topfile)
             self._top_logical = self._top_physical.stem
+            for idx, char in enumerate(self._top_logical):
+                if (idx == 0 and IDENT_INIT_PATTERN.match(char) is None) or (
+                        idx > 0 and IDENT_TRAILING_PATTERN.match(char) is None):
+                    raise ValueError(
+                        f"Invalid character '{char}' in topfile '{topfile}'.")
+            topfile_arg = f"--topfile {topfile}"
         sertop_args = sertop_options.as_serapi_args(self.serapi_version)
-        topfile_arg = "" if topfile is None else f"--topfile {topfile}"
         try:
             cmd = f"sertop --implicit --print0 {sertop_args} {topfile_arg}"
             if omit_loc:
