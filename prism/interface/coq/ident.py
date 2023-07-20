@@ -235,7 +235,8 @@ def qualify_ident(
                               str],
         local_id_cache: Set[str],
         ident: Identifier,
-        modpath: str) -> Identifier:
+        modpath: str,
+        toppath: str = "SerTop") -> Identifier:
     """
     Fully qualify the given identifier.
 
@@ -250,15 +251,19 @@ def qualify_ident(
         A set of locally defined IDs that shadow global definitions,
         which will be modified in-place.
     modpath : str
-        The module path to use in place of ``"SerTop."`` for locally
+        The module path to use in place of `toppath` for locally
         defined identifiers or to prepend for appropriate
         unqualified identifiers.
+    toppath : str
+        The logical library path Coq uses to refer to the current
+        session, by default `"SerTop"`.
 
     Returns
     -------
     str
         The fully qualified identifier.
     """
+    top_prefix = f"{toppath}."
     # make identity unambiguous when the AST is used later in
     # a non-interactive context
     ident_str = ident.string
@@ -285,8 +290,8 @@ def qualify_ident(
                 local_id_cache.add(fully_qualified)
                 fully_qualified = '.'.join([modpath, fully_qualified])
             else:
-                if fully_qualified.startswith("SerTop."):
-                    fully_qualified = modpath + fully_qualified[6 :]
+                if fully_qualified.startswith(top_prefix):
+                    fully_qualified = modpath + fully_qualified[len(toppath):]
                 global_id_cache[ident_str] = fully_qualified
     return Identifier(ident_type, fully_qualified)
 
@@ -297,6 +302,7 @@ def _get_all_idents(
     qualify: bool = False,
     serapi: Optional[SerAPI] = None,
     modpath: str = "SerTop",
+    toppath: str = "SerTop",
     global_id_cache: Optional[Dict[str,
                                    str]] = None
 ) -> Union[List[Identifier],
@@ -322,6 +328,9 @@ def _get_all_idents(
         The logical library path one would use if the contents of the
         `serapi` session were dumped to file and imported or required in
         another, by default ``"SerTop"``.
+    toppath : str
+        The logical library path Coq uses to refer to the current
+        session, by default `"SerTop"`.
     global_id_cache : Optional[Dict[str, str]], optional
         A map from unqualified or partially qualified IDs to fully
         qualified variants, which will be modified in-place.
@@ -349,7 +358,8 @@ def _get_all_idents(
             serapi,
             global_id_cache,
             local_id_cache,
-            modpath=modpath)
+            modpath=modpath,
+            toppath=toppath)
     else:
         qualify = identity
     matches = re.finditer(ident_re, ast)
@@ -365,7 +375,8 @@ get_all_idents = partial(
     _get_all_idents,
     qualify=False,
     serapi=None,
-    modpath="",
+    modpath="SerTop",
+    toppath="SerTop",
     global_id_cache=None)
 """
 Get all of the identifiers referenced in the given serialized AST.
@@ -392,6 +403,7 @@ def get_all_qualified_idents(
     modpath: str,
     ast: str,
     ordered: bool = False,
+    toppath: str = "SerTop",
     id_cache: Optional[Dict[str,
                             str]] = None
 ) -> Union[List[Identifier],
@@ -414,6 +426,9 @@ def get_all_qualified_idents(
         Whether to return identifiers in the order in which they appear
         in the `ast` or to return an unordered set of all identifiers in
         `ast`, by default False.
+    toppath : str
+        The logical library path Coq uses to refer to the current
+        session, by default `"SerTop"`.
     id_cache : Optional[Dict[str, str]], optional
         A map from unqualified or partially qualified IDs to fully
         qualified variants, which will be modified in-place.
@@ -425,7 +440,14 @@ def get_all_qualified_idents(
         An `ordered` list or set of all identifiers contained in the
         AST.
     """
-    return _get_all_idents(ast, ordered, True, serapi, modpath, id_cache)
+    return _get_all_idents(
+        ast,
+        ordered,
+        True,
+        serapi,
+        modpath,
+        toppath,
+        id_cache)
 
 
 def replace_idents(sexp: str, replacements: Sequence[str]) -> str:
