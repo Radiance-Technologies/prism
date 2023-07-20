@@ -19,7 +19,7 @@ from seutil import bash, io
 from prism.util.bash import escape
 from prism.util.env import merge_environments
 from prism.util.io import Fmt
-from prism.util.radpytools import PathLike
+from prism.util.radpytools import PathLike, cachedmethod
 from prism.util.radpytools.dataclasses import default_field
 
 from .file import OpamFile
@@ -834,6 +834,13 @@ class OpamSwitch:
                     for name, metadata in field_value:
                         s.append(f'package "{name}"{metadata}\n')
             return ''.join(s)
+
+        @cachedmethod
+        def get_installed_version(self, package: str) -> Optional[Version]:
+            """
+            Get the version of a package installed in this switch.
+            """
+            return dict(self.installed).get(package, None)
 
         def serialize(
                 self,
