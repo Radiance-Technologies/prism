@@ -279,7 +279,7 @@ class TestSerAPI(unittest.TestCase):
     Test suite for the interactive `SerAPI` interface.
     """
 
-    test_switch: OpamSwitch = OpamSwitch()
+    test_switch: OpamSwitch = OpamSwitch("prism-8.15.2")
     sentences: Dict[str, List[str]]
     serapi_version: str
     update_8_9: bool
@@ -592,7 +592,7 @@ class TestSerAPI(unittest.TestCase):
                     }
                 ],
         }
-        with SerAPI(max_wait_time=180, opam_switch=self.test_switch) as serapi:
+        with SerAPI(max_wait_time=240, opam_switch=self.test_switch) as serapi:
             serapi.execute(
                 "Inductive nat : Type := O : nat | S (n : nat) : nat.")
             serapi.execute("Lemma foo : unit.")
