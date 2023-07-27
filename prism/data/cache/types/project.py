@@ -310,6 +310,7 @@ class ProjectCommitData(Serializable):
         """
         project_dict = {}
         for filename, commands in self.command_data.items():
+            filepath = Path(filename)
             # filename can contain leading directories
-            project_dict[filename] = '\n'.join(commands.stringify())
+            project_dict[filepath] = '\n'.join(commands.stringify())
         return project_dict
