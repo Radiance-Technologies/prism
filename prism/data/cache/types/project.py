@@ -298,7 +298,7 @@ class ProjectCommitData(Serializable):
             (dirpath / filename).parent.mkdir(parents=True, exist_ok=True)
             commands.write_coq_file(dirpath / filename)
 
-    def get_coq_project_state(self) -> Dict[Path, str]:
+    def get_coq_project_state(self) -> Dict[str, str]:
         """
         Return Coq project state as a dict of paths and file contents.
 
@@ -310,7 +310,6 @@ class ProjectCommitData(Serializable):
         """
         project_dict = {}
         for filename, commands in self.command_data.items():
-            filepath = Path(filename)
             # filename can contain leading directories
-            project_dict[filepath] = '\n'.join(commands.stringify())
+            project_dict[filename] = '\n'.join(commands.stringify())
         return project_dict
