@@ -304,7 +304,7 @@ class ProjectCommitData(Serializable):
 
         Returns
         -------
-        project_dict : Dict[Path, str]
+        project_dict : Dict[str, str]
             Dictionary mapping a filename to a string
             representation of the file contents.
         """
