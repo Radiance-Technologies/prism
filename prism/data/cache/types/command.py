@@ -961,22 +961,13 @@ class VernacCommandDataList:
         sentences.sort()
         return sentences
 
-    def write_coq_file(self, filepath: PathLike) -> None:
+    def stringify(self) -> List[str]:
         """
-        Dump the commands to a Coq file at the given location.
+        Convert the list of commands to a list of strings.
 
-        Parameters
-        ----------
-        filepath : PathLike
-            The location at which the file should be dumped.
-            Any file already at the given path will be overwritten.
-
-        Notes
-        -----
-        While the dumped Coq file cannot match the original from which
-        this data was extracted to to normalization of whitespace and
-        comments, the line numbers on which each sentence is written
-        should match the original Coq file.
+        This should essentially convert the command data into a list of
+        strings, as one would obtain from the use of `readlines` on a
+        file object.
         """
         lines: List[str] = [""]
         linenos: List[int] = [0]
@@ -1004,6 +995,26 @@ class VernacCommandDataList:
                     # place each part of sentence on new line
                     lines.append(sentence_part)
                     linenos.append(sentence_lineno)
+        return lines
+
+    def write_coq_file(self, filepath: PathLike) -> None:
+        """
+        Dump the commands to a Coq file at the given location.
+
+        Parameters
+        ----------
+        filepath : PathLike
+            The location at which the file should be dumped.
+            Any file already at the given path will be overwritten.
+
+        Notes
+        -----
+        While the dumped Coq file cannot match the original from which
+        this data was extracted to to normalization of whitespace and
+        comments, the line numbers on which each sentence is written
+        should match the original Coq file.
+        """
+        lines = self.stringify()
         with open(filepath, "w") as f:
             f.write("\n".join(lines))
 

@@ -297,3 +297,19 @@ class ProjectCommitData(Serializable):
             # filename can contain leading directories
             (dirpath / filename).parent.mkdir(parents=True, exist_ok=True)
             commands.write_coq_file(dirpath / filename)
+
+    def get_coq_project_state(self) -> Dict[Path, str]:
+        """
+        Return Coq project state as a dict of paths and file contents.
+
+        Returns
+        -------
+        project_dict : Dict[Path, str]
+            Dictionary mapping a filename to a string
+            representation of the file contents.
+        """
+        project_dict = {}
+        for filename, commands in self.command_data.items():
+            # filename can contain leading directories
+            project_dict[filename] = '\n'.join(commands.stringify())
+        return project_dict
