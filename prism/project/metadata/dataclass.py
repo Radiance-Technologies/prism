@@ -400,7 +400,7 @@ class ProjectMetadata:
                 kwargs[f.name] = su.io.deserialize(data[f.name], clz=f.type)
             except KeyError:
                 pass
-        if 'coq_dependencies' in data:
+        if 'coq_dependencies' in data and data['coq_dependencies']:
             logger.warn(
                 "The 'coq_dependencies' field is deprecated. "
                 "Use 'opam_dependencies' instead.")
