@@ -4,7 +4,7 @@ Defines a class for holding project metadata.
 
 import logging
 import typing
-from dataclasses import asdict, dataclass, fields
+from dataclasses import dataclass, fields
 from typing import (
     Any,
     ClassVar,
@@ -365,7 +365,7 @@ class ProjectMetadata:
             raise RuntimeError(
                 f"Cannot create view at level {level} of metadata at level {self_level}"
             )
-        fields = asdict(self)
+        fields = self.serialize()
         if level < self_level:
             if not level & 8:
                 fields['commit_sha'] = None
@@ -376,7 +376,7 @@ class ProjectMetadata:
             if not level & 1:
                 fields['coq_version'] = None
                 fields['serapi_version'] = None
-        return ProjectMetadata(**fields)
+        return ProjectMetadata.deserialize(fields)
 
     def serialize(self) -> Dict[str, Any]:  # noqa: D102
         # workaround for bug in seutil that skips custom serialization
