@@ -393,6 +393,13 @@ class SexpInfo:
             return self.beg_charno - self.bol_pos
 
         @property
+        def line_range(self) -> range:
+            """
+            The range of lines this location spans.
+            """
+            return range(self.lineno, self.lineno_last + 1)
+
+        @property
         def next(self) -> 'SexpInfo.Loc':
             """
             Get the location immediately after this one.
@@ -465,7 +472,10 @@ class SexpInfo:
             line_range = range(self.lineno, self.lineno_last + 1)
             return lineno in line_range
 
-        def intersects(self, other: 'SexpInfo.Loc') -> bool:
+        def intersects(
+                self,
+                other: 'SexpInfo.Loc',
+                by_line: bool = False) -> bool:
             """
             Return whether this location intersects another.
 
@@ -489,8 +499,13 @@ class SexpInfo:
                 raise TypeError(f"Expected location, got {type(other)}")
             elif other.filename != self.filename:
                 return False
-            return other in self or self in other or not (
-                other < self or self < other)
+            if not by_line:
+                return other in self or self in other or not (
+                    other < self or self < other)
+            else:
+                return (
+                    other.lineno in self.line_range
+                    or other.lineno_last in self.line_range)
 
         def offset_byte_to_char(
                 self,
