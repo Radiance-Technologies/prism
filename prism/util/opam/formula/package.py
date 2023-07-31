@@ -265,6 +265,16 @@ class PackageConstraint(PackageFormula):
     package_name: str
     version_constraint: Optional[Union[Version, VersionFormula]] = None
 
+    def __post_init__(self) -> None:
+        """
+        Convert strings to parsed Versions.
+        """
+        if isinstance(self.version_constraint, str):
+            object.__setattr__(
+                self,
+                'version_constraint',
+                Version.parse(self.version_constraint))
+
     def __str__(self) -> str:  # noqa: D105
         version_constraint = self.version_constraint
         if version_constraint is None:
@@ -275,7 +285,7 @@ class PackageConstraint(PackageFormula):
                     f'"{self.package_name}"',
                     "{",
                     "=",
-                    str(version_constraint),
+                    f'"{str(version_constraint)}"',
                     "}"
                 ])
         else:
