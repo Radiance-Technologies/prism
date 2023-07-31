@@ -270,7 +270,14 @@ class PackageConstraint(PackageFormula):
         if version_constraint is None:
             result = f'"{self.package_name}"'
         elif isinstance(version_constraint, Version):
-            result = f'"{self.package_name}.{version_constraint}"'
+            result = ' '.join(
+                [
+                    f'"{self.package_name}"',
+                    "{",
+                    "=",
+                    str(version_constraint),
+                    "}"
+                ])
         else:
             result = ' '.join(
                 [f'"{self.package_name}"',
