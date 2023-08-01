@@ -1214,9 +1214,8 @@ class Project(ABC):
         assert command_extractor.serapi is not None
         for sentence in sentences:
             assert sentence.location is not None
-            if (breakpoint is not None
-                    and file == breakpoint.filename
-                    and not (sentence.location.lineno_last < breakpoint.lineno)):
+            if (breakpoint is not None and file == breakpoint.filename and
+                    not (sentence.location.lineno_last < breakpoint.lineno)):
                 break
             try:
                 if use_simple_serapi:
