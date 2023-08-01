@@ -1215,7 +1215,8 @@ class Project(ABC):
         for sentence in sentences:
             assert sentence.location is not None
             if (breakpoint is not None
-                    and not (sentence.location < breakpoint)):
+                    and file == breakpoint.filename
+                    and not (sentence.location.lineno_last < breakpoint.lineno)):
                 break
             try:
                 if use_simple_serapi:
@@ -1228,7 +1229,7 @@ class Project(ABC):
                 # yapf: disable
                 if (breakpoint is not None
                         and (breakpoint.filename != file
-                             or fail_loc < breakpoint)):
+                             or fail_loc.lineno_last < breakpoint.lineno)):
                     # yapf: enable
                     raise ExecutionError(fail_loc, error_msg) from ce
                 # Cancel addition of failed command
