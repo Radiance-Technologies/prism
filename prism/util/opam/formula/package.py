@@ -285,7 +285,7 @@ class PackageConstraint(PackageFormula):
                     f'"{self.package_name}"',
                     "{",
                     "=",
-                    f'"{str(version_constraint)}"',
+                    f'"{version_constraint}"',
                     "}"
                 ])
         else:
