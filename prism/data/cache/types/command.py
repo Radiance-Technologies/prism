@@ -661,6 +661,9 @@ class VernacCommandDataList:
     # This could have simply been a subclass of list of seutil checked
     # for custom deserializers first instead of builtin types
 
+    # TODO: Make Coq document data type that packages commands and
+    # comments for a single file together.
+
     commands: List[VernacCommandData] = default_field(list())
 
     @overload
@@ -929,6 +932,12 @@ class VernacCommandDataList:
         """
         return self.commands.pop()
 
+    def serialize(self, fmt: Optional[Fmt] = None) -> List[object]:
+        """
+        Serialize as a basic list.
+        """
+        return su.io.serialize(self.commands, fmt)
+
     def shallow_copy(self) -> 'VernacCommandDataList':
         """
         Get a shallow copy of this list.
@@ -961,7 +970,7 @@ class VernacCommandDataList:
         sentences.sort()
         return sentences
 
-    def stringify(self) -> List[str]:
+    def to_lines(self) -> List[str]:
         """
         Convert the list of commands to a list of strings.
 
@@ -1010,19 +1019,13 @@ class VernacCommandDataList:
         Notes
         -----
         While the dumped Coq file cannot match the original from which
-        this data was extracted to to normalization of whitespace and
+        this data was extracted due to normalization of whitespace and
         comments, the line numbers on which each sentence is written
         should match the original Coq file.
         """
-        lines = self.stringify()
+        lines = self.to_lines()
         with open(filepath, "w") as f:
             f.write("\n".join(lines))
-
-    def serialize(self, fmt: Optional[Fmt] = None) -> List[object]:
-        """
-        Serialize as a basic list.
-        """
-        return su.io.serialize(self.commands, fmt)
 
     @classmethod
     def deserialize(cls, data: object) -> 'VernacCommandDataList':
@@ -1031,7 +1034,8 @@ class VernacCommandDataList:
         """
         return VernacCommandDataList(
             su.io.deserialize(data,
-                              clz=List[VernacCommandData]))
+                              clz=List[VernacCommandData],
+                              error="raise"))
 
 
 VernacDict = Dict[str, VernacCommandDataList]

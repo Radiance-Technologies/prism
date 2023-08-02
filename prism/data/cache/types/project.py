@@ -223,6 +223,36 @@ class ProjectCommitData(Serializable):
             v in self.command_data.items()
         }
 
+    def diff_goals(self) -> None:
+        """
+        Diff goals in-place, removing consecutive `Goals` of sentences.
+        """
+        for _, commands in self.command_data.items():
+            commands.diff_goals()
+
+    def get_file_contents(self) -> Dict[str, str]:
+        """
+        Return Coq project state as a dict of paths and file contents.
+
+        Returns
+        -------
+        project_dict : Dict[str, str]
+            Dictionary mapping a filename to a string
+            representation of the file contents.
+        """
+        project_dict = {}
+        for filename, commands in self.command_data.items():
+            # filename can contain leading directories
+            project_dict[filename] = '\n'.join(commands.to_lines())
+        return project_dict
+
+    def patch_goals(self) -> None:
+        """
+        Patch all goals in-place, removing `GoalsDiff`s from sentences.
+        """
+        for _, commands in self.command_data.items():
+            commands.patch_goals()
+
     def shallow_copy(self) -> 'ProjectCommitData':
         """
         Get a shallow copy of this structure and its fields.
@@ -241,20 +271,6 @@ class ProjectCommitData(Serializable):
             if self.environment is not None else None,
             copy.copy(self.build_result)
             if self.build_result is not None else None)
-
-    def diff_goals(self) -> None:
-        """
-        Diff goals in-place, removing consecutive `Goals` of sentences.
-        """
-        for _, commands in self.command_data.items():
-            commands.diff_goals()
-
-    def patch_goals(self) -> None:
-        """
-        Patch all goals in-place, removing `GoalsDiff`s from sentences.
-        """
-        for _, commands in self.command_data.items():
-            commands.patch_goals()
 
     def sort_commands(self) -> None:
         """
@@ -297,19 +313,3 @@ class ProjectCommitData(Serializable):
             # filename can contain leading directories
             (dirpath / filename).parent.mkdir(parents=True, exist_ok=True)
             commands.write_coq_file(dirpath / filename)
-
-    def get_coq_project_state(self) -> Dict[str, str]:
-        """
-        Return Coq project state as a dict of paths and file contents.
-
-        Returns
-        -------
-        project_dict : Dict[str, str]
-            Dictionary mapping a filename to a string
-            representation of the file contents.
-        """
-        project_dict = {}
-        for filename, commands in self.command_data.items():
-            # filename can contain leading directories
-            project_dict[filename] = '\n'.join(commands.stringify())
-        return project_dict
