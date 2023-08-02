@@ -1214,8 +1214,10 @@ class Project(ABC):
         assert command_extractor.serapi is not None
         for sentence in sentences:
             assert sentence.location is not None
-            if (breakpoint is not None and file == breakpoint.filename and
-                    not (sentence.location.lineno_last < breakpoint.lineno)):
+            # NOTE: compare by line numbers until the heuristic parser
+            # can preserve whitespace
+            if (breakpoint is not None and file == breakpoint.filename
+                    and not sentence.location.lineno_last < breakpoint.lineno):
                 break
             try:
                 if use_simple_serapi:
@@ -1226,6 +1228,8 @@ class Project(ABC):
                 fail_loc = sentence.location
                 error_msg = ce.msg
                 # yapf: disable
+                # NOTE: compare by line numbers until the heuristic
+                # parser can preserve whitespace
                 if (breakpoint is not None
                         and (breakpoint.filename != file
                              or fail_loc.lineno_last < breakpoint.lineno)):
