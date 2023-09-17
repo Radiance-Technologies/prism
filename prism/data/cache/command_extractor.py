@@ -134,8 +134,9 @@ def serapi_id_align(x: Sequence[str], y: Sequence[str]) -> Alignment:
     Alignment
         Aligned ID sequence
     """
-    x = numba.typed.List(xi.split(".")[-1] for xi in x)
-    y = numba.typed.List(yi.split(".")[-1] for yi in y)
+    empty = numba.typed.List.empty_list(numba.types.unicode_type)
+    x = numba.typed.List(xi.split(".")[-1] for xi in x) if len(x) > 0 else empty
+    y = numba.typed.List(yi.split(".")[-1] for yi in y) if len(y) > 0 else empty
     alignment = serapi_id_align_(x, y, False)
     return typing.cast(Alignment, alignment)
 
