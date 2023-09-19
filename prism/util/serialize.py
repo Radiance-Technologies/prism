@@ -152,7 +152,7 @@ class SerializableDataDiff(Generic[_S]):
     _fmt: ClassVar[Fmt] = Fmt.yaml
     _in_memory: ClassVar[bool] = False
 
-    def patch(self, a: _S) -> _S:
+    def patch(self, a: _S, clz: Type[_S] | None = None) -> _S:
         """
         Apply the diff to a given object to obtain a changed one.
 
@@ -170,7 +170,8 @@ class SerializableDataDiff(Generic[_S]):
             ``self.patch(a) == b``.
         """
         if self.diff:
-            clz = type(a)
+            if clz is None:
+                clz = type(a)
             a = su.io.serialize(a, fmt=self._fmt)
             a_str = typing.cast(str, self.safe_dump(a))
             if self._in_memory:
@@ -308,10 +309,10 @@ def get_typevar_bindings(
         _, base_bindings = get_typevar_bindings(base)
         type_bindings.update(
             {
-                k: v
-                if not isinstance(v,
-                                  TypeVar) or not clz_args else clz_args.pop()
-                for k,
+                k:
+                    v if not isinstance(v,
+                                        TypeVar) or not clz_args else
+                    clz_args.pop() for k,
                 v in base_bindings.items()
             })
     return clz_origin, type_bindings
