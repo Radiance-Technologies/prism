@@ -2,6 +2,9 @@
 Module for Manager based Client/Server.
 """
 import inspect
+import multiprocessing
+import multiprocessing.connection
+import multiprocessing.reduction
 import re
 import typing
 from functools import partialmethod
@@ -12,7 +15,17 @@ from multiprocessing.managers import (  # type: ignore
 )
 from typing import Generic, Type, TypeVar
 
+import dill
+
 from prism.util.serialize import get_typevar_bindings
+
+# HACK in lieu of writing a proper reduction protocol compatible with
+# the builtin pickler
+dill.Pickler.dumps = dill.dumps  # type: ignore
+dill.Pickler.loads = dill.loads  # type: ignore
+multiprocessing.reduction.ForkingPickler = dill.Pickler  # type: ignore
+multiprocessing.reduction.dump = dill.dump
+multiprocessing.connection._ForkingPickler = dill.Pickler  # type: ignore
 
 ManagedClient = TypeVar('ManagedClient')
 
@@ -34,7 +47,7 @@ class ManagedServer(BaseManager, Generic[ManagedClient]):
 
     def __new__(cls, *args, **kwargs):
         """
-        Register logger with base manager.
+        Register client proxy with base manager.
         """
         referent = typing.cast(
             Type[ManagedClient],
