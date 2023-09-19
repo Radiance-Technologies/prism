@@ -1,5 +1,6 @@
 bidict
 diff_match_patch
+dill
 fast-diff-match-patch
 GitPython
 gprof2dot
