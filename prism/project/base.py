@@ -180,6 +180,9 @@ class Project(ABC):
         False,
         False)
 
+    _BUILD_INTEGRITY_ERROR_CODE = -100
+    _BUILD_INTEGRITY_ERROR_MSG = "Build integrity check failed"
+
     coq_library_exts = ["*.vio", "*.vo", "*.vos", "*.vok"]
     """
     A list of possible Coq library file extensions.
@@ -439,6 +442,28 @@ class Project(ABC):
                 for f in pathlib.Path(self.path).glob('**/.git/**/*')
                 if f.is_file())
 
+    def _check_build_health(self) -> bool:
+        """
+        Check the integrity of build artifacts.
+
+        Returns
+        -------
+        bool
+            False if there are no build artifacts (.vo files) present,
+            True otherwise.
+        """
+        built_files = glob.glob(f"{self.path}/**/*.vo", recursive=True)
+        # filter out ignore paths
+        filtered = []
+        ignore_regex = self.ignore_path_regex
+        root = self.path
+        for built_file in built_files:
+            rel_file = get_relative_path(built_file, root)
+            if ignore_regex.match(str(rel_file)) is None:
+                # file should be counted among build artifacts
+                filtered.append(built_file)
+        return bool(filtered)
+
     def _check_serapi_option_health_pre_build(self) -> bool:
         """
         Check the integrity of SerAPI options before building.
@@ -591,8 +616,8 @@ class Project(ABC):
             '\n'.join([stdout,
                        stderr]))
         is_build_error_message = m is not None
-        is_anything_built = glob.glob(f"{self.path}/**/*.vo")
-        return is_build_error_message or not is_anything_built
+        is_build_healthy = self._check_build_health()
+        return is_build_error_message or not is_build_healthy
 
     def _prepare_command(self, target: str) -> str:
         # wrap in parentheses to preserve operator precedence when
@@ -673,6 +698,13 @@ class Project(ABC):
             max_runtime=max_runtime)
         result = (r.returncode, r.stdout, r.stderr)
         self._process_command_output(action, *result)
+        if target == 'build' and not self._check_build_health():
+            result = (
+                self._BUILD_INTEGRITY_ERROR_CODE,
+                result[1],
+                '/n'.join([result[2],
+                           self._BUILD_INTEGRITY_ERROR_MSG]))
+            self._process_command_output(action, *result)
         return result
 
     @abstractmethod
@@ -975,6 +1007,11 @@ class Project(ABC):
             ignore_returncode=use_dummy_coqc
             and not self._is_dependency_error(stdout,
                                               stderr))
+        if not self._check_build_health():
+            rcode_out = self._BUILD_INTEGRITY_ERROR_CODE
+            stderr = '/n'.join([stderr, self._BUILD_INTEGRITY_ERROR_MSG])
+            self._process_command_output("Strace", rcode_out, stdout, stderr)
+
         if use_dummy_coqc and cleanup:
             # clean project if we only generated empty files.
             try:
@@ -982,7 +1019,7 @@ class Project(ABC):
             except ProjectBuildError:
                 logger.debug(
                     "Tried to clean a project "
-                    "full of corrupt coqc files, but it failed!")
+                    "full of corrupt Coq files, but it failed!")
         return contexts, rcode_out, stdout, stderr
 
     def build(
