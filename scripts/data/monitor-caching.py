@@ -1,5 +1,5 @@
 """
-Script to perform cache extraction.
+Script to monitor cache extraction progress.
 """
 import argparse
 import curses
@@ -11,7 +11,7 @@ from prism.data.cache.server import CoqProjectBuildCache
 
 def main():
     """
-    Monitor cache files.
+    Monitor cache extraction success and error rates.
     """
     # Clear
     parser = argparse.ArgumentParser(description="Monitor cache files.")
@@ -23,6 +23,7 @@ def main():
     cache = CoqProjectBuildCache(args.cache_dir)
 
     stdscr = curses.initscr()  # initialize curses screen
+    error = None
     try:
         curses.noecho()  # turn off auto echoing of keypress on to screen
         curses.cbreak()  # enter break mode where pressing Enter key
@@ -46,13 +47,15 @@ def main():
             stdscr.refresh()
             stdscr.timeout(1000)
     except Exception:
-        traceback.print_exc()  # print trace back log of the error
+        error = traceback.format_exc()  # get traceback log of the error
     finally:
         # --- Cleanup on exit ---
         stdscr.keypad(False)
         curses.echo()
         curses.nocbreak()
         curses.endwin()
+    if error is not None:
+        print(error)
 
 
 if __name__ == "__main__":
