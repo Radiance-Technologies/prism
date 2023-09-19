@@ -851,7 +851,9 @@ class ProjectCommitDataDiff:
         result.sort_commands()
         self._patch_locations(result_command_data)
         result.file_dependencies = self.file_dependencies_diff.patch(
-            data.file_dependencies)
+            data.file_dependencies,
+            clz=Optional[Dict[str,
+                              List[str]]])
         return result
 
     def shallow_copy(self) -> 'ProjectCommitDataDiff':
