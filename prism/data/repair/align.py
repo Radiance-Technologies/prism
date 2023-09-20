@@ -539,6 +539,7 @@ def _compute_diff_alignment(
         b.environment,
         b.build_result)
     # rename files in b to match those renamed in a
+    # NOTE: this may alter the order of enumerated commands in b
     rename_map: Dict[str, str]
     rename_map = {
         k: k for k in b.command_data.keys()
@@ -548,6 +549,7 @@ def _compute_diff_alignment(
             assert change.after_filename is not None
             assert change.before_filename is not None
             rename_map[str(change.after_filename)] = str(change.before_filename)
+    original_commands = list(enumerate(b_in_diff.commands))
     b_in_diff.command_data = {
         rename_map[k]: v for k,
         v in b_in_diff.command_data.items()
@@ -566,6 +568,17 @@ def _compute_diff_alignment(
     # calculate alignment only for those items that are known to have
     # changed
     diff_alignment = align(a_in_diff, b_in_diff)
+    # revert to original b command indices
+    b_in_diff_files = b_in_diff.files
+    permuted_indices = {
+        k: [] for k in b_in_diff_files
+    }
+    for idx, (filename, _) in original_commands:
+        permuted_indices[rename_map[filename]].append(idx)
+    permuted_indices = np.concatenate(
+        [permuted_indices[k] for k in b_in_diff_files],
+        dtype=int)
+    diff_alignment[:, 1] = permuted_indices[diff_alignment[:, 1]]
     return diff_alignment
 
 
