@@ -576,8 +576,7 @@ def _compute_diff_alignment(
     for idx, (filename, _) in original_commands:
         permuted_indices[rename_map[filename]].append(idx)
     permuted_indices = np.concatenate(
-        [permuted_indices[k] for k in b_in_diff_files],
-        dtype=int)
+        [permuted_indices[k] for k in b_in_diff_files])
     diff_alignment[:, 1] = permuted_indices[diff_alignment[:, 1]]
     return diff_alignment
 
