@@ -616,13 +616,32 @@ def align_commits(
     ------
     ValueError
         If the number of commands in `a` and `b` that do not appear in
-        the `diff` do not match.
+        the `diff` do not match,
+        or if the data for one or both commits is empty (namely, if
+        their ``files`` properties return empty lists).
     """
     # get changed and unchanged sentence per-file indices
     a_indices_in_diff = commands_in_diff(a, diff, True)
     b_indices_in_diff = commands_in_diff(b, diff, False)
     a_files = a.files
     b_files = b.files
+    if not a_files and not b_files:
+        raise ValueError(
+            f"{a.project_metadata.project_name}"
+            f"@{a.project_metadata.commit_sha}"
+            f" and {b.project_metadata.project_name}"
+            f"@{b.project_metadata.commit_sha} have no data."
+            " Did they build correctly?")
+    elif not a_files:
+        raise ValueError(
+            f"{a.project_metadata.project_name}"
+            f"@{a.project_metadata.commit_sha} has no data."
+            " Did it build correctly?")
+    elif not b_files:
+        raise ValueError(
+            f"{b.project_metadata.project_name}"
+            f"@{b.project_metadata.commit_sha} has no data."
+            " Did it build correctly?")
     a_file_sizes = {
         k: len(v) for k,
         v in a.command_data.items()
