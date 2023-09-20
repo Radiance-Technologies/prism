@@ -568,16 +568,17 @@ def _compute_diff_alignment(
     # calculate alignment only for those items that are known to have
     # changed
     diff_alignment = align(a_in_diff, b_in_diff)
-    # revert to original b command indices
-    b_in_diff_files = b_in_diff.files
-    permuted_indices = {
-        k: [] for k in b_in_diff_files
-    }
-    for idx, (filename, _) in original_commands:
-        permuted_indices[rename_map[filename]].append(idx)
-    permuted_indices = np.concatenate(
-        [permuted_indices[k] for k in b_in_diff_files])
-    diff_alignment[:, 1] = permuted_indices[diff_alignment[:, 1]]
+    if diff_alignment.size > 0:
+        # revert to original b command indices
+        b_in_diff_files = b_in_diff.files
+        permuted_indices = {
+            k: [] for k in b_in_diff_files
+        }
+        for idx, (filename, _) in original_commands:
+            permuted_indices[rename_map[filename]].append(idx)
+        permuted_indices = np.concatenate(
+            [permuted_indices[k] for k in b_in_diff_files])
+        diff_alignment[:, 1] = permuted_indices[diff_alignment[:, 1]]
     return diff_alignment
 
 
