@@ -701,30 +701,36 @@ def align_commits(
             b_files,
             [0] + list(np.cumsum([len(b.command_data[x]) for x in b_files]))))
     # get final indices of changed elements of a
+    changed_a_indices = [
+        np.asarray(a_indices_in_diff[filename],
+                   dtype=int) + a_file_offsets[filename] for filename in a_files
+    ]
     changed_a_indices = np.concatenate(
-        [
-            np.asarray(a_indices_in_diff[filename],
-                       dtype=int) + a_file_offsets[filename]
-            for filename in a_files
-        ],
-        axis=0)
+        changed_a_indices,
+        axis=0) if len(changed_a_indices) > 0 else np.empty(
+            0,
+            dtype=int)
     # get final indices of changed elements of b
+    changed_b_indices = [
+        np.asarray(b_indices_in_diff[filename],
+                   dtype=int) + b_file_offsets[filename] for filename in b_files
+    ]
     changed_b_indices = np.concatenate(
-        [
-            np.asarray(b_indices_in_diff[filename],
-                       dtype=int) + b_file_offsets[filename]
-            for filename in b_files
-        ],
-        axis=0)
+        changed_b_indices,
+        axis=0) if len(changed_b_indices) > 0 else np.empty(
+            0,
+            dtype=int)
     # sort unchanged indices
     # get final indices of unchanged elements of a
+    unchanged_a_indices = [
+        np.asarray(a_indices_not_in_diff[filename],
+                   dtype=int) + a_file_offsets[filename] for filename in a_files
+    ]
     unchanged_a_indices = np.concatenate(
-        [
-            np.asarray(a_indices_not_in_diff[filename],
-                       dtype=int) + a_file_offsets[filename]
-            for filename in a_files
-        ],
-        axis=0)
+        unchanged_a_indices,
+        axis=0) if len(unchanged_a_indices) > 0 else np.empty(
+            0,
+            dtype=int)
     # get final indices of unchanged elements of b
     # get map from a filenames to b filenames
     # only need to cover files that exist in both commits
@@ -739,14 +745,17 @@ def align_commits(
             assert change.after_filename is not None
             assert change.before_filename is not None
             rename_map[str(change.before_filename)] = str(change.after_filename)
+    unchanged_b_indices = [
+        np.asarray(b_indices_not_in_diff[rename_map[filename]],
+                   dtype=int) + b_file_offsets[rename_map[filename]]
+        for filename in a_files
+        if filename in rename_map
+    ]
     unchanged_b_indices = np.concatenate(
-        [
-            np.asarray(b_indices_not_in_diff[rename_map[filename]],
-                       dtype=int) + b_file_offsets[rename_map[filename]]
-            for filename in a_files
-            if filename in rename_map
-        ],
-        axis=0)
+        unchanged_b_indices,
+        axis=0) if len(unchanged_b_indices) > 0 else np.empty(
+            0,
+            dtype=int)
     # Compute alignment
     # Unchanged indices should map one-to-one in ascending order.
     # Any dropped or added content will have been handled in
