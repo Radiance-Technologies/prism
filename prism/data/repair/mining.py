@@ -3,6 +3,7 @@ Mine repair instances by looping over existing project build cache.
 """
 import enum
 import logging
+import multiprocessing
 import multiprocessing.queues as mpq
 import os
 import select
@@ -2197,6 +2198,24 @@ def _process_parallel_worker_message(
     return False
 
 
+def _join_workers(
+        worker_processes: Iterable[Process],
+        queues: Iterable[mpq.Queue],
+        repair_mining_logger: RepairMiningLogger,
+        timeout: float | None = None):
+    while len(multiprocessing.active_children()) > 1:
+        repair_mining_logger.write_debug_log("[Main] Clearing queues...")
+        for q in queues:
+            while not q.empty():
+                try:
+                    q.get()
+                except Empty:
+                    break
+        repair_mining_logger.write_debug_log("[Main] Joining subprocesses...")
+        for worker_process in worker_processes:
+            worker_process.join(timeout)
+
+
 def _parallel_work(
         cache_label_pairs: List[Tuple[CacheObjectStatus,
                                       CacheObjectStatus]],
@@ -2262,6 +2281,10 @@ def _parallel_work(
     try:
         while (observed_sentinels < expected_sentinels
                or any(pbar.n < pbar.total for pbar in progress_bars.values())):
+            if len(multiprocessing.active_children()) < max_workers + 1:
+                repair_mining_logger.write_debug_log(
+                    "[Main] Some workers have exited silently")
+                raise KeyboardInterrupt()
             # Don't do anything until there's something to read.
             select.select(
                 [worker_to_parent_queue._reader],  # type: ignore
@@ -2281,13 +2304,27 @@ def _parallel_work(
                 elif not isinstance(job_completed, bool):
                     assert isinstance(job_completed, Except)
                     delayed_exception = job_completed
+                    repair_mining_logger.write_debug_log(
+                        "[Main] Exception received. Aborting")
+                    repair_mining_logger.write_exception_log(delayed_exception)
+                    break
     except KeyboardInterrupt:
         pass
     # ...then stop the workers and their processes
-    for _ in range(len(worker_processes)):
+    repair_mining_logger.write_debug_log("[Main] Telling workers to stop")
+    for _ in range(len(multiprocessing.active_children()) - 1):
         control_queue.put(StopWorkSentinel())
-    for worker_process in worker_processes:
-        worker_process.join()
+    # and clear out the other queues and join the worker processes
+    _join_workers(
+        worker_processes,
+        [
+            changeset_mining_job_queue,
+            error_instance_job_queue,
+            repair_instance_job_queue,
+            worker_to_parent_queue
+        ],
+        repair_mining_logger,
+        5)
     if delayed_exception is not None:
         raise RuntimeError(
             f"Delayed exception: {delayed_exception.exception}."
