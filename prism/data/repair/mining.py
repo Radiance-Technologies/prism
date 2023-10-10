@@ -1,7 +1,9 @@
 """
 Mine repair instances by looping over existing project build cache.
 """
+import atexit
 import enum
+import faulthandler
 import logging
 import multiprocessing
 import multiprocessing.queues as mpq
@@ -1820,6 +1822,23 @@ def mining_loop_worker(
         logging_directory,
         repair_mining_logger.level,
         f'worker-{worker_id}-pid-{os.getpid()}.log')
+    if Debug.is_debug:
+        f = open(
+            logging_directory
+            / f'fault_worker-{worker_id}-pid-{os.getpid()}.log',
+            'w')
+        faulthandler.enable(file=f, all_threads=True)
+
+        @atexit.register
+        def exit_fun():
+            with open(logging_directory
+                      / f"exit-worker-{worker_id}-pid-{os.getpid()}.txt",
+                      "w") as f:
+                try:
+                    raise RuntimeError()
+                except RuntimeError as e:
+                    f.write(format_exc(e))
+
     # The order of the following blocks is important. We wish to keep
     # the size of the repair_instance_job_queue small so that we don't
     # run out of memory. Hence, our first step is to process any control
