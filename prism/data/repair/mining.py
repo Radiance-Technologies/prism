@@ -1659,7 +1659,7 @@ def _mine_repairs(
     Mine repairs from mined errors.
     """
     try:
-        repair_job = repair_instance_job_queue.get_nowait()
+        repair_job = repair_instance_job_queue.get(timeout=5)
     except Empty:
         return LoopControl.PASS
     else:
@@ -1695,7 +1695,7 @@ def _mine_errors(
     Mine errors from mined changesets.
     """
     try:
-        error_instance_job = error_instance_job_queue.get_nowait()
+        error_instance_job = error_instance_job_queue.get(timeout=5)
     except Empty:
         return LoopControl.PASS
     else:
@@ -1742,7 +1742,7 @@ def _mine_changesets(
     Mine changesets for inducing (presumed) errors.
     """
     try:
-        changeset_mining_job = changeset_mining_job_queue.get_nowait()
+        changeset_mining_job = changeset_mining_job_queue.get(timeout=5)
     except Empty:
         pass
     else:
@@ -2324,7 +2324,7 @@ def _parallel_work(
                 [],
                 30)
             try:
-                worker_msg = worker_to_parent_queue.get_nowait()
+                worker_msg = worker_to_parent_queue.get(timeout=1)
             except Empty:
                 pass
             else:
