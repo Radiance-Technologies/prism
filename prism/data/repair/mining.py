@@ -250,6 +250,10 @@ class JobType(enum.Enum):
     The type of a parallel job.
     """
 
+    CHANGESET_INSTANCE = enum.auto()
+    """
+    Changeset instance creation.
+    """
     ERROR_INSTANCE = enum.auto()
     """
     Error instance creation.
@@ -271,21 +275,30 @@ class JobID:
     job_type: JobType
 
     def __str__(self) -> str:  # noqa: D105
-        job_type = "errors" if self.job_type == JobType.ERROR_INSTANCE else "repairs"
+        if self.job_type == JobType.CHANGESET_INSTANCE:
+            job_type = "Changeset"
+        elif self.job_type == JobType.ERROR_INSTANCE:
+            job_type = "Error"
+        else:
+            job_type = "Repair"
         return (
-            f"Mining {job_type}: {self.label_a.project}"
+            f"{job_type} Mining: {self.label_a.project}"
             f"@{self.label_a.commit_hash[:8]}({self.label_a.coq_version})"
             f"..{self.label_b.commit_hash[:8]}({self.label_b.coq_version})")
 
     @classmethod
     def from_job(
-            cls,
-            job: Union[ErrorInstanceJob,
-                       RepairInstanceJob]) -> 'JobID':
+        cls,
+        job: Union[ChangeSetMiningJob,
+                   ErrorInstanceJob,
+                   RepairInstanceJob]
+    ) -> 'JobID':
         """
         Create a job ID for a given job.
         """
-        if isinstance(job, ErrorInstanceJob):
+        if isinstance(job, ChangeSetMiningJob):
+            job_id = JobID(job.label_a, job.label_b, JobType.CHANGESET_INSTANCE)
+        elif isinstance(job, ErrorInstanceJob):
             job_id = JobID(
                 CacheObjectStatus.from_metadata(
                     job.initial_state.project_metadata),
