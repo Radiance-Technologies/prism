@@ -8,12 +8,7 @@ import multiprocessing.queues
 import multiprocessing.reduction
 import re
 import typing
-from functools import partialmethod
-from multiprocessing.managers import (  # type: ignore
-    BaseManager,
-    BaseProxy,
-    NamespaceProxy,
-)
+from multiprocessing.managers import BaseManager, NamespaceProxy  # type: ignore
 from typing import Generic, Type, TypeVar
 
 import dill
@@ -77,10 +72,6 @@ class ManagedServer(BaseManager, Generic[ManagedClient]):
         exposed = {'__getattribute__',
                    '__setattr__',
                    '__delattr__'}
-        proxy_methods = {}
-
-        def _callmethod(self: BaseProxy, nm, *args, **kwargs):
-            return self._callmethod(nm, args, kwargs)
 
         for nm, _ in inspect.getmembers(referent,
                                         lambda m: inspect.ismethod(m)
@@ -93,11 +84,9 @@ class ManagedServer(BaseManager, Generic[ManagedClient]):
             if (nm not in exposed and nm not in reserved
                     and _PRIVATE_METHOD_REGEX.fullmatch(nm) is None):
                 exposed.add(nm)
-                proxy_methods[nm] = partialmethod(_callmethod, nm)
         proxy_members = {
             '_exposed_': list(exposed)
         }
-        proxy_members.update(proxy_methods)
         ClientProxy = type(
             referent.__name__ + "Proxy",
             (NamespaceProxy,
