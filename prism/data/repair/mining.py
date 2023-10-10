@@ -12,6 +12,7 @@ import types
 import typing
 from dataclasses import asdict, dataclass
 from multiprocessing import Process, Queue
+from multiprocessing.synchronize import SemLock
 from pathlib import Path
 from queue import Empty
 from tempfile import TemporaryDirectory
@@ -48,6 +49,7 @@ from prism.data.repair.instance import (
 from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
+from prism.util.debug import Debug
 from prism.util.io import Fmt, atomic_write
 from prism.util.manager import ManagedServer, _override_multiprocessing_pickler
 from prism.util.path import append_suffix, with_suffixes
@@ -1069,32 +1071,46 @@ class RepairMiningLogger:
     Logger for writing logs during repair mining process.
     """
 
-    def __init__(self, repair_instance_db_directory: PathLike, level: int):
+    def __init__(
+            self,
+            repair_instance_db_directory: PathLike,
+            level: int,
+            logname: str | None = None):
         self.logger = logging.getLogger(__name__)
         # Get rid of the stdout handler
         for handler in self.logger.handlers:
             self.logger.removeHandler(handler)
         self.logger.setLevel(level)
+        if logname is None:
+            logname = "repair_mining.log"
         self.handler = logging.FileHandler(
-            str(Path(repair_instance_db_directory) / "repair_mining_log.txt"))
+            str(Path(repair_instance_db_directory) / logname))
         self.handler.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
         self.handler.setLevel(level)
         self.logger.addHandler(self.handler)
+        self._directory = Path(repair_instance_db_directory)
+        self._logname = logname
 
-    def write_exception_log(self, exception: Except[None]):
+    @property
+    def directory(self) -> Path:
         """
-        Write a log entry for the given exception.
-
-        logging.Logger objects are not multi-processing-safe, so this
-        method is synchronized to prevent simultaneous write attempts.
-
-        Parameters
-        ----------
-        exception : Except[None]
-            Exception to write a log entry for
+        The directory in which the log is written.
         """
-        self.logger.exception(exception.exception)
-        self.logger.error(f"Traceback: {exception.trace}")
+        return self._directory
+
+    @property
+    def level(self) -> int:
+        """
+        The logging level.
+        """
+        return self.logger.level
+
+    @property
+    def logname(self) -> str:
+        """
+        The name of the log file, not including parent directories.
+        """
+        return self._logname
 
     def write_debug_log(self, message: str):
         """
@@ -1106,6 +1122,52 @@ class RepairMiningLogger:
             Message to write as a debug message to the logger.
         """
         self.logger.debug(message)
+
+    def write_exception_log(self, exception: Except[None]):
+        """
+        Write a log entry for the given exception.
+
+        Parameters
+        ----------
+        exception : Except[None]
+            Exception to write a log entry for
+        """
+        self.logger.exception(exception.exception)
+        self.logger.error(f"Traceback: {exception.trace}")
+
+    @classmethod
+    def safe_write_debug_log(
+            cls,
+            lock: SemLock,
+            logger: 'RepairMiningLogger',
+            message: str):
+        """
+        Write a debug message in a thread-safe manner.
+
+        Notes
+        -----
+        This is a workaround to a bug in Python's multiprocessing
+        implementation that causes a race condition:
+        https://github.com/python/cpython/issues/84582.
+        The workaround was suggested in
+        https://stackoverflow.com/a/75466266.
+        The workaround did not observably work due to memory issues,
+        but it might work with a small enough number of workers.
+        """
+        with lock:
+            logger.write_debug_log(message)
+
+    @classmethod
+    def safe_write_exception_log(
+            cls,
+            lock: SemLock,
+            logger: 'RepairMiningLogger',
+            exception: Except[None]):
+        """
+        Write a log entry for the given exception.
+        """
+        with lock:
+            logger.write_exception_log(exception)
 
 
 class RepairMiningLoggerServer(ManagedServer[RepairMiningLogger]):
@@ -1357,8 +1419,8 @@ def mine_changesets_from_label_pair(
             commit_diff,
             list(changeset_miner(initial_state,
                                  commit_diff)))
-    except Exception as e:
-        result = Except(None, e, format_exc(e))
+    except BaseException as e:
+        result = Except(None, e, format_exc(e))  # type: ignore
         repair_mining_logger.write_exception_log(result)
     return result
 
@@ -1574,7 +1636,9 @@ def _mine_repairs(
         repair_instance_job_queue: mpq.Queue[RepairInstanceJob],
         worker_to_parent_queue: mpq.Queue[Union[Except[None],
                                                 JobStatusMessage]],
-        skip_errors: bool) -> LoopControl:
+        skip_errors: bool,
+        worker_id: int,
+        repair_mining_logger: RepairMiningLogger) -> LoopControl:
     """
     Mine repairs from mined errors.
     """
@@ -1608,7 +1672,9 @@ def _mine_errors(
                                                 JobStatusMessage]],
         repair_instance_db_directory: Path,
         repair_miner: RepairMiner,
-        skip_errors: bool) -> LoopControl:
+        skip_errors: bool,
+        worker_id: int,
+        repair_mining_logger: RepairMiningLogger) -> LoopControl:
     """
     Mine errors from mined changesets.
     """
@@ -1653,7 +1719,9 @@ def _mine_changesets(
                                                   JobStatusMessage]],
         worker_to_parent_queue: mpq.Queue[Union[Except[None],
                                                 JobStatusMessage]],
-        skip_errors: bool) -> LoopControl:
+        skip_errors: bool,
+        worker_id: int,
+        repair_mining_logger: RepairMiningLogger) -> LoopControl:
     """
     Mine changesets for inducing (presumed) errors.
     """
@@ -1702,16 +1770,19 @@ def _mine_changesets(
 
 
 def mining_loop_worker(
-        control_queue: mpq.Queue[StopWorkSentinel],
-        changeset_mining_job_queue: mpq.Queue[ChangeSetMiningJob],
-        error_instance_job_queue: mpq.Queue[Union[ErrorInstanceJob,
-                                                  JobStatusMessage]],
-        repair_instance_job_queue: mpq.Queue[RepairInstanceJob],
-        worker_to_parent_queue: mpq.Queue[Union[Except[None],
-                                                JobStatusMessage]],
-        repair_instance_db_directory: Path,
-        repair_miner: RepairMiner,
-        skip_errors: bool) -> None:
+    control_queue: mpq.Queue[StopWorkSentinel],
+    changeset_mining_job_queue: mpq.Queue[ChangeSetMiningJob],
+    error_instance_job_queue: mpq.Queue[Union[ErrorInstanceJob,
+                                              JobStatusMessage]],
+    repair_instance_job_queue: mpq.Queue[RepairInstanceJob],
+    worker_to_parent_queue: mpq.Queue[Union[Except[None],
+                                            JobStatusMessage]],
+    repair_instance_db_directory: Path,
+    repair_miner: RepairMiner,
+    skip_errors: bool,
+    repair_mining_logger: RepairMiningLogger,
+    worker_id: int,
+) -> None:
     """
     Perform either error instance or repair instance mining.
 
@@ -1737,7 +1808,17 @@ def mining_loop_worker(
         encountered during error instance or repair mining. Other
         exceptions will not be ignored. If false, stop on exceptions in
         mining. By default, true.
+    repair_mining_logger : RepairMiningLogger
+        The object used to log errors and debug messages during repair
+        mining
+    worker_id : int
+        A unique ID for the worker process invoking this function.
     """
+    logging_directory = repair_mining_logger.directory
+    repair_mining_logger = RepairMiningLogger(
+        logging_directory,
+        repair_mining_logger.level,
+        f'worker-{worker_id}-pid-{os.getpid()}.log')
     # The order of the following blocks is important. We wish to keep
     # the size of the repair_instance_job_queue small so that we don't
     # run out of memory. Hence, our first step is to process any control
@@ -1745,68 +1826,100 @@ def mining_loop_worker(
     # available, do those, and only if none of those jobs are available
     # do we process error instance creation jobs and start filling up
     # the repair instance jobs queue again.
-    while True:
-        # Don't do anything until something is eligible to read.
-        select.select(
-            [
-                control_queue._reader,  # type: ignore
-                changeset_mining_job_queue._reader,  # type: ignore
-                error_instance_job_queue._reader,  # type: ignore
-                repair_instance_job_queue._reader  # type: ignore
-            ],
-            [],
-            [],
-            30)
 
-        # #######################
-        # Handle control messages
-        # #######################
+    try:
+        while True:
+            # Don't do anything until something is eligible to read.
+            select.select(
+                [
+                    control_queue._reader,  # type: ignore
+                    changeset_mining_job_queue._reader,  # type: ignore
+                    error_instance_job_queue._reader,  # type: ignore
+                    repair_instance_job_queue._reader  # type: ignore
+                ],
+                [],
+                [],
+                30)
 
-        try:
-            control_message = control_queue.get_nowait()
-        except Empty:
-            pass
-        else:
-            if isinstance(control_message, StopWorkSentinel):
-                break
-        # ########################
-        # Repair instance creation
-        # ########################
-        match _mine_repairs(repair_instance_job_queue,
-                            worker_to_parent_queue,
-                            skip_errors):
-            case LoopControl.BREAK:
-                break
-            case LoopControl.CONTINUE:
-                continue
-            case LoopControl.PASS:
+            # #######################
+            # Handle control messages
+            # #######################
+
+            try:
+                control_message = control_queue.get(timeout=0.02)
+            except Empty:
                 pass
-        # #######################
-        # Error instance creation
-        # #######################
-        match _mine_errors(error_instance_job_queue,
-                           repair_instance_job_queue,
-                           worker_to_parent_queue,
-                           repair_instance_db_directory,
-                           repair_miner,
-                           skip_errors):
-            case LoopControl.BREAK:
-                break
-            case LoopControl.CONTINUE:
-                continue
-            case LoopControl.PASS:
-                pass
-        # #######################
-        # Changeset mining
-        # #######################
-        match _mine_changesets(changeset_mining_job_queue,
-                               error_instance_job_queue,
+            else:
+                if isinstance(control_message, StopWorkSentinel):
+                    repair_mining_logger.write_debug_log(
+                        f"[Worker {worker_id}] StopWorkSentinel received")
+                    break
+            # ########################
+            # Repair instance creation
+            # ########################
+            match _mine_repairs(repair_instance_job_queue,
+                                worker_to_parent_queue,
+                                skip_errors,
+                                worker_id,
+                                repair_mining_logger):
+                case LoopControl.BREAK:
+                    repair_mining_logger.write_debug_log(
+                        f"[Worker {worker_id}] Breaking out of repair mining")
+                    break
+                case LoopControl.CONTINUE:
+                    continue
+                case LoopControl.PASS:
+                    pass
+            # #######################
+            # Error instance creation
+            # #######################
+            match _mine_errors(error_instance_job_queue,
+                               repair_instance_job_queue,
                                worker_to_parent_queue,
-                               skip_errors):
-            case LoopControl.BREAK:
-                break
-            case _:
-                pass
+                               repair_instance_db_directory,
+                               repair_miner,
+                               skip_errors,
+                               worker_id,
+                               repair_mining_logger):
+                case LoopControl.BREAK:
+                    repair_mining_logger.write_debug_log(
+                        f"[Worker {worker_id}] Breaking out of error mining")
+                    break
+                case LoopControl.CONTINUE:
+                    continue
+                case LoopControl.PASS:
+                    pass
+            # #######################
+            # Changeset mining
+            # #######################
+            match _mine_changesets(changeset_mining_job_queue,
+                                   error_instance_job_queue,
+                                   worker_to_parent_queue,
+                                   skip_errors,
+                                   worker_id,
+                                   repair_mining_logger):
+                case LoopControl.BREAK:
+                    repair_mining_logger.write_debug_log(
+                        f"[Worker {worker_id}] Breaking out of changeset mining"
+                    )
+                    break
+                case _:
+                    pass
+    except BaseException as e:
+        result = Except(None, e, format_exc(e))  # type: ignore
+        if Debug.is_debug:
+            with open(logging_directory
+                      / f"bug-worker-{worker_id}-pid-{os.getpid()}.txt",
+                      "w") as f:
+                f.write(result.trace)
+        # never skip reporting; this indicates something very wrong
+        worker_to_parent_queue.put(result)
+        repair_mining_logger.write_exception_log(result)
+    finally:
+        repair_mining_logger.write_debug_log(f"[Worker {worker_id}] Exiting")
+        repair_instance_job_queue.cancel_join_thread()
+        error_instance_job_queue.cancel_join_thread()
+        changeset_mining_job_queue.cancel_join_thread()
 
 
 def mining_loop_worker_star(args: tuple):
@@ -2121,23 +2234,31 @@ def _parallel_work(
         worker_to_parent_queue,
         repair_instance_db_directory,
         repair_miner,
-        skip_errors
+        skip_errors,
+        repair_mining_logger
     ]
     worker_processes: List[Process] = []
-    # Start processes
-    for _ in range(max_workers):
-        worker_process = Process(target=mining_loop_worker, args=proc_args)
-        worker_process.start()
-        worker_processes.append(worker_process)
     # Load initial job queue
     for changeset_mining_job in changeset_mining_jobs:
         changeset_mining_job_queue.put(changeset_mining_job)
+    # Start processes
+    for worker_id in range(max_workers):
+        worker_process = Process(
+            target=mining_loop_worker,
+            args=proc_args + [worker_id])
+        worker_process.start()
+        worker_processes.append(worker_process)
     expected_sentinels = len(changeset_mining_jobs)
     observed_sentinels = 0
     # Wait until work is finished or until we get a ctrl+c
     delayed_exception = None
     progress_bars: Dict[JobID,
                         tqdm] = {}
+    repair_mining_logger.write_debug_log("Switching to per-process logging")
+    repair_mining_logger = RepairMiningLogger(
+        repair_mining_logger.directory,
+        repair_mining_logger.level,
+        f"main-{os.getpid()}.log")
     try:
         while (observed_sentinels < expected_sentinels
                or any(pbar.n < pbar.total for pbar in progress_bars.values())):
