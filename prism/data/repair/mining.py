@@ -3,11 +3,12 @@ Mine repair instances by looping over existing project build cache.
 """
 import enum
 import logging
+import multiprocessing.queues as mpq
 import os
-import queue
 import select
 import shutil
 import sqlite3
+import types
 import typing
 from dataclasses import asdict, dataclass
 from multiprocessing import Process, Queue
@@ -48,9 +49,18 @@ from prism.project.metadata import ProjectMetadata
 from prism.project.metadata.storage import MetadataStorage
 from prism.project.repo import ProjectRepo
 from prism.util.io import Fmt, atomic_write
-from prism.util.manager import ManagedServer
+from prism.util.manager import ManagedServer, _override_multiprocessing_pickler
 from prism.util.path import append_suffix, with_suffixes
 from prism.util.radpytools.path import PathLike
+
+# HACK: allow multiprocessing Queue to be subscriptable
+type.__setattr__(
+    mpq.Queue,
+    "__class_getitem__",
+    classmethod(types.GenericAlias))
+
+# HACK: use dill instead of builtin multiprocessing pickler
+_override_multiprocessing_pickler()
 
 BuildRepairInstanceOutput = Optional[Union[ProjectCommitDataRepairInstance,
                                            Except[None]]]
@@ -1561,9 +1571,9 @@ def build_repair_instance_mining_inputs(
 
 
 def _mine_repairs(
-        repair_instance_job_queue: queue.Queue[RepairInstanceJob],
-        worker_to_parent_queue: queue.Queue[Union[Except[None],
-                                                  JobStatusMessage]],
+        repair_instance_job_queue: mpq.Queue[RepairInstanceJob],
+        worker_to_parent_queue: mpq.Queue[Union[Except[None],
+                                                JobStatusMessage]],
         skip_errors: bool) -> LoopControl:
     """
     Mine repairs from mined errors.
@@ -1591,11 +1601,11 @@ def _mine_repairs(
 
 
 def _mine_errors(
-        error_instance_job_queue: queue.Queue[Union[ErrorInstanceJob,
-                                                    JobStatusMessage]],
-        repair_instance_job_queue: queue.Queue[RepairInstanceJob],
-        worker_to_parent_queue: queue.Queue[Union[Except[None],
+        error_instance_job_queue: mpq.Queue[Union[ErrorInstanceJob,
                                                   JobStatusMessage]],
+        repair_instance_job_queue: mpq.Queue[RepairInstanceJob],
+        worker_to_parent_queue: mpq.Queue[Union[Except[None],
+                                                JobStatusMessage]],
         repair_instance_db_directory: Path,
         repair_miner: RepairMiner,
         skip_errors: bool) -> LoopControl:
@@ -1638,11 +1648,11 @@ def _mine_errors(
 
 
 def _mine_changesets(
-        changeset_mining_job_queue: queue.Queue[ChangeSetMiningJob],
-        error_instance_job_queue: queue.Queue[Union[ErrorInstanceJob,
-                                                    JobStatusMessage]],
-        worker_to_parent_queue: queue.Queue[Union[Except[None],
+        changeset_mining_job_queue: mpq.Queue[ChangeSetMiningJob],
+        error_instance_job_queue: mpq.Queue[Union[ErrorInstanceJob,
                                                   JobStatusMessage]],
+        worker_to_parent_queue: mpq.Queue[Union[Except[None],
+                                                JobStatusMessage]],
         skip_errors: bool) -> LoopControl:
     """
     Mine changesets for inducing (presumed) errors.
@@ -1692,13 +1702,13 @@ def _mine_changesets(
 
 
 def mining_loop_worker(
-        control_queue: queue.Queue[StopWorkSentinel],
-        changeset_mining_job_queue: queue.Queue[ChangeSetMiningJob],
-        error_instance_job_queue: queue.Queue[Union[ErrorInstanceJob,
-                                                    JobStatusMessage]],
-        repair_instance_job_queue: queue.Queue[RepairInstanceJob],
-        worker_to_parent_queue: queue.Queue[Union[Except[None],
+        control_queue: mpq.Queue[StopWorkSentinel],
+        changeset_mining_job_queue: mpq.Queue[ChangeSetMiningJob],
+        error_instance_job_queue: mpq.Queue[Union[ErrorInstanceJob,
                                                   JobStatusMessage]],
+        repair_instance_job_queue: mpq.Queue[RepairInstanceJob],
+        worker_to_parent_queue: mpq.Queue[Union[Except[None],
+                                                JobStatusMessage]],
         repair_instance_db_directory: Path,
         repair_miner: RepairMiner,
         skip_errors: bool) -> None:
@@ -2096,13 +2106,13 @@ def _parallel_work(
             fast) for label_a,
         label_b in cache_label_pairs
     ]
-    control_queue: Queue[StopWorkSentinel] = Queue()
-    changeset_mining_job_queue: Queue[ChangeSetMiningJob] = Queue()
-    error_instance_job_queue: Queue[Union[ErrorInstanceJob,
-                                          JobStatusMessage]] = Queue()
-    repair_instance_job_queue: Queue[RepairInstanceJob] = Queue()
-    worker_to_parent_queue: Queue[Union[Except[None],
-                                        JobStatusMessage]] = Queue()
+    control_queue: mpq.Queue[StopWorkSentinel] = Queue()
+    changeset_mining_job_queue: mpq.Queue[ChangeSetMiningJob] = Queue()
+    error_instance_job_queue: mpq.Queue[Union[ErrorInstanceJob,
+                                              JobStatusMessage]] = Queue()
+    repair_instance_job_queue: mpq.Queue[RepairInstanceJob] = Queue()
+    worker_to_parent_queue: mpq.Queue[Union[Except[None],
+                                            JobStatusMessage]] = Queue()
     proc_args = [
         control_queue,
         changeset_mining_job_queue,
