@@ -17,10 +17,11 @@ from dataclasses import asdict, dataclass
 from multiprocessing import Process, Queue
 from multiprocessing.synchronize import SemLock
 from pathlib import Path
-from queue import Empty
-from tempfile import TemporaryDirectory
+from queue import Empty, Full
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 from types import TracebackType
 from typing import (
+    Any,
     Callable,
     Dict,
     Iterable,
@@ -1648,33 +1649,107 @@ def build_repair_instance_mining_inputs(
     return repair_instance_jobs
 
 
+def _worker_debug_file_prefix(worker_id: int, job_name: str) -> str:
+    """
+    Get the prefix for a debug file that exists only during a job.
+    """
+    return f'worker-{worker_id}-[{job_name}]-{os.getpid()}'
+
+
+_WORKER_DEBUG_FILE_EXT = '.debug'
+
+
+def enqueue_or_shelve(
+    worker_id: int,
+    client_queue: mpq.Queue,
+    item: Any,
+    repair_mining_logger: RepairMiningLogger | None = None,
+) -> Any | None:
+    """
+    Attempt to enqueue an item or return it if the queue is full.
+    """
+    try:
+        client_queue.put(item, timeout=5)
+    except Full:
+        if repair_mining_logger is not None:
+            job_id = JobID.from_job(item) if isinstance(
+                item,
+                (ErrorInstanceJob,
+                 RepairInstanceJob)) else item
+            repair_mining_logger.write_debug_log(
+                f"[Worker {worker_id}] Queue full. Shelving {job_id}")
+        elif isinstance(item,
+                        (ChangeSetMiningJob,
+                         ErrorInstanceJob,
+                         RepairInstanceJob)):
+            repair_mining_logger = item.repair_mining_logger
+            job_id = JobID.from_job(item) if isinstance(
+                item,
+                (ErrorInstanceJob,
+                 RepairInstanceJob)) else item
+            repair_mining_logger.write_debug_log(
+                f"[Worker {worker_id}] Queue full. Shelving {job_id}")
+        else:
+            # fallback to stdout
+            print(f"[Worker {worker_id}] Queue full. Shelving {item}")
+        return item
+    else:
+        return None
+
+
 def _mine_repairs(
         repair_instance_job_queue: mpq.Queue[RepairInstanceJob],
         worker_to_parent_queue: mpq.Queue[Union[Except[None],
                                                 JobStatusMessage]],
         skip_errors: bool,
         worker_id: int,
+        pending_messages: List[JobStatusMessage],
         repair_mining_logger: RepairMiningLogger) -> LoopControl:
     """
     Mine repairs from mined errors.
     """
+    # Flush pending messages first
+    pending_messages = [
+        m for pm in pending_messages if (
+            m := enqueue_or_shelve(
+                worker_id,
+                worker_to_parent_queue,
+                pm,
+                repair_mining_logger)) is not None
+    ]
+    if pending_messages:
+        # fallback to stdout
+        repair_mining_logger.write_debug_log(
+            f"[Worker {worker_id}] Still flushing messages...")
+        return LoopControl.CONTINUE
     try:
         repair_job = repair_instance_job_queue.get(timeout=5)
     except Empty:
         return LoopControl.PASS
     else:
-        if isinstance(repair_job, RepairInstanceJob):
-            result = build_repair_instance_star(repair_job)
-            if not skip_errors and isinstance(result, Except):
-                worker_to_parent_queue.put(result)
-                return LoopControl.BREAK
-            worker_to_parent_queue.put(
-                JobStatusMessage.from_job(repair_job,
-                                          1,
-                                          JobStatus.PROGRESSED))
-        else:
-            raise RuntimeError(
-                f"Unexpected type {type(repair_job)} for repair_job.")
+        with NamedTemporaryFile(dir=repair_mining_logger.directory,
+                                prefix=_worker_debug_file_prefix(
+                                    worker_id,
+                                    "mine_repairs"),
+                                suffix=_WORKER_DEBUG_FILE_EXT):
+            if isinstance(repair_job, RepairInstanceJob):
+                result = build_repair_instance_star(repair_job)
+                if not skip_errors and isinstance(result, Except):
+                    worker_to_parent_queue.put(result)
+                    return LoopControl.BREAK
+                pending_message = enqueue_or_shelve(
+                    worker_id,
+                    worker_to_parent_queue,
+                    JobStatusMessage.from_job(
+                        repair_job,
+                        1,
+                        JobStatus.PROGRESSED),
+                    repair_mining_logger)
+                if pending_message is not None:
+                    pending_messages.append(pending_message)
+            else:
+                raise RuntimeError(
+                    f"Unexpected type {type(repair_job)} for repair_job.")
         # Don't automatically go to building error instances. Focus
         # on clearing the repair instance queue out.
         return LoopControl.CONTINUE
@@ -1690,40 +1765,81 @@ def _mine_errors(
         repair_miner: RepairMiner,
         skip_errors: bool,
         worker_id: int,
+        pending_messages: List[JobStatusMessage],
+        pending_repair_jobs: List[RepairInstanceJob],
         repair_mining_logger: RepairMiningLogger) -> LoopControl:
     """
     Mine errors from mined changesets.
     """
+    # Flush pending repair jobs first
+    pending_repair_jobs = [
+        r for rj in pending_repair_jobs if (
+            r := enqueue_or_shelve(
+                worker_id,
+                error_instance_job_queue,
+                rj,
+                repair_mining_logger)) is not None
+    ]
+    if pending_repair_jobs:
+        # fallback to stdout
+        repair_mining_logger.write_debug_log(
+            f"[Worker {worker_id}] Still flushing repair jobs...")
+        return LoopControl.CONTINUE
     try:
         error_instance_job = error_instance_job_queue.get(timeout=5)
     except Empty:
         return LoopControl.PASS
     else:
-        if isinstance(error_instance_job, ErrorInstanceJob):
-            result = build_error_instance_star(error_instance_job)
-            if not skip_errors and isinstance(result, Except):
-                worker_to_parent_queue.put(result)
-                return LoopControl.BREAK
-            # If skip_errors is true and result is an Except, the
-            # following will immediately return an empty list.
-            repair_instance_jobs = build_repair_instance_mining_inputs(
-                result,
-                repair_instance_db_directory,
-                repair_miner,
-                error_instance_job.repair_mining_logger)
-            for repair_instance_job in repair_instance_jobs:
-                repair_instance_job_queue.put(repair_instance_job)
-            worker_to_parent_queue.put(
-                JobStatusMessage.from_job(
+        with NamedTemporaryFile(dir=repair_mining_logger.directory,
+                                prefix=_worker_debug_file_prefix(worker_id,
+                                                                 "mine_errors"),
+                                suffix=_WORKER_DEBUG_FILE_EXT):
+            if isinstance(error_instance_job, ErrorInstanceJob):
+                result = build_error_instance_star(error_instance_job)
+                if not skip_errors and isinstance(result, Except):
+                    worker_to_parent_queue.put(result)
+                    return LoopControl.BREAK
+                # If skip_errors is true and result is an Except, the
+                # following will immediately return an empty list.
+                repair_instance_jobs = build_repair_instance_mining_inputs(
+                    result,
+                    repair_instance_db_directory,
+                    repair_miner,
+                    repair_mining_logger)
+                repair_mining_logger.write_debug_log(
+                    f"[Worker {worker_id}]"
+                    f" Mined {len(repair_instance_jobs)} errors"
+                    f" while {JobID.from_job(error_instance_job)}")
+                pending_repair_jobs.extend(
+                    pending_job for repair_instance_job in repair_instance_jobs
+                    if (
+                        pending_job := enqueue_or_shelve(
+                            worker_id,
+                            repair_instance_job_queue,
+                            repair_instance_job,
+                            repair_mining_logger)) is not None)
+                pending_message = enqueue_or_shelve(
+                    worker_id,
+                    worker_to_parent_queue,
+                    JobStatusMessage.from_job(
+                        error_instance_job,
+                        1,
+                        JobStatus.PROGRESSED),
+                    repair_mining_logger)
+                if pending_message is not None:
+                    pending_messages.append(pending_message)
+            elif isinstance(error_instance_job, JobStatusMessage):
+                pending_message = enqueue_or_shelve(
+                    worker_id,
+                    worker_to_parent_queue,
                     error_instance_job,
-                    1,
-                    JobStatus.PROGRESSED))
-        elif isinstance(error_instance_job, JobStatusMessage):
-            worker_to_parent_queue.put(error_instance_job)
-        else:
-            raise RuntimeError(
-                f"Unexpected type {type(error_instance_job)} "
-                "for error_instance_job.")
+                    repair_mining_logger)
+                if pending_message is not None:
+                    pending_messages.append(pending_message)
+            else:
+                raise RuntimeError(
+                    f"Unexpected type {type(error_instance_job)} "
+                    "for error_instance_job.")
         # Don't automatically go to mining changesets. Focus
         # on clearing the error instance queue out.
         return LoopControl.CONTINUE
@@ -1737,51 +1853,96 @@ def _mine_changesets(
                                                 JobStatusMessage]],
         skip_errors: bool,
         worker_id: int,
+        pending_messages: List[JobStatusMessage],
+        pending_error_jobs: List[ErrorInstanceJob],
         repair_mining_logger: RepairMiningLogger) -> LoopControl:
     """
     Mine changesets for inducing (presumed) errors.
     """
+    # Flush pending error jobs first
+    pending_error_jobs = [
+        r for ej in pending_error_jobs if (
+            r := enqueue_or_shelve(
+                worker_id,
+                error_instance_job_queue,
+                ej,
+                repair_mining_logger)) is not None
+    ]
+    if pending_error_jobs:
+        # fallback to stdout
+        repair_mining_logger.write_debug_log(
+            f"[Worker {worker_id}] Still flushing error jobs...")
+        return LoopControl.CONTINUE
     try:
         changeset_mining_job = changeset_mining_job_queue.get(timeout=5)
     except Empty:
         pass
     else:
-        result = mine_changesets_from_label_pair_star(changeset_mining_job)
-        if not skip_errors and isinstance(result, Except):
-            worker_to_parent_queue.put(result)
-            return LoopControl.BREAK
-        # If skip_errors is true and result is an Except, the
-        # following will immediately return an empty list.
-        error_instance_jobs = build_error_instance_creation_inputs(
-            result,
-            changeset_mining_job.repair_mining_logger)
-        # inform parent of job start before queueing any subtasks
-        worker_to_parent_queue.put(
-            JobStatusMessage(
-                JobID(
-                    changeset_mining_job.label_a,
-                    changeset_mining_job.label_b,
-                    JobType.ERROR_INSTANCE),
-                len(error_instance_jobs),
-                JobStatus.QUEUED))
-        worker_to_parent_queue.put(
-            JobStatusMessage(
-                JobID(
-                    changeset_mining_job.label_a,
-                    changeset_mining_job.label_b,
-                    JobType.REPAIR_INSTANCE),
-                len(error_instance_jobs),
-                JobStatus.QUEUED))
-        for error_instance_job in error_instance_jobs:
-            error_instance_job_queue.put(error_instance_job)
-        error_instance_job_queue.put(
-            JobStatusMessage(
-                JobID(
-                    changeset_mining_job.label_a,
-                    changeset_mining_job.label_b,
-                    JobType.ERROR_INSTANCE),
-                0,
-                JobStatus.COMPLETED))
+        with NamedTemporaryFile(dir=repair_mining_logger.directory,
+                                prefix=_worker_debug_file_prefix(
+                                    worker_id,
+                                    "mine_changesets"),
+                                suffix=_WORKER_DEBUG_FILE_EXT):
+            result = mine_changesets_from_label_pair_star(changeset_mining_job)
+            if not skip_errors and isinstance(result, Except):
+                worker_to_parent_queue.put(result)
+                return LoopControl.BREAK
+            # If skip_errors is true and result is an Except, the
+            # following will immediately return an empty list.
+            error_instance_jobs = build_error_instance_creation_inputs(
+                result,
+                changeset_mining_job.repair_mining_logger)
+            repair_mining_logger.write_debug_log(
+                f"[Worker {worker_id}]"
+                f" Mined {len(error_instance_jobs)} changesets"
+                f" while {JobID.from_job(changeset_mining_job)}")
+            # inform parent of job start before queueing any subtasks
+            pending_message = enqueue_or_shelve(
+                worker_id,
+                worker_to_parent_queue,
+                JobStatusMessage(
+                    JobID(
+                        changeset_mining_job.label_a,
+                        changeset_mining_job.label_b,
+                        JobType.ERROR_INSTANCE),
+                    len(error_instance_jobs),
+                    JobStatus.QUEUED),
+                repair_mining_logger)
+            if pending_message is not None:
+                pending_messages.append(pending_message)
+            pending_message = enqueue_or_shelve(
+                worker_id,
+                worker_to_parent_queue,
+                JobStatusMessage(
+                    JobID(
+                        changeset_mining_job.label_a,
+                        changeset_mining_job.label_b,
+                        JobType.REPAIR_INSTANCE),
+                    len(error_instance_jobs),
+                    JobStatus.QUEUED),
+                repair_mining_logger)
+            if pending_message is not None:
+                pending_messages.append(pending_message)
+            pending_error_jobs.extend(
+                pending_job for error_instance_job in error_instance_jobs if (
+                    pending_job := enqueue_or_shelve(
+                        worker_id,
+                        error_instance_job_queue,
+                        error_instance_job,
+                        repair_mining_logger)) is not None)
+            pending_message = enqueue_or_shelve(
+                worker_id,
+                error_instance_job_queue,
+                JobStatusMessage(
+                    JobID(
+                        changeset_mining_job.label_a,
+                        changeset_mining_job.label_b,
+                        JobType.ERROR_INSTANCE),
+                    0,
+                    JobStatus.COMPLETED),
+                repair_mining_logger)
+            if pending_message is not None:
+                pending_error_jobs.append(pending_message)
     return LoopControl.PASS
 
 
@@ -1852,6 +2013,10 @@ def mining_loop_worker(
                 except RuntimeError as e:
                     f.write(format_exc(e))
 
+    # items pending enqueuement
+    pending_messages: List[JobStatusMessage] = []
+    pending_repair_jobs: List[RepairInstanceJob] = []
+    pending_error_jobs: List[ErrorInstanceJob] = []
     # The order of the following blocks is important. We wish to keep
     # the size of the repair_instance_job_queue small so that we don't
     # run out of memory. Hence, our first step is to process any control
@@ -1894,6 +2059,7 @@ def mining_loop_worker(
                                 worker_to_parent_queue,
                                 skip_errors,
                                 worker_id,
+                                pending_messages,
                                 repair_mining_logger):
                 case LoopControl.BREAK:
                     repair_mining_logger.write_debug_log(
@@ -1913,6 +2079,8 @@ def mining_loop_worker(
                                repair_miner,
                                skip_errors,
                                worker_id,
+                               pending_messages,
+                               pending_repair_jobs,
                                repair_mining_logger):
                 case LoopControl.BREAK:
                     repair_mining_logger.write_debug_log(
@@ -1930,6 +2098,8 @@ def mining_loop_worker(
                                    worker_to_parent_queue,
                                    skip_errors,
                                    worker_id,
+                                   pending_messages,
+                                   pending_error_jobs,
                                    repair_mining_logger):
                 case LoopControl.BREAK:
                     repair_mining_logger.write_debug_log(
