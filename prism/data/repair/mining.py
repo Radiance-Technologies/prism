@@ -938,7 +938,9 @@ class RepairInstanceDB:
         """
         self.cursor.execute(
             self._sql_get_record_for_filename,
-            {"file_name": file_name})
+            {
+                "file_name": file_name
+            })
         rows = self.cursor.fetchall()
         if not rows:
             return None

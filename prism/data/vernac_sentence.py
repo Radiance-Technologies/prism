@@ -57,7 +57,9 @@ class VernacularSentence:
         VernacularSentence
             Copy of the current object
         """
-        return VernacularSentence(tokens=copy.deepcopy(self.tokens),)
+        return VernacularSentence(
+            tokens=copy.deepcopy(self.tokens),
+        )
 
     def __str__(self) -> str:
         """

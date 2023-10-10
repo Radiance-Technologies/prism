@@ -135,7 +135,9 @@ def guess_opam_packages(
     if coq_version is not None:
         coq_libraries = LogicalMappings.get_coq_mappings(coq_version)
     local_mapping = LogicalMappings(
-        {k: "_local_project_" for k in local_libraries})
+        {
+            k: "_local_project_" for k in local_libraries
+        })
     packages = set()
     for prefix, suffix in libraries:
         # search local libraries first

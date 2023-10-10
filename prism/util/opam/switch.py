@@ -184,7 +184,9 @@ class OpamSwitch:
         new_path = self.env.pop('PATH', None)
         environ.update(self.env)
         if new_path is not None:
-            self.env.update({'PATH': new_path})
+            self.env.update({
+                'PATH': new_path
+            })
             environ['PATH'] = os.pathsep.join([new_path, environ['PATH']])
 
         environ['OPAMROOT'] = str(self.root)

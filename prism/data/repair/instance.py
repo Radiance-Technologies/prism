@@ -1136,8 +1136,10 @@ def cast_from_base_cls(cls: Type[T], obj: T, base_cls: Type[T]) -> T:
     Cast a value to a subclass of a given base dataclass.
     """
     if not isinstance(obj, cls):
-        obj = cls(**{f.name: getattr(obj,
-                                     f.name) for f in fields(base_cls)})
+        obj = cls(**{
+            f.name: getattr(obj,
+                            f.name) for f in fields(base_cls)
+        })
     return obj
 
 

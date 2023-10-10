@@ -1331,7 +1331,9 @@ class Project(ABC):
             if isinstance(package_version, str):
                 package_version = Version.parse(package_version)
             is_dependency = bool(
-                formula.simplify({package_name: package_version}))
+                formula.simplify({
+                    package_name: package_version
+                }))
         return is_dependency
 
     def filter_files(

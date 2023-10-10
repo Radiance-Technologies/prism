@@ -321,8 +321,10 @@ def get_typevar_bindings(
         # not generic
         return clz_origin, type_bindings
     clz_args = typing_inspect.get_args(clz)
-    type_bindings.update({v: v for v in clz_args if isinstance(v,
-                                                               TypeVar)})
+    type_bindings.update({
+        v: v for v in clz_args if isinstance(v,
+                                             TypeVar)
+    })
     clz_args = list(reversed(clz_args))
     # bind type arguments
     for base in generic_bases:

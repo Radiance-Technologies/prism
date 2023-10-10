@@ -1356,7 +1356,9 @@ class MetadataStorage:
                     self.update(
                         origin,
                         cascade=False,
-                        **{inherited: kwargs.pop(inherited)})
+                        **{
+                            inherited: kwargs.pop(inherited)
+                        })
             default = self._get_default(metadata)
             for field_name, field_value in kwargs.items():
                 self._remove_field(context_id, field_name)

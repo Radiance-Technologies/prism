@@ -374,14 +374,18 @@ def initialize_projects(
     assert projects is not None
     nproj = len(projects)
     # Make sure all arguments can be zipped together
-    root_paths = nproj * (root_path,)
-    metadata_storages = nproj * (metadata_storage,)
+    root_paths = nproj * (root_path,
+                          )
+    metadata_storages = nproj * (metadata_storage,
+                                 )
     if not isinstance(sentence_extraction_method, Iterable):
-        sentence_extraction_methods = nproj * (sentence_extraction_method,)
+        sentence_extraction_methods = nproj * (sentence_extraction_method,
+                                               )
     else:
         sentence_extraction_methods = tuple(sentence_extraction_method)
     if not isinstance(n_build_workers, Iterable):
-        n_build_workers_ = nproj * (n_build_workers,)
+        n_build_workers_ = nproj * (n_build_workers,
+                                    )
     else:
         n_build_workers_ = tuple(n_build_workers)
     if len(n_build_workers_) != nproj:

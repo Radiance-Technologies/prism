@@ -322,7 +322,9 @@ class _cachedmethod(descriptor[_T]):
             **kwargs) -> None:
         super().__init__(func, require_read=True)
         self.cache_name: str
-        kwargs.update({'maxsize': maxsize})
+        kwargs.update({
+            'maxsize': maxsize
+        })
         self.cache_kwargs = kwargs
         self.lock = RLock()
 

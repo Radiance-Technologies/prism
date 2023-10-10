@@ -126,7 +126,9 @@ class TestProjectCommitMapper(unittest.TestCase):
             "Test mapping")
         result = project_looper(2)
         self.assertEqual(result,
-                         {p: 1 for p in self.project_names})
+                         {
+                             p: 1 for p in self.project_names
+                         })
 
     def test_graceful_exit(self):
         """
@@ -183,7 +185,9 @@ class TestProjectCommitMapper(unittest.TestCase):
                 "Test mapping without updating")
             result = project_looper(2)
             self.assertEqual(result,
-                             {p: None for p in self.project_names})
+                             {
+                                 p: None for p in self.project_names
+                             })
             for p in project_looper.projects:
                 self.assertEqual(p.metadata_storage, initial_metadata)
         expected_metadata = deepcopy(initial_metadata)
@@ -200,7 +204,9 @@ class TestProjectCommitMapper(unittest.TestCase):
                 "Test mapping with updating")
             result = project_looper(2)
             self.assertEqual(result,
-                             {p: None for p in self.project_names})
+                             {
+                                 p: None for p in self.project_names
+                             })
             for p in project_looper.projects:
                 self.assertNotEqual(p.metadata_storage, initial_metadata)
                 self.assertEqual(set(p.metadata_storage), expected_metadata)

@@ -287,7 +287,8 @@ class LogicalName(str):
         # This is useful when you don't want to create an instance, just
         # canonicalize some constructor arguments.
         if isinstance(args, str):
-            args = (args,)
+            args = (args,
+                    )
         stack = list(args)
         parts = ()
         while len(stack) > 0:
@@ -299,7 +300,8 @@ class LogicalName(str):
             elif isinstance(part, tuple):
                 stack = part + stack
             elif isinstance(part, str):
-                parts += (part,)
+                parts += (part,
+                          )
             else:
                 raise TypeError(
                     "argument should be a str object or an LogicalName"

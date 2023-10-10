@@ -95,7 +95,9 @@ class ProjectNode:
             cls = self.entity.type.__base__
         if cls is not None:
             return ProjectNode(
-                cls(**{f.name: arguments[f.name] for f in fields(cls)}))
+                cls(**{
+                    f.name: arguments[f.name] for f in fields(cls)
+                }))
 
     @property
     def node_data(self) -> DataDict:

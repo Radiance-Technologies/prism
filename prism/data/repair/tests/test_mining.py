@@ -115,7 +115,9 @@ class TestRepairInstanceDB(unittest.TestCase):
                 "    FROM sqlite_master"
                 "    WHERE type='table' AND name='records';")
             result = db.cursor.fetchall()
-            self.assertListEqual(result, [("records",)])
+            self.assertListEqual(result,
+                                 [("records",
+                                   )])
 
     def test_insert_record(self) -> None:
         """

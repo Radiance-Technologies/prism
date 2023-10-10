@@ -194,7 +194,8 @@ class CoqSetting(Generic[_T], abc.ABC):
         """
         The arguments (sans `name`) used to construct this setting.
         """
-        return (self.value,)
+        return (self.value,
+                )
 
     @abc.abstractmethod
     def as_command(self) -> str:
