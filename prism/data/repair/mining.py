@@ -651,7 +651,7 @@ class RepairInstanceDB:
         The directory containing the database.
         """
         self.db_directory.mkdir(parents=True, exist_ok=True)
-        self.connection = sqlite3.connect(str(self.db_location))
+        self.connection = sqlite3.connect(str(self.db_location), timeout=30)
         self.cursor = self.connection.cursor()
         self.create_table()
 
