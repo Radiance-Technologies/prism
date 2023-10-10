@@ -1,3 +1,23 @@
+#
+# Copyright (c) 2023 Radiance Technologies, Inc.
+#
+# This file is part of PRISM
+# (see https://github.com/orgs/Radiance-Technologies/prism).
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this program. If not, see
+# <http://www.gnu.org/licenses/>.
+#
 """
 Setup utilities, especially for repair mining.
 """
@@ -400,9 +420,11 @@ def load_target_commits_file(path: PathLike) -> dict[str, list[str] | None]:
     Return project-keyed commits to use.
     """
     commits = cast(dict[str, list[str] | None | str], io.load(str(path)))
-    commits = {k: [v] if isinstance(v,
-                                    str) else v for k,
-               v in commits.items()}
+    commits = {
+        k: [v] if isinstance(v,
+                             str) else v for k,
+        v in commits.items()
+    }
     return commits
 
 
@@ -411,6 +433,8 @@ def load_default_commits_file(path: PathLike) -> dict[str, str | None]:
     Return project-keyed commits to use as defaults.
     """
     commits = load_target_commits_file(path)
-    commits = {k: v.pop() if v else None for k,
-               v in commits.items()}
+    commits = {
+        k: v.pop() if v else None for k,
+        v in commits.items()
+    }
     return commits

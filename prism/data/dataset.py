@@ -1,3 +1,23 @@
+#
+# Copyright (c) 2023 Radiance Technologies, Inc.
+#
+# This file is part of PRISM
+# (see https://github.com/orgs/Radiance-Technologies/prism).
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this program. If not, see
+# <http://www.gnu.org/licenses/>.
+#
 """
 Module providing the base dataset object for Coq projects.
 """
@@ -185,8 +205,10 @@ class CoqProjectBaseDataset:
                 metadata_storage,
                 project_class_kwargs)
         # Store project weights for sampling later.
-        self.weights = {pn: p.size_bytes for pn,
-                        p in self.projects.items()}
+        self.weights = {
+            pn: p.size_bytes for pn,
+            p in self.projects.items()
+        }
         self.sentence_extraction_method = next(
             iter(self.projects.values())).sentence_extraction_method
 
