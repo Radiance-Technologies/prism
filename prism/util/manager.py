@@ -4,6 +4,7 @@ Module for Manager based Client/Server.
 import inspect
 import multiprocessing
 import multiprocessing.connection
+import multiprocessing.queues
 import multiprocessing.reduction
 import re
 import typing
@@ -19,13 +20,19 @@ import dill
 
 from prism.util.serialize import get_typevar_bindings
 
+
 # HACK in lieu of writing a proper reduction protocol compatible with
 # the builtin pickler
-dill.Pickler.dumps = dill.dumps  # type: ignore
-dill.Pickler.loads = dill.loads  # type: ignore
-multiprocessing.reduction.ForkingPickler = dill.Pickler  # type: ignore
-multiprocessing.reduction.dump = dill.dump
-multiprocessing.connection._ForkingPickler = dill.Pickler  # type: ignore
+def _override_multiprocessing_pickler():
+    dill.Pickler.dumps = dill.dumps  # type: ignore
+    dill.Pickler.loads = dill.loads  # type: ignore
+    multiprocessing.reduction.ForkingPickler = dill.Pickler  # type: ignore
+    multiprocessing.reduction.dump = dill.dump
+    multiprocessing.connection._ForkingPickler = dill.Pickler  # type: ignore
+    multiprocessing.queues._ForkingPickler = dill.Pickler  # type: ignore
+
+
+_override_multiprocessing_pickler()
 
 ManagedClient = TypeVar('ManagedClient')
 
