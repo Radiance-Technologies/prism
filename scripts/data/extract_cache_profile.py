@@ -53,7 +53,7 @@ if __name__ == "__main__":
         default=f"{ROOT}/prism/pearls/dataset/default_commits.yml")
     parser.add_argument(
         "--mds-file",
-        default=f"{ROOT}/prism/pearls/dataset/agg_coq_repos.yml")
+        default=f"{ROOT}/prism/pearls/dataset/metadata.yml")
     parser.add_argument("--project-root-path", default=f"{ROOT}/repos_full")
     parser.add_argument("--log-dir", default=f"{ROOT}/caching/log")
     args = parser.parse_args()

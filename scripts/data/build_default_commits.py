@@ -204,5 +204,5 @@ if __name__ == "__main__":
     dataset_path = Path(f"{__file__}/../../../dataset").resolve()
     main(
         "/workspace/pearls/cache/msp/repos",
-        dataset_path / "agg_coq_repos.yml",
+        dataset_path / "metadata.yml",
         dataset_path / "default_commits.yml")

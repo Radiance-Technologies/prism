@@ -40,7 +40,7 @@ def get_data_yaml():
     """
     Get all projects' metadata.
     """
-    with open("./dataset/agg_coq_repos.yml", "r") as f:
+    with open("./dataset/metadata.yml", "r") as f:
         data = yaml.load(f, Loader=SafeLoader)
     return data
 
@@ -217,7 +217,7 @@ def test_load_metadata():
     """
     Verify that the aggregated metadata can be loaded and dumped.
     """
-    path = Path("./dataset/agg_coq_repos.yml")
+    path = Path("./dataset/metadata.yml")
 
     metadata = ProjectMetadata.load(path)
     # print(metadata)
@@ -232,7 +232,7 @@ def test_load_metadata():
         # print(storage)
         # print(meta.at_level(0))
         # print("--------------------------------------------------------")
-    storage.dump(storage, output_filepath="./agg_coq_repos.yml")
+    storage.dump(storage, output_filepath="./metadata.yml")
 
 
 if __name__ == "__main__":

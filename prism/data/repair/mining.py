@@ -2625,7 +2625,7 @@ def repair_mining_loop(
     os.makedirs(str(repair_instance_db_directory), exist_ok=True)
     if metadata_storage_file is None:
         metadata_storage_file = Path(
-            __file__).parents[3] / "dataset/agg_coq_repos.yml"
+            __file__).parents[3] / "dataset/metadata.yml"
     if prepare_pairs is None:
         prepare_pairs = prepare_label_pairs
     if repair_miner is None:

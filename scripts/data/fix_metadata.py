@@ -130,8 +130,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--mds-path",
         default=str(
-            (Path(__name__).parent.resolve() / "dataset")
-            / "agg_coq_repos.yml"),
+            (Path(__name__).parent.resolve() / "dataset") / "metadata.yml"),
         help="Path to project metadata storage file")
     parser.add_argument(
         "--default-commits-path",

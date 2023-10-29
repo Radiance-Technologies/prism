@@ -144,7 +144,7 @@ if __name__ == "__main__":
         help="The root for opam switches.")
     parser.add_argument(
         "--mds-file",
-        default=str(ROOT / "prism/pearls/dataset/agg_coq_repos.yml"),
+        default=str(ROOT / "prism/pearls/dataset/metadata.yml"),
         type=str,
         help="The storage file to load metadata from for these projects.")
     parser.add_argument(

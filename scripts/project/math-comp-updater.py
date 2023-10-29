@@ -27,7 +27,7 @@ from prism.project.metadata.storage import MetadataStorage
 
 if __name__ == "__main__":
     module_location = Path(__file__).parent
-    mds_file = (module_location.parents[1] / "dataset") / "agg_coq_repos.yml"
+    mds_file = (module_location.parents[1] / "dataset") / "metadata.yml"
     mds = MetadataStorage.load(mds_file)
     new_build_cmd = ["make -C mathcomp all"]
     new_install_cmd = new_build_cmd + ["make -C mathcomp install"]

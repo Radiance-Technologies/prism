@@ -153,7 +153,7 @@ if __name__ == '__main__':
         nargs='?',
         default=1)
     args = parser.parse_args()
-    storage = MetadataStorage.load("../../dataset/agg_coq_repos.yml")
+    storage = MetadataStorage.load("../../dataset/metadata.yml")
 
     dirs = [
         os.path.join(args.root_dir,
