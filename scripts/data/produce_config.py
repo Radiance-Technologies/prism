@@ -40,17 +40,37 @@ if __name__ == "__main__":
     parser.add_argument(
         "--repo",
         type=str,
-        help="Root coq-pearls repo",
+        help="Root of the coq-pearls repo."
+        " By default discovered based on parent directories of this script.",
         default=None)
-    parser.add_argument("--file", type=str, help="Output file.", default=None)
+    parser.add_argument(
+        "--metadata-yml",
+        type=str,
+        help="Path to metadata storage YAML file."
+        " By default 'dataset/metadata.yml' in the coq-pearls repo",
+        default=None)
+    parser.add_argument(
+        "--file",
+        type=str,
+        help="Output file."
+        " By default 'mine_repair_instances_config.json'"
+        " in the same directory as this script.",
+        default=None)
     args = parser.parse_args()
     repo = args.repo
+    metadata_yml = args.metadata_yml
     if repo is None:
         repo = Path(__file__).parent
     try:
         repo = Repo(path=repo)
     except InvalidGitRepositoryError:
         repo = Repo(path=repo, search_parent_directories=True)
+    working_tree_dir = repo.working_tree_dir
+    if working_tree_dir is None:
+        raise RuntimeError("Cannot produce config from bare repository")
+    working_tree_dir = Path(working_tree_dir)
+    if metadata_yml is None:
+        metadata_yml = str(working_tree_dir / "dataset" / "metadata.yml")
     if args.repair_dir is None:
         repair_dir = repo.commit().hexsha
     else:
@@ -62,6 +82,8 @@ if __name__ == "__main__":
             args.cache_dir,
         "repair_instance_db_directory":
             f"/workspace/pearls/repairs/{repair_dir}",
+        "metadata_storage_file":
+            metadata_yml,
         "cache_format_extension":
             "json",
         "prepare_pairs":

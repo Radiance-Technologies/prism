@@ -1,6 +1,7 @@
 {
   "cache_root": "../cache_root",
   "repair_instance_db_directory": "../test_repairs",
+  "metadata_storage_file": "../../dataset/metadata.yml",
   "cache_format_extension": "json",
   "prepare_pairs": "prism.data.repair.mining.prepare_label_pairs",
   "repair_miner": "prism.data.repair.instance.ProjectCommitDataRepairInstance",

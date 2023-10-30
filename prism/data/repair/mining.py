@@ -2558,7 +2558,7 @@ def _parallel_work(
 def repair_mining_loop(
         cache_root: Path,
         repair_instance_db_directory: Path,
-        metadata_storage_file: Optional[Path] = None,
+        metadata_storage_file: Path,
         cache_format_extension: str = "json",
         prepare_pairs: Optional[PreparePairsFunction] = None,
         repair_miner: Optional[RepairMiner] = None,
@@ -2623,9 +2623,6 @@ def repair_mining_loop(
         By default, False.
     """
     os.makedirs(str(repair_instance_db_directory), exist_ok=True)
-    if metadata_storage_file is None:
-        metadata_storage_file = Path(
-            __file__).parents[3] / "dataset/metadata.yml"
     if prepare_pairs is None:
         prepare_pairs = prepare_label_pairs
     if repair_miner is None:
