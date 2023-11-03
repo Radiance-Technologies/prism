@@ -18,6 +18,7 @@ You should have received a copy of the GNU Lesser General Public
 License along with this program. If not, see
 <http://www.gnu.org/licenses/>.
 -->
+### Distribution Statement A (Approved for Public Release, Distribution Unlimited).
 # PRISM
 
 Code for the paper [Proof Repair Infrastructure for Supervised Models: Building a Large Proof Repair Dataset](https://drops.dagstuhl.de/opus/volltexte/2023/18401).
@@ -349,3 +350,12 @@ repair to a lemma/conjecture itself.
 Cataloguing repairs based on the type of Vernacular command
 (e.g., `VernacStartTheoremProof`) can be done using tags of the form
 `repair:[CommmandTypeName]`, e.g., `repair:VernacDefinition`.
+
+
+## Acknowledgements
+This work was supported by the Defense Advanced Research Projects Agency (DARPA)
+under Agreement HR00112290067.
+
+The views, opinions, and/or findings expressed are those of the authors and should not be
+interpreted as representing the official views or policies of the Department of Defense
+or the U.S. Government.
