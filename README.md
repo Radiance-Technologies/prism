@@ -359,3 +359,11 @@ under Agreement HR00112290067.
 The views, opinions, and/or findings expressed are those of the authors and should not be
 interpreted as representing the official views or policies of the Department of Defense
 or the U.S. Government.
+
+We also want to acknowledge and thank Dr. Talia Ringer and Thomas (Tom) Reichel of the
+University of Illinois at Urbana-Champaign for their valuable insights and contributions
+to this work.
+Talia championed the ITP 2023 paper and the overall importance of the endeavor, and
+Tom implemented solutions to multiple critical issues including but not
+limited to switch cloning, sequence alignment with `numba`, and dependency inference.
+Without their help, this work would be diminished.
